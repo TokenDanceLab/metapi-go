@@ -35,3 +35,4 @@ metapi-migrate.exe
 migrate.exe
 server.exe
 routing.test.exe
+*.test.exe
