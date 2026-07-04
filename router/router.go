@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tokendancelab/metapi-go/app"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/admin"
@@ -25,14 +26,14 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	r.Use(CORS())
 	r.Use(RequestLogger)
 	r.Use(Recoverer)
+	r.Use(BodyLimit(cfg.RequestBodyLimit))
 
 	// ---- /health (design addition, not in TS) ----
 	// Registered before route groups so it bypasses auth middleware.
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
+	r.Get("/health", app.Health)
+
+	// ---- /debug/vars (metrics endpoint, bypasses auth) ----
+	r.Get("/debug/vars", app.MetricsHandler)
 
 	// ---- Route groups ----
 	// /api/* routes (excluding public routes) → admin auth middleware

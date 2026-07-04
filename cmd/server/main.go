@@ -92,6 +92,9 @@ func main() {
 	// ---- 17. Start background services (stubs) ----
 	app.StartBackgroundServices()
 
+	// ---- 18. Start pprof debug server (port 6060, only with -tags debug) ----
+	app.StartDebugServer(6060)
+
 	// ---- 20. Register onClose hooks ----
 	a := app.New(cfg, r)
 	a.RegisterOnClose(func() {
