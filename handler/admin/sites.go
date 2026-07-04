@@ -55,7 +55,7 @@ func (h *sitesHandler) listSites(w http.ResponseWriter, r *http.Request) {
 func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteCreatePayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site payload."})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid site payload."})
 		return
 	}
 
@@ -421,7 +421,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(body.IDs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids is required"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids is required"})
 		return
 	}
 
@@ -431,7 +431,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 		"enableSystemProxy": true, "disableSystemProxy": true,
 	}
 	if !validActions[action] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid action"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid action"})
 		return
 	}
 

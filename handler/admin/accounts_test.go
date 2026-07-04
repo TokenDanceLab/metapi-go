@@ -409,11 +409,11 @@ func TestAccounts_Update(t *testing.T) {
 
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)
-	if result["Username"] != "updatedname" {
-		t.Errorf("expected username='updatedname', got %v", result["Username"])
+	if result["username"] != "updatedname" {
+		t.Errorf("expected username='updatedname', got %v", result["username"])
 	}
-	if result["Status"] != "disabled" {
-		t.Errorf("expected status='disabled', got %v", result["Status"])
+	if result["status"] != "disabled" {
+		t.Errorf("expected status='disabled', got %v", result["status"])
 	}
 }
 

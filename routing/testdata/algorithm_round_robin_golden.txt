@@ -1,0 +1,8 @@
+# Golden file: TS vs Go round_robin ordering
+# Generated: 2026-07-04
+# Format: rank,channelID,siteID,accountID
+1,2,20,102
+2,4,40,104
+3,3,30,103
+4,5,50,105
+5,1,10,101

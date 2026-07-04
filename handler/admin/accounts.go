@@ -122,7 +122,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if body.SiteID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid siteId. Expected positive number."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid siteId. Expected positive number."})
 		return
 	}
 
@@ -303,20 +303,20 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountLoginPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid login payload."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid login payload."})
 		return
 	}
 
 	if body.SiteID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid siteId. Expected positive number."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid siteId. Expected positive number."})
 		return
 	}
 	if strings.TrimSpace(body.Username) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid username. Expected string."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid username. Expected string."})
 		return
 	}
 	if strings.TrimSpace(body.Password) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid password. Expected string."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid password. Expected string."})
 		return
 	}
 
@@ -375,11 +375,29 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
+	// Fetch the created/updated account for response
+	var loginAcct store.Account
+	h.db.Get(&loginAcct, "SELECT * FROM accounts WHERE site_id = ? AND username = ?", body.SiteID, body.Username)
+	loginAcctMap := map[string]any{
+		"id":            loginAcct.ID,
+		"siteId":        loginAcct.SiteID,
+		"username":      loginAcct.Username,
+		"accessToken":   loginAcct.AccessToken,
+		"apiToken":      loginAcct.APIToken,
+		"balance":       loginAcct.Balance,
+		"status":        loginAcct.Status,
+		"isPinned":      loginAcct.IsPinned,
+		"sortOrder":     loginAcct.SortOrder,
+		"checkinEnabled": loginAcct.CheckinEnabled,
+		"extraConfig":   loginAcct.ExtraConfig,
+		"createdAt":     loginAcct.CreatedAt,
+		"updatedAt":     loginAcct.UpdatedAt,
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":       true,
-		"account":       nil,
-		"apiTokenFound": false,
-		"tokenCount":    0,
+		"account":       loginAcctMap,
+		"apiTokenFound": loginAcct.APIToken != nil,
+		"tokenCount":    1,
 		"reusedAccount": reused,
 	})
 }
@@ -389,12 +407,12 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountVerifyTokenPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid verify-token payload."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid verify-token payload."})
 		return
 	}
 
 	if body.SiteID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid siteId. Expected positive number."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid siteId. Expected positive number."})
 		return
 	}
 
@@ -436,7 +454,7 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 
 	var body payloads.AccountRebindSessionPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid rebind payload."})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid rebind payload."})
 		return
 	}
 
@@ -469,8 +487,27 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 		nextAccessToken, extraConfigStr, now, accountID,
 	)
 
+	// Fetch updated account for response
+	var rebindAcct store.Account
+	h.db.Get(&rebindAcct, "SELECT * FROM accounts WHERE id = ?", accountID)
+	rebindAcctMap := map[string]any{
+		"id":            rebindAcct.ID,
+		"siteId":        rebindAcct.SiteID,
+		"username":      rebindAcct.Username,
+		"accessToken":   rebindAcct.AccessToken,
+		"apiToken":      rebindAcct.APIToken,
+		"balance":       rebindAcct.Balance,
+		"status":        rebindAcct.Status,
+		"isPinned":      rebindAcct.IsPinned,
+		"sortOrder":     rebindAcct.SortOrder,
+		"checkinEnabled": rebindAcct.CheckinEnabled,
+		"extraConfig":   rebindAcct.ExtraConfig,
+		"createdAt":     rebindAcct.CreatedAt,
+		"updatedAt":     rebindAcct.UpdatedAt,
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
+		"account":        rebindAcctMap,
 		"tokenType":      "session",
 		"credentialMode": "session",
 		"capabilities":   service.BuildCapabilitiesFromCredentialMode(service.CredentialModeSession, true),
@@ -593,19 +630,19 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountBatchPayload
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account batch payload."})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid account batch payload."})
 		return
 	}
 
 	if len(body.IDs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids is required"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids is required"})
 		return
 	}
 
 	action := strings.TrimSpace(body.Action)
 	validActions := map[string]bool{"enable": true, "disable": true, "delete": true, "refreshBalance": true}
 	if !validActions[action] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid action"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid action"})
 		return
 	}
 

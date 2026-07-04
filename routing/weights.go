@@ -74,7 +74,7 @@ func EffectiveUnitCost(candidate RouteChannelCandidate, modelName string, pricin
 // Implements the TS calculateWeightedSelection exactly.
 func CalculateWeightedSelection(
 	candidates []RouteChannelCandidate,
-	modelName string,
+	modelResolver func(RouteChannelCandidate) string,
 	routingWeights RoutingWeightsConfig,
 	siteWeightMultipliers map[int64]float64,
 	channelLoadProvider ChannelLoadSnapshotProvider,
@@ -88,18 +88,22 @@ func CalculateWeightedSelection(
 		return WeightedSelectionResult{}
 	}
 
+	if modelResolver == nil {
+		modelResolver = func(c RouteChannelCandidate) string { return "" }
+	}
+
 	n := len(candidates)
 
 	// Step 1: Effective costs
 	effectiveCosts := make([]CostSignal, n)
 	for i, c := range candidates {
-		effectiveCosts[i] = EffectiveUnitCost(c, modelName, pricingFn, fallbackUnitCost)
+		effectiveCosts[i] = EffectiveUnitCost(c, modelResolver(c), pricingFn, fallbackUnitCost)
 	}
 
 	// Step 2: Runtime health details
 	runtimeHealthDetails := make([]SiteRuntimeHealthDetails, n)
 	for i, c := range candidates {
-		runtimeHealthDetails[i] = GetSiteRuntimeHealthDetails(c.Site.ID, modelName)
+		runtimeHealthDetails[i] = GetSiteRuntimeHealthDetails(c.Site.ID, modelResolver(c))
 	}
 
 	// Step 3: Channel load snapshots
@@ -582,7 +586,7 @@ func UpdateStableFirstObservationProgress(rotationKey string, usedObservation bo
 }
 
 // BuildStableFirstPoolPlan splits candidates into primary and observation pools.
-func BuildStableFirstPoolPlan(candidates []RouteChannelCandidate, modelName string) StableFirstPoolPlan {
+func BuildStableFirstPoolPlan(candidates []RouteChannelCandidate, modelResolver func(RouteChannelCandidate) string) StableFirstPoolPlan {
 	if len(candidates) == 0 {
 		return StableFirstPoolPlan{}
 	}
@@ -600,7 +604,11 @@ func BuildStableFirstPoolPlan(candidates []RouteChannelCandidate, modelName stri
 	}
 
 	for siteID, leader := range leaderBySiteID {
-		healthDetails := GetSiteRuntimeHealthDetails(siteID, modelName)
+		resolvedModel := ""
+		if modelResolver != nil {
+			resolvedModel = modelResolver(leader)
+		}
+		healthDetails := GetSiteRuntimeHealthDetails(siteID, resolvedModel)
 		historical := historicalBySiteID[siteID]
 		historicalTotalCalls := historical.TotalCalls
 		effectiveSuccessRate := ResolveStableFirstSuccessRate(healthDetails, historical.SuccessRate)

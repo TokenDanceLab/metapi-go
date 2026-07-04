@@ -76,7 +76,7 @@ func TestCalculateWeightedSelection_GoldenFile(t *testing.T) {
 	}
 
 	result := CalculateWeightedSelection(
-		candidates, "gpt-4", routingWeights,
+		candidates, staticModel("gpt-4"), routingWeights,
 		nil, // siteWeightMultipliers
 		nil, // channelLoadProvider
 		0,   // nowMs
@@ -208,7 +208,7 @@ func TestEffectiveUnitCost_MinimumClamp(t *testing.T) {
 
 func TestCalculateWeightedSelection_EmptyCandidates(t *testing.T) {
 	result := CalculateWeightedSelection(
-		nil, "gpt-4", RoutingWeightsConfig{}, nil, nil, 0, WeightedMode, "", nil, 1.0)
+		nil, staticModel("gpt-4"), RoutingWeightsConfig{}, nil, nil, 0, WeightedMode, "", nil, 1.0)
 	if result.Selected != nil {
 		t.Error("expected nil selected for empty candidates")
 	}
@@ -222,7 +222,7 @@ func TestCalculateWeightedSelection_SingleCandidate(t *testing.T) {
 		makeCandidate(1, 100, 1001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
 	}
 	result := CalculateWeightedSelection(
-		candidates, "gpt-4",
+		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		nil, nil, 0, WeightedMode, "", nil, 1.0)
 	if result.Selected == nil {
@@ -251,7 +251,7 @@ func TestCalculateWeightedSelection_SiteWeightMultipliers(t *testing.T) {
 	multipliers := map[int64]float64{200: 1e12}
 
 	result := CalculateWeightedSelection(
-		candidates, "gpt-4",
+		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		multipliers, nil, 0, WeightedMode, "", nil, 1.0)
 
@@ -294,7 +294,7 @@ func TestCalculateWeightedSelection_FallbackPenalty(t *testing.T) {
 	c2 := makeCandidate(2, 200, 2001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil)
 
 	result := CalculateWeightedSelection(
-		[]RouteChannelCandidate{c1, c2}, "gpt-4",
+		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		nil, nil, 0, WeightedMode, "", nil, 100.0) // high fallback cost
 
@@ -316,7 +316,7 @@ func TestCalculateWeightedSelection_StableFirstMode(t *testing.T) {
 	}
 
 	result := CalculateWeightedSelection(
-		candidates, "gpt-4",
+		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0)
 
@@ -335,7 +335,7 @@ func TestCalculateWeightedSelection_ZeroWeightChannels(t *testing.T) {
 	c2 := makeCandidate(2, 200, 2001, 0, 0, 100, 5, 50.0, 1.0, nil, 0, nil)
 
 	result := CalculateWeightedSelection(
-		[]RouteChannelCandidate{c1, c2}, "gpt-4",
+		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		nil, nil, 0, WeightedMode, "", nil, 1.0)
 
@@ -382,7 +382,7 @@ func TestValueScoreComputation(t *testing.T) {
 	c2 := makeCandidate(2, 200, 2001, 10, 0, 1000, 1000, 500.0, 1.0, ptrFloat(0.05), 1.0, nil) // high cost, low balance, many calls
 
 	result := CalculateWeightedSelection(
-		[]RouteChannelCandidate{c1, c2}, "gpt-4",
+		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
 		nil, nil, 0, WeightedMode, "", nil, 1.0)
 

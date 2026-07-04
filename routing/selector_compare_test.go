@@ -47,7 +47,7 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		result := CalculateWeightedSelection(
-			candidates, "gpt-4", routingWeights,
+			candidates, staticModel("gpt-4"), routingWeights,
 			nil, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 		if result.Selected != nil {
@@ -67,7 +67,7 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 
 	// Single deterministic run for detailed breakdown
 	result := CalculateWeightedSelection(
-		candidates, "gpt-4", routingWeights,
+		candidates, staticModel("gpt-4"), routingWeights,
 		nil, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 

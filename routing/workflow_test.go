@@ -317,7 +317,7 @@ func TestUpdateStableFirstObservationProgress(t *testing.T) {
 // =============================================================================
 
 func TestBuildStableFirstPoolPlan_Empty(t *testing.T) {
-	plan := BuildStableFirstPoolPlan(nil, "gpt-4")
+	plan := BuildStableFirstPoolPlan(nil, staticModel("gpt-4"))
 	if len(plan.PrimaryCandidates) != 0 {
 		t.Errorf("expected 0 primary candidates, got %d", len(plan.PrimaryCandidates))
 	}
@@ -334,7 +334,7 @@ func TestBuildStableFirstPoolPlan_SingleSite(t *testing.T) {
 		makeCandidate(2, 100, 1002, 10, 0, 200, 2, 80.0, 1.0, nil, 0, nil),
 	}
 
-	plan := BuildStableFirstPoolPlan(candidates, "gpt-4")
+	plan := BuildStableFirstPoolPlan(candidates, staticModel("gpt-4"))
 	// Single site: should be in primary pool
 	if len(plan.PrimarySiteIDs) != 1 {
 		t.Errorf("expected 1 primary site, got %d", len(plan.PrimarySiteIDs))
@@ -357,7 +357,7 @@ func TestBuildStableFirstPoolPlan_MultiSite(t *testing.T) {
 		makeCandidate(2, 200, 2001, 10, 0, 0, 0, 0, 1.0, nil, 0, nil),
 	}
 
-	plan := BuildStableFirstPoolPlan(candidates, "gpt-4")
+	plan := BuildStableFirstPoolPlan(candidates, staticModel("gpt-4"))
 
 	// Site 100 should be primary
 	foundPrimary := false

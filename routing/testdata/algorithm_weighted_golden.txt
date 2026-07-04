@@ -1,0 +1,9 @@
+# Golden file: TS vs Go weighted selection probabilities
+# Generated: 2026-07-04
+# This file verifies Go matches TS behavior exactly.
+# Format: channelID,siteID,accountID,probability (weighted mode)
+1,10,101,0.253712
+2,10,102,0.336556
+3,20,201,0.13303
+4,20,202,0.122505
+5,30,301,0.154195

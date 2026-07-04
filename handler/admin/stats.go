@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
@@ -218,7 +219,7 @@ func (h *statsHandler) proxyLogDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse billing details if present
-	if bd, ok := row["billing_details"]; ok {
+	if bd, ok := row["billingDetails"]; ok {
 		if bdStr, ok2 := bd.(string); ok2 && bdStr != "" {
 			var parsed any
 			if err := json.Unmarshal([]byte(bdStr), &parsed); err == nil {
@@ -386,14 +387,13 @@ func queryRow(db *sqlx.DB, query string, args ...any) map[string]any {
 		if err := rows.MapScan(row); err != nil {
 			return nil
 		}
-		return row
+		return mapKeysToCamel(row)
 	}
 	return nil
 }
 
 func nowUTC() string {
-	// Return ISO 8601 datetime
-	return "" // placeholder, resolved at compile time
+	return time.Now().UTC().Format(time.RFC3339)
 }
 
 func roundMicro(v float64) float64 {

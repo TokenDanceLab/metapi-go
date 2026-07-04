@@ -54,6 +54,24 @@ type tokenRoutesHandler struct {
 // GET /api/routes/lite
 func (h *tokenRoutesHandler) listLite(w http.ResponseWriter, r *http.Request) {
 	rows := queryRows(h.db, "SELECT id, model_pattern, display_name, display_icon, route_mode, routing_strategy, enabled FROM token_routes ORDER BY id ASC")
+	type srcRow struct {
+		GroupRouteID  int64 `db:"group_route_id"`
+		SourceRouteID int64 `db:"source_route_id"`
+	}
+	var srcRows []srcRow
+	h.db.Select(&srcRows, "SELECT group_route_id, source_route_id FROM route_group_sources")
+	sourceIdsByRoute := map[int64][]int64{}
+	for _, sr := range srcRows {
+		sourceIdsByRoute[sr.GroupRouteID] = append(sourceIdsByRoute[sr.GroupRouteID], sr.SourceRouteID)
+	}
+	for _, row := range rows {
+		rid := toInt64(row["id"])
+		if ids, ok := sourceIdsByRoute[rid]; ok {
+			row["sourceRouteIds"] = ids
+		} else {
+			row["sourceRouteIds"] = []int64{}
+		}
+	}
 	writeJSON(w, http.StatusOK, normalizeSlice(rows))
 }
 
@@ -70,22 +88,22 @@ func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request)
 
 		item := map[string]any{
 			"id":                  route["id"],
-			"modelPattern":        route["model_pattern"],
-			"displayName":         route["display_name"],
-			"displayIcon":         route["display_icon"],
-			"routeMode":           route["route_mode"],
+			"modelPattern":        route["modelPattern"],
+			"displayName":         route["displayName"],
+			"displayIcon":         route["displayIcon"],
+			"routeMode":           route["routeMode"],
 			"sourceRouteIds":      []int64{},
-			"modelMapping":        route["model_mapping"],
-			"routingStrategy":     route["routing_strategy"],
+			"modelMapping":        route["modelMapping"],
+			"routingStrategy":     route["routingStrategy"],
 			"enabled":             route["enabled"],
 			"channelCount":        channelCount,
 			"enabledChannelCount": enabledCount,
 			"siteNames":           []string{},
 			"decisionSnapshot":    nil,
-			"decisionRefreshedAt": route["decision_refreshed_at"],
+			"decisionRefreshedAt": route["decisionRefreshedAt"],
 		}
 		// Parse decision snapshot
-		if ds, ok := route["decision_snapshot"].(string); ok && ds != "" {
+		if ds, ok := route["decisionSnapshot"].(string); ok && ds != "" {
 			var parsed any
 			if json.Unmarshal([]byte(ds), &parsed) == nil {
 				item["decisionSnapshot"] = parsed
@@ -103,16 +121,49 @@ func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) 
 	result := make([]map[string]any, 0)
 	for _, route := range rows {
 		routeID := toInt64(route["id"])
-		channels := queryRows(h.db,
-			`SELECT rc.*, a.username, s.name as site_name
+		channelRows := queryRows(h.db,
+			`SELECT rc.*, a.username, a.access_token, a.api_token, a.balance, a.status as account_status,
+			        s.id as site_id, s.name as site_name, s.url as site_url, s.platform as site_platform, s.status as site_status
 			 FROM route_channels rc
 			 LEFT JOIN accounts a ON rc.account_id = a.id
 			 LEFT JOIN sites s ON a.site_id = s.id
 			 WHERE rc.route_id = ?`, routeID)
 
+		var enrichedChannels []map[string]any
+		for _, ch := range channelRows {
+			enriched := map[string]any{
+				"id":             ch["id"],
+				"routeId":        ch["routeId"],
+				"accountId":      ch["accountId"],
+				"tokenId":        ch["tokenId"],
+				"oauthRouteUnitId": ch["oauthRouteUnitId"],
+				"sourceModel":    ch["sourceModel"],
+				"priority":       ch["priority"],
+				"weight":         ch["weight"],
+				"enabled":        ch["enabled"],
+				"manualOverride": ch["manualOverride"],
+				"account": map[string]any{
+					"id":          ch["accountId"],
+					"username":    ch["username"],
+					"accessToken": ch["accessToken"],
+					"apiToken":    ch["apiToken"],
+					"balance":     ch["balance"],
+					"status":      ch["accountStatus"],
+				},
+				"site": map[string]any{
+					"id":       ch["siteId"],
+					"name":     ch["siteName"],
+					"url":      ch["siteUrl"],
+					"platform": ch["sitePlatform"],
+					"status":   ch["siteStatus"],
+				},
+			}
+			enrichedChannels = append(enrichedChannels, enriched)
+		}
+
 		item := route
-		item["channels"] = normalizeSlice(channels)
-		if ds, ok := route["decision_snapshot"].(string); ok && ds != "" {
+		item["channels"] = enrichedChannels
+		if ds, ok := route["decisionSnapshot"].(string); ok && ds != "" {
 			var parsed any
 			if json.Unmarshal([]byte(ds), &parsed) == nil {
 				item["decisionSnapshot"] = parsed
@@ -189,8 +240,6 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 	}
 
 	id, _ := result.LastInsertId()
-	created := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
-
 	// For explicit_group, insert source route references
 	if routeMode == "explicit_group" && len(body.SourceRouteIds) > 0 {
 		for _, srcID := range body.SourceRouteIds {
@@ -198,6 +247,12 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	created := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
+	if created == nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建路由失败"})
+		return
+	}
+	created["sourceRouteIds"] = body.SourceRouteIds
 	writeJSON(w, http.StatusOK, created)
 }
 
@@ -264,6 +319,9 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
+	var srcIDs []int64
+	h.db.Select(&srcIDs, "SELECT source_route_id FROM route_group_sources WHERE group_route_id = ?", id)
+	updated["sourceRouteIds"] = srcIDs
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -344,13 +402,45 @@ func (h *tokenRoutesHandler) getRouteChannels(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	channels := queryRows(h.db,
-		`SELECT rc.*, a.username, s.name as site_name
+	channelRows := queryRows(h.db,
+		`SELECT rc.*, a.username, a.access_token, a.api_token, a.balance, a.status as account_status,
+		        s.id as site_id, s.name as site_name, s.url as site_url, s.platform as site_platform, s.status as site_status
 		 FROM route_channels rc
 		 LEFT JOIN accounts a ON rc.account_id = a.id
 		 LEFT JOIN sites s ON a.site_id = s.id
 		 WHERE rc.route_id = ?`, id)
-	writeJSON(w, http.StatusOK, normalizeSlice(channels))
+	var enrichedChans []map[string]any
+	for _, ch := range channelRows {
+		enriched := map[string]any{
+			"id":             ch["id"],
+			"routeId":        ch["routeId"],
+			"accountId":      ch["accountId"],
+			"tokenId":        ch["tokenId"],
+			"oauthRouteUnitId": ch["oauthRouteUnitId"],
+			"sourceModel":    ch["sourceModel"],
+			"priority":       ch["priority"],
+			"weight":         ch["weight"],
+			"enabled":        ch["enabled"],
+			"manualOverride": ch["manualOverride"],
+			"account": map[string]any{
+				"id":          ch["accountId"],
+				"username":    ch["username"],
+				"accessToken": ch["accessToken"],
+				"apiToken":    ch["apiToken"],
+				"balance":     ch["balance"],
+				"status":      ch["accountStatus"],
+			},
+			"site": map[string]any{
+				"id":       ch["siteId"],
+				"name":     ch["siteName"],
+				"url":      ch["siteUrl"],
+				"platform": ch["sitePlatform"],
+				"status":   ch["siteStatus"],
+			},
+		}
+		enrichedChans = append(enrichedChans, enriched)
+	}
+	writeJSON(w, http.StatusOK, enrichedChans)
 }
 
 // ---- Add Channel ----
@@ -482,13 +572,23 @@ func (h *tokenRoutesHandler) batchUpdateChannels(w http.ResponseWriter, r *http.
 	}
 	json.NewDecoder(r.Body).Decode(&body)
 
+	var updatedIDs []int64
 	for _, update := range body.Updates {
 		h.db.Exec("UPDATE route_channels SET priority = ?, manual_override = 1 WHERE id = ?", update.Priority, update.ID)
+		updatedIDs = append(updatedIDs, update.ID)
+	}
+
+	var updatedChannels []map[string]any
+	for _, cid := range updatedIDs {
+		ch := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", cid)
+		if ch != nil {
+			updatedChannels = append(updatedChannels, ch)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
-		"channels": []any{},
+		"channels": normalizeSlice(updatedChannels),
 	})
 }
 

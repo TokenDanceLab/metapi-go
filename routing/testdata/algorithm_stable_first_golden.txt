@@ -1,0 +1,10 @@
+# Golden file: TS vs Go stable_first selection contributions
+# Generated: 2026-07-04
+# Format: channelID,siteID,accountID,probability (stable_first mode)
+1,10,101,0.221643
+2,10,102,0.221643
+3,20,201,0.176119
+4,20,202,0.176119
+5,30,301,0.204474
+# Stable site count: 3
+# Selected: channel=5, site=30

@@ -294,7 +294,7 @@ func (s *ChannelSelector) selectFromMatch(
 			nowMs, s.configuredMaxSec)
 
 		rotationKey := BuildStableFirstRotationKey(match.Route.ID, requestedModel)
-		poolPlan := BuildStableFirstPoolPlan(filteredCandidates, resolveModel(filteredCandidates[0]))
+		poolPlan := BuildStableFirstPoolPlan(filteredCandidates, resolveModel)
 
 		shouldUseObservation := len(poolPlan.ObservationCandidates) > 0 &&
 			(len(poolPlan.PrimaryCandidates) == 0 ||
@@ -313,7 +313,7 @@ func (s *ChannelSelector) selectFromMatch(
 			return nil, nil
 		}
 
-		selected := s.stableFirstSelect(selectionPool, resolveModel(selectionPool[0]), policy,
+		selected := s.stableFirstSelect(selectionPool, resolveModel, policy,
 			shouldUseObservation, rotationKey)
 		if selected == nil {
 			return nil, nil
@@ -350,7 +350,7 @@ func (s *ChannelSelector) selectFromMatch(
 			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
 			nowMs, s.configuredMaxSec)
 
-		selected := s.weightedRandomSelect(filteredLayer, resolveModel(filteredLayer[0]), policy)
+		selected := s.weightedRandomSelect(filteredLayer, resolveModel, policy)
 		if selected == nil {
 			continue
 		}
@@ -675,12 +675,12 @@ func (s *ChannelSelector) resolveDownstreamExclusionReason(candidate RouteChanne
 
 func (s *ChannelSelector) weightedRandomSelect(
 	candidates []RouteChannelCandidate,
-	modelName string,
+	modelResolver func(RouteChannelCandidate) string,
 	policy DownstreamRoutingPolicy,
 ) *RouteChannelCandidate {
 	result := CalculateWeightedSelection(
 		candidates,
-		modelName,
+		modelResolver,
 		s.routingWeights,
 		policy.SiteWeightMultipliers,
 		s.channelLoadProvider,
@@ -695,7 +695,7 @@ func (s *ChannelSelector) weightedRandomSelect(
 
 func (s *ChannelSelector) stableFirstSelect(
 	candidates []RouteChannelCandidate,
-	modelName string,
+	modelResolver func(RouteChannelCandidate) string,
 	policy DownstreamRoutingPolicy,
 	shouldUseObservation bool,
 	rotationKey string,
@@ -706,7 +706,7 @@ func (s *ChannelSelector) stableFirstSelect(
 	}
 	result := CalculateWeightedSelection(
 		candidates,
-		modelName,
+		modelResolver,
 		s.routingWeights,
 		policy.SiteWeightMultipliers,
 		s.channelLoadProvider,

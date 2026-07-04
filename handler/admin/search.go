@@ -139,7 +139,7 @@ func queryRows(db *sqlx.DB, query string, args ...any) []map[string]any {
 		if err := rows.MapScan(row); err != nil {
 			continue
 		}
-		result = append(result, row)
+		result = append(result, mapKeysToCamel(row))
 	}
 	return result
 }
@@ -149,6 +149,27 @@ func normalizeSlice(rows []map[string]any) []map[string]any {
 		return []map[string]any{}
 	}
 	return rows
+}
+
+// snakeToCamel converts snake_case to camelCase.
+// e.g. "model_pattern" -> "modelPattern", "id" -> "id"
+func snakeToCamel(s string) string {
+	parts := strings.Split(s, "_")
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+// mapKeysToCamel returns a new map with all keys converted from snake_case to camelCase.
+func mapKeysToCamel(m map[string]any) map[string]any {
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[snakeToCamel(k)] = v
+	}
+	return result
 }
 
 func getQueryInt(r *http.Request, key string, fallback int) int {

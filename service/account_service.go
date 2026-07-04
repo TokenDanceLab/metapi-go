@@ -388,15 +388,35 @@ func ListAccountsWithSites(db *sqlx.DB) ([]map[string]any, error) {
 		if err := rows.MapScan(row); err != nil {
 			continue
 		}
-		result = append(result, row)
+		result = append(result, mapKeysToCamel(row))
 	}
 	return result, nil
 }
 
 // ---- Event helpers ----
 
+// snakeToCamel converts snake_case to camelCase.
+func snakeToCamel(s string) string {
+	parts := strings.Split(s, "_")
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+// mapKeysToCamel returns a new map with all keys converted from snake_case to camelCase.
+func mapKeysToCamel(m map[string]any) map[string]any {
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[snakeToCamel(k)] = v
+	}
+	return result
+}
+
 // CreateEvent creates an event entry.
-func CreateEvent(db *sqlx.DB, eventType, title, message, level string, relatedID int64, relatedType string) error {
+func CreateEvent(db *sqlx.DB, eventType string, title string, message string, level string, relatedID int64, relatedType string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.Exec(
 		`INSERT INTO events (type, title, message, level, read, related_id, related_type, created_at)

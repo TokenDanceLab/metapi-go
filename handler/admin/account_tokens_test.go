@@ -466,8 +466,8 @@ func TestTokens_Update(t *testing.T) {
 		t.Error("expected success=true")
 	}
 	tok, _ := result["token"].(map[string]any)
-	if tok["Name"] != "new-name" {
-		t.Errorf("expected name='new-name', got %v", tok["Name"])
+	if tok["name"] != "new-name" {
+		t.Errorf("expected name='new-name', got %v", tok["name"])
 	}
 }
 
