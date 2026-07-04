@@ -1,6 +1,6 @@
-# Frontend build artifact (created by npm run build:web or Docker multi-stage)
-web/dist/*
-!web/dist/.gitkeep
+# Frontend source dependencies (not needed for Go build)
+web/node_modules/
+web/shared/
 
 # Binaries
 /bin/
