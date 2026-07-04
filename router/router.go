@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/handler/admin"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // New creates and configures the Chi router with the full middleware stack,
@@ -36,7 +38,16 @@ func New(cfg *config.Config, webDir string) chi.Router {
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.AdminAuth(cfg))
 
-		// P3-P11: register specific /api routes here
+		// P3: Sites + Accounts + AccountTokens CRUD API
+		db := store.GetDB()
+		if db != nil {
+			admin.RegisterSitesRoutes(r, db.DB)
+			admin.RegisterAccountsRoutes(r, db.DB, cfg)
+			admin.RegisterAccountTokensRoutes(r, db.DB)
+		} else {
+			slog.Warn("router: database not initialized, P3 routes skipped")
+		}
+
 		r.Get("/desktop/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
