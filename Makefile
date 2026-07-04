@@ -2,7 +2,7 @@
 
 # Build the server binary (requires web/dist/ to exist for go:embed)
 build:
-	go build -ldflags="-s -w" -o metapi ./cmd/server
+	go build -trimpath -ldflags="-s -w" -o metapi ./cmd/server
 
 # Run tests
 test:
@@ -26,7 +26,7 @@ web-build:
 
 # Build the standalone migration tool
 migrate-build:
-	go build -ldflags="-s -w" -o metapi-migrate ./cmd/migrate
+	go build -trimpath -ldflags="-s -w" -o metapi-migrate ./cmd/migrate
 
 # Clean build artifacts
 clean:
