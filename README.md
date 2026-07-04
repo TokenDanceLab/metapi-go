@@ -2,9 +2,9 @@
 
 <div align="center">
 
-**中转站的中转站 — 将分散的 AI 中转站聚合为一个统一网关**
+**中转站的中转站，将分散的 AI 中转站聚合为一个统一网关**
 
-Go 语言重写版。单二进制部署，无需 Node.js 运行时，与原 TypeScript 版功能完全对等。
+[MetAPI](https://github.com/cita-777/metapi) 的 Go 语言重写版。单二进制部署，与原 TypeScript 版功能对等。
 
 <p align="center">
   <a href="README.md"><strong>中文</strong></a> |
@@ -13,47 +13,92 @@ Go 语言重写版。单二进制部署，无需 Node.js 运行时，与原 Type
 
 <p align="center">
   <a href="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/TokenDanceLab/metapi-go/actions/workflows/cd.yml"><img alt="CD" src="https://github.com/TokenDanceLab/metapi-go/actions/workflows/cd.yml/badge.svg"></a>
   <img alt="Go" src="https://img.shields.io/badge/Go-1.25-00ADD8?logo=go">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
   <a href="https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go"><img alt="Docker" src="https://img.shields.io/badge/ghcr-v0.4.0-blue?logo=docker"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
 </div>
 
 ---
 
-## 这是什么？
+## 介绍
 
-MetAPI 帮你把各处注册的 New API / One API / OneHub / DoneHub / Veloera / Sub2API 等站点，汇聚成**一个 API Key、一个入口**。
+把你在各处注册的 New API / One API / OneHub / DoneHub / Veloera / AnyRouter / Sub2API 等站点，汇聚成**一个 API Key、一个入口**，自动发现模型、智能路由、成本最优。
 
-把 API 中转站当做模型供应商，MetAPI 就是你的统一网关——自动发现模型、智能路由请求、每天帮你签到领额度。
+MetAPI 作为中转站之上的**元聚合层**，把多个站点统一到一个入口，下游所有工具（Cursor、Claude Code、Codex、Open WebUI 等）即可无感接入全部模型。当前支持的上游范围不止传统聚合面板，还包括：
 
-**Go 版相比原 TypeScript 版**：内存 85MB → 20MB，Docker 镜像 250MB → 15MB，启动 5-10s → 0.1s。单文件部署，拷贝即运行。
+- 聚合面板：New API、One API、OneHub、DoneHub、Veloera、AnyRouter、Sub2API
+- 通用兼容接口：OpenAI、Claude、Gemini 兼容端点，以及 `cliproxyapi`
+- OAuth 连接：Codex、Claude、Gemini CLI、Antigravity
 
-## 为什么用 Go？
+| 痛点 | MetAPI 怎么解决 |
+|------|----------------|
+| 每个站点一个 Key，下游工具配置一堆 | **统一代理入口**，模型自动聚合到 `/v1/*` |
+| 不知道哪个站点用某个模型最便宜 | **智能路由**自动按成本、余额、使用率选最优通道 |
+| 某个站点挂了，手动切换好麻烦 | **自动故障转移**，一个通道失败自动冷却并切到下一个 |
+| 余额分散在各处，不知道还剩多少 | **集中看板**一目了然，余额不足自动告警 |
+| 每天得去各站签到领额度 | **自动签到**定时执行，奖励自动追踪 |
+| 不知道哪个站有什么模型 | **自动模型发现**，上游新增模型零配置出现在你的模型列表里 |
 
-| | Node.js (原版) | Go (本版) |
+### Go 版有什么不同
+
+和原 TypeScript 版功能完全一致，换个运行时：
+
+| | Node.js（原版） | Go（本版） |
 |---|---|---|
-| 内存占用 | 85 MB | ~20 MB |
+| 内存占用 | ~85 MB | ~20 MB |
 | Docker 镜像 | ~250 MB | ~15 MB |
-| 启动时间 | 5-10 秒 | <0.1 秒 |
-| 部署方式 | 需要 Node.js 运行时 | 单个二进制文件 |
-| 并发能力 | 事件循环 | goroutines 多核并行 |
+| 启动时间 | 5-10 秒 | 即时 |
+| 部署方式 | 需要 Node 运行时 | 单个二进制文件 |
+
+---
 
 ## 快速开始
 
-### Docker（推荐）
+### Docker
 
 ```bash
-docker run -d -p 4000:4000 \
-  -v ./data:/app/data \
+docker run -d --name metapi \
+  -p 4000:4000 \
   -e AUTH_TOKEN=your-admin-token \
-  -e PROXY_TOKEN=sk-your-proxy-token \
+  -e PROXY_TOKEN=your-proxy-sk-token \
+  -e TZ=Asia/Shanghai \
+  -v ./data:/app/data \
+  --restart unless-stopped \
   ghcr.io/tokendancelab/metapi-go:latest
 ```
 
-打开 `http://localhost:4000`，用 AUTH_TOKEN 登录。
+启动后访问 `http://localhost:4000`，用 `AUTH_TOKEN` 登录。
+
+> 请务必修改 `AUTH_TOKEN` 和 `PROXY_TOKEN`，不要使用默认值。数据存储在 `./data` 目录，升级不会丢失。
+
+### Docker Compose
+
+```bash
+mkdir metapi && cd metapi
+
+cat > docker-compose.yml << 'EOF'
+services:
+  metapi:
+    image: ghcr.io/tokendancelab/metapi-go:latest
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      AUTH_TOKEN: ${AUTH_TOKEN:?required}
+      PROXY_TOKEN: ${PROXY_TOKEN:?required}
+      CHECKIN_CRON: "0 8 * * *"
+      BALANCE_REFRESH_CRON: "0 * * * *"
+      TZ: Asia/Shanghai
+    restart: unless-stopped
+EOF
+
+export AUTH_TOKEN=your-admin-token
+export PROXY_TOKEN=your-proxy-sk-token
+docker compose up -d
+```
 
 ### 从源码
 
@@ -64,43 +109,54 @@ go build -o metapi ./cmd/server
 AUTH_TOKEN=admin PROXY_TOKEN=sk-proxy ./metapi
 ```
 
-### 使用代理
+---
 
-```bash
-curl http://localhost:4000/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-proxy-token" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"你好"}]}'
-```
+## 核心功能
 
-## 功能
+### 统一代理网关
 
-### 协议代理
-- `/v1/chat/completions`、`/v1/responses`、`/v1/embeddings`、`/v1/models` 等 OpenAI 兼容端点
-- `/v1/messages` Anthropic 原生端点
-- Gemini、Codex 原生接口
-- **实时协议转换**：发送 Anthropic 请求，获得 OpenAI 响应（或反过来）
-- SSE 流式传输
+兼容 **OpenAI** 与 **Claude** 下游格式，对接所有主流客户端。支持 Chat Completions、Responses、Messages、Completions、Embeddings、Images、Models，以及标准 `/v1/files` 文件接口。完整的 SSE 流式传输，自动格式转换。
 
-### 路由引擎
-- 加权随机、轮询、稳定优先三种策略
-- 斐波那契退避冷却（`15 × fib(失败次数)`，上限 30 天）
-- 站点级断路器 + 半开探测
-- 粘滞会话
-- 按 API Key 的细粒度路由策略
+### 智能路由引擎
 
-### 账号管理
-- 14 个平台适配器自动检测
-- 每日自动签到 + 奖励解析
-- 余额追踪 + 价值评分
-- OAuth PKCE 登录（Codex、Claude、Gemini CLI、Antigravity）
+自动发现所有上游站点的可用模型，零配置生成路由表。多通道概率分摊，基于成本、余额、使用率加权分配。失败通道自动冷却与避让，请求失败自动重试切到其他可用通道。
 
-### 运维
-- Webhook / Bark / Server酱 / Telegram / SMTP 五通道通知
-- 27 表完整备份/恢复（支持 WebDAV 同步）
-- SQLite → PostgreSQL 迁移工具
-- 速率限制（100rps 管理，10rps OAuth）
-- 15 个后台调度器
+### 多平台聚合管理
+
+| 平台 | 适配器 | 说明 |
+|------|--------|------|
+| New API | `new-api` | 新一代大模型网关 |
+| One API | `one-api` | 经典 OpenAI 接口聚合 |
+| OneHub | `onehub` | One API 增强分支 |
+| DoneHub | `done-hub` | OneHub 增强分支 |
+| Veloera | `veloera` | API 网关平台 |
+| AnyRouter | `anyrouter` | 通用路由平台 |
+| Sub2API | `sub2api` | 订阅制中转平台 |
+| OpenAI / Claude / Gemini | `openapi` / `claude` / `gemini` | 标准兼容接口 |
+
+各平台适配器覆盖模型枚举、余额查询、Token 管理、代理接入等通用能力。
+
+### 账号与 Token 管理
+
+多站点多账号，每个账号可持有多个 API Token。凭证加密存储在本地数据库中。Token 过期自动重新登录获取新凭证，禁用站点自动级联禁用所有关联账号。
+
+### 自动签到
+
+Cron 定时执行（默认每日 08:00），智能解析奖励金额，签到失败自动通知。按账号启用/禁用控制，完整签到日志与历史查询。
+
+### 余额管理
+
+定时余额刷新（默认每小时），批量更新所有活跃账号。收入追踪：每日/累计收入与消费趋势分析。凭证过期自动重新登录。
+
+### 告警通知
+
+支持五种通知渠道：Webhook、Bark、Server酱、Telegram Bot、SMTP 邮件。告警场景包括余额不足预警、站点/账号异常、签到失败、代理请求失败、Token 过期提醒、每日摘要报告。
+
+### 轻量部署
+
+单 Docker 容器，默认本地数据目录部署，支持外接 PostgreSQL 运行时数据库。Go 单二进制，15MB 镜像，启动即时。数据完整导入导出，迁移无忧。
+
+---
 
 ## 配置
 
@@ -113,43 +169,55 @@ curl http://localhost:4000/v1/chat/completions \
 | `PORT` | `4000` | 监听端口 |
 | `DB_TYPE` | `sqlite` | 数据库类型（`sqlite` / `postgres`） |
 | `CHECKIN_CRON` | `0 8 * * *` | 签到时间 |
+| `BALANCE_REFRESH_CRON` | `0 * * * *` | 余额刷新频率 |
 
-完整配置见 [`.env.example`](.env.example)。
+[`.env.example`](.env.example) 中有完整的环境变量清单。
+
+---
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 后端 | [chi](https://github.com/go-chi/chi) 路由 + `net/http` |
+| 语言 | Go 1.25 |
+| 数据库 | SQLite / PostgreSQL + [sqlx](https://github.com/jmoiron/sqlx) |
+| 定时任务 | [robfig/cron](https://github.com/robfig/cron) |
+| 容器化 | Docker（Alpine，15MB 镜像） |
+| 前端 | React 18 + Vite + Tailwind CSS v4（内嵌） |
+
+---
+
+## 数据与隐私
+
+MetAPI 完全自托管，所有数据（账号、令牌、路由、日志）均存储在你自己的部署环境中，不会向任何第三方发送数据。代理请求仅在你的服务器与上游站点之间直连传输。
+
+---
 
 ## 从 TypeScript 版迁移
 
+数据库 Schema 完全一致，Go 版启动时自动执行幂等 migration。停止旧服务，用同样的环境变量启动 Go 版即可。
+
+---
+
+## 开发
+
 ```bash
-# 1. 停止旧服务
-# 2. 启动 Go 版（数据库文件和环境变量通用）
-./metapi
+make build    # 构建
+make test     # 运行全部测试
+make lint     # 代码检查
 ```
 
-数据库 Schema 完全一致，Go 版启动时自动执行幂等 migration。
-
-## 项目结构
-
-```
-cmd/server/          主程序
-cmd/migrate/         SQLite→PG 迁移工具
-config/              配置（~100 环境变量）
-store/               数据库（27 表，双方言）
-auth/                认证 + 速率限制
-routing/             路由引擎
-proxy/               代理核心
-platform/            14 平台适配器
-transform/           四协议 SSE 转换
-service/             业务逻辑
-scheduler/           15 后台任务
-handler/admin/       管理 API
-handler/proxy/       代理端点
-web/dist/            前端（构建产物，已嵌入）
-```
+---
 
 ## 相关项目
 
-- [MetAPI (TypeScript)](https://github.com/cita-777/metapi) — 原版 Node.js 实现
-- [TokenDance Gateway](https://github.com/TokenDanceLab/tokendance-gateway) — 生产级 NewAPI fork
+- [MetAPI (TypeScript)](https://github.com/cita-777/metapi)，原版 Node.js 实现
+- [New API](https://github.com/QuantumNous/new-api)，主要上游之一
+- [One API](https://github.com/songquanpeng/one-api)，经典 OpenAI 接口聚合
+
+---
 
 ## 许可证
 
-MIT © [TokenDance Lab](https://github.com/TokenDanceLab)
+[MIT](LICENSE)
