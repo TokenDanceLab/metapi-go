@@ -98,6 +98,15 @@ func CloseDatabase() error {
 	return nil
 }
 
+// OverrideDB replaces the active database singleton with the given DB.
+// Intended for tests that need to inject a pre-configured connection.
+func OverrideDB(db *DB) {
+	mu.Lock()
+	defer mu.Unlock()
+	activeDB = db
+	initialized = db != nil
+}
+
 // maskDSN redacts the password portion of a PostgreSQL connection string for logging.
 func maskDSN(dsn string) string {
 	result := dsn

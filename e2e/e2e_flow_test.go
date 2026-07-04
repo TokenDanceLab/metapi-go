@@ -227,11 +227,11 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 		// Flat response: id is at top level.
 		tokenData = tokenResp
 	}
-	tokenIDFloat, ok := tokenData["id"].(float64)
-	if !ok {
+	tokenID := mapGetInt64(tokenData, "id")
+	if tokenID == 0 {
 		t.Fatalf("create account_token: expected numeric id in response, got %v", tokenResp)
 	}
-	t.Logf("created account_token: id=%d for account %d", int64(tokenIDFloat), accountID)
+	t.Logf("created account_token: id=%d for account %d", tokenID, accountID)
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 5: Query /v1/models via proxy
@@ -615,4 +615,25 @@ func doAdminPost(t *testing.T, r chi.Router, path string, token string, body any
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	return rec
+}
+
+// mapGetInt64 extracts an int64 value from a decoded JSON map, handling
+// all numeric types that encoding/json may produce (float64, json.Number).
+func mapGetInt64(m map[string]any, key string) int64 {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return int64(n)
+	case json.Number:
+		i, _ := n.Int64()
+		return i
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	}
+	return 0
 }

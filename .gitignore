@@ -36,3 +36,7 @@ migrate.exe
 server.exe
 routing.test.exe
 *.test.exe
+
+# Test artifacts
+coverage.out
+*.out
