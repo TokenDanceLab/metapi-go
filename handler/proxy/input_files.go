@@ -1,4 +1,4 @@
-package proxy
+package proxyhandler
 
 // Input files parsing helpers.
 // In the TS codebase, input files are resolved from multipart form data

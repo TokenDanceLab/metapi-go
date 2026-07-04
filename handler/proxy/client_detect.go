@@ -1,4 +1,4 @@
-package proxy
+package proxyhandler
 
 import (
 	"github.com/tokendancelab/metapi-go/proxy"

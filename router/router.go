@@ -11,7 +11,7 @@ import (
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/admin"
-	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
+	"github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/store"
 )
 

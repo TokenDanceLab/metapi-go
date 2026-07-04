@@ -1,6 +1,6 @@
-// Package proxy implements P10 proxy route handlers.
+// Package proxyhandler implements P10 proxy route handlers.
 // Thin HTTP handlers that delegate to P8 endpoint flow + P9 transform.
-package proxy
+package proxyhandler
 
 import (
 	"net/http"

@@ -363,16 +363,23 @@ func (c *ProxyChannelCoordinator) createTrackedLease(channelID int64, state *cha
 		doneCh:    make(chan struct{}, 1),
 	}
 
-	// Start expiry timer
-	ttlMs := c.channelLeaseTTLMs()
+	// Start expiry timer (single goroutine; resets via expiryCh on Touch)
 	go func() {
-		timer := time.NewTimer(time.Duration(ttlMs) * time.Millisecond)
+		timer := time.NewTimer(time.Duration(c.channelLeaseTTLMs()) * time.Millisecond)
 		defer timer.Stop()
-		select {
-		case <-timer.C:
-			lease.Release()
-		case <-lease.doneCh:
-			return
+		for {
+			select {
+			case <-timer.C:
+				lease.Release()
+				return
+			case <-lease.expiryCh:
+				if !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(time.Duration(c.channelLeaseTTLMs()) * time.Millisecond)
+			case <-lease.doneCh:
+				return
+			}
 		}
 	}()
 
@@ -397,27 +404,10 @@ func (c *ProxyChannelCoordinator) createTrackedLease(channelID int64, state *cha
 }
 
 func (c *ProxyChannelCoordinator) touchLease(lease *ChannelLease) {
-	ttlMs := c.channelLeaseTTLMs()
 	select {
 	case lease.expiryCh <- struct{}{}:
 	default:
 	}
-	// Reset expiry in a goroutine
-	go func() {
-		timer := time.NewTimer(time.Duration(ttlMs) * time.Millisecond)
-		defer timer.Stop()
-		for {
-			select {
-			case <-timer.C:
-				lease.Release()
-				return
-			case <-lease.expiryCh:
-				timer.Reset(time.Duration(ttlMs) * time.Millisecond)
-			case <-lease.doneCh:
-				return
-			}
-		}
-	}()
 }
 
 func (c *ProxyChannelCoordinator) releaseLease(channelID int64, leaseID int, state *channelRuntimeState) {

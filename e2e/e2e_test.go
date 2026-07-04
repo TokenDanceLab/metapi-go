@@ -22,7 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
-	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
+	"github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"

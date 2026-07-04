@@ -26,6 +26,21 @@ func main() {
 	cfg := config.Load(env)
 	config.Set(cfg)
 
+	// ---- 1a. Validate config at startup ----
+	errs := cfg.Validate()
+	hasCritical := false
+	for _, err := range errs {
+		if config.IsCritical(err) {
+			slog.Error("config validation", "error", err)
+			hasCritical = true
+		} else {
+			slog.Warn("config validation", "error", err)
+		}
+	}
+	if hasCritical {
+		os.Exit(1)
+	}
+
 	// Normalize DataDir (E11: trailing slash / Windows backslash)
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
 
