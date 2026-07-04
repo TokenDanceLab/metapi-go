@@ -1,5 +1,5 @@
 # Frontend build artifact (created by npm run build:web or Docker multi-stage)
-web/dist/
+web/dist/*
 !web/dist/.gitkeep
 
 # Binaries
