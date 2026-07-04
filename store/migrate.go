@@ -123,16 +123,6 @@ func textPK(d string) string {
 // isPostgres is a short helper.
 func isPG(d string) bool { return d == DialectPostgres }
 
-// pgInlineFKNullable creates nullable inline FK
-func pgInlineFKNullable(col, refTable, refCol, onDelete string) string {
-	return fmt.Sprintf("%s INTEGER REFERENCES %s(%s) ON DELETE %s", col, refTable, refCol, onDelete)
-}
-
-// sqFK builds a SQLite FK constraint (separate from column defs).
-func sqFK(col, refTable, refCol, onDelete string) string {
-	return fmt.Sprintf("FOREIGN KEY (%s) REFERENCES %s(%s) ON DELETE %s", col, refTable, refCol, onDelete)
-}
-
 // ---- Table DDL builders ----
 
 func buildSitesDDL(d string) string {

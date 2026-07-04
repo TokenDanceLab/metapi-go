@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -35,7 +34,6 @@ type SiteProxyConfig struct {
 type SiteProxy struct {
 	systemProxyURL  string
 	siteConfigs     map[string]*SiteProxyConfig
-	mu              sync.RWMutex
 	lastLoad        time.Time
 	httpClient      *http.Client
 	httpClientNoTLS *http.Client
