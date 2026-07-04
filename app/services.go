@@ -4,109 +4,78 @@ import (
 	"log/slog"
 
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/scheduler"
 )
 
-// PrintStartupSummary logs a summary of the startup configuration.
-// Mirrors the TS buildStartupSummaryLines behavior.
-func PrintStartupSummary(cfg *config.Config) {
-	slog.Info("========================================")
-	slog.Info("  MetAPI Go Server started")
-	slog.Info("========================================")
-	slog.Info("listening", "port", cfg.Port, "host", cfg.ListenHost)
-	slog.Info("database", "type", cfg.DbType)
-	if cfg.AuthToken != "" {
-		slog.Info("auth", "admin_token", "configured")
-	} else {
-		slog.Warn("auth", "admin_token", "not configured")
-	}
-	if cfg.ProxyToken != "" {
-		slog.Info("auth", "proxy_token", "configured")
-	} else {
-		slog.Warn("auth", "proxy_token", "not configured")
-	}
-	slog.Info("========================================")
-}
+var (
+	registry *scheduler.Registry
+)
 
-// StartBackgroundServices starts all background service stubs.
-// Each is wrapped in a goroutine+recover; failures only warn, never crash.
-// P12 will replace stubs with real implementations.
+// StartBackgroundServices creates and starts all 15 background schedulers.
 func StartBackgroundServices() {
-	slog.Info("starting background services (stubs)")
+	slog.Info("starting background schedulers")
 
-	services := []struct {
-		name string
-		fn   func()
-	}{
-		{"checkinScheduler", startCheckinSchedulerStub},
-		{"backupWebdavReload", reloadBackupWebdavStub},
-		{"siteAnnouncementPolling", startSiteAnnouncementPollingStub},
-		{"modelAvailabilityProbe", startModelAvailabilityProbeStub},
-		{"channelRecoveryProbe", startChannelRecoveryProbeStub},
-		{"sub2apiRefresh", startSub2apiRefreshStub},
-		{"updateCenterPolling", startUpdateCenterPollingStub},
-		{"usageAggregation", startUsageAggregationStub},
-		{"adminSnapshot", startAdminSnapshotStub},
-	}
+	cfg := config.Get()
+	registry = scheduler.NewRegistry()
 
-	for _, svc := range services {
-		go func(name string, fn func()) {
-			defer func() {
-				if r := recover(); r != nil {
-					slog.Warn("background service panicked", "service", name, "panic", r)
-				}
-			}()
-			slog.Info("background service started (stub)", "service", name)
-			fn()
-		}(svc.name, svc.fn)
-	}
+	// ---- Usage Aggregation (needed by admin-snapshot) ----
+	usageAgg := scheduler.NewUsageAggregationScheduler(cfg)
+	registry.Register(usageAgg)
 
-	// OAuth loopback servers: wrapped in try/catch equivalent
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Warn("OAuth loopback callback servers failed", "panic", r)
-			}
-		}()
-		startOAuthLoopbackCallbackServersStub()
-	}()
+	// ---- Scheduler 1: Checkin ----
+	registry.Register(scheduler.NewCheckinScheduler(cfg))
+
+	// ---- Scheduler 2: Balance Refresh ----
+	registry.Register(scheduler.NewBalanceScheduler(cfg, nil))
+
+	// ---- Scheduler 3: Daily Summary ----
+	registry.Register(scheduler.NewDailySummaryScheduler(cfg))
+
+	// ---- Scheduler 4: Log Cleanup ----
+	registry.Register(scheduler.NewLogCleanupScheduler(cfg))
+
+	// ---- Scheduler 5: Backup WebDAV ----
+	registry.Register(scheduler.NewBackupWebdavScheduler(cfg))
+
+	// ---- Scheduler 6: Site Announcements ----
+	registry.Register(scheduler.NewSiteAnnouncementScheduler(cfg))
+
+	// ---- Scheduler 7: Model Probe ----
+	registry.Register(scheduler.NewModelProbeScheduler(cfg))
+
+	// ---- Scheduler 8: Channel Recovery ----
+	registry.Register(scheduler.NewChannelRecoveryScheduler(cfg))
+
+	// ---- Scheduler 9: Sub2API Refresh ----
+	registry.Register(scheduler.NewSub2APIRefreshScheduler(cfg))
+
+	// ---- Scheduler 10: Update Center ----
+	registry.Register(scheduler.NewUpdateCenterScheduler(cfg))
+
+	// ---- Scheduler 12: Admin Snapshot ----
+	registry.Register(scheduler.NewAdminSnapshotScheduler(cfg, usageAgg))
+
+	// ---- Scheduler 13: Proxy File Retention ----
+	registry.Register(scheduler.NewProxyFileRetentionScheduler(cfg))
+
+	// ---- Scheduler 14: Proxy Log Retention (legacy fallback) ----
+	registry.Register(scheduler.NewProxyLogRetentionScheduler(cfg))
+
+	// ---- Scheduler 15: OAuth Loopback ----
+	registry.Register(scheduler.NewOAuthLoopbackScheduler(cfg))
+
+	// Start all
+	registry.StartAll(nil) // nil context: schedulers manage their own goroutines
+
+	slog.Info("all background schedulers registered",
+		"count", len(registry.List()),
+	)
 }
 
-// StopBackgroundServices stops all background service stubs.
-// Registered as onClose callbacks.
+// StopBackgroundServices stops all background schedulers.
 func StopBackgroundServices() {
-	slog.Info("stopping background services (stubs)")
-	stopSiteAnnouncementPollingStub()
-	stopUpdateCenterPollingStub()
-	stopProxyFileRetentionStub()
-	stopProxyLogRetentionStub()
-	stopModelAvailabilityProbeStub()
-	stopChannelRecoveryProbeStub()
-	stopUsageAggregationStub()
-	stopAdminSnapshotStub()
-	stopSub2apiRefreshStub()
-	stopOAuthLoopbackCallbackServersStub()
+	slog.Info("stopping background schedulers")
+	if registry != nil {
+		registry.StopAll()
+	}
 }
-
-// ---- Individual service stubs ----
-
-func startCheckinSchedulerStub()        {}
-func reloadBackupWebdavStub()           {}
-func startSiteAnnouncementPollingStub()  {}
-func startModelAvailabilityProbeStub()   {}
-func startChannelRecoveryProbeStub()     {}
-func startSub2apiRefreshStub()           {}
-func startUpdateCenterPollingStub()      {}
-func startUsageAggregationStub()         {}
-func startAdminSnapshotStub()            {}
-func startOAuthLoopbackCallbackServersStub() {}
-
-func stopSiteAnnouncementPollingStub()    {}
-func stopUpdateCenterPollingStub()        {}
-func stopProxyFileRetentionStub()         {}
-func stopProxyLogRetentionStub()          {}
-func stopModelAvailabilityProbeStub()     {}
-func stopChannelRecoveryProbeStub()       {}
-func stopUsageAggregationStub()           {}
-func stopAdminSnapshotStub()              {}
-func stopSub2apiRefreshStub()             {}
-func stopOAuthLoopbackCallbackServersStub() {}
