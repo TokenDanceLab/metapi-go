@@ -5,7 +5,31 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+var (
+	globalCfg *Config
+	cfgMu     sync.RWMutex
+)
+
+// Set stores the global config singleton.
+func Set(cfg *Config) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	globalCfg = cfg
+}
+
+// Get returns the global config singleton.
+// Panics if config has not been loaded.
+func Get() *Config {
+	cfgMu.RLock()
+	defer cfgMu.RUnlock()
+	if globalCfg == nil {
+		panic("config.Get() called before config.Set() — load config first")
+	}
+	return globalCfg
+}
 
 // CodexHeaderDefaults holds Codex-specific HTTP header defaults.
 type CodexHeaderDefaults struct {

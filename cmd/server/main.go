@@ -23,6 +23,7 @@ func main() {
 
 	// ---- 1. Load config ----
 	cfg := config.Load(env)
+	config.Set(cfg)
 
 	// Normalize DataDir (E11: trailing slash / Windows backslash)
 	cfg.DataDir = filepath.Clean(cfg.DataDir)

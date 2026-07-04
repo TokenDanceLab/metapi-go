@@ -1,0 +1,5 @@
+# Golden file for CalculateWeightedSelection weight formula
+# Format: channelID,siteID,accountID,probability
+1,100,1001,0.29361
+2,100,1002,0.37272
+3,200,2001,0.333669
