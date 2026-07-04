@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/config"
 )
 
 // New creates and configures the Chi router with the full middleware stack,
 // route groups, SPA fallback, and asset caching.
-func New(webDir string) chi.Router {
+func New(cfg *config.Config, webDir string) chi.Router {
 	r := chi.NewRouter()
 
 	// ---- Middleware stack ----
@@ -23,8 +25,6 @@ func New(webDir string) chi.Router {
 
 	// ---- /health (design addition, not in TS) ----
 	// Registered before route groups so it bypasses auth middleware.
-	// The actual handler lives in app/health.go; we register it from app.go.
-	// This placeholder allows the router to compile without the app package.
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -33,9 +33,8 @@ func New(webDir string) chi.Router {
 
 	// ---- Route groups ----
 	// /api/* routes (excluding public routes) → admin auth middleware
-	// For P0, the auth middleware is a placeholder that passes through.
 	r.Route("/api", func(r chi.Router) {
-		r.Use(adminAuthPlaceholder)
+		r.Use(auth.AdminAuth(cfg))
 
 		// P3-P11: register specific /api routes here
 		r.Get("/desktop/health", func(w http.ResponseWriter, r *http.Request) {
@@ -45,9 +44,9 @@ func New(webDir string) chi.Router {
 		})
 	})
 
-	// /v1/* proxy routes → internal auth handled by P10
+	// /v1/* proxy routes → proxy auth middleware
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(proxyAuthPlaceholder)
+		r.Use(auth.ProxyAuth(cfg))
 		// P10: register proxy handler
 	})
 
@@ -83,38 +82,4 @@ func setupSPAFallback(r chi.Router, webDir string) {
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
 	})
-}
-
-// adminAuthPlaceholder is a P0 stub for admin bearer token + IP allowlist auth.
-// It passes through all requests. P3 will implement actual auth.
-func adminAuthPlaceholder(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// P3: validate Bearer AUTH_TOKEN, check AdminIpAllowlist
-		// For now, skip public routes
-		if isPublicApiRoute(r.URL.Path) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// proxyAuthPlaceholder is a P0 stub for proxy token auth.
-// P10 will implement actual proxy auth.
-func proxyAuthPlaceholder(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r)
-	})
-}
-
-// isPublicApiRoute checks if the URL path is on the public API whitelist.
-// Whitelist: /api/desktop/health, /api/oauth/callback/*
-func isPublicApiRoute(urlPath string) bool {
-	if urlPath == "/api/desktop/health" {
-		return true
-	}
-	if strings.HasPrefix(urlPath, "/api/oauth/callback/") {
-		return true
-	}
-	return false
 }

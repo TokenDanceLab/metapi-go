@@ -67,7 +67,7 @@ func main() {
 
 	// ---- 12. Create HTTP router ----
 	webDir := filepath.Join(cfg.DataDir, "..", "web", "dist")
-	r := router.New(webDir)
+	r := router.New(cfg, webDir)
 
 	// Override /health handler with actual implementation
 	// (router.New registers a placeholder; in production we'd pass the handler in)
