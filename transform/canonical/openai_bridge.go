@@ -23,10 +23,6 @@ func isRecord(v any) (map[string]any, bool) {
 	return m, true
 }
 
-func isRecordIface(v any) bool {
-	_, ok := isRecord(v)
-	return ok
-}
 
 func safeJSONString(v any) string {
 	if v == nil {

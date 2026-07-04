@@ -67,13 +67,6 @@ func extractClaudeCodeSessionID(userID string) string {
 	return strings.TrimSpace(trimmed[idx+len("__session_"):])
 }
 
-func isRecord(v any) bool {
-	if v == nil {
-		return false
-	}
-	_, ok := v.(map[string]any)
-	return ok
-}
 
 func detectClaudeCode(input types.DetectInput) *types.DetectedProfile {
 	if !isClaudeSurface(input.DownstreamPath) {

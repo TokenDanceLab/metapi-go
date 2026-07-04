@@ -564,28 +564,6 @@ func TestOpenAIBody_ToolMessage_NonStringContent(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: verify re-serializable JSON
-// ---------------------------------------------------------------------------
-
-func mustMarshal(t *testing.T, v any) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	return string(b)
-}
-
-func mustUnmarshalMap(t *testing.T, s string) map[string]any {
-	t.Helper()
-	var m map[string]any
-	if err := json.Unmarshal([]byte(s), &m); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	return m
-}
-
-// ---------------------------------------------------------------------------
 // Roundtrip: assistant with reasoning_content
 // ---------------------------------------------------------------------------
 

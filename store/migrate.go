@@ -123,11 +123,6 @@ func textPK(d string) string {
 // isPostgres is a short helper.
 func isPG(d string) bool { return d == DialectPostgres }
 
-// pgFK creates inline FK definition (PostgreSQL only — SQLite uses separate FK clause).
-func pgInlineFK(col, refTable, refCol, onDelete string) string {
-	return fmt.Sprintf("%s INTEGER NOT NULL REFERENCES %s(%s) ON DELETE %s", col, refTable, refCol, onDelete)
-}
-
 // pgInlineFKNullable creates nullable inline FK
 func pgInlineFKNullable(col, refTable, refCol, onDelete string) string {
 	return fmt.Sprintf("%s INTEGER REFERENCES %s(%s) ON DELETE %s", col, refTable, refCol, onDelete)
