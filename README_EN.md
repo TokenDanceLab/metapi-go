@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Unified proxy gateway for AI API aggregation platforms.**
+**The proxy for proxies — aggregate all your AI API中转站 into one unified gateway**
 
 Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Single binary, no Node.js runtime, full feature parity.
 
