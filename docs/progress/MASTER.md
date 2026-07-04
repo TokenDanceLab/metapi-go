@@ -19,17 +19,17 @@
 | P8 | ProxyCore orchestration | ✅ |
 | P9 | Protocol transformers | ✅ |
 | P10 | Proxy routes (/v1/*) | ✅ |
-| P11 | Admin API (~60 endpoints) | ✅ |
+| P11 | Admin API (~144 endpoints) | ✅ |
 | P12 | Background schedulers (15) | ✅ |
 | P13 | Frontend embed + CI/CD + docs | ✅ |
 | **COMPARE** | TS vs Go deep comparison | ✅ |
 | **AUDIT** | 16-dimension audit | ✅ |
-| **FIX** | Audit findings remediation | 🔄 |
+| **FIX** | Audit findings remediation | ✅ |
 
 ## CI/CD Status
 - CI: ✅ (build + test-sqlite + test-pg + lint)
 - CD: ✅ (ghcr.io/tokendancelab/metapi-go:latest)
-- Release: v0.1.0
+- Release: v0.3.0
 
 ## Deep Comparison Results
 - **Routing**: ALL MATCH (9 algorithm steps verified)
@@ -49,8 +49,9 @@ See `docs/plan/audit-fix-plan.md` for full prioritized fix plan.
 | LOW | 10 | Style, docs, minor optimizations |
 
 ## Next Steps
-1. Write fix plan → `docs/plan/audit-fix-plan.md`
-2. Execute CRITICAL fixes first
-3. Verify locally (build + vet + test + e2e)
-4. Push + verify CI/CD green
-5. Tag v0.2.0
+1. ~~Write fix plan~~ (done)
+2. ~~Execute CRITICAL fixes first~~ (done)
+3. ~~Verify locally (build + vet + test + e2e)~~ (done)
+4. ~~Push + verify CI/CD green~~ (done)
+5. ~~Tag v0.2.0~~ (done, now v0.3.0)
+6. Monitor production metrics, observability tuning

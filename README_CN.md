@@ -169,8 +169,8 @@ AUTH_TOKEN=... PROXY_TOKEN=... ./metapi
 ├── transform/           # 4 协议 SSE 转换
 ├── service/             # 业务逻辑（签到/余额/通知/OAuth/备份）
 ├── scheduler/           # 15 个后台调度器
-├── handler/admin/       # 管理 API（~100 端点）
-├── handler/proxy/       # 代理路由（11 接口面）
+├── handler/admin/       # 管理 API（~144 端点）
+├── handler/proxy/       # 代理路由（~30 接口面）
 ├── web/dist/            # 前端静态文件（构建产物，已嵌入）
 └── docs/                # 文档与规格
 ```

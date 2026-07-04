@@ -175,8 +175,8 @@ make docker-build   # Build Docker image
 ```
 ┌─ React SPA (embedded via go:embed) ────────────────────┐
 ├─ chi Router ───────────────────────────────────────────┤
-│  /api/*      Admin REST API (~100 endpoints)            │
-│  /v1/*       OpenAI-compatible proxy (11 surfaces)      │
+│  /api/*      Admin REST API (~144 endpoints)            │
+│  /v1/*       OpenAI-compatible proxy (~30 surfaces)      │
 │  /*          SPA fallback                               │
 ├─ Service Layer ────────────────────────────────────────┤
 │  routing/    TokenRouter (Fibonacci + weighted random)  │

@@ -28,8 +28,8 @@ platform/               14 upstream adapters
 transform/              4-protocol SSE conversion
 service/                Checkin, balance, notify, OAuth, backup
 scheduler/              15 background jobs
-handler/admin/          ~100 admin REST endpoints
-handler/proxy/          11 OpenAI-compatible proxy surfaces
+handler/admin/          ~144 admin REST endpoints
+handler/proxy/           ~30 proxy routes (OpenAI, Gemini, Claude, Codex, Files)
 web/dist/               Pre-built React SPA (embedded)
 docs/specs/             14 implementation specifications
 ```

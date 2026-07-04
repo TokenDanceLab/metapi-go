@@ -40,3 +40,6 @@ routing.test.exe
 # Test artifacts
 coverage.out
 *.out
+
+# E2E runtime data
+/e2e/data/
