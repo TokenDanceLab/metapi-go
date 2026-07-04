@@ -1,6 +1,7 @@
 package proxyhandler
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -64,25 +65,7 @@ func itoa(n int64) string {
 }
 
 func jsonSafeString(s string) string {
-	result := make([]byte, 0, len(s)+16)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case '"':
-			result = append(result, '\\', '"')
-		case '\\':
-			result = append(result, '\\', '\\')
-		case '\n':
-			result = append(result, '\\', 'n')
-		case '\r':
-			result = append(result, '\\', 'r')
-		case '\t':
-			result = append(result, '\\', 't')
-		default:
-			result = append(result, c)
-		}
-	}
-	return string(result)
+	return jsonEscape(s)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
@@ -160,6 +143,9 @@ func jsonEscapeStr(s string) string {
 }
 
 func ftoa(f float64) string {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return "null"
+	}
 	// Simple float-to-string for JSON
 	if f == float64(int64(f)) && f < 1e15 && f > -1e15 {
 		return itoa(int64(f))

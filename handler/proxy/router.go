@@ -85,7 +85,7 @@ func writeJSONError(w http.ResponseWriter, status int, message, typ string) {
 	w.Write([]byte(body))
 }
 
-// jsonEscape performs minimal JSON string escaping.
+// jsonEscape performs full JSON string escaping per RFC 8259 Section 7.
 func jsonEscape(s string) string {
 	result := make([]byte, 0, len(s)+16)
 	for i := 0; i < len(s); i++ {
@@ -95,6 +95,10 @@ func jsonEscape(s string) string {
 			result = append(result, '\\', '"')
 		case '\\':
 			result = append(result, '\\', '\\')
+		case '\b':
+			result = append(result, '\\', 'b')
+		case '\f':
+			result = append(result, '\\', 'f')
 		case '\n':
 			result = append(result, '\\', 'n')
 		case '\r':
@@ -102,10 +106,21 @@ func jsonEscape(s string) string {
 		case '\t':
 			result = append(result, '\\', 't')
 		default:
-			result = append(result, c)
+			if c < 0x20 {
+				result = append(result, '\\', 'u', '0', '0', hexDigit(c>>4), hexDigit(c&0x0f))
+			} else {
+				result = append(result, c)
+			}
 		}
 	}
 	return string(result)
+}
+
+func hexDigit(n byte) byte {
+	if n < 10 {
+		return '0' + n
+	}
+	return 'a' + n - 10
 }
 
 // GetProxyAuth extracts the proxy auth context from the request.
