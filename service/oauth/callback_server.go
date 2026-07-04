@@ -274,7 +274,7 @@ func handleCallbackRequest(provider string, w http.ResponseWriter, r *http.Reque
 
 	if r.URL.Path != def.Loopback.Path {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Not found"))
+		_, _ = w.Write([]byte("Not found"))
 		return
 	}
 

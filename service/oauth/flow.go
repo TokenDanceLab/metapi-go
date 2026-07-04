@@ -632,7 +632,7 @@ func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store
 
 	// Get next sort order.
 	var maxSortOrder int64
-	db.Get(&maxSortOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM sites")
+	_ = db.Get(&maxSortOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM sites")
 	sortOrder := maxSortOrder + 1
 	now := time.Now().Format(time.RFC3339)
 
@@ -655,7 +655,7 @@ func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store
 	id, err := result.LastInsertId()
 	if err != nil {
 		// Fallback for Postgres.
-		db.Get(&id, "SELECT id FROM sites WHERE platform = ? AND url = ? LIMIT 1",
+		_ = db.Get(&id, "SELECT id FROM sites WHERE platform = ? AND url = ? LIMIT 1",
 			def.Site.Platform, def.Site.URL)
 	}
 	site.ID = id

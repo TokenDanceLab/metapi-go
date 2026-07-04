@@ -282,7 +282,7 @@ func fetchJSONRaw(ctx context.Context, url, method string, body interface{}, hea
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(respBody, &parsed)
+	_ = json.Unmarshal(respBody, &parsed)
 
 	return parsed, respBody, resp.StatusCode, nil
 }
@@ -331,7 +331,7 @@ func fetchJSONRawWithCookie(ctx context.Context, url, method string, body interf
 	}
 
 	var parsed map[string]interface{}
-	json.Unmarshal(respBody, &parsed)
+	_ = json.Unmarshal(respBody, &parsed)
 
 	return parsed, newCookie, nil
 }
