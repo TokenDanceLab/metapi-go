@@ -43,6 +43,7 @@ type Ctx struct {
 	Auth      *auth.ProxyAuthContext
 	Policy    auth.DownstreamRoutingPolicy
 	Body      map[string]any
+	RawBody   []byte // raw request body bytes for zero-copy model swap in upstream
 	Headers   map[string]string
 	ClientCtx proxy.DownstreamClientContext
 	RequestedModel string
@@ -108,6 +109,7 @@ func PrepareCtx(r *http.Request, cfg SurfConfig) (*Ctx, *SurfResult) {
 		Auth:      authCtx,
 		Policy:    authCtx.Policy,
 		Body:      body,
+		RawBody:   bodyBytes,
 		Headers:   headers,
 		ClientCtx:  clientCtx,
 		RequestedModel: requestedModel,

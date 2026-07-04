@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -76,8 +75,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		if upstreamModel == "" {
 			upstreamModel = ctx.RequestedModel
 		}
-		forwardBody := cloneAndSetModel(ctx.Body, upstreamModel)
-		forwardBytes, _ := json.Marshal(forwardBody)
+		forwardBytes := swapModelInJSON(ctx.RawBody, upstreamModel)
 		upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, r.URL.Path)
 
 		// Step 8: Send upstream request
@@ -254,30 +252,39 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	w.Write(bodyBytes)
 }
 
-// cloneAndSetModel returns a copy of the body with the model field replaced.
-func cloneAndSetModel(body map[string]any, upstreamModel string) map[string]any {
-	cloned := make(map[string]any, len(body)+1)
-	for k, v := range body {
-		if k == "model" {
-			cloned[k] = upstreamModel
-		} else {
-			cloned[k] = v
-		}
+// swapModelInJSON performs a shallow JSON re-encode to replace the "model" field.
+// It uses json.RawMessage to avoid deep-unmarshalling nested values, then sets
+// the model key and marshals once. This replaces the previous approach of:
+//
+//	cloneAndSetModel(ctx.Body) -> json.Marshal
+//
+// which allocated a full map copy PLUS serialized the deep structure twice.
+func swapModelInJSON(bodyBytes []byte, upstreamModel string) []byte {
+	if len(bodyBytes) == 0 {
+		// Empty body: synthesize a minimal JSON object with only the model field.
+		modelJSON, _ := json.Marshal(upstreamModel)
+		return append(append([]byte(`{"model":`), modelJSON...), '}')
 	}
-	if _, ok := cloned["model"]; !ok {
-		cloned["model"] = upstreamModel
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		// Body is already validated in PrepareCtx; fallback to original bytes.
+		return bodyBytes
 	}
-	return cloned
+	modelJSON, _ := json.Marshal(upstreamModel)
+	raw["model"] = json.RawMessage(modelJSON)
+	result, err := json.Marshal(raw)
+	if err != nil {
+		return bodyBytes
+	}
+	return result
 }
 
 func bytesReader(b []byte) io.Reader {
 	if len(b) == 0 {
 		return nil
 	}
-	return strings.NewReader(string(b))
+	return bytes.NewReader(b)
 }
 
 // Ensure imports are used
-var _ = fmt.Sprintf
-var _ = json.Marshal
 var _ = context.Background
