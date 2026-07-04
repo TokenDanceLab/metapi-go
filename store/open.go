@@ -117,6 +117,12 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 		return nil, fmt.Errorf("store: failed to open %s database: %w", dialect, err)
 	}
 
+	// Bind the pgx driver to DOLLAR ($1, $2, ...) so that all "?"
+	// placeholders are automatically rebound for PostgreSQL.
+	if driverName == "pgx" {
+		sqlx.BindDriver("pgx", sqlx.DOLLAR)
+	}
+
 	db := &DB{DB: sqldb, Dialect: dialect}
 
 	// Configure driver-specific settings.
