@@ -1,12 +1,14 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -163,6 +165,8 @@ func writeStubResponse(w http.ResponseWriter, ctx *Ctx) {
 }
 
 // handleStreamUpstream relays an SSE stream from upstream to the downstream client.
+// It performs raw byte passthrough for minimal latency, then optionally parses the
+// accumulated stream body to detect SSE error events and empty content.
 func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs int64) {
 	writeSSEHeaders(w)
 	w.WriteHeader(200)
@@ -173,11 +177,13 @@ func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs 
 		// Already set by writeSSEHeaders
 	}
 
+	var accumulated bytes.Buffer
 	buf := make([]byte, 4096)
 	for {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
 			w.Write(buf[:n])
+			accumulated.Write(buf[:n])
 			if flusher != nil {
 				flusher.Flush()
 			}
@@ -187,6 +193,29 @@ func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs 
 				slog.Warn("SSE stream read error", "err", err, "latency_ms", latencyMs)
 			}
 			break
+		}
+	}
+
+	// Post-stream SSE analysis: parse the accumulated body to check for
+	// error events and empty content.
+	if accumulated.Len() > 0 {
+		result := ParseAndAnalyzeSseStream(accumulated.String())
+
+		// Log SSE error events at WARN level
+		if result.HasErrorEvent {
+			LogSseErrorEvents(result.Events)
+		}
+
+		// Check for empty content (stream ended with no data events)
+		if !result.HasDataEvent {
+			emptyContentFail := os.Getenv("PROXY_EMPTY_CONTENT_FAIL")
+			if strings.ToLower(emptyContentFail) == "true" || emptyContentFail == "1" {
+				slog.Warn("SSE stream contained no data events",
+					"latency_ms", latencyMs,
+					"event_count", len(result.Events),
+					"has_done_marker", result.HasDoneMarker,
+				)
+			}
 		}
 	}
 }

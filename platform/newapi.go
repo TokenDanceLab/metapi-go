@@ -1302,6 +1302,24 @@ func (n *NewApiAdapter) GetSiteAnnouncements(ctx context.Context, baseURL, acces
 
 // SolveAcwScV2 attempts to solve an acw_sc__v2 shield challenge from HTML.
 // Returns the solved cookie value or empty string if unsolvable.
+//
+// IMPORTANT: This is a best-effort Go implementation. The acw_sc__v2 shield
+// challenge embeds a JavaScript rotation function (a0j(0x115)) whose output is
+// the XOR seed needed to decrypt the cookie value. The TypeScript reference
+// implementation executes this JS via Node's vm.createContext()/runInContext().
+// Go cannot execute arbitrary JavaScript without embedding a JS VM (e.g., goja).
+//
+// The current implementation can extract arg1 and the mapping array via regex,
+// but cannot determine the XOR seed because parseChallengeXorSeed always returns
+// empty. This means:
+//   - NewAPI sites behind Alibaba Cloud WAF (acw_sc__v2) that issue shield
+//     challenges during login will fail with "shield challenge blocked login"
+//   - Cookie-based auth can still work for pre-existing sessions
+//   - Sites not behind such WAFs are unaffected
+//
+// Resolution: Documented limitation. Shield-protected NewAPI sites require
+// cookie import rather than credential-based login. See docs/specs/review/
+// audit-platform-parity.md Section 3 for the full audit analysis.
 func SolveAcwScV2(html string) string {
 	arg1 := parseChallengeArg1(html)
 	mapping := parseChallengeMapping(html)
@@ -1502,6 +1520,7 @@ func (n *NewApiAdapter) fetchWithShieldRetry(ctx context.Context, url, method st
 	}
 
 	cookieHeader := ""
+	unsolvableChallenges := 0
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 		if err != nil {
@@ -1551,8 +1570,19 @@ func (n *NewApiAdapter) fetchWithShieldRetry(ctx context.Context, url, method st
 		// Shield challenge detected — attempt to solve
 		solved := SolveAcwScV2(string(respBody))
 		if solved == "" {
-			// Unsolvable challenge -- return nil parsed with the cookie so far
-			return nil, newCookie, nil
+			// Unresolvable shield challenge — track and continue retrying
+			unsolvableChallenges++
+			cookieHeader = newCookie
+
+			// Reset body reader for retry (re-marshal)
+			if body != nil {
+				b, err := json.Marshal(body)
+				if err != nil {
+					return nil, cookieHeader, fmt.Errorf("marshal body: %w", err)
+				}
+				bodyReader = strings.NewReader(string(b))
+			}
+			continue
 		}
 
 		// Inject solved cookie and retry
@@ -1568,6 +1598,9 @@ func (n *NewApiAdapter) fetchWithShieldRetry(ctx context.Context, url, method st
 		}
 	}
 
-	// Retries exhausted
+	// Retries exhausted after maxRetries attempts
+	if unsolvableChallenges > 0 {
+		return nil, cookieHeader, fmt.Errorf("shield challenge (acw_sc__v2) could not be solved after %d retries — this platform requires JavaScript execution which is not available in Go; use cookie import instead", unsolvableChallenges)
+	}
 	return nil, cookieHeader, fmt.Errorf("shield challenge retry exhausted after %d attempts", maxRetries)
 }
