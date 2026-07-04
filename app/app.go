@@ -50,8 +50,11 @@ func (a *App) OnClose() {
 func (a *App) Start() error {
 	addr := fmt.Sprintf("%s:%d", a.Config.ListenHost, a.Config.Port)
 	a.Server = &http.Server{
-		Addr:    addr,
-		Handler: a.Router,
+		Addr:         addr,
+		Handler:      a.Router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Channel to capture listen errors

@@ -45,3 +45,17 @@ func RealIP(next http.Handler) http.Handler {
 func Recoverer(next http.Handler) http.Handler {
 	return middleware.Recoverer(next)
 }
+
+// BodyLimit enforces a maximum request body size using http.MaxBytesReader.
+// Returns a middleware that wraps the request body so that reads beyond the
+// limit return an error, causing the handler to receive a closed body.
+func BodyLimit(limitBytes int) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if limitBytes > 0 {
+				r.Body = http.MaxBytesReader(w, r.Body, int64(limitBytes))
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
