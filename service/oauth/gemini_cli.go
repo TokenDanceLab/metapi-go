@@ -427,7 +427,7 @@ func fetchGeminiUserEmail(accessToken string, proxyURL *string) (string, error) 
 		Email string `json:"email"`
 	}
 	respBody, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(respBody, &payload)
+	_ = json.Unmarshal(respBody, &payload)
 	return strings.TrimSpace(payload.Email), nil
 }
 

@@ -306,7 +306,7 @@ func callAntigravityInternalAPI(accessToken, method string, body map[string]inte
 
 	var result map[string]interface{}
 	respBody, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(respBody, &result)
+	_ = json.Unmarshal(respBody, &result)
 	return result, nil
 }
 
@@ -332,7 +332,7 @@ func fetchAntigravityUserEmail(accessToken string, proxyURL *string) (string, er
 		Email string `json:"email"`
 	}
 	respBody, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(respBody, &payload)
+	_ = json.Unmarshal(respBody, &payload)
 	return strings.TrimSpace(payload.Email), nil
 }
 

@@ -301,7 +301,7 @@ func runMigration(fromPath, toURL string, overwrite, dryRun, progress, verify bo
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback() // safe no-op after commit
+	defer func() { _ = tx.Rollback() }() // safe no-op after commit
 
 	// 10. Clear target data in FK-safe order (if overwrite)
 	if overwrite {

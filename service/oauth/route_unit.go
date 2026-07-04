@@ -230,7 +230,7 @@ func CreateOauthRouteUnit(input CreateRouteUnitInput) (*CreateRouteUnitResult, e
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Format(time.RFC3339)
 	result, err := tx.Exec(

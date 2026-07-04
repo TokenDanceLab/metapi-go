@@ -62,7 +62,7 @@ func respondHTML(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(statusCode)
-	w.Write([]byte(renderCompletionPage(message)))
+	_, _ = w.Write([]byte(renderCompletionPage(message)))
 }
 
 func normalizeOrigin(host string, port int) string {
@@ -261,14 +261,14 @@ func handleCallbackRequest(provider string, w http.ResponseWriter, r *http.Reque
 	def := GetProviderDefinition(provider)
 	if def == nil {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("Not found"))
+		_, _ = w.Write([]byte("Not found"))
 		return
 	}
 
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte("Method not allowed"))
+		_, _ = w.Write([]byte("Method not allowed"))
 		return
 	}
 

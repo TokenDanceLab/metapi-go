@@ -472,7 +472,7 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 
 		// Get next sort order.
 		var maxSortOrder int64
-		db.Get(&maxSortOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM accounts")
+		_ = db.Get(&maxSortOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM accounts")
 		sortOrder := maxSortOrder + 1
 
 		result, err := db.Exec(
@@ -490,7 +490,7 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 		accountID, err = result.LastInsertId()
 		if err != nil {
 			// Fallback for Postgres which doesn't support LastInsertId.
-			db.Get(&accountID, "SELECT id FROM accounts WHERE site_id = ? AND oauth_provider = ? AND oauth_account_key = ? ORDER BY id DESC LIMIT 1",
+			_ = db.Get(&accountID, "SELECT id FROM accounts WHERE site_id = ? AND oauth_provider = ? AND oauth_account_key = ? ORDER BY id DESC LIMIT 1",
 				site.ID, string(def.Metadata.Provider), accountKey)
 		}
 	}
@@ -511,7 +511,7 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 
 		// If existing and we just updated: activate the account now that model refresh succeeded.
 		if !created && input.PersistedStatus == "" {
-			db.Exec("UPDATE accounts SET status = 'active', updated_at = ? WHERE id = ?", now, accountID)
+			_, _ = db.Exec("UPDATE accounts SET status = 'active', updated_at = ? WHERE id = ?", now, accountID)
 		}
 
 		// Step 7f: Rebuild routes.
@@ -577,7 +577,7 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, err = tx.Exec(
 		`UPDATE accounts SET site_id = ?, username = ?, access_token = ?, api_token = ?,

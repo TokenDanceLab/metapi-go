@@ -227,7 +227,7 @@ func TestAutoMigrateTextPKTables(t *testing.T) {
 // handles a nil DB gracefully.
 func TestMigrateFunctionDoesNotPanic(t *testing.T) {
 	// Close any existing DB to test nil case.
-	CloseDatabase()
+	_ = CloseDatabase()
 
 	// Migrate should not panic when DB is nil.
 	// It logs a warning and returns nil.

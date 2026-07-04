@@ -81,7 +81,7 @@ func ListOauthConnections(input ListConnectionsInput) (*ListConnectionsResult, e
 	ensureOauthIdentityBackfill(db)
 
 	var total int64
-	db.Get(&total, "SELECT COUNT(*) FROM accounts WHERE oauth_provider IS NOT NULL")
+	_ = db.Get(&total, "SELECT COUNT(*) FROM accounts WHERE oauth_provider IS NOT NULL")
 
 	var rows []struct {
 		Account store.Account `db:"accounts"`
@@ -413,7 +413,7 @@ func ensureOauthIdentityBackfill(db *store.DB) {
 
 		if needsUpdate {
 			now := time.Now().Format(time.RFC3339)
-			db.Exec(
+			_, _ = db.Exec(
 				`UPDATE accounts SET oauth_provider = COALESCE(NULLIF(?, ''), oauth_provider),
 				 oauth_account_key = COALESCE(NULLIF(?, ''), oauth_account_key),
 				 oauth_project_id = COALESCE(NULLIF(?, ''), oauth_project_id),

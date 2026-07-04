@@ -282,7 +282,7 @@ func RecordOauthQuotaResetHint(accountID int64, statusCode int, errorText string
 	}
 	extraConfig := MergeAccountExtraConfig(account.ExtraConfig, extraPatch)
 	now := time.Now().Format(time.RFC3339)
-	db.Exec("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?", extraConfig, now, accountID)
+	_, _ = db.Exec("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?", extraConfig, now, accountID)
 }
 
 // ---- Internal helpers ----
