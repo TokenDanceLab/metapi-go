@@ -2,8 +2,8 @@
 # Iterations: 10000
 # Routing weights: baseWeightFactor=0.5 valueScoreFactor=0.5 costWeight=0.4 balanceWeight=0.3 usageWeight=0.3
 # Format: channelID,siteID,accountID,selectionCount,selectionPercent
-1,10,101,2529,25.29
-2,10,102,3409,34.089999
-3,20,201,1343,13.429999
-4,20,202,1185,11.849999
-5,30,301,1534,15.34
+1,10,101,2573,25.729999
+2,10,102,3403,34.03
+3,20,201,1345,13.45
+4,20,202,1186,11.859999
+5,30,301,1493,14.929999
