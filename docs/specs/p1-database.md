@@ -15,7 +15,7 @@
 
 ### MySQL 方言已放弃
 原始 TS 支持三种方言: SQLite, MySQL, PG。Go 端口**仅支持 SQLite + PG**。MySQL 支持被显式移除。理由:
-- PG 已是生产标准 (us1 跑 PG, hk2 冷备 PG)
+- PG 已是生产标准 (example-host 跑 PG, example-host 冷备 PG)
 - MySQL 的 index prefix (TEXT 列需要 `(191)` 前缀) 和 datetime 处理与 PG/SQLite 差异太大
 - 减少 33% 的方言维护负担
 
@@ -1031,7 +1031,7 @@ TS `runtimeSchemaBootstrap.ts` 的升级系统:
 
 ### 现有 Drizzle-journaled DB
 
-生产环境 (us1 PG, hk2 PG, 以及可能的 SQLite hub.db 文件) 是通过 Drizzle 的增量 migration 系统创建的。关键兼容性问题:
+生产环境 (example-host PG, example-host PG, 以及可能的 SQLite hub.db 文件) 是通过 Drizzle 的增量 migration 系统创建的。关键兼容性问题:
 
 1. **`__drizzle_migrations` 表**: 生产 DB 中存在此表。Go app 启动时发现它已存在, `CREATE TABLE IF NOT EXISTS` 会跳过所有表。然后 Go app 可以正常读写数据。此表可保留不动 (无副作用)。
 
