@@ -407,15 +407,31 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	defer tx.Rollback() // safe to call after Commit
 
 	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Build dialect-aware INSERT queries once before loop.
+	var siteDaySQL, siteHourSQL string
+	switch dbw.Dialect {
+	case store.DialectPostgres:
+		siteDaySQL = `INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (local_day, site_id) DO NOTHING`
+		siteHourSQL = `INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT (bucket_start_utc, site_id) DO NOTHING`
+	default: // sqlite
+		siteDaySQL = `INSERT OR IGNORE INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		siteHourSQL = `INSERT OR IGNORE INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	}
+
 	for _, d := range deltas {
 		// site_day_usage upsert
-		tx.Exec(`INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tx.Exec(siteDaySQL,
 			d.day, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
 
 		// site_hour_usage upsert
-		tx.Exec(`INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		tx.Exec(siteHourSQL,
 			d.hour, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
 	}
 
