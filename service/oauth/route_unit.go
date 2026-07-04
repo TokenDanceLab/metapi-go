@@ -112,7 +112,7 @@ func ListEnabledOauthRouteUnitsWithMembers() []struct {
 	}
 
 	var units []store.OAuthRouteUnit
-	if err := db.Select(&units, "SELECT * FROM oauth_route_units WHERE enabled = 1"); err != nil {
+	if err := db.Select(&units, "SELECT * FROM oauth_route_units WHERE enabled = TRUE"); err != nil {
 		return nil
 	}
 	if len(units) == 0 {

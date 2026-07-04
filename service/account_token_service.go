@@ -370,7 +370,7 @@ func GetDefaultTokenForAccount(db *sqlx.DB, accountID int64) (*store.AccountToke
 	err := db.Get(&token,
 		`SELECT t.* FROM account_tokens t
 		 INNER JOIN accounts a ON t.account_id = a.id
-		 WHERE t.account_id = ? AND t.is_default = 1`, accountID,
+		 WHERE t.account_id = ? AND t.is_default = TRUE`, accountID,
 	)
 	if err != nil {
 		return nil, err

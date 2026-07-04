@@ -182,7 +182,7 @@ func (s *CheckinScheduler) runIntervalPass() {
 		SELECT a.id, a.last_checkin_at
 		FROM accounts a
 		INNER JOIN sites s ON a.site_id = s.id
-		WHERE a.checkin_enabled = 1
+		WHERE a.checkin_enabled = TRUE
 		  AND a.status = 'active'
 		  AND s.status <> 'disabled'
 	`)

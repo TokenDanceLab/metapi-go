@@ -414,7 +414,7 @@ func CheckinAll(cfg *config.Config, db *sqlx.DB, accountIDs []int64, scheduleMod
 		s.id AS "sites.id", s.name AS "sites.name", s.url AS "sites.url",
 		s.platform AS "sites.platform", s.status AS "sites.status"
 		FROM accounts a INNER JOIN sites s ON a.site_id = s.id
-		WHERE a.checkin_enabled = 1 AND a.status = 'active'`
+		WHERE a.checkin_enabled = TRUE AND a.status = 'active'`
 
 	var rows []struct {
 		Accounts struct {

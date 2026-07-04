@@ -601,7 +601,7 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 	h.db.Select(&accountModels,
 		`SELECT DISTINCT ma.model_name FROM model_availability ma
 		 INNER JOIN accounts a ON ma.account_id = a.id
-		 WHERE a.site_id = ? AND ma.available = 1`, id,
+		 WHERE a.site_id = ? AND ma.available = TRUE`, id,
 	)
 
 	// Token-level models
@@ -610,7 +610,7 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 		`SELECT DISTINCT tma.model_name FROM token_model_availability tma
 		 INNER JOIN account_tokens at ON tma.token_id = at.id
 		 INNER JOIN accounts a ON at.account_id = a.id
-		 WHERE a.site_id = ? AND tma.available = 1`, id,
+		 WHERE a.site_id = ? AND tma.available = TRUE`, id,
 	)
 
 	// Merge, deduplicate, sort

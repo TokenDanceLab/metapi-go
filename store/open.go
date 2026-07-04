@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -23,9 +24,39 @@ const (
 )
 
 // DB wraps a *sqlx.DB connection pool and provides convenience methods.
+// Exec/Query/QueryRow methods override sqlx.DB to auto-rebind ? placeholders
+// to $N for PostgreSQL. pgx v5 stdlib handles ? natively, but sqlx.BindDriver
+// + Rebind provides a more robust path for complex queries.
 type DB struct {
 	*sqlx.DB
 	Dialect string
+}
+
+// Exec executes a query that does not return rows. For PostgreSQL, the query
+// string is rebound from ? to $N placeholders before execution.
+func (db *DB) Exec(query string, args ...any) (sql.Result, error) {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.Exec(query, args...)
+}
+
+// Query executes a query that returns rows. For PostgreSQL, the query string
+// is rebound from ? to $N placeholders before execution.
+func (db *DB) Query(query string, args ...any) (*sql.Rows, error) {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.Query(query, args...)
+}
+
+// QueryRow executes a query that returns at most one row. For PostgreSQL, the
+// query string is rebound from ? to $N placeholders before execution.
+func (db *DB) QueryRow(query string, args ...any) *sql.Row {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.QueryRow(query, args...)
 }
 
 // ResolveSQLitePath resolves the SQLite database file path.

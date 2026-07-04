@@ -111,7 +111,7 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 		 INNER JOIN account_tokens at ON tma.token_id = at.id
 		 INNER JOIN accounts a ON at.account_id = a.id
 		 INNER JOIN sites s ON a.site_id = s.id
-		 WHERE tma.model_name LIKE ? AND tma.available = 1 AND at.enabled = 1 AND a.status = 'active'
+		 WHERE tma.model_name LIKE ? AND tma.available = TRUE AND at.enabled = TRUE AND a.status = 'active'
 		 GROUP BY tma.model_name
 		 ORDER BY account_count DESC LIMIT ?`,
 		likePattern, perCategory)

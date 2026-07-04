@@ -160,7 +160,7 @@ func (s *ChannelRecoveryScheduler) loadCoolingCandidates(dbw *store.DB) []recove
 		FROM route_channels rc
 		INNER JOIN accounts a ON rc.account_id = a.id
 		INNER JOIN sites st ON a.site_id = st.id
-		WHERE rc.enabled = 1
+		WHERE rc.enabled = TRUE
 		  AND a.status = 'active'
 		  AND st.status = 'active'
 		  AND rc.cooldown_until IS NOT NULL
@@ -196,7 +196,7 @@ func (s *ChannelRecoveryScheduler) loadActiveCandidates(dbw *store.DB) []recover
 		FROM route_channels rc
 		INNER JOIN accounts a ON rc.account_id = a.id
 		INNER JOIN sites st ON a.site_id = st.id
-		WHERE rc.enabled = 1
+		WHERE rc.enabled = TRUE
 		  AND a.status = 'active'
 		  AND st.status = 'active'
 		  AND rc.cooldown_until IS NULL
