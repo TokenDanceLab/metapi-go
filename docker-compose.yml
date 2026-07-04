@@ -1,0 +1,10 @@
+services:
+  metapi:
+    build: .
+    ports:
+      - "4000:4000"
+    volumes:
+      - "./data:/app/data"
+    environment:
+      AUTH_TOKEN: change-me
+      PROXY_TOKEN: sk-change-me
