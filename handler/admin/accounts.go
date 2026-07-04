@@ -16,6 +16,7 @@ import (
 	"github.com/tokendancelab/metapi-go/handler/admin/payloads"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/store"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 // RegisterAccountsRoutes registers all /api/accounts routes.
@@ -208,6 +209,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		routing.InvalidateCache()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success":      true,
 			"batch":        true,
@@ -236,6 +238,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", accountID)
 
 	caps := service.BuildCapabilitiesForAccount(&account)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":               account.ID,
 		"siteId":           account.SiteID,
@@ -401,6 +404,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 		"createdAt":     loginAcct.CreatedAt,
 		"updatedAt":     loginAcct.UpdatedAt,
 	}
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":       true,
 		"account":       loginAcctMap,
@@ -513,6 +517,7 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 		"createdAt":     rebindAcct.CreatedAt,
 		"updatedAt":     rebindAcct.UpdatedAt,
 	}
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
 		"account":        rebindAcctMap,
@@ -614,6 +619,7 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 
 	var updated store.Account
 	h.db.Get(&updated, "SELECT * FROM accounts WHERE id = ?", id)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -867,6 +873,7 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 

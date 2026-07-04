@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 // RegisterMaintenanceRoutes registers all /api/settings/maintenance routes.
@@ -35,6 +36,7 @@ func (h *maintenanceHandler) clearCache(w http.ResponseWriter, r *http.Request) 
 	h.db.Exec("DELETE FROM route_channels")
 	h.db.Exec("DELETE FROM token_routes")
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"success":                   true,
 		"queued":                    true,
@@ -146,6 +148,7 @@ func (h *maintenanceHandler) factoryReset(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "工厂重置完成",

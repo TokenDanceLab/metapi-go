@@ -1,11 +1,39 @@
 package routing
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/store"
 )
+
+// globalCache is the package-level cache reference, set during router initialization.
+// It allows admin handlers to invalidate the cache without holding a *TokenRouter reference.
+var (
+	globalCache   *RouteCache
+	globalCacheMu sync.RWMutex
+)
+
+// SetGlobalCache sets the global route cache. Called once during router initialization.
+func SetGlobalCache(c *RouteCache) {
+	globalCacheMu.Lock()
+	defer globalCacheMu.Unlock()
+	globalCache = c
+}
+
+// InvalidateCache invalidates the global route cache. Safe to call even if the cache
+// has not been initialized (no-op).
+func InvalidateCache() {
+	globalCacheMu.RLock()
+	c := globalCache
+	globalCacheMu.RUnlock()
+	if c != nil {
+		c.InvalidateAll()
+	} else {
+		slog.Debug("routing.InvalidateCache: global cache not yet initialized, skipping")
+	}
+}
 
 // RouteCache caches enabled routes and per-route matches with TTL.
 type RouteCache struct {

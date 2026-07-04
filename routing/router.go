@@ -32,6 +32,7 @@ func NewTokenRouter(
 ) *TokenRouter {
 	cacheTTLMs := int64(cfg.TokenRouterCacheTtlMs)
 	cache := NewRouteCache(cacheTTLMs)
+	SetGlobalCache(cache)
 
 	configuredMaxSec := cfg.TokenRouterFailureCooldownMaxSec
 	if configuredMaxSec <= 0 {

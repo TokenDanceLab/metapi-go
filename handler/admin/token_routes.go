@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 // RegisterTokenRoutes registers all /api/routes and /api/channels routes.
@@ -253,6 +254,7 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	created["sourceRouteIds"] = body.SourceRouteIds
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, created)
 }
 
@@ -322,6 +324,7 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	var srcIDs []int64
 	h.db.Select(&srcIDs, "SELECT source_route_id FROM route_group_sources WHERE group_route_id = ?", id)
 	updated["sourceRouteIds"] = srcIDs
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -339,6 +342,7 @@ func (h *tokenRoutesHandler) deleteRoute(w http.ResponseWriter, r *http.Request)
 	h.db.Exec("DELETE FROM route_group_sources WHERE source_route_id = ?", id)
 	h.db.Exec("DELETE FROM route_channels WHERE route_id = ?", id)
 	h.db.Exec("DELETE FROM token_routes WHERE id = ?", id)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
@@ -373,6 +377,7 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":      true,
 		"updatedCount": updated,
@@ -382,6 +387,7 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 // ---- Rebuild Routes ----
 // POST /api/routes/rebuild
 func (h *tokenRoutesHandler) rebuildRoutes(w http.ResponseWriter, r *http.Request) {
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"success": true,
 		"queued":  true,
@@ -492,6 +498,7 @@ func (h *tokenRoutesHandler) addChannel(w http.ResponseWriter, r *http.Request) 
 
 	id, _ := result.LastInsertId()
 	created := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", id)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, created)
 }
 
@@ -539,6 +546,7 @@ func (h *tokenRoutesHandler) batchAddChannels(w http.ResponseWriter, r *http.Req
 		created++
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"created": created,
@@ -558,6 +566,7 @@ func (h *tokenRoutesHandler) clearCooldown(w http.ResponseWriter, r *http.Reques
 	}
 
 	h.db.Exec(`UPDATE route_channels SET cooldown_until = NULL, consecutive_fail_count = 0, cooldown_level = 0 WHERE route_id = ?`, routeID)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
@@ -586,6 +595,7 @@ func (h *tokenRoutesHandler) batchUpdateChannels(w http.ResponseWriter, r *http.
 		}
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
 		"channels": normalizeSlice(updatedChannels),
@@ -616,6 +626,7 @@ func (h *tokenRoutesHandler) updateChannel(w http.ResponseWriter, r *http.Reques
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", channelID)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -630,6 +641,7 @@ func (h *tokenRoutesHandler) deleteChannel(w http.ResponseWriter, r *http.Reques
 	}
 
 	h.db.Exec("DELETE FROM route_channels WHERE id = ?", channelID)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 

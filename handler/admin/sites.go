@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/handler/admin/payloads"
+	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -215,6 +216,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Create site failed"})
 		return
 	}
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -395,6 +397,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, _ := service.LoadSiteWithEndpoints(h.db, id)
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -413,6 +416,7 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	service.InvalidateSiteCaches()
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -474,6 +478,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	if action == "delete" || action == "enable" || action == "disable" ||
 		action == "enableSystemProxy" || action == "disableSystemProxy" {
 		service.InvalidateSiteCaches()
+		routing.InvalidateCache()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -568,6 +573,7 @@ func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Reque
 		h.db.Exec("INSERT INTO site_disabled_models (site_id, model_name, created_at) VALUES (?, ?, ?)", id, m, now)
 	}
 
+	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"siteId": id,
 		"models": uniqueModels,
