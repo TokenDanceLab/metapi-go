@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -56,7 +57,8 @@ func (h *siteAnnouncementsHandler) listAnnouncements(w http.ResponseWriter, r *h
 
 	rows, err := h.db.Queryx(query, args...)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to load announcements", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load announcements"})
 		return
 	}
 	defer rows.Close()

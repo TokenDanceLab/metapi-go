@@ -3,7 +3,6 @@ package proxy
 import (
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -150,6 +149,3 @@ func sseEvent(data string) []byte {
 func sseDone() []byte {
 	return []byte("data: [DONE]\n\n")
 }
-
-// Ensure slog is used
-var _ = slog.Info

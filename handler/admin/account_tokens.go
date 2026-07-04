@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -49,7 +50,8 @@ func (h *accountTokensHandler) listTokens(w http.ResponseWriter, r *http.Request
 
 	tokens, err := service.ListTokensWithRelations(h.db, accountID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": err.Error()})
+		slog.Error("Failed to load tokens", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load tokens"})
 		return
 	}
 
@@ -94,7 +96,8 @@ func (h *accountTokensHandler) createToken(w http.ResponseWriter, r *http.Reques
 	if tokenValue != "" {
 		result, err := h.createLocalToken(body, row, tokenValue)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": err.Error()})
+			slog.Error("Token creation failed", "err", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Token creation failed"})
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
@@ -230,7 +233,8 @@ func (h *accountTokensHandler) batchTokens(w http.ResponseWriter, r *http.Reques
 		if action == "delete" {
 			// Upstream-first delete stub: just do local delete
 			if err := service.DeleteTokenByID(h.db, id); err != nil {
-				failedItems = append(failedItems, map[string]any{"id": id, "message": err.Error()})
+				slog.Error("Token deletion failed", "err", err, "token_id", id)
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "Token deletion failed"})
 				continue
 			}
 		} else {
@@ -472,7 +476,8 @@ func (h *accountTokensHandler) deleteToken(w http.ResponseWriter, r *http.Reques
 
 	// Stub: upstream-first delete - just local delete for now
 	if err := service.DeleteTokenByID(h.db, tokenID); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"success": false, "message": err.Error()})
+		slog.Error("Token deletion failed", "err", err)
+		writeJSON(w, http.StatusBadGateway, map[string]any{"success": false, "message": "Token deletion failed"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -562,7 +567,8 @@ func (h *accountTokensHandler) getGroups(w http.ResponseWriter, r *http.Request)
 
 	groups, err := service.GetTokenGroups(h.db, accountID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": err.Error()})
+		slog.Error("Failed to load token groups", "err", err, "account_id", accountID)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load token groups"})
 		return
 	}
 

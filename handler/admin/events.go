@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +55,8 @@ func (h *eventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Queryx(query, args...)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to load events", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load events"})
 		return
 	}
 	defer rows.Close()
@@ -63,7 +65,8 @@ func (h *eventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		row := make(map[string]any)
 		if err := rows.MapScan(row); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Error("Failed to read event row", "err", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load events"})
 			return
 		}
 		events = append(events, row)
@@ -81,7 +84,8 @@ func (h *eventsHandler) countUnread(w http.ResponseWriter, r *http.Request) {
 	var count int
 	err := h.db.Get(&count, "SELECT COUNT(*) FROM events WHERE read = 0")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to count unread events", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load events"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"count": count})

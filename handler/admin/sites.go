@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -44,7 +45,8 @@ type sitesHandler struct {
 func (h *sitesHandler) listSites(w http.ResponseWriter, r *http.Request) {
 	sites, err := service.ListSites(h.db)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to load sites", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load sites"})
 		return
 	}
 	writeJSON(w, http.StatusOK, sites)
@@ -232,7 +234,8 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
 		return
 	} else if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to load site for update", "err", err, "site_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load site"})
 		return
 	}
 
@@ -380,7 +383,8 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to update site", "err", err, "site_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update site"})
 		return
 	}
 
@@ -404,7 +408,8 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := service.DeleteSite(h.db, id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to delete site", "err", err, "site_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to delete site"})
 		return
 	}
 	service.InvalidateSiteCaches()

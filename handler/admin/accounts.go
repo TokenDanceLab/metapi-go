@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -92,7 +93,8 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 
 	accounts, err := service.ListAccountsWithSites(h.db)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		slog.Error("Failed to load accounts", "err", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load accounts"})
 		return
 	}
 
@@ -174,10 +176,11 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 
 			accountID, err := h.createSingleAccount(body, site, credentialMode, token, username)
 			if err != nil {
+				slog.Error("Batch account creation failed", "err", err, "index", i)
 				items = append(items, map[string]any{
 					"index":   i,
 					"status":  "failed",
-					"message": err.Error(),
+					"message": "Account creation failed",
 				})
 			} else {
 				createdCount++
@@ -220,9 +223,10 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	// Single token creation
 	accountID, err := h.createSingleAccount(body, site, credentialMode, requestedTokens[0], body.Username)
 	if err != nil {
+		slog.Error("Account creation failed", "err", err)
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success":  false,
-			"message":  err.Error(),
+			"message":  "Account creation failed",
 		})
 		return
 	}
@@ -599,7 +603,8 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	// (spec lines 594-602, TS accounts.ts:1550-1556)
 
 	if err := service.UpdateAccountFields(h.db, id, updates); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		slog.Error("Failed to update account", "err", err, "account_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to update account"})
 		return
 	}
 
@@ -618,7 +623,8 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := service.DeleteAccount(h.db, id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": err.Error()})
+		slog.Error("Failed to delete account", "err", err, "account_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to delete account"})
 		return
 	}
 	service.RebuildRoutesBestEffort()

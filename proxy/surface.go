@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/tokendancelab/metapi-go/routing"
 )
@@ -31,9 +32,9 @@ type SurfaceChannelRef struct {
 
 // SurfaceAccountRef is a lightweight account reference.
 type SurfaceAccountRef struct {
-	ID        int64
-	Username  *string
-	ExtraConfig *string
+	ID            int64
+	Username      *string
+	ExtraConfig   *string
 	OAuthProvider *string
 }
 
@@ -93,13 +94,13 @@ func ConvertToSurfaceSelectedChannel(sel *routing.SelectedChannel) SurfaceSelect
 
 // SurfaceFailureToolkit provides common failure handling methods for surfaces.
 type SurfaceFailureToolkit struct {
-	WarningScope      SurfaceWarningScope
-	DownstreamPath    string
-	MaxRetries        int
-	Router            TokenRouterInterface
-	Coord             *ProxyChannelCoordinator
-	LogProxy          func(ctx context.Context, entry ProxyLogEntry) error
-	ReportAllFailed   func(model string, reason string)
+	WarningScope       SurfaceWarningScope
+	DownstreamPath     string
+	MaxRetries         int
+	Router             TokenRouterInterface
+	Coord              *ProxyChannelCoordinator
+	LogProxy           func(ctx context.Context, entry ProxyLogEntry) error
+	ReportAllFailed    func(model string, reason string)
 	ReportTokenExpired func(accountID int64, username *string, siteName *string, detail string)
 }
 
@@ -221,13 +222,13 @@ func NewSurfaceFailureToolkit(
 	reportTokenExpired func(accountID int64, username *string, siteName *string, detail string),
 ) *SurfaceFailureToolkit {
 	return &SurfaceFailureToolkit{
-		WarningScope:      scope,
-		DownstreamPath:    downstreamPath,
-		MaxRetries:        maxRetries,
-		Router:            router,
-		Coord:             coord,
-		LogProxy:          logProxy,
-		ReportAllFailed:   reportAllFailed,
+		WarningScope:       scope,
+		DownstreamPath:     downstreamPath,
+		MaxRetries:         maxRetries,
+		Router:             router,
+		Coord:              coord,
+		LogProxy:           logProxy,
+		ReportAllFailed:    reportAllFailed,
 		ReportTokenExpired: reportTokenExpired,
 	}
 }
@@ -248,14 +249,16 @@ func (ft *SurfaceFailureToolkit) HandleUpstreamFailure(
 ) SurfaceFailureResponse {
 	// Record failure
 	statusInt := status
-	_ = ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
+	if err := ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
 		Status:    &statusInt,
 		ErrorText: &rawErrText,
 		ModelName: &modelName,
-	}, nil)
+	}, nil); err != nil {
+		slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	// Write proxy log
-	_ = ft.LogProxy(ctx, ProxyLogEntry{
+	if err := ft.LogProxy(ctx, ProxyLogEntry{
 		RouteID:        selected.Channel.RouteID,
 		ChannelID:      &selected.Channel.ID,
 		AccountID:      &selected.Account.ID,
@@ -266,7 +269,9 @@ func (ft *SurfaceFailureToolkit) HandleUpstreamFailure(
 		LatencyMs:      latencyMs,
 		ErrorMessage:   &errText,
 		RetryCount:     retryCount,
-	})
+	}); err != nil {
+		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	// Check retry
 	if ShouldRetryProxyRequest(status, errText) {
@@ -309,14 +314,16 @@ func (ft *SurfaceFailureToolkit) HandleDetectedFailure(
 	// Record failure
 	failStatus := failure.Status
 	failReason := failure.Reason
-	_ = ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
+	if err := ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
 		Status:    &failStatus,
 		ErrorText: &failReason,
 		ModelName: &modelName,
-	}, nil)
+	}, nil); err != nil {
+		slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	// Write proxy log
-	_ = ft.LogProxy(ctx, ProxyLogEntry{
+	if err := ft.LogProxy(ctx, ProxyLogEntry{
 		RouteID:          selected.Channel.RouteID,
 		ChannelID:        &selected.Channel.ID,
 		AccountID:        &selected.Account.ID,
@@ -331,7 +338,9 @@ func (ft *SurfaceFailureToolkit) HandleDetectedFailure(
 		ErrorMessage:     &failure.Reason,
 		RetryCount:       retryCount,
 		UpstreamPath:     &upstreamPath,
-	})
+	}); err != nil {
+		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	// Check retry
 	if ShouldRetryProxyRequest(failure.Status, failure.Reason) {
@@ -367,13 +376,15 @@ func (ft *SurfaceFailureToolkit) HandleExecutionError(
 	retryCount int,
 ) SurfaceFailureResponse {
 	// Record failure
-	_ = ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
+	if err := ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
 		ErrorText: &errorMessage,
 		ModelName: &modelName,
-	}, nil)
+	}, nil); err != nil {
+		slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	// Write proxy log
-	_ = ft.LogProxy(ctx, ProxyLogEntry{
+	if err := ft.LogProxy(ctx, ProxyLogEntry{
 		RouteID:        selected.Channel.RouteID,
 		ChannelID:      &selected.Channel.ID,
 		AccountID:      &selected.Account.ID,
@@ -384,7 +395,9 @@ func (ft *SurfaceFailureToolkit) HandleExecutionError(
 		LatencyMs:      latencyMs,
 		ErrorMessage:   &errorMessage,
 		RetryCount:     retryCount,
-	})
+	}); err != nil {
+		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 
 	if retryCount < ft.MaxRetries {
 		return SurfaceFailureResponse{Action: "retry"}
@@ -425,19 +438,23 @@ func (ft *SurfaceFailureToolkit) RecordStreamFailure(
 	// Record failure
 	if runtimeFailureStatus != nil {
 		failStatus := *runtimeFailureStatus
-		_ = ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
+		if err := ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
 			Status:    &failStatus,
 			ErrorText: &errorMessage,
 			ModelName: &modelName,
-		}, nil)
+		}, nil); err != nil {
+			slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+		}
 	} else {
-		_ = ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
+		if err := ft.Router.RecordFailure(ctx, selected.Channel.ID, routing.SiteRuntimeFailureContext{
 			ErrorText: &errorMessage,
 			ModelName: &modelName,
-		}, nil)
+		}, nil); err != nil {
+			slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+		}
 	}
 
-	_ = ft.LogProxy(ctx, ProxyLogEntry{
+	if err := ft.LogProxy(ctx, ProxyLogEntry{
 		RouteID:          selected.Channel.RouteID,
 		ChannelID:        &selected.Channel.ID,
 		AccountID:        &selected.Account.ID,
@@ -452,5 +469,7 @@ func (ft *SurfaceFailureToolkit) RecordStreamFailure(
 		ErrorMessage:     &errorMessage,
 		RetryCount:       retryCount,
 		UpstreamPath:     &upstreamPath,
-	})
+	}); err != nil {
+		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+	}
 }

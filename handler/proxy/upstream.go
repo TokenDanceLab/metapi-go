@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -62,6 +63,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 			},
 		)
 		if err != nil || selected == nil {
+			slog.Warn("channel selection failed", "err", err, "model", ctx.RequestedModel, "retry", retry)
 			writeJSONError(w, 503, "No available channels", "server_error")
 			return
 		}
@@ -80,10 +82,11 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		startedAt := time.Now()
 		req, err := http.NewRequestWithContext(context.Background(), r.Method, upstreamURL, bytesReader(forwardBytes))
 		if err != nil {
+			slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
 			if retry < maxRetries {
 				continue
 			}
-			writeJSONError(w, 502, fmt.Sprintf("Upstream error: %v", err), "upstream_error")
+			writeJSONError(w, 502, "Upstream request failed", "upstream_error")
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -95,10 +98,11 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		latencyMs := time.Since(startedAt).Milliseconds()
 
 		if err != nil {
+			slog.Warn("upstream request failed", "err", err, "url", upstreamURL, "model", upstreamModel, "channel_id", selected.Channel.ID)
 			if retry < maxRetries {
 				continue
 			}
-			writeJSONError(w, 502, fmt.Sprintf("Upstream error: %v", err), "upstream_error")
+			writeJSONError(w, 502, "Upstream request failed", "upstream_error")
 			return
 		}
 
@@ -106,7 +110,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		if ctx.IsStream {
 			handleStreamUpstream(w, resp, latencyMs)
 		} else {
-			handleNonStreamUpstream(w, resp, latencyMs)
+			handleNonStreamUpstream(w, resp, latencyMs, ctx.RequestedModel, upstreamModel, selected.Channel.ID)
 		}
 		resp.Body.Close()
 		return
@@ -179,16 +183,19 @@ func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs 
 			}
 		}
 		if err != nil {
+			if err != io.EOF {
+				slog.Warn("SSE stream read error", "err", err, "latency_ms", latencyMs)
+			}
 			break
 		}
 	}
-	_ = latencyMs
 }
 
 // handleNonStreamUpstream writes a non-streaming upstream response to the downstream.
-func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs int64) {
+func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs int64, requestedModel, upstreamModel string, channelID int64) {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		slog.Warn("failed to read upstream response", "err", err)
 		writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
 		return
 	}
@@ -196,7 +203,14 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	// Detect proxy failure
 	failure := proxy.DetectProxyFailure(string(bodyBytes), &proxy.UsageSummary{})
 	if failure != nil {
-		writeJSONError(w, failure.Status, failure.Reason, "upstream_error")
+		slog.Warn("content-based failure detected",
+			"reason", failure.Reason,
+			"status", failure.Status,
+			"model", upstreamModel,
+			"channel_id", channelID,
+			"latency_ms", latencyMs,
+		)
+		writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
 		return
 	}
 
@@ -209,7 +223,6 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	}
 	w.WriteHeader(resp.StatusCode)
 	w.Write(bodyBytes)
-	_ = latencyMs
 }
 
 // cloneAndSetModel returns a copy of the body with the model field replaced.

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/tokendancelab/metapi-go/routing"
 )
@@ -129,10 +130,12 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 
 		if isTerminalFailure(action) {
 			if input.OnTerminalFailure != nil {
-				_ = input.OnTerminalFailure(ctx, selected, struct {
+				if err := input.OnTerminalFailure(ctx, selected, struct {
 					Status       int
 					RawErrorText string
-				}{Status: result.Status, RawErrorText: result.RawErrorText})
+				}{Status: result.Status, RawErrorText: result.RawErrorText}); err != nil {
+					slog.Warn("OnTerminalFailure callback failed", "err", err)
+				}
 			}
 			return ExecuteResult{
 				OK:           false,
