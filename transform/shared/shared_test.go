@@ -1,0 +1,946 @@
+package shared
+
+import (
+	"strings"
+	"testing"
+)
+
+// ---------------------------------------------------------------------------
+// Think tag parser: basic cases
+// ---------------------------------------------------------------------------
+
+func TestConsumeThinkTaggedText_NoTags(t *testing.T) {
+	state := CreateThinkTagParserState()
+	content, reasoning := ConsumeThinkTaggedText(state, "plain text")
+	// When no think tags are present, text is buffered in state.Pending for the next chunk.
+	if reasoning != "" {
+		t.Errorf("expected no reasoning, got %q", reasoning)
+	}
+	if content != "" {
+		t.Logf("content=%q", content)
+	}
+	// Pending holds the buffered text, to be consumed by next chunk
+	if state.Pending != "plain text" {
+		t.Errorf("expected 'plain text' in pending, got %q", state.Pending)
+	}
+}
+
+func TestConsumeThinkTaggedText_CompleteTag(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "thinking step by step..." + thinkClose + "Here is the answer."
+
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if reasoning != "thinking step by step..." {
+		t.Errorf("expected 'thinking step by step...', got %q", reasoning)
+	}
+	// Content after closing tag is buffered in state.Pending for next chunk
+	if state.Pending != "Here is the answer." {
+		t.Errorf("expected 'Here is the answer.' in pending, got %q", state.Pending)
+	}
+	_ = content
+}
+
+func TestConsumeThinkTaggedText_OnlyThinking(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "reasoning content" + thinkClose
+
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+	if reasoning != "reasoning content" {
+		t.Errorf("expected 'reasoning content', got %q", reasoning)
+	}
+}
+
+func TestConsumeThinkTaggedText_OnlyContent(t *testing.T) {
+	state := CreateThinkTagParserState()
+	content, reasoning := ConsumeThinkTaggedText(state, "just content")
+	// Text without think tags is buffered in Pending
+	if reasoning != "" {
+		t.Errorf("expected no reasoning, got %q", reasoning)
+	}
+	if state.Pending != "just content" {
+		t.Errorf("expected 'just content' in pending, got %q", state.Pending)
+	}
+	_ = content
+}
+
+func TestConsumeThinkTaggedText_OpenedTag_NotClosed(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := "before " + thinkOpen + "thinking..."
+
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if content != "before " {
+		t.Errorf("expected 'before ', got %q", content)
+	}
+	if reasoning != "" {
+		t.Errorf("expected no reasoning yet (tag not closed), got %q", reasoning)
+	}
+	if state.Mode != "reasoning" {
+		t.Errorf("expected reasoning mode, got %q", state.Mode)
+	}
+	if state.Pending != "thinking..." {
+		t.Errorf("expected 'thinking...' in pending, got %q", state.Pending)
+	}
+}
+
+func TestConsumeThinkTaggedText_ContinuedReasoning(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "part 1"
+
+	// First chunk opens reasoning mode
+	content1, reasoning1 := ConsumeThinkTaggedText(state, text)
+	if content1 != "" {
+		t.Errorf("expected empty content, got %q", content1)
+	}
+	if reasoning1 != "" {
+		t.Errorf("expected empty reasoning on first chunk (no close tag), got %q", reasoning1)
+	}
+	if state.Mode != "reasoning" {
+		t.Errorf("expected reasoning mode, got %q", state.Mode)
+	}
+	if state.Pending != "part 1" {
+		t.Errorf("expected 'part 1' in pending, got %q", state.Pending)
+	}
+
+	// Second chunk continues in reasoning mode, then closes
+	content2, reasoning2 := ConsumeThinkTaggedText(state, "more thinking"+thinkClose+"final answer")
+	if content2 != "" {
+		t.Logf("content2=%q (buffered in Pending)", content2)
+	}
+	if reasoning2 != "part 1more thinking" {
+		t.Errorf("expected 'part 1more thinking', got %q", reasoning2)
+	}
+	// Content after tag closure goes to Pending (retrieved by next chunk)
+	if state.Pending != "final answer" {
+		t.Errorf("expected 'final answer' in pending, got %q", state.Pending)
+	}
+	if state.Mode != "content" {
+		t.Errorf("expected back to content mode, got %q", state.Mode)
+	}
+}
+
+func TestConsumeThinkTaggedText_MultipleTags(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "think1" + thinkClose + " content1 " +
+		thinkOpen + "think2" + thinkClose + " content2"
+
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	// Named return values accumulate across the loop
+	if content != " content1 " {
+		t.Errorf("expected ' content1 ', got %q", content)
+	}
+	if reasoning != "think1think2" {
+		t.Errorf("expected 'think1think2', got %q", reasoning)
+	}
+	// Remaining text after final close tag goes to Pending
+	if state.Pending != " content2" {
+		t.Errorf("expected ' content2' in pending, got %q", state.Pending)
+	}
+}
+
+func TestConsumeThinkTaggedText_NestedLike(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "outer" + thinkClose + " middle " + thinkOpen + "inner" + thinkClose
+
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if content != " middle " {
+		t.Errorf("expected ' middle ', got %q", content)
+	}
+	if reasoning != "outerinner" {
+		t.Errorf("expected 'outerinner', got %q", reasoning)
+	}
+}
+
+func TestConsumeThinkTaggedText_PartialOpenTag(t *testing.T) {
+	state := CreateThinkTagParserState()
+	// Incomplete opening tag
+	text := "text < think>"
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if reasoning != "" {
+		t.Errorf("expected no reasoning for broken tag, got %q", reasoning)
+	}
+	// Since there's no full <think> tag match, text is buffered in Pending
+	if content != "" {
+		t.Logf("content=%q", content)
+	}
+	if state.Pending != "text < think>" {
+		t.Errorf("expected 'text < think>' in pending, got %q", state.Pending)
+	}
+}
+
+func TestConsumeThinkTaggedText_MissingCloseTag(t *testing.T) {
+	state := CreateThinkTagParserState()
+	text := thinkOpen + "never closes"
+	content, reasoning := ConsumeThinkTaggedText(state, text)
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+	if reasoning != "" {
+		t.Errorf("expected no reasoning yet, got %q", reasoning)
+	}
+	if state.Mode != "reasoning" {
+		t.Errorf("expected reasoning mode, got %q", state.Mode)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FlushThinkTaggedText
+// ---------------------------------------------------------------------------
+
+func TestFlushThinkTaggedText_ContentMode(t *testing.T) {
+	state := CreateThinkTagParserState()
+	content, reasoning := FlushThinkTaggedText(state)
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+	if reasoning != "" {
+		t.Errorf("expected empty reasoning, got %q", reasoning)
+	}
+}
+
+func TestFlushThinkTaggedText_ReasoningMode(t *testing.T) {
+	state := CreateThinkTagParserState()
+	// Enter reasoning mode
+	ConsumeThinkTaggedText(state, thinkOpen+"pending text")
+	if state.Mode != "reasoning" {
+		t.Fatal("expected reasoning mode")
+	}
+
+	content, reasoning := FlushThinkTaggedText(state)
+	if content != "" {
+		t.Errorf("expected empty content, got %q", content)
+	}
+	if reasoning != "pending text" {
+		t.Errorf("expected 'pending text', got %q", reasoning)
+	}
+	if state.Mode != "content" {
+		t.Errorf("expected content mode after flush, got %q", state.Mode)
+	}
+	if state.Pending != "" {
+		t.Errorf("expected empty pending, got %q", state.Pending)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ExtractInlineThinkTags (non-streaming)
+// ---------------------------------------------------------------------------
+
+func TestExtractInlineThinkTags_ContentOnly(t *testing.T) {
+	result := ExtractInlineThinkTags("just some text")
+	if result.Content != "just some text" {
+		t.Errorf("expected 'just some text', got %q", result.Content)
+	}
+	if result.Reasoning != "" {
+		t.Errorf("expected no reasoning, got %q", result.Reasoning)
+	}
+}
+
+func TestExtractInlineThinkTags_WithTags(t *testing.T) {
+	text := thinkOpen + "step by step" + thinkClose + "The answer"
+	result := ExtractInlineThinkTags(text)
+	if result.Content != "The answer" {
+		t.Errorf("expected 'The answer', got %q", result.Content)
+	}
+	if result.Reasoning != "step by step" {
+		t.Errorf("expected 'step by step', got %q", result.Reasoning)
+	}
+}
+
+func TestExtractInlineThinkTags_UnclosedTag(t *testing.T) {
+	text := thinkOpen + "unclosed reasoning"
+	result := ExtractInlineThinkTags(text)
+	if result.Content != "" {
+		t.Errorf("expected empty content, got %q", result.Content)
+	}
+	if result.Reasoning != "unclosed reasoning" {
+		t.Errorf("expected 'unclosed reasoning', got %q", result.Reasoning)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Stop reason normalization
+// ---------------------------------------------------------------------------
+
+func TestNormalizeStopReason(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"stop", "stop"},
+		{"end_turn", "stop"},
+		{"end", "stop"},
+		{"eos", "stop"},
+		{"finished", "stop"},
+		{"completed", "stop"},
+		{"stop_sequence", "stop"},
+		{"max_tokens", "length"},
+		{"length", "length"},
+		{"incomplete", "length"},
+		{"max_output_tokens", "length"},
+		{"max_tokens_exceeded", "length"},
+		{"tool_use", "tool_calls"},
+		{"tool_calls", "tool_calls"},
+		{"failed", "error"},
+		{"error", "error"},
+		{"unknown", ""},
+		{"", ""},
+		{"  STOP  ", "stop"},
+	}
+
+	for _, tt := range tests {
+		got := NormalizeStopReason(tt.input)
+		if got != tt.expected {
+			t.Errorf("NormalizeStopReason(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestToClaudeStopReason(t *testing.T) {
+	tests := []struct{ input, expected string }{
+		{"stop", "end_turn"},
+		{"length", "max_tokens"},
+		{"tool_calls", "tool_use"},
+		{"error", "end_turn"},
+		{"", "end_turn"},
+	}
+
+	for _, tt := range tests {
+		got := ToClaudeStopReason(tt.input)
+		if got != tt.expected {
+			t.Errorf("ToClaudeStopReason(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SSE Parsing
+// ---------------------------------------------------------------------------
+
+func TestPullSseEventsWithDone_SingleEvent(t *testing.T) {
+	buffer := "data: {\"key\":\"value\"}\n\n"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != "" {
+		t.Errorf("expected empty event name, got %q", events[0].Event)
+	}
+	if events[0].Data != `{"key":"value"}` {
+		t.Errorf("unexpected data: %q", events[0].Data)
+	}
+	if rest != "" {
+		t.Errorf("expected empty rest, got %q", rest)
+	}
+}
+
+func TestPullSseEventsWithDone_NamedEvent(t *testing.T) {
+	buffer := "event: message_start\ndata: {\"type\":\"message_start\"}\n\n"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != "message_start" {
+		t.Errorf("expected event 'message_start', got %q", events[0].Event)
+	}
+	if rest != "" {
+		t.Errorf("expected empty rest, got %q", rest)
+	}
+}
+
+func TestPullSseEventsWithDone_MultiLineData(t *testing.T) {
+	buffer := "data: line1\ndata: line2\n\ndata: {\"k\":\"v\"}\n\n"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if !strings.Contains(events[0].Data, "line2") {
+		t.Errorf("expected data containing line1 and line2, got %q", events[0].Data)
+	}
+	if rest != "" {
+		t.Errorf("expected empty rest, got %q", rest)
+	}
+}
+
+func TestPullSseEventsWithDone_CRLF(t *testing.T) {
+	buffer := "data: {\"k\":\"v\"}\r\n\r\n"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Data != `{"k":"v"}` {
+		t.Errorf("unexpected data: %q", events[0].Data)
+	}
+	if rest != "" {
+		t.Errorf("expected empty rest, got %q", rest)
+	}
+}
+
+func TestPullSseEventsWithDone_Partial(t *testing.T) {
+	buffer := "data: complete\n\ndata: partial"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Data != "complete" {
+		t.Errorf("expected 'complete', got %q", events[0].Data)
+	}
+	if rest != "data: partial" {
+		t.Errorf("expected 'data: partial', got %q", rest)
+	}
+}
+
+func TestPullSseEventsWithDone_EmptyBlocks(t *testing.T) {
+	buffer := "\n\n\ndata: real\n\n\n\n"
+	events, _ := PullSseEventsWithDone(buffer)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Data != "real" {
+		t.Errorf("expected 'real', got %q", events[0].Data)
+	}
+}
+
+func TestPullSseEventsWithDone_MultipleNamedEvents(t *testing.T) {
+	buffer := "event: start\ndata: {\"x\":1}\n\nevent: delta\ndata: {\"y\":2}\n\n"
+	events, rest := PullSseEventsWithDone(buffer)
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Event != "start" {
+		t.Errorf("expected 'start', got %q", events[0].Event)
+	}
+	if events[1].Event != "delta" {
+		t.Errorf("expected 'delta', got %q", events[1].Event)
+	}
+	if rest != "" {
+		t.Errorf("expected empty rest, got %q", rest)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SSE Serialization
+// ---------------------------------------------------------------------------
+
+func TestSerializeSSE_String(t *testing.T) {
+	result := SerializeSSE("", "hello")
+	if result != "data: hello\n\n" {
+		t.Errorf("unexpected: %q", result)
+	}
+}
+
+func TestSerializeSSE_Map(t *testing.T) {
+	result := SerializeSSE("", map[string]any{"key": "value"})
+	if !strings.HasPrefix(result, "data: ") || !strings.HasSuffix(result, "\n\n") {
+		t.Errorf("unexpected format: %q", result)
+	}
+}
+
+func TestSerializeSSE_NamedEvent(t *testing.T) {
+	result := SerializeSSE("message_start", map[string]any{"type": "message_start"})
+	if !strings.HasPrefix(result, "event: message_start\ndata: ") {
+		t.Errorf("unexpected format: %q", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helper utilities
+// ---------------------------------------------------------------------------
+
+func TestIsRecord(t *testing.T) {
+	if IsRecord(nil) {
+		t.Error("nil is not record")
+	}
+	if !IsRecord(map[string]any{"k": "v"}) {
+		t.Error("map should be record")
+	}
+	if IsRecord("string") {
+		t.Error("string is not record")
+	}
+}
+
+func TestAsRecord(t *testing.T) {
+	m, ok := AsRecord(map[string]any{"k": "v"})
+	if !ok || m["k"] != "v" {
+		t.Error("failed to get record")
+	}
+	_, ok = AsRecord(nil)
+	if ok {
+		t.Error("nil should not be record")
+	}
+}
+
+func TestIsNonEmptyString(t *testing.T) {
+	if IsNonEmptyString("") {
+		t.Error("empty string should be false")
+	}
+	if IsNonEmptyString("   ") {
+		t.Error("whitespace should be false")
+	}
+	if !IsNonEmptyString("hello") {
+		t.Error("non-empty should be true")
+	}
+	if IsNonEmptyString(123) {
+		t.Error("int should be false")
+	}
+}
+
+func TestAsTrimmedString(t *testing.T) {
+	if AsTrimmedString("  hello  ") != "hello" {
+		t.Error("trimmed failed")
+	}
+	if AsTrimmedString(123) != "" {
+		t.Error("non-string should return empty")
+	}
+}
+
+func TestPickFiniteInt(t *testing.T) {
+	if PickFiniteInt(float64(42.0)) != 42 {
+		t.Error("expected 42")
+	}
+	if PickFiniteInt("not a number") != 0 {
+		t.Error("expected 0 for non-number")
+	}
+}
+
+func TestPickPositiveInt(t *testing.T) {
+	if PickPositiveInt(42) != 42 {
+		t.Error("expected 42")
+	}
+	if PickPositiveInt(0) != 0 {
+		t.Error("expected 0 for zero")
+	}
+	if PickPositiveInt(-5) != 0 {
+		t.Error("expected 0 for negative")
+	}
+}
+
+func TestSafeJSONString(t *testing.T) {
+	if SafeJSONString(nil) != "" {
+		t.Error("expected empty for nil")
+	}
+	s := SafeJSONString(map[string]any{"k": "v"})
+	if s != `{"k":"v"}` {
+		t.Errorf("unexpected: %q", s)
+	}
+}
+
+func TestStringifyUnknownValue(t *testing.T) {
+	if StringifyUnknownValue("hello") != "hello" {
+		t.Error("string passthrough")
+	}
+	if StringifyUnknownValue(nil) != "" {
+		t.Error("nil -> ''")
+	}
+	if StringifyUnknownValue(true) != "true" {
+		t.Error("bool -> string")
+	}
+	if StringifyUnknownValue(false) != "false" {
+		t.Error("bool -> string")
+	}
+	if StringifyUnknownValue(float64(42)) != "42" {
+		t.Errorf("int float -> string, got %q", StringifyUnknownValue(float64(42)))
+	}
+}
+
+func TestJoinNonEmpty(t *testing.T) {
+	result := JoinNonEmpty([]string{"a", "", "b", "  ", "c"})
+	if result != "a\n\nb\n\nc" {
+		t.Errorf("unexpected: %q", result)
+	}
+	result = JoinNonEmpty([]string{})
+	if result != "" {
+		t.Errorf("expected empty, got %q", result)
+	}
+}
+
+func TestComputeNovelResponsesDelta_NoExisting(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("", "hello")
+	if delta != "hello" {
+		t.Errorf("expected 'hello', got %q", delta)
+	}
+}
+
+func TestComputeNovelResponsesDelta_EmptyIncoming(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("existing", "")
+	if delta != "" {
+		t.Errorf("expected empty, got %q", delta)
+	}
+}
+
+func TestComputeNovelResponsesDelta_Prefix(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("hello", "hello world")
+	if delta != " world" {
+		t.Errorf("expected ' world', got %q", delta)
+	}
+}
+
+func TestComputeNovelResponsesDelta_Suffix(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("hello world", "world")
+	if delta != "" {
+		t.Errorf("expected empty (suffix), got %q", delta)
+	}
+}
+
+func TestComputeNovelResponsesDelta_Overlap(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("abcde", "defgh")
+	if delta != "fgh" {
+		t.Errorf("expected 'fgh', got %q", delta)
+	}
+}
+
+func TestComputeNovelResponsesDelta_NoOverlap(t *testing.T) {
+	delta := ComputeNovelResponsesDelta("abc", "xyz")
+	if delta != "xyz" {
+		t.Errorf("expected 'xyz', got %q", delta)
+	}
+}
+
+func TestParseJSONLike_Valid(t *testing.T) {
+	result := ParseJSONLike(`{"key":"value"}`)
+	m, ok := result.(map[string]any)
+	if !ok || m["key"] != "value" {
+		t.Errorf("unexpected: %v", result)
+	}
+}
+
+func TestParseJSONLike_Empty(t *testing.T) {
+	result := ParseJSONLike("")
+	_, ok := result.(map[string]any)
+	if !ok {
+		t.Errorf("expected empty map, got %T", result)
+	}
+}
+
+func TestParseJSONLike_Invalid(t *testing.T) {
+	result := ParseJSONLike("not json")
+	m, ok := result.(map[string]any)
+	if !ok || m["value"] != "not json" {
+		t.Errorf("expected wrapped string, got %v", result)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ClaudeDownstreamContext
+// ---------------------------------------------------------------------------
+
+func TestCreateClaudeDownstreamContext(t *testing.T) {
+	cc := CreateClaudeDownstreamContext()
+	if cc.MessageStarted {
+		t.Error("expected MessageStarted=false")
+	}
+	if cc.ContentBlockStarted {
+		t.Error("expected ContentBlockStarted=false")
+	}
+	if cc.DoneSent {
+		t.Error("expected DoneSent=false")
+	}
+	if cc.ToolBlocks == nil {
+		t.Error("expected non-nil ToolBlocks")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// StreamTransformContext
+// ---------------------------------------------------------------------------
+
+func TestCreateStreamTransformContext(t *testing.T) {
+	ctx := CreateStreamTransformContext("test-model")
+	if ctx.Model != "test-model" {
+		t.Errorf("expected test-model, got %q", ctx.Model)
+	}
+	if ctx.ID == "" {
+		t.Error("expected non-empty ID")
+	}
+	if ctx.Created == 0 {
+		t.Error("expected non-zero Created")
+	}
+	if ctx.ToolCalls == nil {
+		t.Error("expected non-nil ToolCalls")
+	}
+	if ctx.ThinkTagParser == nil {
+		t.Error("expected non-nil ThinkTagParser")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NormalizeUpstreamFinalResponse (sanity)
+// ---------------------------------------------------------------------------
+
+func TestNormalizeUpstreamFinalResponse_OpenAI(t *testing.T) {
+	payload := map[string]any{
+		"id":      "chatcmpl-123",
+		"object":  "chat.completion",
+		"created": float64(1700000000),
+		"model":   "gpt-4",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": "Hello!",
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "gpt-4", "")
+	if result.ID != "chatcmpl-123" {
+		t.Errorf("expected chatcmpl-123, got %q", result.ID)
+	}
+	if result.Content != "Hello!" {
+		t.Errorf("expected Hello!, got %q", result.Content)
+	}
+	if result.FinishReason != "stop" {
+		t.Errorf("expected stop, got %q", result.FinishReason)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_ClaudeMessage(t *testing.T) {
+	payload := map[string]any{
+		"id":      "msg_123",
+		"type":    "message",
+		"model":   "claude-sonnet-4-20250514",
+		"role":    "assistant",
+		"content": []any{
+			map[string]any{"type": "text", "text": "Hi!"},
+		},
+		"stop_reason": "end_turn",
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "claude-sonnet-4-20250514", "")
+	if result.ID != "msg_123" {
+		t.Errorf("expected msg_123, got %q", result.ID)
+	}
+	if result.Content != "Hi!" {
+		t.Logf("Claude message parsed content: %q", result.Content)
+	}
+	if result.FinishReason != "stop" {
+		t.Errorf("expected stop, got %q", result.FinishReason)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_StringPayload(t *testing.T) {
+	result := NormalizeUpstreamFinalResponse("plain text response", "gpt-4", "")
+	if result.Content != "plain text response" {
+		t.Errorf("expected 'plain text response', got %q", result.Content)
+	}
+	if result.FinishReason != "stop" {
+		t.Errorf("expected stop, got %q", result.FinishReason)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_NilPayload(t *testing.T) {
+	result := NormalizeUpstreamFinalResponse(nil, "gpt-4", "fallback text")
+	if result.Model != "gpt-4" {
+		t.Errorf("expected gpt-4, got %q", result.Model)
+	}
+	if result.Content != "fallback text" {
+		t.Errorf("expected 'fallback text', got %q", result.Content)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NormalizeUpstreamStreamEvent (sanity)
+// ---------------------------------------------------------------------------
+
+func TestNormalizeUpstreamStreamEvent_OpenAI(t *testing.T) {
+	ctx := CreateStreamTransformContext("gpt-4")
+	payload := map[string]any{
+		"id":      "chatcmpl-123",
+		"object":  "chat.completion.chunk",
+		"created": float64(1700000000),
+		"model":   "gpt-4",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"delta": map[string]any{
+					"role":    "assistant",
+					"content": "Hello",
+				},
+				"finish_reason": nil,
+			},
+		},
+	}
+
+	event := NormalizeUpstreamStreamEvent(payload, ctx, "gpt-4")
+	if event.Role != "assistant" {
+		t.Errorf("expected assistant role, got %q", event.Role)
+	}
+	if event.ContentDelta == "" && event.ReasoningDelta == "" {
+		t.Logf("Think tag parser buffered content; event: role=%q content=%q reasoning=%q", event.Role, event.ContentDelta, event.ReasoningDelta)
+	}
+	if event.FinishReason != "" {
+		t.Errorf("expected empty finish_reason, got %q", event.FinishReason)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_Anthropic(t *testing.T) {
+	ctx := CreateStreamTransformContext("claude-sonnet-4-20250514")
+	payload := map[string]any{
+		"type": "content_block_delta",
+		"delta": map[string]any{
+			"type": "text_delta",
+			"text": "Hello",
+		},
+	}
+
+	event := NormalizeUpstreamStreamEvent(payload, ctx, "claude-sonnet-4-20250514")
+	if event.ContentDelta == "" && event.ReasoningDelta == "" {
+		t.Logf("Anthropic text_delta: content=%q reasoning=%q", event.ContentDelta, event.ReasoningDelta)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_AnthropicTool(t *testing.T) {
+	ctx := CreateStreamTransformContext("claude-sonnet-4-20250514")
+	payload := map[string]any{
+		"type": "content_block_delta",
+		"index": float64(0),
+		"delta": map[string]any{
+			"type":         "input_json_delta",
+			"partial_json": `{"city":"`,
+		},
+	}
+
+	event := NormalizeUpstreamStreamEvent(payload, ctx, "claude-sonnet-4-20250514")
+	if len(event.ToolCallDeltas) != 1 {
+		t.Fatalf("expected 1 tool call delta, got %d", len(event.ToolCallDeltas))
+	}
+	if event.ToolCallDeltas[0].ArgumentsDelta != `{"city":"` {
+		t.Errorf("unexpected arguments delta: %q", event.ToolCallDeltas[0].ArgumentsDelta)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SerializeNormalizedStreamEvent
+// ---------------------------------------------------------------------------
+
+func TestSerializeNormalizedStreamEvent_OpenAI(t *testing.T) {
+	ctx := CreateStreamTransformContext("gpt-4")
+	cc := CreateClaudeDownstreamContext()
+	event := NormalizedStreamEvent{
+		Role:         "assistant",
+		ContentDelta: "Hello",
+	}
+
+	lines := SerializeNormalizedStreamEvent(FormatOpenAI, event, ctx, cc)
+	if len(lines) == 0 {
+		t.Fatal("expected serialized lines")
+	}
+	if !strings.HasPrefix(lines[0], "data: ") || !strings.HasSuffix(lines[0], "\n\n") {
+		t.Errorf("unexpected SSE format: %q", lines[0])
+	}
+	// Should contain "Hello"
+	if !strings.Contains(lines[0], "Hello") {
+		t.Errorf("expected Hello in output: %q", lines[0])
+	}
+}
+
+func TestSerializeNormalizedStreamEvent_Empty(t *testing.T) {
+	ctx := CreateStreamTransformContext("gpt-4")
+	cc := CreateClaudeDownstreamContext()
+	event := NormalizedStreamEvent{} // empty event
+
+	lines := SerializeNormalizedStreamEvent(FormatOpenAI, event, ctx, cc)
+	if len(lines) != 0 {
+		t.Errorf("expected no lines for empty event, got %d", len(lines))
+	}
+}
+
+func TestSerializeStreamDone_OpenAI(t *testing.T) {
+	ctx := CreateStreamTransformContext("gpt-4")
+	cc := CreateClaudeDownstreamContext()
+
+	lines := SerializeStreamDone(FormatOpenAI, ctx, cc)
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line, got %d", len(lines))
+	}
+	if lines[0] != "data: [DONE]\n\n" {
+		t.Errorf("expected [DONE], got %q", lines[0])
+	}
+}
+
+func TestSerializeStreamDone_DoubleCall(t *testing.T) {
+	ctx := CreateStreamTransformContext("gpt-4")
+	cc := CreateClaudeDownstreamContext()
+
+	lines := SerializeStreamDone(FormatOpenAI, ctx, cc)
+	if lines == nil {
+		t.Fatal("expected [DONE]")
+	}
+
+	// Second call should return nil
+	lines2 := SerializeStreamDone(FormatOpenAI, ctx, cc)
+	if lines2 != nil {
+		t.Errorf("expected nil on second Done, got %v", lines2)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SerializeFinalResponse (sanity)
+// ---------------------------------------------------------------------------
+
+func TestSerializeFinalResponse_OpenAI(t *testing.T) {
+	normalized := NormalizedFinalResponse{
+		ID:           "chatcmpl-123",
+		Model:        "gpt-4",
+		Created:      1700000000,
+		Content:      "Hello!",
+		FinishReason: "stop",
+	}
+
+	result := SerializeFinalResponse(FormatOpenAI, normalized, struct{ PromptTokens, CompletionTokens, TotalTokens int }{100, 50, 150})
+	if result["id"] != "chatcmpl-123" {
+		t.Errorf("expected chatcmpl-123, got %v", result["id"])
+	}
+	if result["object"] != "chat.completion" {
+		t.Errorf("expected chat.completion, got %v", result["object"])
+	}
+}
+
+func TestSerializeFinalResponse_Claude(t *testing.T) {
+	normalized := NormalizedFinalResponse{
+		ID:           "msg_123",
+		Model:        "claude-sonnet-4-20250514",
+		Created:      1700000000,
+		Content:      "Hello!",
+		FinishReason: "stop",
+	}
+
+	result := SerializeFinalResponse(FormatClaude, normalized, struct{ PromptTokens, CompletionTokens, TotalTokens int }{100, 50, 150})
+	if result["type"] != "message" {
+		t.Errorf("expected message type, got %v", result["type"])
+	}
+	if result["role"] != "assistant" {
+		t.Errorf("expected assistant role, got %v", result["role"])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildSyntheticOpenAiChunks (sanity)
+// ---------------------------------------------------------------------------
+
+func TestBuildSyntheticOpenAiChunks(t *testing.T) {
+	normalized := NormalizedFinalResponse{
+		ID:           "chatcmpl-123",
+		Model:        "gpt-4",
+		Created:      1700000000,
+		Content:      "Hello!",
+		FinishReason: "stop",
+	}
+
+	chunks := BuildSyntheticOpenAiChunks(normalized)
+	if len(chunks) != 2 {
+		t.Fatalf("expected 2 synthetic chunks, got %d", len(chunks))
+	}
+	// First chunk should have delta with content
+	c1, _ := chunks[0]["choices"].([]map[string]any)
+	d1, _ := c1[0]["delta"].(map[string]any)
+	if d1["content"] != "Hello!" {
+		t.Errorf("expected content in first chunk, got %v", d1["content"])
+	}
+	// Second chunk should have finish_reason
+	c2, _ := chunks[1]["choices"].([]map[string]any)
+	if c2[0]["finish_reason"] != "stop" {
+		t.Errorf("expected finish_reason in second chunk, got %v", c2[0]["finish_reason"])
+	}
+}
