@@ -1,10 +1,10 @@
 package router
 
 import (
+	"embed"
+	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -17,7 +17,7 @@ import (
 
 // New creates and configures the Chi router with the full middleware stack,
 // route groups, SPA fallback, and asset caching.
-func New(cfg *config.Config, webDir string) chi.Router {
+func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	r := chi.NewRouter()
 
 	// ---- Middleware stack ----
@@ -93,25 +93,24 @@ func New(cfg *config.Config, webDir string) chi.Router {
 	})
 
 	// ---- SPA static file fallback ----
-	if webDir != "" {
-		if info, err := os.Stat(webDir); err == nil && info.IsDir() {
-			setupSPAFallback(r, webDir)
-		} else {
-			slog.Warn("web directory not found, SPA fallback disabled", "dir", webDir)
-		}
-	}
+	setupSPAFallback(r, webFS)
 
 	return r
 }
 
 // setupSPAFallback configures static asset serving and SPA fallback.
-func setupSPAFallback(r chi.Router, webDir string) {
+// distFS is the embedded frontend filesystem, rooted at web/dist/.
+func setupSPAFallback(r chi.Router, distFS fs.FS) {
 	// /assets/* → immutable cache for 1 year
-	assetsDir := filepath.Join(webDir, "assets")
-	r.Handle("/assets/*", http.StripPrefix("/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		http.FileServer(http.Dir(assetsDir)).ServeHTTP(w, r)
-	})))
+	assetsFS, err := fs.Sub(distFS, "assets")
+	if err == nil {
+		r.Handle("/assets/*", http.StripPrefix("/assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			http.FileServer(http.FS(assetsFS)).ServeHTTP(w, r)
+		})))
+	} else {
+		slog.Warn("embedded web/dist/assets not found, asset serving disabled", "error", err)
+	}
 
 	// SPA fallback: non-API paths → index.html; API → 404 JSON
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +120,15 @@ func setupSPAFallback(r chi.Router, webDir string) {
 			w.Write([]byte(`{"error":"Not found"}`))
 			return
 		}
+		data, err := fs.ReadFile(distFS, "index.html")
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(`{"error":"Not found"}`))
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
-		http.ServeFile(w, r, filepath.Join(webDir, "index.html"))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
 	})
 }

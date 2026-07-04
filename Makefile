@@ -1,6 +1,6 @@
-.PHONY: build test lint run docker-build clean
+.PHONY: build test lint run docker-build clean web-build migrate-build
 
-# Build the server binary
+# Build the server binary (requires web/dist/ to exist for go:embed)
 build:
 	go build -ldflags="-s -w" -o metapi ./cmd/server
 
@@ -16,10 +16,19 @@ lint:
 run:
 	go run ./cmd/server
 
-# Build Docker image
+# Build Docker image (multi-stage: frontend + Go)
 docker-build:
 	docker build -t metapi-go:latest .
 
+# Build the React frontend (requires Node.js)
+web-build:
+	cd web && npm ci && npx vite build
+
+# Build the standalone migration tool
+migrate-build:
+	go build -ldflags="-s -w" -o metapi-migrate ./cmd/migrate
+
 # Clean build artifacts
 clean:
-	rm -f metapi metapi.exe
+	rm -f metapi metapi.exe metapi-migrate metapi-migrate.exe
+	rm -rf web/dist

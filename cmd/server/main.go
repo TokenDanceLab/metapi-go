@@ -12,6 +12,7 @@ import (
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/router"
 	"github.com/tokendancelab/metapi-go/store"
+	"github.com/tokendancelab/metapi-go/web"
 )
 
 func main() {
@@ -67,8 +68,7 @@ func main() {
 	}()
 
 	// ---- 12. Create HTTP router ----
-	webDir := filepath.Join(cfg.DataDir, "..", "web", "dist")
-	r := router.New(cfg, webDir)
+	r := router.New(cfg, web.Dist)
 
 	// Override /health handler with actual implementation
 	// (router.New registers a placeholder; in production we'd pass the handler in)

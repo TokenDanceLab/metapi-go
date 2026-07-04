@@ -1,3 +1,6 @@
+# Frontend build artifact (created by npm run build:web or Docker multi-stage)
+web/dist/
+
 # Binaries
 /bin/
 /dist/
@@ -27,3 +30,6 @@ Thumbs.db
 # Build
 /tmp/
 metapi.exe
+metapi-migrate.exe
+migrate.exe
+server.exe

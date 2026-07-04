@@ -1,0 +1,57 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: golangci/golangci-lint-action@v6
+
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: go test ./... -count=1
+
+  test-pg:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: metapi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: go test ./... -count=1 -tags=integration
+        env:
+          DATABASE_URL: postgres://postgres:test@localhost:5432/metapi_test?sslmode=disable
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: mkdir -p web/dist
+      - run: go build ./cmd/server
+      - run: go build ./cmd/migrate

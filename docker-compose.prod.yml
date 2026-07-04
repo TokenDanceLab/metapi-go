@@ -1,0 +1,30 @@
+# Production Docker Compose
+# Uses pre-built GHCR image instead of local build.
+#
+# Usage:
+#   1. Create a .env file with required values:
+#        AUTH_TOKEN=<your-admin-token>
+#        PROXY_TOKEN=<your-proxy-token>
+#   2. Start: docker compose -f docker-compose.prod.yml up -d
+#   3. Place nginx/Caddy reverse proxy in front of 127.0.0.1:4000
+
+services:
+  metapi:
+    image: ghcr.io/tokendancelab/metapi-go:latest
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Required (validated at startup -- missing = exit with error)
+      AUTH_TOKEN: ${AUTH_TOKEN:?AUTH_TOKEN is required}
+      PROXY_TOKEN: ${PROXY_TOKEN:?PROXY_TOKEN is required}
+      # Optional with defaults
+      CHECKIN_CRON: ${CHECKIN_CRON:-0 8 * * *}
+      BALANCE_REFRESH_CRON: ${BALANCE_REFRESH_CRON:-0 * * * *}
+      PORT: ${PORT:-4000}
+      DATA_DIR: /app/data
+      TZ: ${TZ:-Asia/Shanghai}
+      # Database config (for PG mode; leave empty for SQLite)
+      DATABASE_URL: ${DATABASE_URL:-}
+    restart: unless-stopped
