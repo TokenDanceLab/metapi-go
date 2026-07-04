@@ -345,12 +345,15 @@ func TestHandleCallback_ProviderMismatch(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	_, err := HandleCallback(CallbackInput{
+	_, err = HandleCallback(CallbackInput{
 		Provider: "claude",
 		State:    session.State,
 		Code:     "test-code",
@@ -367,12 +370,15 @@ func TestHandleCallback_ErrorParam(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	_, err := HandleCallback(CallbackInput{
+	_, err = HandleCallback(CallbackInput{
 		Provider: "codex",
 		State:    session.State,
 		Error:    "access_denied",
@@ -395,12 +401,15 @@ func TestHandleCallback_MissingCode(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	_, err := HandleCallback(CallbackInput{
+	_, err = HandleCallback(CallbackInput{
 		Provider: "codex",
 		State:    session.State,
 		Code:     "",
@@ -417,12 +426,15 @@ func TestHandleCallback_MissingCode_Whitespace(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	_, err := HandleCallback(CallbackInput{
+	_, err = HandleCallback(CallbackInput{
 		Provider: "codex",
 		State:    session.State,
 		Code:     "   ",
@@ -454,12 +466,15 @@ func TestSubmitManualCallback_StateMismatch(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	err := SubmitManualCallback(ManualCallbackInput{
+	err = SubmitManualCallback(ManualCallbackInput{
 		State:       session.State,
 		CallbackURL: "http://localhost:1455/auth/callback?state=wrong-state&code=xyz",
 	})
@@ -475,12 +490,15 @@ func TestSubmitManualCallback_InvalidURL(t *testing.T) {
 	custom := NewMemoryOAuthSessionStore()
 	SetSessionStore(custom)
 
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:    "codex",
 		RedirectURI: "http://localhost:1455/auth/callback",
 	})
+	if err != nil {
+		t.Fatal("unexpected error: " + err.Error())
+	}
 
-	err := SubmitManualCallback(ManualCallbackInput{
+	err = SubmitManualCallback(ManualCallbackInput{
 		State:       session.State,
 		CallbackURL: "",
 	})

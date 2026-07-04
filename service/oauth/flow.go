@@ -93,7 +93,7 @@ func StartFlow(input StartFlowInput) (*FlowStartResult, error) {
 	}
 
 	redirectURI := def.Loopback.RedirectURI
-	session := CreateSession(CreateSessionInput{
+	session, err := CreateSession(CreateSessionInput{
 		Provider:        input.Provider,
 		RedirectURI:     redirectURI,
 		RebindAccountID: input.RebindAccountID,
@@ -101,6 +101,9 @@ func StartFlow(input StartFlowInput) (*FlowStartResult, error) {
 		ProxyURL:        input.ProxyURL,
 		UseSystemProxy:  input.UseSystemProxy,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
 
 	authURL, err := def.BuildAuthorizationURL(context.Background(), BuildAuthURLInput{
 		State:        session.State,

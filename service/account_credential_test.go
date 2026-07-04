@@ -24,7 +24,10 @@ func TestEncryptDecryptRoundtrip(t *testing.T) {
 	cfg := testCfg("my-test-secret-key")
 	password := "super-secret-password-123"
 
-	cipherText := EncryptAccountPassword(cfg, password)
+	cipherText, err := EncryptAccountPassword(cfg, password)
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 	if cipherText == "" {
 		t.Fatal("encrypt returned empty string")
 	}
@@ -48,7 +51,10 @@ func TestEncryptDecryptMultiplePasswords(t *testing.T) {
 
 	for _, pw := range passwords {
 		t.Run("pw_"+truncateForName(pw, 20), func(t *testing.T) {
-			cipherText := EncryptAccountPassword(cfg, pw)
+			cipherText, err := EncryptAccountPassword(cfg, pw)
+			if err != nil {
+				t.Fatalf("encrypt failed: %v", err)
+			}
 			plain := DecryptAccountPassword(cfg, cipherText)
 			if plain != pw {
 				t.Errorf("roundtrip failed: expected %q, got %q", pw, plain)
@@ -59,7 +65,10 @@ func TestEncryptDecryptMultiplePasswords(t *testing.T) {
 
 func TestEncryptProducesV1Format(t *testing.T) {
 	cfg := testCfg("format-test-key")
-	cipherText := EncryptAccountPassword(cfg, "test-password")
+	cipherText, err := EncryptAccountPassword(cfg, "test-password")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 
 	parts := strings.SplitN(cipherText, ":", 4)
 	if len(parts) != 4 {
@@ -80,8 +89,14 @@ func TestEncryptNonDeterministic(t *testing.T) {
 	cfg := testCfg("nd-test-key")
 	password := "same-password"
 
-	c1 := EncryptAccountPassword(cfg, password)
-	c2 := EncryptAccountPassword(cfg, password)
+	c1, err := EncryptAccountPassword(cfg, password)
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
+	c2, err := EncryptAccountPassword(cfg, password)
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 
 	if c1 == c2 {
 		t.Error("expected non-deterministic encryption (different IV each time)")
@@ -92,7 +107,10 @@ func TestDecryptWithWrongKey(t *testing.T) {
 	cfg1 := testCfg("key-one")
 	cfg2 := testCfg("key-two")
 
-	cipherText := EncryptAccountPassword(cfg1, "my-password")
+	cipherText, err := EncryptAccountPassword(cfg1, "my-password")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 	plain := DecryptAccountPassword(cfg2, cipherText)
 
 	if plain != "" {
@@ -103,7 +121,10 @@ func TestDecryptWithWrongKey(t *testing.T) {
 func TestDecryptWithTamperedCiphertext(t *testing.T) {
 	cfg := testCfg("tamper-key")
 
-	cipherText := EncryptAccountPassword(cfg, "original-password")
+	cipherText, err := EncryptAccountPassword(cfg, "original-password")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 
 	// Tamper with the ciphertext part
 	parts := strings.SplitN(cipherText, ":", 4)
@@ -142,7 +163,10 @@ func TestDecryptWrongIVLength(t *testing.T) {
 	cfg := testCfg("iv-key")
 
 	// Normal encrypt to get valid parts
-	cipherText := EncryptAccountPassword(cfg, "test")
+	cipherText, err := EncryptAccountPassword(cfg, "test")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 	parts := strings.SplitN(cipherText, ":", 4)
 
 	// Replace IV with invalid-length one
@@ -196,7 +220,10 @@ func TestBuildCredentialKeyFallback(t *testing.T) {
 
 func TestEncryptPassword_Delegates(t *testing.T) {
 	cfg := testCfg("delegate-key")
-	cipherText := EncryptPassword(cfg, "delegate-pw")
+	cipherText, err := EncryptPassword(cfg, "delegate-pw")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 
 	if !strings.HasPrefix(cipherText, "v1:") {
 		t.Errorf("expected v1 prefix, got %q", cipherText)
@@ -228,7 +255,10 @@ func TestDecryptWithCorruptBase64(t *testing.T) {
 
 func TestDecryptWrongTagLength(t *testing.T) {
 	cfg := testCfg("tag-key")
-	cipherText := EncryptAccountPassword(cfg, "test")
+	cipherText, err := EncryptAccountPassword(cfg, "test")
+	if err != nil {
+		t.Fatalf("encrypt failed: %v", err)
+	}
 	parts := strings.SplitN(cipherText, ":", 4)
 
 	// Replace tag with 4-byte value (not 16)

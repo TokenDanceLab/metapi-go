@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"strings"
 
@@ -33,21 +34,21 @@ func buildCredentialKey(cfg *config.Config) []byte {
 // EncryptAccountPassword encrypts a password with AES-256-GCM.
 // Returns "v1:base64url(iv):base64url(tag):base64url(ciphertext)".
 // Mirrors TS encryptAccountPassword().
-func EncryptAccountPassword(cfg *config.Config, password string) string {
+func EncryptAccountPassword(cfg *config.Config, password string) (string, error) {
 	key := buildCredentialKey(cfg)
 	iv := make([]byte, 12)
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		panic("crypto/rand failed: " + err.Error())
+		return "", fmt.Errorf("crypto/rand failed: %w", err)
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		panic("aes.NewCipher failed: " + err.Error())
+		return "", fmt.Errorf("aes.NewCipher failed: %w", err)
 	}
 
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		panic("cipher.NewGCM failed: " + err.Error())
+		return "", fmt.Errorf("cipher.NewGCM failed: %w", err)
 	}
 
 	ciphertext := aesgcm.Seal(nil, iv, []byte(password), nil)
@@ -59,7 +60,7 @@ func EncryptAccountPassword(cfg *config.Config, password string) string {
 	return credentialVersion + ":" +
 		base64URLEncode(iv) + ":" +
 		base64URLEncode(tag) + ":" +
-		base64URLEncode(encrypted)
+		base64URLEncode(encrypted), nil
 }
 
 // DecryptAccountPassword decrypts a ciphertext produced by EncryptAccountPassword.

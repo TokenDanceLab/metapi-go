@@ -349,7 +349,11 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Encrypt password for autoRelogin
-	passwordCipher := service.EncryptPassword(h.cfg, body.Password)
+	passwordCipher, encErr := service.EncryptPassword(h.cfg, body.Password)
+	if encErr != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to encrypt password."})
+		return
+	}
 
 	extraConfig := map[string]any{
 		"credentialMode": "session",

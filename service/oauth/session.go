@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -12,7 +13,7 @@ import (
 
 // OAuthSessionStore is the interface for storing OAuth sessions.
 type OAuthSessionStore interface {
-	Create(input CreateSessionInput) *SessionRecord
+	Create(input CreateSessionInput) (*SessionRecord, error)
 	Get(state string) *SessionRecord
 	MarkSuccess(state string, accountID int64, siteID int64) *SessionRecord
 	MarkError(state string, errorMsg string) *SessionRecord
@@ -54,15 +55,21 @@ func (s *MemoryOAuthSessionStore) pruneExpiredSessions(now time.Time) {
 }
 
 // Create creates a new OAuth session with a random state and PKCE verifier.
-func (s *MemoryOAuthSessionStore) Create(input CreateSessionInput) *SessionRecord {
+func (s *MemoryOAuthSessionStore) Create(input CreateSessionInput) (*SessionRecord, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now := time.Now()
 	s.pruneExpiredSessions(now)
 
-	state := randomBase64URL(24)
-	codeVerifier := randomBase64URL(48)
+	state, err := randomBase64URL(24)
+	if err != nil {
+		return nil, err
+	}
+	codeVerifier, err := randomBase64URL(48)
+	if err != nil {
+		return nil, err
+	}
 	createdAt := now
 	expiresAt := now.Add(sessionTTL)
 
@@ -81,7 +88,7 @@ func (s *MemoryOAuthSessionStore) Create(input CreateSessionInput) *SessionRecor
 		UseSystemProxy:  input.UseSystemProxy,
 	}
 	s.sessions[state] = record
-	return record
+	return record, nil
 }
 
 // Get retrieves a session by state.
@@ -139,7 +146,7 @@ func SetSessionStore(store OAuthSessionStore) {
 }
 
 // CreateSession creates a session using the global store.
-func CreateSession(input CreateSessionInput) *SessionRecord {
+func CreateSession(input CreateSessionInput) (*SessionRecord, error) {
 	return globalSessionStore.Create(input)
 }
 
@@ -161,7 +168,7 @@ func MarkSessionError(state string, errorMsg string) *SessionRecord {
 // ---- PKCE Utilities ----
 
 // CreatePKCEVerifier generates a random 48-byte base64url code verifier.
-func CreatePKCEVerifier() string {
+func CreatePKCEVerifier() (string, error) {
 	return randomBase64URL(48)
 }
 
@@ -173,12 +180,12 @@ func CreatePKCEChallenge(codeVerifier string) string {
 
 // ---- Helpers ----
 
-func randomBase64URL(n int) string {
+func randomBase64URL(n int) (string, error) {
 	buf := make([]byte, n)
 	if _, err := rand.Read(buf); err != nil {
-		panic("crypto/rand.Read failed: " + err.Error())
+		return "", fmt.Errorf("crypto/rand.Read failed: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(buf)
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func trimOr(s, fallback string) string {

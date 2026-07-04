@@ -123,7 +123,7 @@ func BuildCapabilitiesFromCredentialMode(mode AccountCredentialMode, hasSessionT
 // ---- AES Password Encryption (delegates to account_credential.go) ----
 
 // EncryptPassword encrypts a password for storage in extraConfig.autoRelogin.passwordCipher.
-func EncryptPassword(cfg *config.Config, password string) string {
+func EncryptPassword(cfg *config.Config, password string) (string, error) {
 	return EncryptAccountPassword(cfg, password)
 }
 
