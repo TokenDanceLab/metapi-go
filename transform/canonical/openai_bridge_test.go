@@ -766,3 +766,138 @@ func TestOpenAIBody_ContentArray_StringElements(t *testing.T) {
 
 // make sure unused imports compile
 var _ = strings.TrimSpace
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkOpenAIBody_ToCanonical(b *testing.B) {
+	body := openAiChatBodyFixture()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+			Body:      body,
+			Surface:   SurfaceOpenAIChat,
+			CliProfile: ProfileGeneric,
+			Operation:  OpGenerate,
+		})
+	}
+}
+
+func BenchmarkOpenAIBody_ToCanonical_WithTools(b *testing.B) {
+	body := map[string]any{
+		"model": "gpt-4",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "Get the weather"},
+		},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "get_weather",
+					"description": "Get weather for a city",
+					"parameters": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"city": map[string]any{"type": "string"},
+						},
+						"required": []any{"city"},
+					},
+				},
+			},
+		},
+		"tool_choice": "auto",
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+			Body:    body,
+			Surface: SurfaceOpenAIChat,
+		})
+	}
+}
+
+func BenchmarkOpenAIBody_ToCanonical_WithImages(b *testing.B) {
+	body := map[string]any{
+		"model": "gpt-4o",
+		"stream": false,
+		"messages": []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "text", "text": "What is in this image?"},
+					map[string]any{"type": "image_url", "image_url": map[string]any{"url": "https://example.com/photo.png"}},
+				},
+			},
+		},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+			Body:       body,
+			Surface:    SurfaceOpenAIChat,
+			CliProfile: ProfileGeneric,
+			Operation:  OpGenerate,
+		})
+	}
+}
+
+func BenchmarkCanonical_ToOpenAIBody(b *testing.B) {
+	body := openAiChatBodyFixture()
+	env, _ := CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+		Body:       body,
+		Surface:    SurfaceOpenAIChat,
+		CliProfile: ProfileGeneric,
+		Operation:  OpGenerate,
+	})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CanonicalRequestToOpenAiChatBody(env)
+	}
+}
+
+func BenchmarkOpenAIBody_Roundtrip(b *testing.B) {
+	body := openAiChatBodyFixture()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		env, _ := CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+			Body:       body,
+			Surface:    SurfaceOpenAIChat,
+			CliProfile: ProfileGeneric,
+			Operation:  OpGenerate,
+		})
+		_ = CanonicalRequestToOpenAiChatBody(env)
+	}
+}
+
+func BenchmarkOpenAIBody_Roundtrip_WithImages(b *testing.B) {
+	body := map[string]any{
+		"model":  "gpt-4o",
+		"stream": false,
+		"messages": []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "text", "text": "What is in this image?"},
+					map[string]any{"type": "image_url", "image_url": map[string]any{"url": "https://example.com/photo.png"}},
+				},
+			},
+		},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		env, _ := CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+			Body:       body,
+			Surface:    SurfaceOpenAIChat,
+			CliProfile: ProfileGeneric,
+			Operation:  OpGenerate,
+		})
+		_ = CanonicalRequestToOpenAiChatBody(env)
+	}
+}

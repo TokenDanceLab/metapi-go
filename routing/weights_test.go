@@ -403,3 +403,155 @@ func TestValueScoreComputation(t *testing.T) {
 // =============================================================================
 
 func ptrFloat(v float64) *float64 { return &v }
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkCalculateWeightedSelection_5Candidates(b *testing.B) {
+	ResetSiteRuntimeHealthState()
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 10, 101, 10, 0, 500, 10, 250.0, 1.5, ptrFloat(0.003), 100.0, nil),
+		makeCandidate(2, 10, 102, 10, 0, 300, 5, 180.0, 1.5, ptrFloat(0.0025), 200.0, nil),
+		makeCandidate(3, 20, 201, 10, 1, 200, 20, 100.0, 1.0, ptrFloat(0.005), 50.0, nil),
+		makeCandidate(4, 20, 202, 10, 1, 150, 30, 80.0, 1.0, nil, 30.0, nil),
+		makeCandidate(5, 30, 301, 10, 2, 100, 50, 40.0, 0.8, nil, 5.0, nil),
+	}
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CalculateWeightedSelection(
+			candidates, staticModel("gpt-4"), routingWeights,
+			nil, nil, 0, WeightedMode, "", nil, 1.0,
+		)
+	}
+}
+
+func BenchmarkCalculateWeightedSelection_10Candidates(b *testing.B) {
+	ResetSiteRuntimeHealthState()
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 10, 101, 10, 0, 500, 10, 250.0, 1.5, ptrFloat(0.003), 100.0, nil),
+		makeCandidate(2, 10, 102, 10, 0, 300, 5, 180.0, 1.5, ptrFloat(0.0025), 200.0, nil),
+		makeCandidate(3, 20, 201, 10, 1, 200, 20, 100.0, 1.0, ptrFloat(0.005), 50.0, nil),
+		makeCandidate(4, 20, 202, 10, 1, 150, 30, 80.0, 1.0, nil, 30.0, nil),
+		makeCandidate(5, 30, 301, 10, 2, 100, 50, 40.0, 0.8, nil, 5.0, nil),
+		makeCandidate(6, 10, 103, 10, 0, 600, 8, 300.0, 1.5, ptrFloat(0.004), 150.0, nil),
+		makeCandidate(7, 20, 203, 10, 1, 180, 15, 120.0, 1.0, ptrFloat(0.006), 60.0, nil),
+		makeCandidate(8, 30, 302, 10, 2, 80, 40, 35.0, 0.8, nil, 8.0, nil),
+		makeCandidate(9, 40, 401, 10, 1, 250, 25, 150.0, 1.2, ptrFloat(0.0035), 80.0, nil),
+		makeCandidate(10, 40, 402, 10, 1, 220, 20, 130.0, 1.2, nil, 70.0, nil),
+	}
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CalculateWeightedSelection(
+			candidates, staticModel("gpt-4"), routingWeights,
+			nil, nil, 0, WeightedMode, "", nil, 1.0,
+		)
+	}
+}
+
+func BenchmarkCalculateWeightedSelection_SingleCandidate(b *testing.B) {
+	ResetSiteRuntimeHealthState()
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 100, 1001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+	}
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CalculateWeightedSelection(
+			candidates, staticModel("gpt-4"), routingWeights,
+			nil, nil, 0, WeightedMode, "", nil, 1.0,
+		)
+	}
+}
+
+func BenchmarkCalculateWeightedSelection_StableFirst(b *testing.B) {
+	ResetSiteRuntimeHealthState()
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 100, 1001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+		makeCandidate(2, 200, 2001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+	}
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = CalculateWeightedSelection(
+			candidates, staticModel("gpt-4"), routingWeights,
+			nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+		)
+	}
+}
+
+func BenchmarkEffectiveUnitCost_Observed(b *testing.B) {
+	c := makeCandidate(1, 100, 1001, 10, 0, 100, 0, 50.0, 1.0, nil, 0, nil)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = EffectiveUnitCost(c, "gpt-4", nil, 1.0)
+	}
+}
+
+func BenchmarkEffectiveUnitCost_Catalog(b *testing.B) {
+	c := makeCandidate(1, 100, 1001, 10, 0, 0, 0, 0, 1.0, nil, 0, nil)
+	pricingFn := func(siteID, accountID int64, modelName string) *float64 {
+		return ptrFloat(0.002)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = EffectiveUnitCost(c, "gpt-4", pricingFn, 1.0)
+	}
+}
+
+func BenchmarkResolveChannelRuntimeLoadMultiplier(b *testing.B) {
+	snapshots := []ChannelLoadSnapshot{
+		{SessionScoped: false},
+		{SessionScoped: true, ConcurrencyLimit: 0},
+		{SessionScoped: true, ConcurrencyLimit: 10, ActiveLeaseCount: 0},
+		{SessionScoped: true, ConcurrencyLimit: 10, ActiveLeaseCount: 5},
+		{SessionScoped: true, ConcurrencyLimit: 10, ActiveLeaseCount: 10, WaitingCount: 5, Saturated: true},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, s := range snapshots {
+			_ = ResolveChannelRuntimeLoadMultiplier(s)
+		}
+	}
+}
+
+func BenchmarkMakeCandidate(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = makeCandidate(int64(i%100)+1, int64(i%10)*10, int64(i)+1, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil)
+	}
+}

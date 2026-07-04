@@ -545,3 +545,138 @@ func TestExecuteEndpointFlow_OnAttemptSuccessWithRecovery(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkBuildUpstreamURL(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = BuildUpstreamURL("https://api.example.com/path", "/v1/chat/completions")
+	}
+}
+
+func BenchmarkSummarizeUpstreamError(b *testing.B) {
+	b.ReportAllocs()
+	errText := `{"error":{"message":"The model ` + `gpt-4` + ` is overloaded. Please try again later.","type":"server_error","code":503}}` + ``
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = SummarizeUpstreamError(503, errText)
+	}
+}
+
+func BenchmarkSummarizeUpstreamError_Long(b *testing.B) {
+	b.ReportAllocs()
+	longText := ""
+	for j := 0; j < 500; j++ {
+		longText += "x"
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = SummarizeUpstreamError(502, longText)
+	}
+}
+
+func BenchmarkExecuteEndpointFlow_Success(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+			SiteURL:                     "https://api.example.com",
+			DisableCrossProtocolFallback: false,
+			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+				return BuiltEndpointRequest{
+					Endpoint: endpoint,
+					Path:     "/v1/chat/completions",
+				}
+			},
+			DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+				return makeSuccessResponse(200, `{"choices":[{"message":{"content":"hello"}}]}`), nil
+			},
+		})
+	}
+}
+
+func BenchmarkExecuteEndpointFlow_TimeoutFallback(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		callCount := 0
+		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+			SiteURL:                     "https://api.example.com",
+			DisableCrossProtocolFallback: false,
+			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
+			},
+			DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+				callCount++
+				if callCount == 1 {
+					return makeTimeoutResponse(), nil
+				}
+				return makeSuccessResponse(200, "ok"), nil
+			},
+		})
+	}
+}
+
+func BenchmarkExecuteEndpointFlow_Recovery(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		callCount := 0
+		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+			SiteURL:            "https://api.example.com",
+			EndpointCandidates: makeEndpointCandidates(EndpointChat),
+			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
+			},
+			DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+				callCount++
+				if callCount == 1 {
+					return makeErrorResponse(401, "unauthorized"), nil
+				}
+				return makeSuccessResponse(200, "recovered"), nil
+			},
+			TryRecover: func(ctx *EndpointAttemptContext) *RecoverResult {
+				return &RecoverResult{
+					Response:     makeSuccessResponse(200, "recovered token"),
+					UpstreamPath: "/v1/chat/completions",
+				}
+			},
+		})
+	}
+}
+
+func BenchmarkExecuteEndpointFlow_AllExhausted(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+			SiteURL:                     "https://api.example.com",
+			DisableCrossProtocolFallback: false,
+			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
+			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
+			},
+			DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+				return makeErrorResponse(500, "server error"), nil
+			},
+		})
+	}
+}
+
+func BenchmarkExecuteEndpointFlow_ProxyURL(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+			SiteURL:            "https://real.api.com",
+			ProxyURL:           "https://proxy.api.com",
+			EndpointCandidates: makeEndpointCandidates(EndpointChat),
+			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
+			},
+			DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+				return makeSuccessResponse(200, "ok"), nil
+			},
+		})
+	}
+}

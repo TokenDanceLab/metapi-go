@@ -117,3 +117,38 @@ func TestHandleChatCompletions_StreamHeaders(t *testing.T) {
 		t.Error("missing Connection: keep-alive")
 	}
 }
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkHandleChatCompletions_NonStream(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+		rec := httptest.NewRecorder()
+		HandleChatCompletions(rec, req)
+	}
+}
+
+func BenchmarkHandleChatCompletions_Stream(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+		rec := httptest.NewRecorder()
+		HandleChatCompletions(rec, req)
+	}
+}
+
+func BenchmarkHandleChatCompletions_Unauthorized(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(`{"model":"test"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		HandleChatCompletions(rec, req)
+	}
+}

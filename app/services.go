@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 
 	"github.com/tokendancelab/metapi-go/config"
@@ -65,7 +66,7 @@ func StartBackgroundServices() {
 	registry.Register(scheduler.NewOAuthLoopbackScheduler(cfg))
 
 	// Start all
-	registry.StartAll(nil) // nil context: schedulers manage their own goroutines
+	registry.StartAll(context.Background())
 
 	slog.Info("all background schedulers registered",
 		"count", len(registry.List()),

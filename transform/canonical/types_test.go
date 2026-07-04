@@ -481,3 +481,96 @@ func TestCanonicalMessageRole_AllRoles(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+var benchEnvelope = func() CanonicalRequestEnvelope {
+	var env CanonicalRequestEnvelope
+	json.Unmarshal([]byte(sampleEnvelopeJSON()), &env)
+	return env
+}()
+
+func BenchmarkCanonicalEnvelope_JSONUnmarshal(b *testing.B) {
+	raw := sampleEnvelopeJSON()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var env CanonicalRequestEnvelope
+		_ = json.Unmarshal([]byte(raw), &env)
+	}
+}
+
+func BenchmarkCanonicalEnvelope_JSONMarshal(b *testing.B) {
+	env := benchEnvelope
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = json.Marshal(env)
+	}
+}
+
+func BenchmarkCanonicalEnvelope_JSONRoundtrip(b *testing.B) {
+	raw := sampleEnvelopeJSON()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var env CanonicalRequestEnvelope
+		_ = json.Unmarshal([]byte(raw), &env)
+		_, _ = json.Marshal(env)
+	}
+}
+
+func BenchmarkCreateCanonicalRequestEnvelope(b *testing.B) {
+	input := CreateCanonicalRequestEnvelopeInput{
+		Operation:      OpGenerate,
+		Surface:        SurfaceOpenAIChat,
+		CliProfile:     ProfileGeneric,
+		RequestedModel: "gpt-4",
+		Stream:         true,
+		Messages: []CanonicalMessage{
+			{Role: RoleUser, Parts: []CanonicalContentPart{{Type: PartText, Text: "Hello"}}},
+		},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = CreateCanonicalRequestEnvelope(input)
+	}
+}
+
+func BenchmarkNormalizeCanonicalContinuation_NonNil(b *testing.B) {
+	c := &CanonicalContinuation{SessionID: "sess_123"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = NormalizeCanonicalContinuation(c)
+	}
+}
+
+func BenchmarkNormalizeCanonicalContinuation_Empty(b *testing.B) {
+	c := &CanonicalContinuation{}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = NormalizeCanonicalContinuation(c)
+	}
+}
+
+func BenchmarkCanonicalContentPart_JSONRoundtrip(b *testing.B) {
+	parts := []CanonicalContentPart{
+		{Type: PartText, Text: "Hello world"},
+		{Type: PartImage, DataURL: "data:image/png;base64,iVBORw0KGgo="},
+		{Type: PartToolCall, ID: "toolu_01", Name: "get_weather", ArgumentsJSON: `{"city":"SF"}`},
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, p := range parts {
+			data, _ := json.Marshal(p)
+			var p2 CanonicalContentPart
+			_ = json.Unmarshal(data, &p2)
+		}
+	}
+}
