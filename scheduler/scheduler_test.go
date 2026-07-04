@@ -145,10 +145,13 @@ func TestValidateCronExpr(t *testing.T) {
 		{"0 0 0 1 * *", true},
 		{"0 0 0 * * 0", true},
 		{"30 0 */2 * * *", true},
-		// 5-field expressions — invalid (parser requires seconds)
-		{"* * * * *", false},
-		{"*/5 * * * *", false},
-		{"0 */6 * * *", false},
+		// 5-field expressions — auto-converted to 6-field, now valid
+		{"* * * * *", true},
+		{"*/5 * * * *", true},
+		{"0 */6 * * *", true},
+		{"0 8 * * *", true},
+		{"58 23 * * *", true}, // daily-summary default
+		{"0 6 * * *", true},   // log-cleanup default
 		// Descriptor — not supported
 		{"@every 1h", false},
 		{"not a cron expr", false},
@@ -163,9 +166,15 @@ func TestValidateCronExpr(t *testing.T) {
 }
 
 func TestParseCronExpr(t *testing.T) {
-	t.Run("valid expr", func(t *testing.T) {
+	t.Run("valid 6-field expr", func(t *testing.T) {
 		if err := ParseCronExpr("0 0 */6 * * *"); err != nil {
 			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("valid 5-field expr auto-converted", func(t *testing.T) {
+		if err := ParseCronExpr("0 */6 * * *"); err != nil {
+			t.Errorf("unexpected error for 5-field expr: %v", err)
 		}
 	})
 
@@ -189,6 +198,32 @@ func TestParseCronExpr(t *testing.T) {
 			t.Error("expected error for invalid cron expr")
 		}
 	})
+}
+
+func TestNormalizeCronExpr(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"   ", ""},
+		{"* * * * *", "0 * * * * *"},
+		{"*/5 * * * *", "0 */5 * * * *"},
+		{"0 */6 * * *", "0 0 */6 * * *"},
+		{"0 8 * * *", "0 0 8 * * *"},
+		{"58 23 * * *", "0 58 23 * * *"},
+		{"  0 8 * * *  ", "0 0 8 * * *"},          // with surrounding whitespace
+		{"0 0 */6 * * *", "0 0 */6 * * *"},         // already 6-field, unchanged
+		{"0   0   */6   *  *  *", "0   0   */6   *  *  *"}, // irregular spacing preserved (not 5 fields)
+		{"@every 1h", "@every 1h"},                  // non-standard, passed through
+	}
+
+	for _, tc := range tests {
+		got := normalizeCronExpr(tc.input)
+		if got != tc.expected {
+			t.Errorf("normalizeCronExpr(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
 }
 
 func TestCronRunner_AddJob(t *testing.T) {
