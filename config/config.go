@@ -507,6 +507,24 @@ func maxInt(a, b int) int {
 	return b
 }
 
+// MaxInt returns the larger of a and b. Exported for use by other packages.
+func MaxInt(a, b int) int {
+	return maxInt(a, b)
+}
+
+// ParseJsonValue parses a JSON string into an any value.
+// Returns nil on empty input or parse error.
+func ParseJsonValue(value string) any {
+	if value == "" {
+		return nil
+	}
+	var result any
+	if err := json.Unmarshal([]byte(value), &result); err != nil {
+		return nil
+	}
+	return result
+}
+
 // atoiOr parses s as int, returning fallback on failure.
 func atoiOr(s string, fallback int) int {
 	if s == "" {
