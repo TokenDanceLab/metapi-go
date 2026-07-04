@@ -11,6 +11,7 @@ import (
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/admin"
+	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -44,8 +45,32 @@ func New(cfg *config.Config, webDir string) chi.Router {
 			admin.RegisterSitesRoutes(r, db.DB)
 			admin.RegisterAccountsRoutes(r, db.DB, cfg)
 			admin.RegisterAccountTokensRoutes(r, db.DB)
+
+			// P11: Admin API routes
+			admin.RegisterStatsRoutes(r, db.DB)
+			admin.RegisterSettingsRoutes(r, db.DB, cfg)
+			admin.RegisterDatabaseRoutes(r, db.DB)
+			admin.RegisterBackupRoutes(r, db.DB)
+			admin.RegisterNotifyRoutes(r)
+			admin.RegisterMaintenanceRoutes(r, db.DB)
+			admin.RegisterDownstreamKeysRoutes(r, db.DB)
+			admin.RegisterEventsRoutes(r, db.DB)
+			admin.RegisterSearchRoutes(r, db.DB)
+			admin.RegisterTasksRoutes(r, db.DB)
+			admin.RegisterTestRoutes(r)
+			admin.RegisterSiteAnnouncementsRoutes(r, db.DB)
+			admin.RegisterAuthSettingsRoutes(r, db.DB, cfg)
+			admin.RegisterCheckinRoutes(r, db.DB)
+			admin.RegisterTokenRoutes(r, db.DB)
+			admin.RegisterUpdateCenterRoutes(r)
+			admin.RegisterOauthRoutes(r, db.DB)
 		} else {
 			slog.Warn("router: database not initialized, P3 routes skipped")
+		}
+
+		// P11: Monitor routes (includes LDOH proxy outside /api)
+		if db := store.GetDB(); db != nil {
+			admin.RegisterMonitorRoutes(r, db.DB, cfg)
 		}
 
 		r.Get("/desktop/health", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +83,13 @@ func New(cfg *config.Config, webDir string) chi.Router {
 	// /v1/* proxy routes → proxy auth middleware
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(auth.ProxyAuth(cfg))
-		// P10: register proxy handler
+		proxyhandler.RegisterProxyRoutes(r)
+	})
+
+	// Non-/v1 proxy routes (chat alias, responses aliases, Gemini native paths)
+	r.Route("/", func(r chi.Router) {
+		r.Use(auth.ProxyAuth(cfg))
+		proxyhandler.RegisterNonV1ProxyRoutes(r)
 	})
 
 	// ---- SPA static file fallback ----

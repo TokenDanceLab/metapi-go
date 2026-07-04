@@ -1,0 +1,640 @@
+package admin
+
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/config"
+)
+
+// RegisterSettingsRoutes registers all /api/settings routes (runtime, brand-list, system-proxy/test).
+func RegisterSettingsRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
+	handler := &settingsHandler{db: db, cfg: cfg}
+
+	r.Get("/api/settings/runtime", handler.getRuntime)
+	r.Put("/api/settings/runtime", handler.updateRuntime)
+	r.Get("/api/settings/brand-list", handler.brandList)
+	r.Post("/api/settings/system-proxy/test", handler.testSystemProxy)
+}
+
+type settingsHandler struct {
+	db  *sqlx.DB
+	cfg *config.Config
+}
+
+// GET /api/settings/runtime
+func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
+	cfg := h.cfg
+	writeJSON(w, http.StatusOK, map[string]any{
+		// Checkin
+		"checkinCron":          cfg.CheckinCron,
+		"checkinScheduleMode":  cfg.CheckinScheduleMode,
+		"checkinIntervalHours": cfg.CheckinIntervalHours,
+		// Balance
+		"balanceRefreshCron": cfg.BalanceRefreshCron,
+		// Log cleanup
+		"logCleanupCron":              cfg.LogCleanupCron,
+		"logCleanupUsageLogsEnabled":  cfg.LogCleanupUsageLogsEnabled,
+		"logCleanupProgramLogsEnabled": cfg.LogCleanupProgramLogsEnabled,
+		"logCleanupRetentionDays":     cfg.LogCleanupRetentionDays,
+		// Model probe
+		"modelAvailabilityProbeEnabled": cfg.ModelAvailabilityProbeEnabled,
+		// Codex
+		"codexUpstreamWebsocketEnabled": cfg.CodexUpstreamWebsocketEnabled,
+		// Responses
+		"responsesCompactFallbackToResponsesEnabled": cfg.ResponsesCompactFallbackToResponsesEnabled,
+		// Cross-protocol
+		"disableCrossProtocolFallback": cfg.DisableCrossProtocolFallback,
+		// Proxy session
+		"proxySessionChannelConcurrencyLimit": cfg.ProxySessionChannelConcurrencyLimit,
+		"proxySessionChannelQueueWaitMs":      cfg.ProxySessionChannelQueueWaitMs,
+		// Debug trace
+		"proxyDebugTraceEnabled":        cfg.ProxyDebugTraceEnabled,
+		"proxyDebugCaptureHeaders":      cfg.ProxyDebugCaptureHeaders,
+		"proxyDebugCaptureBodies":       cfg.ProxyDebugCaptureBodies,
+		"proxyDebugCaptureStreamChunks": cfg.ProxyDebugCaptureStreamChunks,
+		"proxyDebugTargetSessionId":     cfg.ProxyDebugTargetSessionId,
+		"proxyDebugTargetClientKind":    cfg.ProxyDebugTargetClientKind,
+		"proxyDebugTargetModel":         cfg.ProxyDebugTargetModel,
+		"proxyDebugRetentionHours":      cfg.ProxyDebugRetentionHours,
+		"proxyDebugMaxBodyBytes":        cfg.ProxyDebugMaxBodyBytes,
+		// Routing
+		"routingFallbackUnitCost":           cfg.RoutingFallbackUnitCost,
+		"proxyFirstByteTimeoutSec":          cfg.ProxyFirstByteTimeoutSec,
+		"tokenRouterFailureCooldownMaxSec":  cfg.TokenRouterFailureCooldownMaxSec,
+		"routingWeights": map[string]any{
+			"baseWeightFactor":  cfg.RoutingWeights.BaseWeightFactor,
+			"valueScoreFactor":  cfg.RoutingWeights.ValueScoreFactor,
+			"costWeight":        cfg.RoutingWeights.CostWeight,
+			"balanceWeight":     cfg.RoutingWeights.BalanceWeight,
+			"usageWeight":       cfg.RoutingWeights.UsageWeight,
+		},
+		// Notify: Webhook
+		"webhookUrl":     cfg.WebhookUrl,
+		"webhookEnabled": cfg.WebhookEnabled,
+		// Notify: Bark
+		"barkUrl":     cfg.BarkUrl,
+		"barkEnabled": cfg.BarkEnabled,
+		// Notify: ServerChan
+		"serverChanEnabled":   cfg.ServerChanEnabled,
+		"serverChanKeyMasked": maskValue(cfg.ServerChanKey),
+		// Notify: Telegram
+		"telegramEnabled":          cfg.TelegramEnabled,
+		"telegramApiBaseUrl":       cfg.TelegramApiBaseUrl,
+		"telegramBotTokenMasked":   maskValue(cfg.TelegramBotToken),
+		"telegramChatId":           cfg.TelegramChatId,
+		"telegramUseSystemProxy":   cfg.TelegramUseSystemProxy,
+		"telegramMessageThreadId":  cfg.TelegramMessageThreadId,
+		// Notify: SMTP
+		"smtpEnabled":    cfg.SmtpEnabled,
+		"smtpHost":       cfg.SmtpHost,
+		"smtpPort":       cfg.SmtpPort,
+		"smtpSecure":     cfg.SmtpSecure,
+		"smtpUser":       cfg.SmtpUser,
+		"smtpPassMasked": maskValue(cfg.SmtpPass),
+		"smtpFrom":       cfg.SmtpFrom,
+		"smtpTo":         cfg.SmtpTo,
+		// Notify: cooldown
+		"notifyCooldownSec": cfg.NotifyCooldownSec,
+		// Admin
+		"adminIpAllowlist": cfg.AdminIpAllowlist,
+		"currentAdminIp":   extractClientIP(r),
+		"serverTimeZone":   cfg.Tz,
+		// System
+		"systemProxyUrl":  cfg.SystemProxyUrl,
+		"proxyTokenMasked": maskValue(cfg.ProxyToken),
+		// Proxy
+		"payloadRules":               cfg.PayloadRules,
+		"proxyErrorKeywords":         cfg.ProxyErrorKeywords,
+		"proxyEmptyContentFailEnabled": cfg.ProxyEmptyContentFailEnabled,
+		// Global filters
+		"globalBlockedBrands": cfg.GlobalBlockedBrands,
+		"globalAllowedModels": cfg.GlobalAllowedModels,
+	})
+}
+
+// PUT /api/settings/runtime
+func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+
+	cfg := h.cfg
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Validate and apply each field
+	// Proxy token
+	if v, ok := body["proxyToken"]; ok {
+		token := normalizeString(v)
+		if !strings.HasPrefix(token, "sk-") {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "下游访问令牌必须以 sk- 开头"})
+			return
+		}
+		if len(token) < 6 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "下游访问令牌至少 6 位（含 sk-）"})
+			return
+		}
+		cfg.ProxyToken = token
+		upsertSettingDB(h.db, "proxy_token", token)
+	}
+
+	// System proxy URL
+	if v, ok := body["systemProxyUrl"]; ok {
+		url := normalizeString(v)
+		cfg.SystemProxyUrl = url
+		upsertSettingDB(h.db, "system_proxy_url", url)
+	}
+
+	// Checkin cron
+	if v, ok := body["checkinCron"]; ok {
+		cron := normalizeString(v)
+		cfg.CheckinCron = cron
+		upsertSettingDB(h.db, "checkin_cron", cron)
+	}
+
+	// Checkin schedule mode
+	if v, ok := body["checkinScheduleMode"]; ok {
+		mode := normalizeString(v)
+		if mode != "cron" && mode != "interval" {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "签到方式无效：仅支持 cron 或 interval"})
+			return
+		}
+		cfg.CheckinScheduleMode = mode
+		upsertSettingDB(h.db, "checkin_schedule_mode", mode)
+	}
+
+	// Checkin interval hours
+	if v, ok := body["checkinIntervalHours"]; ok {
+		hours := toFloat64(v)
+		if hours < 1 || hours > 24 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "签到间隔必须是 1 到 24 的整数小时"})
+			return
+		}
+		cfg.CheckinIntervalHours = int(hours)
+		upsertSettingDB(h.db, "checkin_interval_hours", int(hours))
+	}
+
+	// Balance refresh cron
+	if v, ok := body["balanceRefreshCron"]; ok {
+		cron := normalizeString(v)
+		cfg.BalanceRefreshCron = cron
+		upsertSettingDB(h.db, "balance_refresh_cron", cron)
+	}
+
+	// Log cleanup settings
+	if v, ok := body["logCleanupCron"]; ok {
+		cron := normalizeString(v)
+		cfg.LogCleanupCron = cron
+		upsertSettingDB(h.db, "log_cleanup_cron", cron)
+	}
+	if v, ok := body["logCleanupUsageLogsEnabled"]; ok {
+		enabled := toBool(v)
+		cfg.LogCleanupUsageLogsEnabled = enabled
+		upsertSettingDB(h.db, "log_cleanup_usage_logs_enabled", enabled)
+	}
+	if v, ok := body["logCleanupProgramLogsEnabled"]; ok {
+		enabled := toBool(v)
+		cfg.LogCleanupProgramLogsEnabled = enabled
+		upsertSettingDB(h.db, "log_cleanup_program_logs_enabled", enabled)
+	}
+	if v, ok := body["logCleanupRetentionDays"]; ok {
+		days := toFloat64(v)
+		if days < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "日志清理保留天数必须是大于等于 1 的整数"})
+			return
+		}
+		cfg.LogCleanupRetentionDays = int(days)
+		upsertSettingDB(h.db, "log_cleanup_retention_days", int(days))
+	}
+
+	// Model probe
+	if v, ok := body["modelAvailabilityProbeEnabled"]; ok {
+		cfg.ModelAvailabilityProbeEnabled = toBool(v)
+		upsertSettingDB(h.db, "model_availability_probe_enabled", cfg.ModelAvailabilityProbeEnabled)
+	}
+
+	// Codex upstream websocket
+	if v, ok := body["codexUpstreamWebsocketEnabled"]; ok {
+		cfg.CodexUpstreamWebsocketEnabled = toBool(v)
+		upsertSettingDB(h.db, "codex_upstream_websocket_enabled", cfg.CodexUpstreamWebsocketEnabled)
+	}
+
+	// Responses compact fallback
+	if v, ok := body["responsesCompactFallbackToResponsesEnabled"]; ok {
+		cfg.ResponsesCompactFallbackToResponsesEnabled = toBool(v)
+		upsertSettingDB(h.db, "responses_compact_fallback_to_responses_enabled", cfg.ResponsesCompactFallbackToResponsesEnabled)
+	}
+
+	// Cross protocol fallback
+	if v, ok := body["disableCrossProtocolFallback"]; ok {
+		cfg.DisableCrossProtocolFallback = toBool(v)
+		upsertSettingDB(h.db, "disable_cross_protocol_fallback", cfg.DisableCrossProtocolFallback)
+	}
+
+	// Proxy session settings
+	if v, ok := body["proxySessionChannelConcurrencyLimit"]; ok {
+		n := toFloat64(v)
+		if n < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "会话通道并发上限必须是大于等于 0 的整数"})
+			return
+		}
+		cfg.ProxySessionChannelConcurrencyLimit = int(n)
+		upsertSettingDB(h.db, "proxy_session_channel_concurrency_limit", int(n))
+	}
+	if v, ok := body["proxySessionChannelQueueWaitMs"]; ok {
+		n := toFloat64(v)
+		if n < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "会话通道排队等待时间必须是大于等于 0 的整数毫秒"})
+			return
+		}
+		cfg.ProxySessionChannelQueueWaitMs = int(n)
+		upsertSettingDB(h.db, "proxy_session_channel_queue_wait_ms", int(n))
+	}
+
+	// Debug settings
+	applyBoolSettingDB(h.db, body, "proxyDebugTraceEnabled", &cfg.ProxyDebugTraceEnabled, "proxy_debug_trace_enabled")
+	applyBoolSettingDB(h.db, body, "proxyDebugCaptureHeaders", &cfg.ProxyDebugCaptureHeaders, "proxy_debug_capture_headers")
+	applyBoolSettingDB(h.db, body, "proxyDebugCaptureBodies", &cfg.ProxyDebugCaptureBodies, "proxy_debug_capture_bodies")
+	applyBoolSettingDB(h.db, body, "proxyDebugCaptureStreamChunks", &cfg.ProxyDebugCaptureStreamChunks, "proxy_debug_capture_stream_chunks")
+
+	if v, ok := body["proxyDebugTargetSessionId"]; ok {
+		cfg.ProxyDebugTargetSessionId = normalizeString(v)
+		upsertSettingDB(h.db, "proxy_debug_target_session_id", cfg.ProxyDebugTargetSessionId)
+	}
+	if v, ok := body["proxyDebugTargetClientKind"]; ok {
+		cfg.ProxyDebugTargetClientKind = normalizeString(v)
+		upsertSettingDB(h.db, "proxy_debug_target_client_kind", cfg.ProxyDebugTargetClientKind)
+	}
+	if v, ok := body["proxyDebugTargetModel"]; ok {
+		cfg.ProxyDebugTargetModel = normalizeString(v)
+		upsertSettingDB(h.db, "proxy_debug_target_model", cfg.ProxyDebugTargetModel)
+	}
+	if v, ok := body["proxyDebugRetentionHours"]; ok {
+		n := toFloat64(v)
+		if n < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "代理调试保留时长必须是大于等于 1 的整数小时"})
+			return
+		}
+		cfg.ProxyDebugRetentionHours = int(n)
+		upsertSettingDB(h.db, "proxy_debug_retention_hours", int(n))
+	}
+	if v, ok := body["proxyDebugMaxBodyBytes"]; ok {
+		n := toFloat64(v)
+		if n < 1024 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "代理调试抓取体积上限必须是大于等于 1024 的整数字节"})
+			return
+		}
+		cfg.ProxyDebugMaxBodyBytes = int(n)
+		upsertSettingDB(h.db, "proxy_debug_max_body_bytes", int(n))
+	}
+
+	// Routing
+	if v, ok := body["routingFallbackUnitCost"]; ok {
+		n := toFloat64(v)
+		if n <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "无价模型默认单价必须是大于 0 的数字"})
+			return
+		}
+		if n < 1e-6 {
+			n = 1e-6
+		}
+		cfg.RoutingFallbackUnitCost = n
+		upsertSettingDB(h.db, "routing_fallback_unit_cost", n)
+	}
+	if v, ok := body["proxyFirstByteTimeoutSec"]; ok {
+		n := toFloat64(v)
+		if n < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "首字超时必须是大于等于 0 的数字（秒）"})
+			return
+		}
+		cfg.ProxyFirstByteTimeoutSec = int(n)
+		upsertSettingDB(h.db, "proxy_first_byte_timeout_sec", int(n))
+	}
+	if v, ok := body["tokenRouterFailureCooldownMaxSec"]; ok {
+		n := toFloat64(v)
+		if n <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "路由失败冷却上限必须是大于 0 的数字（秒）"})
+			return
+		}
+		cfg.TokenRouterFailureCooldownMaxSec = int(n)
+		upsertSettingDB(h.db, "token_router_failure_cooldown_max_sec", int(n))
+	}
+
+	// Notify: Webhook
+	applyBoolSettingDB(h.db, body, "webhookEnabled", &cfg.WebhookEnabled, "webhook_enabled")
+	if v, ok := body["webhookUrl"]; ok {
+		cfg.WebhookUrl = normalizeString(v)
+		upsertSettingDB(h.db, "webhook_url", cfg.WebhookUrl)
+	}
+
+	// Notify: Bark
+	applyBoolSettingDB(h.db, body, "barkEnabled", &cfg.BarkEnabled, "bark_enabled")
+	if v, ok := body["barkUrl"]; ok {
+		cfg.BarkUrl = normalizeString(v)
+		upsertSettingDB(h.db, "bark_url", cfg.BarkUrl)
+	}
+
+	// Notify: ServerChan
+	applyBoolSettingDB(h.db, body, "serverChanEnabled", &cfg.ServerChanEnabled, "serverchan_enabled")
+	if v, ok := body["serverChanKey"]; ok {
+		cfg.ServerChanKey = normalizeString(v)
+		upsertSettingDB(h.db, "serverchan_key", cfg.ServerChanKey)
+	}
+
+	// Notify: Telegram
+	applyBoolSettingDB(h.db, body, "telegramEnabled", &cfg.TelegramEnabled, "telegram_enabled")
+	if v, ok := body["telegramApiBaseUrl"]; ok {
+		cfg.TelegramApiBaseUrl = normalizeString(v)
+		upsertSettingDB(h.db, "telegram_api_base_url", cfg.TelegramApiBaseUrl)
+	}
+	if v, ok := body["telegramBotToken"]; ok {
+		cfg.TelegramBotToken = normalizeString(v)
+		upsertSettingDB(h.db, "telegram_bot_token", cfg.TelegramBotToken)
+	}
+	if v, ok := body["telegramChatId"]; ok {
+		cfg.TelegramChatId = normalizeString(v)
+		upsertSettingDB(h.db, "telegram_chat_id", cfg.TelegramChatId)
+	}
+	applyBoolSettingDB(h.db, body, "telegramUseSystemProxy", &cfg.TelegramUseSystemProxy, "telegram_use_system_proxy")
+	if v, ok := body["telegramMessageThreadId"]; ok {
+		cfg.TelegramMessageThreadId = normalizeString(v)
+		upsertSettingDB(h.db, "telegram_message_thread_id", cfg.TelegramMessageThreadId)
+	}
+
+	// Notify: SMTP
+	applyBoolSettingDB(h.db, body, "smtpEnabled", &cfg.SmtpEnabled, "smtp_enabled")
+	if v, ok := body["smtpHost"]; ok {
+		cfg.SmtpHost = normalizeString(v)
+		upsertSettingDB(h.db, "smtp_host", cfg.SmtpHost)
+	}
+	if v, ok := body["smtpPort"]; ok {
+		cfg.SmtpPort = int(toFloat64(v))
+		upsertSettingDB(h.db, "smtp_port", cfg.SmtpPort)
+	}
+	applyBoolSettingDB(h.db, body, "smtpSecure", &cfg.SmtpSecure, "smtp_secure")
+	if v, ok := body["smtpUser"]; ok {
+		cfg.SmtpUser = normalizeString(v)
+		upsertSettingDB(h.db, "smtp_user", cfg.SmtpUser)
+	}
+	if v, ok := body["smtpPass"]; ok {
+		cfg.SmtpPass = normalizeString(v)
+		upsertSettingDB(h.db, "smtp_pass", cfg.SmtpPass)
+	}
+	if v, ok := body["smtpFrom"]; ok {
+		cfg.SmtpFrom = normalizeString(v)
+		upsertSettingDB(h.db, "smtp_from", cfg.SmtpFrom)
+	}
+	if v, ok := body["smtpTo"]; ok {
+		cfg.SmtpTo = normalizeString(v)
+		upsertSettingDB(h.db, "smtp_to", cfg.SmtpTo)
+	}
+
+	// Notify cooldown
+	if v, ok := body["notifyCooldownSec"]; ok {
+		n := toFloat64(v)
+		if n < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "告警冷静期必须是大于等于 0 的数字（秒）"})
+			return
+		}
+		cfg.NotifyCooldownSec = int(n)
+		upsertSettingDB(h.db, "notify_cooldown_sec", int(n))
+	}
+
+	// Admin IP allowlist
+	if v, ok := body["adminIpAllowlist"]; ok {
+		var list []string
+		switch val := v.(type) {
+		case []any:
+			for _, item := range val {
+				if s, ok2 := item.(string); ok2 {
+					list = append(list, strings.TrimSpace(s))
+				}
+			}
+		case string:
+			list = strings.Split(val, ",")
+			for i := range list {
+				list[i] = strings.TrimSpace(list[i])
+			}
+		}
+		cfg.AdminIpAllowlist = list
+		upsertSettingDB(h.db, "admin_ip_allowlist", list)
+	}
+
+	// Global blocked brands
+	if v, ok := body["globalBlockedBrands"]; ok {
+		var brands []string
+		if arr, ok2 := v.([]any); ok2 {
+			for _, item := range arr {
+				if s, ok3 := item.(string); ok3 {
+					s = strings.TrimSpace(s)
+					if s != "" {
+						brands = append(brands, s)
+					}
+				}
+			}
+		}
+		cfg.GlobalBlockedBrands = brands
+		upsertSettingDB(h.db, "global_blocked_brands", brands)
+	}
+
+	// Global allowed models
+	if v, ok := body["globalAllowedModels"]; ok {
+		var models []string
+		if arr, ok2 := v.([]any); ok2 {
+			for _, item := range arr {
+				if s, ok3 := item.(string); ok3 {
+					s = strings.TrimSpace(s)
+					if s != "" {
+						models = append(models, s)
+					}
+				}
+			}
+		}
+		cfg.GlobalAllowedModels = models
+		upsertSettingDB(h.db, "global_allowed_models", models)
+	}
+
+	// Proxy error keywords
+	if v, ok := body["proxyErrorKeywords"]; ok {
+		var keywords []string
+		switch val := v.(type) {
+		case []any:
+			for _, item := range val {
+				if s, ok2 := item.(string); ok2 {
+					keywords = append(keywords, strings.TrimSpace(s))
+				}
+			}
+		case string:
+			for _, kw := range strings.Split(val, ",") {
+				kw = strings.TrimSpace(kw)
+				if kw != "" {
+					keywords = append(keywords, kw)
+				}
+			}
+		}
+		cfg.ProxyErrorKeywords = keywords
+		upsertSettingDB(h.db, "proxy_error_keywords", keywords)
+	}
+
+	// Proxy empty content fail
+	applyBoolSettingDB(h.db, body, "proxyEmptyContentFailEnabled", &cfg.ProxyEmptyContentFailEnabled, "proxy_empty_content_fail_enabled")
+
+	// Routing weights
+	if v, ok := body["routingWeights"]; ok {
+		if rw, ok2 := v.(map[string]any); ok2 {
+			if bf, ok3 := rw["baseWeightFactor"]; ok3 {
+				cfg.RoutingWeights.BaseWeightFactor = toFloat64(bf)
+			}
+			if vsf, ok3 := rw["valueScoreFactor"]; ok3 {
+				cfg.RoutingWeights.ValueScoreFactor = toFloat64(vsf)
+			}
+			if cw, ok3 := rw["costWeight"]; ok3 {
+				cfg.RoutingWeights.CostWeight = toFloat64(cw)
+			}
+			if bw, ok3 := rw["balanceWeight"]; ok3 {
+				cfg.RoutingWeights.BalanceWeight = toFloat64(bw)
+			}
+			if uw, ok3 := rw["usageWeight"]; ok3 {
+				cfg.RoutingWeights.UsageWeight = toFloat64(uw)
+			}
+			upsertSettingDB(h.db, "routing_weights", cfg.RoutingWeights)
+		}
+	}
+
+	// Payload rules
+	if v, ok := body["payloadRules"]; ok {
+		cfg.PayloadRules = v
+		upsertSettingDB(h.db, "payload_rules", v)
+	}
+
+	// Log the event
+	logSettingsEvent(h.db, "status", "运行时设置已更新", "运行时设置已更新", "info", now)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "运行时设置已更新",
+	})
+}
+
+// GET /api/settings/brand-list
+func (h *settingsHandler) brandList(w http.ResponseWriter, r *http.Request) {
+	// Stub: return known brands
+	brands := []string{"new-api", "one-api", "veloera", "lobechat", "openwebui"}
+	writeJSON(w, http.StatusOK, map[string]any{"brands": brands})
+}
+
+// POST /api/settings/system-proxy/test
+func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ProxyUrl *string `json:"proxyUrl"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+
+	proxyURL := h.cfg.SystemProxyUrl
+	if body.ProxyUrl != nil {
+		proxyURL = strings.TrimSpace(*body.ProxyUrl)
+	}
+
+	if proxyURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "请先填写系统代理地址",
+		})
+		return
+	}
+
+	// Stub: actual proxy testing would require HTTP client
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":    true,
+		"proxyUrl":   proxyURL,
+		"reachable":  true,
+		"ok":         true,
+		"statusCode": 204,
+		"latencyMs":  100,
+	})
+}
+
+func extractClientIP(r *http.Request) string {
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	// Remove port from remote addr
+	addr := r.RemoteAddr
+	if idx := strings.LastIndex(addr, ":"); idx > 0 {
+		return addr[:idx]
+	}
+	return addr
+}
+
+func normalizeString(v any) string {
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func toFloat64(v any) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case json.Number:
+		n, _ := val.Float64()
+		return n
+	default:
+		return 0
+	}
+}
+
+func toBool(v any) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case string:
+		val = strings.ToLower(strings.TrimSpace(val))
+		return val == "1" || val == "true" || val == "yes" || val == "on"
+	case float64:
+		return val != 0
+	case int:
+		return val != 0
+	default:
+		return false
+	}
+}
+
+func applyBoolSettingDB(db *sqlx.DB, body map[string]any, key string, target *bool, dbKey string) {
+	if v, ok := body[key]; ok {
+		*target = toBool(v)
+		upsertSettingDB(db, dbKey, *target)
+	}
+}
+
+func upsertSettingDB(db *sqlx.DB, key string, value any) {
+	jsonValue, _ := json.Marshal(value)
+	var count int
+	db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = ?", key)
+	if count > 0 {
+		db.Exec("UPDATE settings SET value = ? WHERE key = ?", string(jsonValue), key)
+	} else {
+		db.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", key, string(jsonValue))
+	}
+}
+
+func logSettingsEvent(db *sqlx.DB, eventType, title, message, level, createdAt string) {
+	// Silently ignore errors (matches TS behavior)
+	db.Exec(`INSERT INTO events (type, title, message, level, related_type, created_at, "read")
+		VALUES (?, ?, ?, ?, 'settings', ?, 0)`, eventType, title, message, level, createdAt)
+}

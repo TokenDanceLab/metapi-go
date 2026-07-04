@@ -1,0 +1,1233 @@
+package admin
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/jmoiron/sqlx"
+)
+
+// RegisterDownstreamKeysRoutes registers all /api/downstream-keys routes.
+func RegisterDownstreamKeysRoutes(r chi.Router, db *sqlx.DB) {
+	handler := &downstreamKeysHandler{db: db}
+
+	r.Get("/api/downstream-keys/summary", handler.summary)
+	r.Get("/api/downstream-keys", handler.listKeys)
+	r.Post("/api/downstream-keys", handler.createKey)
+	r.Post("/api/downstream-keys/batch", handler.batchKeys)
+	r.Get("/api/downstream-keys/{id}/overview", handler.overview)
+	r.Get("/api/downstream-keys/{id}/trend", handler.trend)
+	r.Put("/api/downstream-keys/{id}", handler.updateKey)
+	r.Post("/api/downstream-keys/{id}/reset-usage", handler.resetUsage)
+	r.Delete("/api/downstream-keys/{id}", handler.deleteKey)
+}
+
+type downstreamKeysHandler struct {
+	db *sqlx.DB
+}
+
+// GET /api/downstream-keys/summary?range=&status=&search=&group=&tags=&tagMatch=
+func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) {
+	rangeFilter := normalizeRange(r.URL.Query().Get("range"))
+	statusFilter := normalizeStatus(r.URL.Query().Get("status"))
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	if len(search) > 80 {
+		search = search[:80]
+	}
+	group := strings.TrimSpace(r.URL.Query().Get("group"))
+
+	query := "SELECT * FROM downstream_api_keys"
+	var conditions []string
+	var args []any
+
+	if statusFilter == "enabled" {
+		conditions = append(conditions, "enabled = 1")
+	} else if statusFilter == "disabled" {
+		conditions = append(conditions, "enabled = 0")
+	}
+	if search != "" {
+		conditions = append(conditions, "(LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)")
+		like := "%" + strings.ToLower(search) + "%"
+		args = append(args, like, like)
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY id DESC"
+
+	rows := queryRows(h.db, query, args...)
+
+	// Apply group filter and enrich with usage data
+	items := make([]map[string]any, 0)
+	for _, row := range rows {
+		groupName, _ := row["group_name"].(string)
+		if group == "__ungrouped__" && groupName != "" {
+			continue
+		}
+		if group != "" && group != "__ungrouped__" && groupName != group {
+			continue
+		}
+		// Enrich with masked key and usage data
+		key, _ := row["key"].(string)
+		row["keyMasked"] = maskKey(key)
+		items = append(items, row)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":  true,
+		"range":    rangeFilter,
+		"status":   statusFilter,
+		"search":   search,
+		"group":    group,
+		"tags":     []string{},
+		"tagMatch": "any",
+		"items":    normalizeSlice(items),
+	})
+}
+
+// GET /api/downstream-keys
+func (h *downstreamKeysHandler) listKeys(w http.ResponseWriter, r *http.Request) {
+	rows := queryRows(h.db, "SELECT * FROM downstream_api_keys ORDER BY id DESC")
+	for _, row := range rows {
+		if key, ok := row["key"].(string); ok {
+			row["keyMasked"] = maskKey(key)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"items":   normalizeSlice(rows),
+	})
+}
+
+// POST /api/downstream-keys
+func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Name                   string  `json:"name"`
+		Key                    string  `json:"key"`
+		Description            *string `json:"description"`
+		GroupName              *string `json:"groupName"`
+		Tags                   []string `json:"tags"`
+		Enabled                *bool   `json:"enabled"`
+		ExpiresAt              *string `json:"expiresAt"`
+		MaxCost                *float64 `json:"maxCost"`
+		MaxRequests            *int64  `json:"maxRequests"`
+		SupportedModels        []string `json:"supportedModels"`
+		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
+		SiteWeightMultipliers  any     `json:"siteWeightMultipliers"`
+		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
+		ExcludedCredentialRefs []any   `json:"excludedCredentialRefs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+
+	body.Name = strings.TrimSpace(body.Name)
+	body.Key = strings.TrimSpace(body.Key)
+
+	if body.Name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "name 不能为空"})
+		return
+	}
+	if body.Key == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 不能为空"})
+		return
+	}
+	if !strings.HasPrefix(body.Key, "sk-") || len(body.Key) < 6 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 必须以 sk- 开头且长度至少 6"})
+		return
+	}
+
+	// Check for duplicate key
+	var count int
+	h.db.Get(&count, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ?", body.Key)
+	if count > 0 {
+		writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+		return
+	}
+
+	// Normalize policy fields.
+	normalizedTags := normalizeTagsInput(body.Tags)
+	normalizedModels := normalizeSupportedModelsInput(body.SupportedModels)
+	normalizedRouteIds := normalizeAllowedRouteIdsInput(body.AllowedRouteIds)
+	normalizedSWM := normalizeSiteWeightMultipliersInput(body.SiteWeightMultipliers)
+	normalizedExcludedSites := normalizeInt64Set(body.ExcludedSiteIds)
+	normalizedCredRefs := normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
+
+	// Policy reference validation.
+	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": refErr})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	enabled := true
+	if body.Enabled != nil {
+		enabled = *body.Enabled
+	}
+
+	tagsJSON := toPersistenceJSON(normalizedTags)
+	modelsJSON := toPersistenceJSON(normalizedModels)
+	routeIdsJSON := toPersistenceJSON(normalizedRouteIds)
+	swmJSON := toPersistenceJSON(normalizedSWM)
+	excludedSitesJSON := toPersistenceJSON(normalizedExcludedSites)
+	credRefsJSON := toPersistenceJSON(normalizedCredRefs)
+
+	normalizedGroupName := normalizeGroupNameInput(body.GroupName)
+	var desc interface{}
+	desc = nil
+	if body.Description != nil && strings.TrimSpace(*body.Description) != "" {
+		s := strings.TrimSpace(*body.Description)
+		desc = &s
+	}
+
+	result, err := h.db.Exec(
+		`INSERT INTO downstream_api_keys
+		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
+		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		 created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
+		body.MaxCost, body.MaxRequests,
+		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
+		now, now,
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建失败"})
+		return
+	}
+
+	id, _ := result.LastInsertId()
+	created := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	if created != nil {
+		if key, ok := created["key"].(string); ok {
+			created["keyMasked"] = maskKey(key)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"item":    created,
+	})
+}
+
+// PUT /api/downstream-keys/:id
+func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		return
+	}
+
+	existing := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	if existing == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		return
+	}
+
+	// Parse body into typed struct with pointers to detect field presence.
+	// nil pointer = field not present in JSON body.
+	var body struct {
+		Name                   *string  `json:"name"`
+		Key                    *string  `json:"key"`
+		Description            *string  `json:"description"`
+		GroupName              *string  `json:"groupName"`
+		Tags                   []string `json:"tags"`
+		Enabled                *bool    `json:"enabled"`
+		ExpiresAt              *string  `json:"expiresAt"`
+		MaxCost                *float64 `json:"maxCost"`
+		MaxRequests            *int64   `json:"maxRequests"`
+		SupportedModels        []string `json:"supportedModels"`
+		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
+		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
+		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
+		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
+	}
+
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+
+	// First unmarshal into map to detect which fields were present in JSON.
+	rawBody := map[string]any{}
+	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+
+	// Then unmarshal into typed struct for field values.
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+
+	hasField := make(map[string]bool)
+	if _, ok := rawBody["name"]; ok {
+		hasField["name"] = true
+	}
+	if _, ok := rawBody["key"]; ok {
+		hasField["key"] = true
+	}
+	if _, ok := rawBody["description"]; ok {
+		hasField["description"] = true
+	}
+	if _, ok := rawBody["groupName"]; ok {
+		hasField["groupName"] = true
+	}
+	if _, ok := rawBody["tags"]; ok {
+		hasField["tags"] = true
+	}
+	if _, ok := rawBody["enabled"]; ok {
+		hasField["enabled"] = true
+	}
+	if _, ok := rawBody["expiresAt"]; ok {
+		hasField["expiresAt"] = true
+	}
+	if _, ok := rawBody["maxCost"]; ok {
+		hasField["maxCost"] = true
+	}
+	if _, ok := rawBody["maxRequests"]; ok {
+		hasField["maxRequests"] = true
+	}
+	if _, ok := rawBody["supportedModels"]; ok {
+		hasField["supportedModels"] = true
+	}
+	if _, ok := rawBody["allowedRouteIds"]; ok {
+		hasField["allowedRouteIds"] = true
+	}
+	if _, ok := rawBody["siteWeightMultipliers"]; ok {
+		hasField["siteWeightMultipliers"] = true
+	}
+	if _, ok := rawBody["excludedSiteIds"]; ok {
+		hasField["excludedSiteIds"] = true
+	}
+	if _, ok := rawBody["excludedCredentialRefs"]; ok {
+		hasField["excludedCredentialRefs"] = true
+	}
+
+	// Merge: present fields from body, missing fields from existing record.
+	name := existingString(existing, "name")
+	if hasField["name"] && body.Name != nil {
+		name = strings.TrimSpace(*body.Name)
+	}
+
+	key := existingString(existing, "key")
+	if hasField["key"] && body.Key != nil {
+		key = strings.TrimSpace(*body.Key)
+	}
+
+	description := existingStringPtr(existing, "description")
+	if hasField["description"] {
+		if body.Description != nil && strings.TrimSpace(*body.Description) != "" {
+			s := strings.TrimSpace(*body.Description)
+			description = &s
+		} else {
+			description = nil
+		}
+	}
+
+	existingGroupName := existingStringPtr(existing, "group_name")
+	groupName := normalizeGroupNameInput(existingGroupName)
+	if hasField["groupName"] {
+		groupName = normalizeGroupNameInput(body.GroupName)
+	}
+
+	existingTags := parseStringArrayFromDB(existing, "tags")
+	tags := existingTags
+	if hasField["tags"] {
+		tags = normalizeTagsInput(body.Tags)
+	}
+
+	enabled := existingBool(existing, "enabled")
+	if hasField["enabled"] && body.Enabled != nil {
+		enabled = *body.Enabled
+	}
+
+	expiresAt := existingStringPtr(existing, "expires_at")
+	if hasField["expiresAt"] {
+		expiresAt = normalizeExpiresAt(body.ExpiresAt)
+	}
+
+	maxCost := existingFloat64Ptr(existing, "max_cost")
+	if hasField["maxCost"] {
+		maxCost = normalizePositiveFloatOrNull(body.MaxCost)
+	}
+
+	maxRequests := existingInt64Ptr(existing, "max_requests")
+	if hasField["maxRequests"] {
+		maxRequests = normalizePositiveIntOrNull(body.MaxRequests)
+	}
+
+	existingSupportedModels := parseStringArrayFromDB(existing, "supported_models")
+	supportedModels := existingSupportedModels
+	if hasField["supportedModels"] {
+		supportedModels = normalizeSupportedModelsInput(body.SupportedModels)
+	}
+
+	existingAllowedRouteIds := parseIntArrayFromDB(existing, "allowed_route_ids")
+	allowedRouteIds := existingAllowedRouteIds
+	if hasField["allowedRouteIds"] {
+		allowedRouteIds = normalizeAllowedRouteIdsInput(body.AllowedRouteIds)
+	}
+
+	existingSiteWeightMultipliers := parseMapFromDB(existing, "site_weight_multipliers")
+	siteWeightMultipliers := existingSiteWeightMultipliers
+	if hasField["siteWeightMultipliers"] {
+		siteWeightMultipliers = normalizeSiteWeightMultipliersInput(body.SiteWeightMultipliers)
+	}
+
+	existingExcludedSiteIds := parseIntArrayFromDB(existing, "excluded_site_ids")
+	excludedSiteIds := existingExcludedSiteIds
+	if hasField["excludedSiteIds"] {
+		excludedSiteIds = normalizeInt64Set(body.ExcludedSiteIds)
+	}
+
+	existingExcludedCredentialRefs := parseAnyArrayFromDB(existing, "excluded_credential_refs")
+	excludedCredentialRefs := existingExcludedCredentialRefs
+	if hasField["excludedCredentialRefs"] {
+		excludedCredentialRefs = normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
+	}
+
+	// Validate.
+	if name == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "name 不能为空"})
+		return
+	}
+	if key == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 不能为空"})
+		return
+	}
+	if !strings.HasPrefix(key, "sk-") || len(key) < 6 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 必须以 sk- 开头且长度至少 6"})
+		return
+	}
+
+	// Duplicate key check: if key is being changed, verify new key doesn't collide.
+	if hasField["key"] && key != existingString(existing, "key") {
+		var dupCount int
+		h.db.Get(&dupCount, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ? AND id != ?", key, id)
+		if dupCount > 0 {
+			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			return
+		}
+	}
+
+	// Policy reference validation.
+	if refErr := h.validateDownstreamPolicyReferences(allowedRouteIds, siteWeightMultipliers, excludedSiteIds, excludedCredentialRefs); refErr != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": refErr})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	tagsJSON := toPersistenceJSON(tags)
+	modelsJSON := toPersistenceJSON(supportedModels)
+	routeIdsJSON := toPersistenceJSON(allowedRouteIds)
+	swmJSON := toPersistenceJSON(siteWeightMultipliers)
+	excludedSitesJSON := toPersistenceJSON(excludedSiteIds)
+	credRefsJSON := toPersistenceJSON(excludedCredentialRefs)
+
+	_, err = h.db.Exec(
+		`UPDATE downstream_api_keys SET
+			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
+			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?,
+			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
+			excluded_site_ids = ?, excluded_credential_refs = ?, updated_at = ?
+		WHERE id = ?`,
+		name, key, description, groupName, tagsJSON,
+		enabled, expiresAt, maxCost, maxRequests,
+		modelsJSON, routeIdsJSON, swmJSON,
+		excludedSitesJSON, credRefsJSON, now, id,
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		return
+	}
+
+	updated := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	if updated != nil {
+		if k, ok := updated["key"].(string); ok {
+			updated["keyMasked"] = maskKey(k)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"item":    updated,
+	})
+}
+
+// POST /api/downstream-keys/:id/reset-usage
+func (h *downstreamKeysHandler) resetUsage(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	h.db.Exec("UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?", now, id)
+
+	updated := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"item":    updated,
+	})
+}
+
+// DELETE /api/downstream-keys/:id
+func (h *downstreamKeysHandler) deleteKey(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		return
+	}
+
+	h.db.Exec("DELETE FROM downstream_api_keys WHERE id = ?", id)
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+// GET /api/downstream-keys/:id/overview
+func (h *downstreamKeysHandler) overview(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		return
+	}
+
+	row := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	if row == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		return
+	}
+
+	if key, ok := row["key"].(string); ok {
+		row["keyMasked"] = maskKey(key)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"item":    row,
+		"usage": map[string]any{
+			"last24h": nil,
+			"last7d":  nil,
+			"all":     nil,
+		},
+	})
+}
+
+// GET /api/downstream-keys/:id/trend?range=&timeZone=
+func (h *downstreamKeysHandler) trend(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		return
+	}
+
+	row := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	if row == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		return
+	}
+
+	rangeFilter := normalizeRange(r.URL.Query().Get("range"))
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":       true,
+		"range":         rangeFilter,
+		"item":          map[string]any{"id": id, "name": row["name"]},
+		"bucketSeconds": 3600,
+		"timeZone":      "UTC",
+		"buckets":       []any{},
+	})
+}
+
+// POST /api/downstream-keys/batch
+func (h *downstreamKeysHandler) batchKeys(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs            []int64  `json:"ids"`
+		Action         string   `json:"action"`
+		GroupName      *string  `json:"groupName"`
+		GroupOperation *string  `json:"groupOperation"`
+		Tags           []string `json:"tags"`
+		TagOperation   *string  `json:"tagOperation"`
+	}
+	json.NewDecoder(r.Body).Decode(&body)
+
+	if len(body.IDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "ids is required"})
+		return
+	}
+
+	action := strings.TrimSpace(body.Action)
+	validActions := map[string]bool{
+		"enable": true, "disable": true, "delete": true,
+		"resetUsage": true, "updateMetadata": true,
+	}
+	if !validActions[action] {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid action"})
+		return
+	}
+
+	var successIDs []int64
+	var failedItems []map[string]any
+
+	for _, id := range body.IDs {
+		row := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+		if row == nil {
+			failedItems = append(failedItems, map[string]any{"id": id, "message": "API key 不存在"})
+			continue
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		switch action {
+		case "delete":
+			h.db.Exec("DELETE FROM downstream_api_keys WHERE id = ?", id)
+		case "resetUsage":
+			h.db.Exec("UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?", now, id)
+		case "enable":
+			h.db.Exec("UPDATE downstream_api_keys SET enabled = 1, updated_at = ? WHERE id = ?", now, id)
+		case "disable":
+			h.db.Exec("UPDATE downstream_api_keys SET enabled = 0, updated_at = ? WHERE id = ?", now, id)
+		case "updateMetadata":
+			if body.GroupOperation != nil && *body.GroupOperation == "set" && body.GroupName != nil {
+				h.db.Exec("UPDATE downstream_api_keys SET group_name = ?, updated_at = ? WHERE id = ?", *body.GroupName, now, id)
+			} else if body.GroupOperation != nil && *body.GroupOperation == "clear" {
+				h.db.Exec("UPDATE downstream_api_keys SET group_name = NULL, updated_at = ? WHERE id = ?", now, id)
+			}
+		}
+		successIDs = append(successIDs, id)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":     true,
+		"successIds":  successIDs,
+		"failedItems": failedItems,
+	})
+}
+
+func maskKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
+}
+
+func normalizeRange(v string) string {
+	v = strings.TrimSpace(strings.ToLower(v))
+	switch v {
+	case "24h", "7d", "all":
+		return v
+	default:
+		return "24h"
+	}
+}
+
+func normalizeStatus(v string) string {
+	v = strings.TrimSpace(strings.ToLower(v))
+	switch v {
+	case "enabled", "disabled":
+		return v
+	default:
+		return "all"
+	}
+}
+
+// --- helpers for extracting existing values from DB row maps ---
+
+func existingString(row map[string]any, key string) string {
+	if v, ok := row[key]; ok {
+		if s, ok2 := v.(string); ok2 {
+			return s
+		}
+	}
+	return ""
+}
+
+func existingStringPtr(row map[string]any, key string) *string {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return nil
+	}
+	s, ok2 := v.(string)
+	if !ok2 || s == "" {
+		return nil
+	}
+	return &s
+}
+
+func existingBool(row map[string]any, key string) bool {
+	v, ok := row[key]
+	if !ok {
+		return false
+	}
+	switch val := v.(type) {
+	case bool:
+		return val
+	case int64:
+		return val != 0
+	case float64:
+		return val != 0
+	case string:
+		return val == "1" || strings.EqualFold(val, "true")
+	}
+	return false
+}
+
+func existingFloat64Ptr(row map[string]any, key string) *float64 {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case float64:
+		return &val
+	case int64:
+		f := float64(val)
+		return &f
+	case json.Number:
+		f, err := val.Float64()
+		if err != nil {
+			return nil
+		}
+		return &f
+	}
+	return nil
+}
+
+func existingInt64Ptr(row map[string]any, key string) *int64 {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case int64:
+		return &val
+	case float64:
+		i := int64(val)
+		return &i
+	case json.Number:
+		i, err := val.Int64()
+		if err != nil {
+			return nil
+		}
+		return &i
+	}
+	return nil
+}
+
+// parseJsonField unmarshals a DB column value (string or already-parsed) into target.
+func parseJsonField(row map[string]any, key string, target any) {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return
+		}
+		json.Unmarshal([]byte(val), target)
+	case []byte:
+		if len(val) == 0 {
+			return
+		}
+		json.Unmarshal(val, target)
+	default:
+		// Already parsed by sqlx (e.g. JSON column in PostgreSQL)
+		data, _ := json.Marshal(val)
+		json.Unmarshal(data, target)
+	}
+}
+
+func parseStringArrayFromDB(row map[string]any, key string) []string {
+	var arr []string
+	parseJsonField(row, key, &arr)
+	return arr
+}
+
+func parseIntArrayFromDB(row map[string]any, key string) []int64 {
+	var arr []int64
+	parseJsonField(row, key, &arr)
+	return arr
+}
+
+func parseMapFromDB(row map[string]any, key string) map[string]float64 {
+	v, ok := row[key]
+	if !ok || v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case string:
+		if val == "" || val == "{}" {
+			return nil
+		}
+		var raw map[string]float64
+		if err := json.Unmarshal([]byte(val), &raw); err != nil {
+			return nil
+		}
+		return raw
+	case []byte:
+		if len(val) == 0 || string(val) == "{}" {
+			return nil
+		}
+		var raw map[string]float64
+		if err := json.Unmarshal(val, &raw); err != nil {
+			return nil
+		}
+		return raw
+	default:
+		data, _ := json.Marshal(val)
+		var raw map[string]float64
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil
+		}
+		return raw
+	}
+}
+
+func parseAnyArrayFromDB(row map[string]any, key string) []any {
+	var arr []any
+	parseJsonField(row, key, &arr)
+	return arr
+}
+
+// --- normalization helpers (mirrors TS normalizeDownstreamApiKeyPayload) ---
+
+func normalizeGroupNameInput(input *string) *string {
+	if input == nil {
+		return nil
+	}
+	v := strings.TrimSpace(*input)
+	if v == "" {
+		return nil
+	}
+	if len(v) > 64 {
+		v = v[:64]
+	}
+	return &v
+}
+
+func normalizeTagsInput(input []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(input))
+	for _, raw := range input {
+		v := strings.TrimSpace(raw)
+		if v == "" {
+			continue
+		}
+		if len(v) > 32 {
+			v = v[:32]
+		}
+		lower := strings.ToLower(v)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
+		result = append(result, v)
+		if len(result) >= 20 {
+			break
+		}
+	}
+	return result
+}
+
+func normalizeSupportedModelsInput(input []string) []string {
+	seen := make(map[string]bool)
+	result := make([]string, 0, len(input))
+	for _, raw := range input {
+		v := strings.TrimSpace(raw)
+		if v == "" {
+			continue
+		}
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		result = append(result, v)
+	}
+	return result
+}
+
+func normalizeAllowedRouteIdsInput(input []int64) []int64 {
+	seen := make(map[int64]bool)
+	result := make([]int64, 0, len(input))
+	for _, raw := range input {
+		if raw <= 0 {
+			continue
+		}
+		if seen[raw] {
+			continue
+		}
+		seen[raw] = true
+		result = append(result, raw)
+		if len(result) >= 500 {
+			break
+		}
+	}
+	return result
+}
+
+func normalizeSiteWeightMultipliersInput(input any) map[string]float64 {
+	if input == nil {
+		return nil
+	}
+	// Accept both map[string]float64 (from struct) and raw JSON object.
+	var raw map[string]any
+	switch val := input.(type) {
+	case map[string]float64:
+		if len(val) == 0 {
+			return nil
+		}
+		return val
+	case map[string]any:
+		raw = val
+	default:
+		data, err := json.Marshal(input)
+		if err != nil {
+			return nil
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil
+		}
+	}
+	if len(raw) == 0 {
+		return nil
+	}
+	result := make(map[string]float64, len(raw))
+	for k, v := range raw {
+		siteId, _ := strconv.ParseFloat(k, 64)
+		if siteId <= 0 {
+			continue
+		}
+		var multiplier float64
+		switch mv := v.(type) {
+		case float64:
+			multiplier = mv
+		case json.Number:
+			multiplier, _ = mv.Float64()
+		case int64:
+			multiplier = float64(mv)
+		default:
+			continue
+		}
+		if multiplier <= 0 {
+			continue
+		}
+		result[fmt.Sprintf("%.0f", siteId)] = multiplier
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func normalizeInt64Set(input []int64) []int64 {
+	seen := make(map[int64]bool)
+	result := make([]int64, 0, len(input))
+	for _, raw := range input {
+		if raw <= 0 {
+			continue
+		}
+		if seen[raw] {
+			continue
+		}
+		seen[raw] = true
+		result = append(result, raw)
+		if len(result) >= 500 {
+			break
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	return result
+}
+
+func normalizeExcludedCredentialRefsInput(input []any) []any {
+	seen := make(map[string]bool)
+	result := make([]any, 0, len(input))
+	for _, item := range input {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind, _ := obj["kind"].(string)
+		kind = strings.TrimSpace(kind)
+		siteId := int64FromAny(obj["siteId"])
+		accountId := int64FromAny(obj["accountId"])
+		if siteId <= 0 || accountId <= 0 {
+			continue
+		}
+
+		var dedupeKey string
+		if kind == "account_token" {
+			tokenId := int64FromAny(obj["tokenId"])
+			if tokenId <= 0 {
+				continue
+			}
+			dedupeKey = fmt.Sprintf("account_token:%d:%d:%d", siteId, accountId, tokenId)
+			if seen[dedupeKey] {
+				continue
+			}
+			seen[dedupeKey] = true
+			result = append(result, map[string]any{
+				"kind":      "account_token",
+				"siteId":    siteId,
+				"accountId": accountId,
+				"tokenId":   tokenId,
+			})
+		} else if kind == "default_api_key" {
+			dedupeKey = fmt.Sprintf("default_api_key:%d:%d", siteId, accountId)
+			if seen[dedupeKey] {
+				continue
+			}
+			seen[dedupeKey] = true
+			result = append(result, map[string]any{
+				"kind":      "default_api_key",
+				"siteId":    siteId,
+				"accountId": accountId,
+			})
+		}
+		// Unknown kinds are silently skipped
+		if len(result) >= 1000 {
+			break
+		}
+	}
+	return result
+}
+
+func int64FromAny(v any) int64 {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case float64:
+		return int64(val)
+	case int64:
+		return val
+	case json.Number:
+		i, _ := val.Int64()
+		return i
+	case int:
+		return int64(val)
+	}
+	return 0
+}
+
+func normalizeExpiresAt(input *string) *string {
+	if input == nil {
+		return nil
+	}
+	v := strings.TrimSpace(*input)
+	if v == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		// Try other common formats.
+		t, err = time.Parse("2006-01-02T15:04:05Z", v)
+		if err != nil {
+			t, err = time.Parse("2006-01-02T15:04:05.000Z", v)
+			if err != nil {
+				// If we can't parse it, keep the original string.
+				// TS throws an error; we are lenient and just store the trimmed value.
+				return &v
+			}
+		}
+	}
+	iso := t.UTC().Format(time.RFC3339)
+	return &iso
+}
+
+func normalizePositiveFloatOrNull(input *float64) *float64 {
+	if input == nil {
+		return nil
+	}
+	if *input < 0 || math.IsNaN(*input) || math.IsInf(*input, 0) {
+		return nil
+	}
+	return input
+}
+
+func normalizePositiveIntOrNull(input *int64) *int64 {
+	if input == nil {
+		return nil
+	}
+	if *input < 0 {
+		return nil
+	}
+	return input
+}
+
+func toPersistenceJSON(v any) interface{} {
+	if v == nil {
+		return nil
+	}
+	switch val := v.(type) {
+	case []string:
+		if len(val) == 0 {
+			return nil
+		}
+	case []int64:
+		if len(val) == 0 {
+			return nil
+		}
+	case []any:
+		if len(val) == 0 {
+			return nil
+		}
+	case map[string]float64:
+		if len(val) == 0 {
+			return nil
+		}
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return string(data)
+}
+
+// --- policy reference validation (mirrors TS validatePolicyReferences) ---
+
+func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
+	allowedRouteIds []int64,
+	siteWeightMultipliers map[string]float64,
+	excludedSiteIds []int64,
+	excludedCredentialRefs []any,
+) string {
+	// Validate allowedRouteIds exist in token_routes.
+	if len(allowedRouteIds) > 0 {
+		query, args, err := sqlx.In("SELECT id FROM token_routes WHERE id IN (?)", allowedRouteIds)
+		if err == nil {
+			rows := queryRows(h.db, h.db.Rebind(query), args...)
+			existingIds := make(map[int64]bool)
+			for _, row := range rows {
+				if id, ok := row["id"].(int64); ok {
+					existingIds[id] = true
+				}
+			}
+			var missing []string
+			for _, rid := range allowedRouteIds {
+				if !existingIds[rid] {
+					missing = append(missing, strconv.FormatInt(rid, 10))
+				}
+			}
+			if len(missing) > 0 {
+				return fmt.Sprintf("allowedRouteIds 包含不存在的路由: %s", strings.Join(missing, ", "))
+			}
+		}
+	}
+
+	// Collect all site IDs to validate.
+	siteIdSet := make(map[int64]bool)
+	for k := range siteWeightMultipliers {
+		id, err := strconv.ParseInt(k, 10, 64)
+		if err == nil && id > 0 {
+			siteIdSet[id] = true
+		}
+	}
+	for _, id := range excludedSiteIds {
+		if id > 0 {
+			siteIdSet[id] = true
+		}
+	}
+	if len(siteIdSet) > 0 {
+		ids := make([]int64, 0, len(siteIdSet))
+		for id := range siteIdSet {
+			ids = append(ids, id)
+		}
+		query, args, err := sqlx.In("SELECT id FROM sites WHERE id IN (?)", ids)
+		if err == nil {
+			rows := queryRows(h.db, h.db.Rebind(query), args...)
+			existingIds := make(map[int64]bool)
+			for _, row := range rows {
+				if id, ok := row["id"].(int64); ok {
+					existingIds[id] = true
+				}
+			}
+			var missing []string
+			for _, sid := range ids {
+				if !existingIds[sid] {
+					missing = append(missing, strconv.FormatInt(sid, 10))
+				}
+			}
+			if len(missing) > 0 {
+				return fmt.Sprintf("策略中包含不存在的站点: %s", strings.Join(missing, ", "))
+			}
+		}
+	}
+
+	// Validate excludedCredentialRefs.
+	for _, ref := range excludedCredentialRefs {
+		obj, ok := ref.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind, _ := obj["kind"].(string)
+		if kind == "account_token" {
+			tokenId := int64FromAny(obj["tokenId"])
+			accountId := int64FromAny(obj["accountId"])
+			siteId := int64FromAny(obj["siteId"])
+			if tokenId <= 0 {
+				return fmt.Sprintf("excludedCredentialRefs 包含不存在的令牌: %v", obj["tokenId"])
+			}
+			row := queryRow(h.db,
+				`SELECT at.id as token_id, at.account_id, a.site_id
+				 FROM account_tokens at
+				 INNER JOIN accounts a ON at.account_id = a.id
+				 WHERE at.id = ?`, tokenId)
+			if row == nil {
+				return fmt.Sprintf("excludedCredentialRefs 包含不存在的令牌: %d", tokenId)
+			}
+			dbAccountId := int64FromAny(row["account_id"])
+			dbSiteId := int64FromAny(row["site_id"])
+			if dbAccountId != accountId || dbSiteId != siteId {
+				return fmt.Sprintf("excludedCredentialRefs 中的 account_token 引用与账号/站点不匹配: %d", tokenId)
+			}
+		} else if kind == "default_api_key" {
+			accountId := int64FromAny(obj["accountId"])
+			siteId := int64FromAny(obj["siteId"])
+			row := queryRow(h.db,
+				`SELECT id as account_id, site_id, api_token
+				 FROM accounts WHERE id = ?`, accountId)
+			if row == nil {
+				return fmt.Sprintf("excludedCredentialRefs 包含不存在的账号: %d", accountId)
+			}
+			dbSiteId := int64FromAny(row["site_id"])
+			if dbSiteId != siteId {
+				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 引用与站点不匹配: %d", accountId)
+			}
+			apiToken, _ := row["api_token"].(string)
+			if strings.TrimSpace(apiToken) == "" {
+				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 账号缺少默认 API Key: %d", accountId)
+			}
+		}
+	}
+
+	return ""
+}
