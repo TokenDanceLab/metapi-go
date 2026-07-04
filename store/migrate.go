@@ -1082,8 +1082,6 @@ func buildSiteAnnouncementsDDL(d string) string {
 			read_at TEXT,
 			dismissed_at TEXT,
 			raw_payload TEXT,
-			created_at TEXT,
-			updated_at TEXT,
 			CONSTRAINT site_announcements_site_source_key_unique UNIQUE (site_id, source_key)
 		)`
 	}
@@ -1105,8 +1103,6 @@ func buildSiteAnnouncementsDDL(d string) string {
 		read_at TEXT,
 		dismissed_at TEXT,
 		raw_payload TEXT,
-		created_at TEXT,
-		updated_at TEXT,
 		CONSTRAINT site_announcements_site_source_key_unique UNIQUE (site_id, source_key),
 		FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 	)`
