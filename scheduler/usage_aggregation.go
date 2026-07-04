@@ -255,7 +255,7 @@ func (s *UsageAggregationScheduler) tryAcquireLease(dbw *store.DB) (*projectionL
 		ensureQuery = `
 			INSERT INTO analytics_projection_checkpoints
 				(projector_key, time_zone, last_proxy_log_id, created_at, updated_at)
-			VALUES ($1, 'UTC', 0, $2, $3)
+			VALUES (?, 'UTC', 0, ?, ?)
 			ON CONFLICT (projector_key) DO NOTHING`
 	default: // sqlite
 		ensureQuery = `
