@@ -266,11 +266,23 @@ func importTableRows(db *sqlx.DB, table string, rows []map[string]any) (int64, e
 			values = append(values, val)
 		}
 
-		query := fmt.Sprintf("INSERT OR IGNORE INTO %s (%s) VALUES (%s)",
-			table,
-			strings.Join(columns, ", "),
-			strings.Join(placeholders, ", "),
-		)
+		// Build dialect-aware INSERT.
+		var query string
+		driverName := db.DriverName()
+		switch driverName {
+		case "pgx", "postgres":
+			query = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT DO NOTHING",
+				table,
+				strings.Join(columns, ", "),
+				strings.Join(placeholders, ", "),
+			)
+		default: // sqlite, sqlite3
+			query = fmt.Sprintf("INSERT OR IGNORE INTO %s (%s) VALUES (%s)",
+				table,
+				strings.Join(columns, ", "),
+				strings.Join(placeholders, ", "),
+			)
+		}
 
 		result, err := tx.Exec(query, values...)
 		if err != nil {
