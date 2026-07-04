@@ -37,9 +37,9 @@ func ProxyAwareHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 }
 
 // HTTPGet performs a GET request, optionally through a proxy.
-func HTTPGet(proxyURL, requestURL string, headers map[string]string) (*http.Response, error) {
+func HTTPGet(ctx context.Context, proxyURL, requestURL string, headers map[string]string) (*http.Response, error) {
 	client := ProxyAwareHTTPClient(proxyURL, 30*time.Second)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -50,9 +50,9 @@ func HTTPGet(proxyURL, requestURL string, headers map[string]string) (*http.Resp
 }
 
 // HTTPPost performs a POST request with string body, optionally through a proxy.
-func HTTPPost(proxyURL, requestURL, contentType string, body io.Reader, headers map[string]string) (*http.Response, error) {
+func HTTPPost(ctx context.Context, proxyURL, requestURL, contentType string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	client := ProxyAwareHTTPClient(proxyURL, 30*time.Second)
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, requestURL, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -64,8 +64,8 @@ func HTTPPost(proxyURL, requestURL, contentType string, body io.Reader, headers 
 }
 
 // HTTPPostJSON posts a JSON string body.
-func HTTPPostJSON(proxyURL, requestURL, jsonBody string, headers map[string]string) (*http.Response, error) {
-	return HTTPPost(proxyURL, requestURL, "application/json", strings.NewReader(jsonBody), headers)
+func HTTPPostJSON(ctx context.Context, proxyURL, requestURL, jsonBody string, headers map[string]string) (*http.Response, error) {
+	return HTTPPost(ctx, proxyURL, requestURL, "application/json", strings.NewReader(jsonBody), headers)
 }
 
 // WithAccountProxyOverride wraps a function that uses HTTP with proxy from extraConfig.

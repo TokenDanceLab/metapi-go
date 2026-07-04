@@ -2,7 +2,6 @@ package proxyhandler
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -52,7 +51,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 	for retry := 0; retry <= maxRetries; retry++ {
 		// Step 6: Channel selection
 		selected, err := proxy.SelectProxyChannelForAttempt(
-			context.Background(),
+			r.Context(),
 			cfg.Router,
 			cfg.Coordinator,
 			cfg.RouteRefresher,
@@ -80,7 +79,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 
 		// Step 8: Send upstream request
 		startedAt := time.Now()
-		req, err := http.NewRequestWithContext(context.Background(), r.Method, upstreamURL, bytesReader(forwardBytes))
+		req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytesReader(forwardBytes))
 		if err != nil {
 			slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
 			if retry < maxRetries {
@@ -285,6 +284,3 @@ func bytesReader(b []byte) io.Reader {
 	}
 	return bytes.NewReader(b)
 }
-
-// Ensure imports are used
-var _ = context.Background
