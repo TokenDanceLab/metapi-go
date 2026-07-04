@@ -3,7 +3,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24-blue.svg)](https://go.dev/)
 [![Docker Image](https://img.shields.io/badge/ghcr-tokendancelab%2Fmetapi--go-blue)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
 
-Go rewrite of the MetAPI multi-model proxy gateway. Single static binary with embedded React SPA frontend, SQLite (dev) or PostgreSQL (production) storage, and a standalone SQLite-to-PG migration tool.
+Go rewrite of [MetAPI](https://github.com/cita-777/metapi) — the meta-layer management and unified proxy for AI API aggregation platforms. This is the [TokenDance Lab](https://github.com/TokenDanceLab) Go port of the original TypeScript project, with full feature parity. Single static binary with embedded React SPA frontend, SQLite (dev) or PostgreSQL (production) storage, and a standalone SQLite-to-PG migration tool.
 
 ## Features
 
