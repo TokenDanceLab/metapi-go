@@ -168,7 +168,11 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 		return nil, fmt.Errorf("创建令牌失败: %w", err)
 	}
 
-	tokenID, _ := result.LastInsertId()
+	tokenID, err := result.LastInsertId()
+	if err != nil {
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = h.db.Get(&tokenID, "SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1", body.AccountID, tokenValue)
+	}
 
 	// Set as default if appropriate
 	if valueStatus == TokenValueStatusReady && (isDefault || (len(existingTokens) == 0 && enabled)) {

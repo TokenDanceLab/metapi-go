@@ -3,6 +3,7 @@ package oauth
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -135,12 +136,14 @@ func doRefreshAccessToken(accountID int64) refreshResult {
 	}
 	projectID := nextOauth.ProjectID
 
+	now := time.Now().UTC().Format(time.RFC3339)
+
 	_, err = db.Exec(
 		`UPDATE accounts SET access_token = ?, oauth_provider = ?, oauth_account_key = ?,
-		 oauth_project_id = ?, extra_config = ?, status = 'active', updated_at = datetime('now')
+		 oauth_project_id = ?, extra_config = ?, status = 'active', updated_at = ?
 		 WHERE id = ?`,
 		refreshed.AccessToken, oauth.Provider, accountKey, projectID,
-		extraConfig, accountID,
+		extraConfig, now, accountID,
 	)
 	if err != nil {
 		return refreshResult{AccountID: accountID, Err: fmt.Errorf("token refresh persistence failed: %w", err)}

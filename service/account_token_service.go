@@ -323,7 +323,11 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 		if err != nil {
 			return 0, err
 		}
-		id, _ := result.LastInsertId()
+		id, err := result.LastInsertId()
+		if err != nil {
+			// Fallback for Postgres which doesn't support LastInsertId.
+			_ = db.Get(&id, "SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1", accountID, normalized)
+		}
 		targetID := id
 
 		// Clear other defaults

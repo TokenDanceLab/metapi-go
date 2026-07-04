@@ -257,26 +257,32 @@ func importTableRows(db *sqlx.DB, table string, rows []map[string]any) (int64, e
 		}
 
 		columns := make([]string, 0, len(row))
-		placeholders := make([]string, 0, len(row))
 		values := make([]any, 0, len(row))
 
 		for col, val := range row {
 			columns = append(columns, col)
-			placeholders = append(placeholders, "?")
 			values = append(values, val)
 		}
 
-		// Build dialect-aware INSERT.
+		// Build dialect-aware INSERT with correct placeholders.
 		var query string
 		driverName := db.DriverName()
 		switch driverName {
 		case "pgx", "postgres":
+			placeholders := make([]string, 0, len(columns))
+			for i := range columns {
+				placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
+			}
 			query = fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT DO NOTHING",
 				table,
 				strings.Join(columns, ", "),
 				strings.Join(placeholders, ", "),
 			)
 		default: // sqlite, sqlite3
+			placeholders := make([]string, 0, len(columns))
+			for i := 0; i < len(columns); i++ {
+				placeholders = append(placeholders, "?")
+			}
 			query = fmt.Sprintf("INSERT OR IGNORE INTO %s (%s) VALUES (%s)",
 				table,
 				strings.Join(columns, ", "),

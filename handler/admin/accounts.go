@@ -302,7 +302,12 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 		return 0, err
 	}
 
-	return result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = h.db.Get(&id, "SELECT id FROM accounts WHERE site_id = ? AND username = ? ORDER BY id DESC LIMIT 1", site.ID, username)
+	}
+	return id, nil
 }
 
 // ---- Login Account ----

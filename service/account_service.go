@@ -318,7 +318,9 @@ func InsertAccount(db *sqlx.DB, account map[string]any) (int64, error) {
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("failed to get inserted account id: %w", err)
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = db.Get(&id, "SELECT id FROM accounts WHERE site_id = ? AND username = ? ORDER BY id DESC LIMIT 1",
+			account["siteId"], account["username"])
 	}
 	return id, nil
 }

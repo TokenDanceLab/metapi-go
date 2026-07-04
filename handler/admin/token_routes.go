@@ -240,7 +240,11 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = h.db.Get(&id, "SELECT id FROM token_routes WHERE model_pattern = ? AND display_name = ? ORDER BY id DESC LIMIT 1", modelPattern, strOrNull(&displayName))
+	}
 	// For explicit_group, insert source route references
 	if routeMode == "explicit_group" && len(body.SourceRouteIds) > 0 {
 		for _, srcID := range body.SourceRouteIds {
@@ -496,7 +500,11 @@ func (h *tokenRoutesHandler) addChannel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = h.db.Get(&id, "SELECT id FROM route_channels WHERE route_id = ? AND account_id = ? AND source_model = ? ORDER BY id DESC LIMIT 1", routeID, body.AccountID, body.SourceModel)
+	}
 	created := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", id)
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, created)

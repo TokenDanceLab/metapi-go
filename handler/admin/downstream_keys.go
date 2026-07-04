@@ -210,7 +210,11 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	id, _ := result.LastInsertId()
+	id, err := result.LastInsertId()
+	if err != nil {
+		// Fallback for Postgres which doesn't support LastInsertId.
+		_ = h.db.Get(&id, "SELECT id FROM downstream_api_keys WHERE key = ? ORDER BY id DESC LIMIT 1", body.Key)
+	}
 	created := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	if created != nil {
 		if key, ok := created["key"].(string); ok {

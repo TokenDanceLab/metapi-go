@@ -284,7 +284,7 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	siteID, err := result.LastInsertId()
 	if err != nil {
 		var id int64
-		tx.Get(&id, "SELECT last_insert_rowid()")
+		tx.Get(&id, "SELECT id FROM sites WHERE name = ? AND url = ? AND platform = ? ORDER BY id DESC LIMIT 1", name, urlStr, platform)
 		siteID = id
 	}
 
