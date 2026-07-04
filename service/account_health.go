@@ -50,7 +50,7 @@ func SetAccountRuntimeHealth(db *sqlx.DB, accountID int64, entry RuntimeHealthEn
 		return err
 	}
 	healthMap := map[string]any{}
-	json.Unmarshal(healthJSON, &healthMap)
+	_ = json.Unmarshal(healthJSON, &healthMap)
 
 	newConfig := MergeExtraConfig(extraConfig, map[string]any{
 		"runtimeHealth": healthMap,

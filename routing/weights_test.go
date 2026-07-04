@@ -247,8 +247,8 @@ func TestCalculateWeightedSelection_SiteWeightMultipliers(t *testing.T) {
 		makeCandidate(2, 200, 2001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
 	}
 
-	// Give site 200 a large multiplier
-	multipliers := map[int64]float64{200: 100.0}
+	// Give site 200 a huge multiplier to make selection deterministic
+	multipliers := map[int64]float64{200: 1e12}
 
 	result := CalculateWeightedSelection(
 		candidates, "gpt-4",
@@ -258,10 +258,32 @@ func TestCalculateWeightedSelection_SiteWeightMultipliers(t *testing.T) {
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
 	}
-	// Site 200 should dominate due to the 100x multiplier
-	if result.Selected.Site.ID != 200 {
-		t.Errorf("expected site 200 to be selected (100x multiplier), got site %d", result.Selected.Site.ID)
+
+	// Deterministic check: site 200 contribution must be much larger than site 100
+	if len(result.Details) != 2 {
+		t.Fatalf("expected 2 details, got %d", len(result.Details))
 	}
+	var contrib100, contrib200 float64
+	var prob100, prob200 float64
+	for _, d := range result.Details {
+		if d.Candidate.Site.ID == 100 {
+			contrib100 = d.Probability
+		} else if d.Candidate.Site.ID == 200 {
+			contrib200 = d.Probability
+			prob200 = d.Probability
+		}
+		_ = prob100
+	}
+	// Site 200 should have contribution vastly larger than site 100
+	if contrib200 <= contrib100*100 {
+		t.Errorf("expected site 200 contribution to be >> site 100, got site100=%.6f site200=%.6f", contrib100, contrib200)
+	}
+
+	// Site 200 should dominate due to the 1e12 multiplier
+	if result.Selected.Site.ID != 200 {
+		t.Errorf("expected site 200 to be selected (1e12 multiplier), got site %d", result.Selected.Site.ID)
+	}
+	_ = prob200
 }
 
 func TestCalculateWeightedSelection_FallbackPenalty(t *testing.T) {
