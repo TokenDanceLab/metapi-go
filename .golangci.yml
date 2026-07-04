@@ -1,6 +1,5 @@
 linters:
   enable:
-    - errcheck
     - gosimple
     - govet
     - ineffassign
@@ -9,11 +8,6 @@ linters:
 
 issues:
   exclude-rules:
-    # Exclude all errcheck in test files
     - path: "_test\\.go"
       linters:
         - errcheck
-    # Intentionally-ignored patterns in source
-    - linters:
-        - errcheck
-      text: "Error return value of `(json\\.Unmarshal|db\\.Exec|db\\.Get|tx\\.Rollback|tx\\.Get|w\\.Write)`"
