@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log/slog"
 	"math"
 	"strconv"
 	"strings"
@@ -339,6 +340,9 @@ func Load(env map[string]string) *Config {
 	cfg.ProxyToken = firstNonEmpty(get("PROXY_TOKEN"), DefaultProxyToken)
 	cfg.DeployHelperToken = parseOptionalSecret(resolveDeployHelperToken())
 	cfg.AccountCredentialSecret = resolveAccountCredentialSecret()
+	if cfg.AccountCredentialSecret == DefaultAuthToken {
+		slog.Warn("config: AccountCredentialSecret is using the default value — this is insecure for production. Set ACCOUNT_CREDENTIAL_SECRET or AUTH_TOKEN environment variable.")
+	}
 	cfg.CodexClientId = firstNonEmpty(parseOptionalSecret(get("CODEX_CLIENT_ID")), DefaultCodexClientId)
 
 	// ---- §3.2 OAuth Clients ----

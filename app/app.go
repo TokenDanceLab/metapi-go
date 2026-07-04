@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // App is the top-level application struct that holds all runtime components.
@@ -83,6 +84,10 @@ func (a *App) Start() error {
 	if err := a.Server.Shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown failed", "error", err)
 		return err
+	}
+
+	if err := store.CloseDatabase(); err != nil {
+		slog.Warn("failed to close database", "error", err)
 	}
 
 	slog.Info("server stopped")

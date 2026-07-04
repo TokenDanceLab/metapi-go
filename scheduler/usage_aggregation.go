@@ -389,16 +389,22 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 		deltas = append(deltas, d)
 	}
 
-	// Apply to usage tables
+	// Apply to usage tables within a transaction for atomicity
+	tx, err := dbw.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // safe to call after Commit
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, d := range deltas {
 		// site_day_usage upsert
-		dbw.Exec(`INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		tx.Exec(`INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			d.day, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
 
 		// site_hour_usage upsert
-		dbw.Exec(`INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		tx.Exec(`INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			d.hour, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
 	}
@@ -407,13 +413,13 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	if len(rows) > 0 {
 		lastID := rows[len(rows)-1].id
 		lastCreatedAt := time.Now().UTC().Format(time.RFC3339)
-		dbw.Exec(`UPDATE analytics_projection_checkpoints
+		tx.Exec(`UPDATE analytics_projection_checkpoints
 			SET last_proxy_log_id = ?, watermark_created_at = ?, last_projected_at = ?, last_successful_at = ?, updated_at = ?
 			WHERE projector_key = ?`,
 			lastID, lastCreatedAt, now, now, now, usageProjectorKey)
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (s *UsageAggregationScheduler) applyRecompute(dbw *store.DB, cp projectionCheckpoint) (projectionCheckpoint, error) {

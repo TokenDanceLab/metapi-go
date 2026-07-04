@@ -124,6 +124,8 @@ func (c *RouteCache) InvalidateAll() {
 }
 
 func clearAllStableFirstCaches() {
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
 	for k := range stableFirstLastSelectedSiteByKey {
 		delete(stableFirstLastSelectedSiteByKey, k)
 	}

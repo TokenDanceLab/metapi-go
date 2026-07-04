@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"sync"
 )
 
 // WeightedSelectionMode is either "weighted" or "stable_first".
@@ -343,20 +344,14 @@ type StableFirstObservationProgressState struct {
 	LastObservationAtMs *int64
 }
 
-type sync_RWMutex = RWMutexStub
-
-// RWMutexStub is a no-op mutex for single-goroutine usage.
-type RWMutexStub struct{}
-
-func (m *RWMutexStub) Lock()   {}
-func (m *RWMutexStub) Unlock() {}
-func (m *RWMutexStub) RLock()  {}
-func (m *RWMutexStub) RUnlock() {}
+type sync_RWMutex = sync.RWMutex
 
 func rememberStableFirstSiteSelectionForKey(rotationKey string, siteID int64) {
 	if rotationKey == "" || siteID <= 0 {
 		return
 	}
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
 	delete(stableFirstLastSelectedSiteByKey, rotationKey)
 	stableFirstLastSelectedSiteByKey[rotationKey] = siteID
 	for len(stableFirstLastSelectedSiteByKey) > MaxStableFirstRotationKeys {
@@ -371,6 +366,8 @@ func rememberStableFirstObservationProgressForKey(rotationKey string, state Stab
 	if rotationKey == "" {
 		return
 	}
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
 	delete(stableFirstObservationProgressByKey, rotationKey)
 	stableFirstObservationProgressByKey[rotationKey] = state
 	for len(stableFirstObservationProgressByKey) > MaxStableFirstObservationProgressKeys {
@@ -386,6 +383,8 @@ func rememberStableFirstObservationSiteCooldown(rotationKey string, siteID int64
 		return
 	}
 	scopedKey := rotationKey + ":" + formatInt(siteID)
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
 	delete(stableFirstObservationSiteCooldownByKey, scopedKey)
 	stableFirstObservationSiteCooldownByKey[scopedKey] = observedAtMs
 	for len(stableFirstObservationSiteCooldownByKey) > MaxStableFirstObservationSiteCooldownKeys {
@@ -518,6 +517,8 @@ func BuildStableFirstRotationKey(routeID int64, requestedModel string) string {
 
 // ClearStableFirstCachesForRoute clears rotation/progress/cooldown for a route.
 func ClearStableFirstCachesForRoute(routeID int64) {
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
 	routePrefix := formatInt(routeID) + ":"
 	for k := range stableFirstLastSelectedSiteByKey {
 		if len(k) >= len(routePrefix) && k[:len(routePrefix)] == routePrefix {
@@ -541,6 +542,8 @@ func ShouldUseStableFirstObservationCandidate(rotationKey string, observationCan
 	if rotationKey == "" || len(observationCandidates) == 0 {
 		return false
 	}
+	stableFirstStateMu.RLock()
+	defer stableFirstStateMu.RUnlock()
 	state, ok := stableFirstObservationProgressByKey[rotationKey]
 	if !ok {
 		state = StableFirstObservationProgressState{}
