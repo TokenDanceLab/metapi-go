@@ -122,6 +122,7 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 	// Configure driver-specific settings.
 	switch dialect {
 	case DialectSQLite:
+		db.SetMaxOpenConns(1) // SQLite :memory: databases are per-connection
 		if err := applySQLitePragmas(db); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("store: failed to apply SQLite pragmas: %w", err)

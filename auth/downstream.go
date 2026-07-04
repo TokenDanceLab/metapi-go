@@ -79,13 +79,11 @@ func AuthorizeDownstreamToken(token string, cfg *config.Config) DownstreamTokenA
 	// ---- Check managed key table ----
 	managed, err := getManagedKeyByToken(normalized)
 	if err != nil {
-		slog.Error("downstream auth: failed to query managed key", "error", err)
-		return DownstreamTokenAuthResult{
-			OK:         false,
-			StatusCode: 500,
-			Error:      "Internal server error",
-			Reason:     "invalid",
-		}
+		slog.Warn("downstream auth: failed to query managed key, falling back to global", "error", err)
+		// DO NOT return 500. Fall through to global token check below.
+		// This matches the TypeScript resilience pattern where the DB query
+		// failure does not block the global token fallback.
+		managed = nil
 	}
 
 	if managed != nil {
