@@ -38,6 +38,10 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	// /api/* routes (excluding public routes) → admin auth middleware
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.AdminAuth(cfg))
+		// Rate limiting: per-IP token bucket (100 req/s, burst 200)
+		r.Use(auth.AdminRateLimit(100, 200))
+		// Stricter OAuth rate limit: 10 req/s, burst 20 (only /api/oauth/*)
+		r.Use(auth.OAuthRateLimit(10, 20))
 
 		// P3: Sites + Accounts + AccountTokens CRUD API
 		db := store.GetDB()
