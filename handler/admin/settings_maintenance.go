@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -69,6 +71,84 @@ func (h *maintenanceHandler) clearUsage(w http.ResponseWriter, r *http.Request) 
 
 // POST /api/settings/maintenance/factory-reset
 func (h *maintenanceHandler) factoryReset(w http.ResponseWriter, r *http.Request) {
-	// Stub: factory reset not yet implemented
-	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+	// Require confirmation token to prevent accidental invocation.
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	// Decode body; if confirm is not true, reject.
+	json.NewDecoder(r.Body).Decode(&body)
+	if !body.Confirm {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "工厂重置需要确认。请在请求体中设置 confirm: true",
+		})
+		return
+	}
+
+	tx, err := h.db.Beginx()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"success": false,
+			"message": fmt.Sprintf("开启事务失败：%v", err),
+		})
+		return
+	}
+	defer tx.Rollback()
+
+	deleted := map[string]int64{}
+
+	// Delete all 27 tables in reverse FK order (children before parents).
+	for _, table := range reverseAllTables {
+		// Count before deletion
+		var count int64
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", table)
+		if err := tx.Get(&count, countQuery); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"success": false,
+				"message": fmt.Sprintf("工厂重置失败：无法读取表 %s：%v", table, err),
+			})
+			return
+		}
+
+		deleteQuery := fmt.Sprintf("DELETE FROM %s", table)
+		if _, err := tx.Exec(deleteQuery); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"success": false,
+				"message": fmt.Sprintf("工厂重置失败：无法清空表 %s：%v", table, err),
+			})
+			return
+		}
+
+		deleted[table] = count
+	}
+
+	// Reset auto-increment sequences.
+	// SQLite: DELETE FROM sqlite_sequence removes all autoincrement tracking.
+	// PostgreSQL: ALTER SEQUENCE ... RESTART for each table with a serial column.
+	// Try SQLite first (silently fails on non-SQLite); then try PG.
+	driverName := h.db.DriverName()
+	switch driverName {
+	case "sqlite", "sqlite3":
+		tx.Exec("DELETE FROM sqlite_sequence")
+	case "pgx", "postgres":
+		for _, table := range allTables {
+			seqName := table + "_id_seq"
+			tx.Exec(fmt.Sprintf("ALTER SEQUENCE IF EXISTS %s RESTART WITH 1", seqName))
+		}
+	}
+	// For other drivers, skip sequence reset (no-op).
+
+	if err := tx.Commit(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"success": false,
+			"message": fmt.Sprintf("提交事务失败：%v", err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "工厂重置完成",
+		"deleted": deleted,
+	})
 }
