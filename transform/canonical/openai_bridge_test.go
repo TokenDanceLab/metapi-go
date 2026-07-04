@@ -1,7 +1,6 @@
 package canonical
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
