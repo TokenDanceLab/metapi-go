@@ -112,15 +112,16 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 		return nil, fmt.Errorf("store: unsupported dialect %q (expected %q or %q)", dialect, DialectSQLite, DialectPostgres)
 	}
 
+	// Bind the pgx driver to DOLLAR ($1, $2, ...) so that all "?"
+	// placeholders are automatically rebound for PostgreSQL.
+	// Must be called BEFORE sqlx.Open so the DB's BindType is set correctly.
+	if driverName == "pgx" {
+		sqlx.BindDriver("pgx", sqlx.DOLLAR)
+	}
+
 	sqldb, err := sqlx.Open(driverName, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("store: failed to open %s database: %w", dialect, err)
-	}
-
-	// Bind the pgx driver to DOLLAR ($1, $2, ...) so that all "?"
-	// placeholders are automatically rebound for PostgreSQL.
-	if driverName == "pgx" {
-		sqlx.BindDriver("pgx", sqlx.DOLLAR)
 	}
 
 	db := &DB{DB: sqldb, Dialect: dialect}
