@@ -249,11 +249,21 @@ func (s *UsageAggregationScheduler) tryAcquireLease(dbw *store.DB) (*projectionL
 	}
 
 	// Ensure checkpoint row exists
-	_, err := dbw.Exec(`
-		INSERT OR IGNORE INTO analytics_projection_checkpoints
-			(projector_key, time_zone, last_proxy_log_id, created_at, updated_at)
-		VALUES (?, 'UTC', 0, ?, ?)
-	`, usageProjectorKey, now, now)
+	var ensureQuery string
+	switch dbw.Dialect {
+	case store.DialectPostgres:
+		ensureQuery = `
+			INSERT INTO analytics_projection_checkpoints
+				(projector_key, time_zone, last_proxy_log_id, created_at, updated_at)
+			VALUES ($1, 'UTC', 0, $2, $3)
+			ON CONFLICT (projector_key) DO NOTHING`
+	default: // sqlite
+		ensureQuery = `
+			INSERT OR IGNORE INTO analytics_projection_checkpoints
+				(projector_key, time_zone, last_proxy_log_id, created_at, updated_at)
+			VALUES (?, 'UTC', 0, ?, ?)`
+	}
+	_, err := dbw.Exec(ensureQuery, usageProjectorKey, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure checkpoint: %w", err)
 	}
