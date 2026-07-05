@@ -12,7 +12,7 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Feature parity with 
   assume SQLite-only features.
 - **API compatibility**: All JSON responses must use camelCase field names matching the TS frontend.
   All env var names are identical to the TS version (no prefix).
-- **Before pushing**: `go build ./cmd/server && go vet ./... && go test ./... -count=1` must pass.
+- **Before pushing**: `go build ./cmd/server && go vet ./... && go test ./... -count=1 -race` must pass.
 
 ## Project Structure
 

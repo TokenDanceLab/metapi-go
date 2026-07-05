@@ -71,14 +71,14 @@ func init() {
 	})
 }
 
-func requireGeminiCliOAuthConfig() (clientID, clientSecret string) {
+func requireGeminiCliOAuthConfig() (clientID, clientSecret string, err error) {
 	clientID = strings.TrimSpace(config.Get().GeminiCliClientId)
 	if clientID == "" {
-		panic("GEMINI_CLI_CLIENT_ID is not configured")
+		return "", "", fmt.Errorf("GEMINI_CLI_CLIENT_ID is not configured")
 	}
 	clientSecret = strings.TrimSpace(config.Get().GeminiCliClientSecret)
 	if clientSecret == "" {
-		panic("GEMINI_CLI_CLIENT_SECRET is not configured")
+		return "", "", fmt.Errorf("GEMINI_CLI_CLIENT_SECRET is not configured")
 	}
 	return
 }
@@ -86,7 +86,10 @@ func requireGeminiCliOAuthConfig() (clientID, clientSecret string) {
 // ---- Auth URL (no PKCE) ----
 
 func buildGeminiCliAuthorizationURL(ctx context.Context, input BuildAuthURLInput) (string, error) {
-	clientID, _ := requireGeminiCliOAuthConfig()
+	clientID, _, err := requireGeminiCliOAuthConfig()
+	if err != nil {
+		return "", err
+	}
 	params := url.Values{}
 	params.Set("client_id", clientID)
 	params.Set("redirect_uri", input.RedirectURI)
@@ -175,7 +178,10 @@ func postGeminiToken(form url.Values, proxyURL *string) (*TokenSet, error) {
 }
 
 func exchangeGeminiCliAuthorizationCode(ctx context.Context, input ExchangeCodeInput) (*TokenSet, error) {
-	clientID, clientSecret := requireGeminiCliOAuthConfig()
+	clientID, clientSecret, err := requireGeminiCliOAuthConfig()
+	if err != nil {
+		return nil, err
+	}
 	form := url.Values{}
 	form.Set("code", input.Code)
 	form.Set("client_id", clientID)
@@ -214,7 +220,10 @@ func exchangeGeminiCliAuthorizationCode(ctx context.Context, input ExchangeCodeI
 // ---- Token Refresh ----
 
 func refreshGeminiCliAccessToken(ctx context.Context, input RefreshTokenInput) (*TokenSet, error) {
-	clientID, clientSecret := requireGeminiCliOAuthConfig()
+	clientID, clientSecret, err := requireGeminiCliOAuthConfig()
+	if err != nil {
+		return nil, err
+	}
 	form := url.Values{}
 	form.Set("client_id", clientID)
 	form.Set("client_secret", clientSecret)

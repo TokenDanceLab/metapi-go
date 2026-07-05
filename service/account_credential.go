@@ -18,14 +18,13 @@ const (
 )
 
 // buildCredentialKey derives a 32-byte AES key from config.AccountCredentialSecret.
-// Mirrors TS buildKey(): SHA-256(accountCredentialSecret || authToken || fallback).
+// Uses SHA-256 of the explicitly set ACCOUNT_CREDENTIAL_SECRET env var.
+// If not configured, falls back to a hardcoded default with a startup warning
+// (config.Validate() already logs this as UNSAFE).
 func buildCredentialKey(cfg *config.Config) []byte {
 	secret := strings.TrimSpace(cfg.AccountCredentialSecret)
 	if secret == "" {
-		secret = strings.TrimSpace(cfg.AuthToken)
-	}
-	if secret == "" {
-		secret = "change-me-admin-token" // fallback matches TS config defaults
+		secret = "metapi-go-default-credential-key-change-me" // standalone default, not chained to AUTH_TOKEN
 	}
 	h := sha256.Sum256([]byte(secret))
 	return h[:]

@@ -4,7 +4,6 @@ on: [push, pull_request]
 
 jobs:
   lint:
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,6 +12,15 @@ jobs:
           go-version: "1.25"
       - uses: golangci/golangci-lint-action@v6
 
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go vet ./...
+
   test-sqlite:
     runs-on: ubuntu-latest
     steps:
@@ -20,7 +28,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-      - run: go test ./... -count=1
+      - run: go test ./... -count=1 -race
 
   test-pg:
     runs-on: ubuntu-latest

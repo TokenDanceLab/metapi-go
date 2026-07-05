@@ -100,7 +100,7 @@ func doRefreshAccessToken(accountID int64) refreshResult {
 	}
 
 	// Merge refreshed fields with existing.
-	nextOauth := BuildOauthInfoFromAccount(&account, &OauthInfo{
+	nextOauth, err := BuildOauthInfoFromAccount(&account, &OauthInfo{
 		Provider:   oauth.Provider,
 		AccountID:  coalesceStr(refreshed.AccountID, oauth.AccountID),
 		AccountKey: coalesceStr(refreshed.AccountKey, oauth.AccountKey, refreshed.AccountID, oauth.AccountID),
@@ -112,6 +112,9 @@ func doRefreshAccessToken(accountID int64) refreshResult {
 		IDToken:    coalesceStr(refreshed.IDToken, oauth.IDToken),
 		ProviderData: mergeProviderData(oauth.ProviderData, refreshed.ProviderData),
 	})
+	if err != nil {
+		return refreshResult{AccountID: accountID, Err: err}
+	}
 
 	oauthMap := map[string]interface{}{
 		"email":          nextOauth.Email,

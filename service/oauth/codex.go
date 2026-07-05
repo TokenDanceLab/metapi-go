@@ -55,19 +55,23 @@ func init() {
 	})
 }
 
-func requireCodexClientID() string {
+func requireCodexClientID() (string, error) {
 	id := strings.TrimSpace(config.Get().CodexClientId)
 	if id == "" {
-		panic("CODEX_CLIENT_ID is not configured")
+		return "", fmt.Errorf("CODEX_CLIENT_ID is not configured")
 	}
-	return id
+	return id, nil
 }
 
 // ---- Auth URL ----
 
 func buildCodexAuthorizationURL(ctx context.Context, input BuildAuthURLInput) (string, error) {
 	params := url.Values{}
-	params.Set("client_id", requireCodexClientID())
+	clientID, err := requireCodexClientID()
+	if err != nil {
+		return "", err
+	}
+	params.Set("client_id", clientID)
 	params.Set("response_type", "code")
 	params.Set("redirect_uri", input.RedirectURI)
 	params.Set("scope", "openid email profile offline_access")
@@ -166,7 +170,7 @@ func exchangeCodexToken(form url.Values, proxyURL *string) (*codexTokenResponse,
 func exchangeCodexAuthorizationCode(ctx context.Context, input ExchangeCodeInput) (*TokenSet, error) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
-	form.Set("client_id", requireCodexClientID())
+	form.Set("client_id", func() string { id, _ := requireCodexClientID(); return id }())
 	form.Set("code", input.Code)
 	form.Set("redirect_uri", input.RedirectURI)
 	form.Set("code_verifier", input.CodeVerifier)
@@ -174,6 +178,9 @@ func exchangeCodexAuthorizationCode(ctx context.Context, input ExchangeCodeInput
 	payload, err := exchangeCodexToken(form, input.ProxyURL)
 	if err != nil {
 		return nil, err
+	}
+	if _, idErr := requireCodexClientID(); idErr != nil {
+		return nil, idErr
 	}
 
 	claims, err := parseJWTClaims(payload.IDToken)
@@ -204,7 +211,7 @@ func exchangeCodexAuthorizationCode(ctx context.Context, input ExchangeCodeInput
 func refreshCodexAccessToken(ctx context.Context, input RefreshTokenInput) (*TokenSet, error) {
 	form := url.Values{}
 	form.Set("grant_type", "refresh_token")
-	form.Set("client_id", requireCodexClientID())
+	form.Set("client_id", func() string { id, _ := requireCodexClientID(); return id }())
 	form.Set("refresh_token", input.RefreshToken)
 	form.Set("scope", "openid profile email")
 

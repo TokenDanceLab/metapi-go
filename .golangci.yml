@@ -1,9 +1,17 @@
 linters:
-  disable:
-    - errcheck
-    - unused
-    - ineffassign
-    - gosimple
-    - staticcheck
   enable:
     - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+  disable:
+    - unused
+    - gosimple
+
+issues:
+  exclude-rules:
+    # Allow intentional error discards in defer Close(), tx.Rollback(), etc.
+    - path: ".go"
+      linters:
+        - errcheck
+      text: "Error return value of .*(Close|Rollback|Flush). is not checked"

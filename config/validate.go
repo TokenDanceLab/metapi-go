@@ -154,6 +154,60 @@ func (c *Config) Validate() []error {
 		})
 	}
 
+	// --- Warning: Default AUTH_TOKEN / PROXY_TOKEN ---
+	if c.AuthToken == DefaultAuthToken {
+		errs = append(errs, &configError{
+			field:    "auth_token",
+			value:    "(default)",
+			msg:     "UNSAFE: using default admin token — set AUTH_TOKEN in production",
+			critical: false,
+		})
+	}
+	if c.ProxyToken == DefaultProxyToken {
+		errs = append(errs, &configError{
+			field:    "proxy_token",
+			value:    "(default)",
+			msg:     "UNSAFE: using default proxy token — set PROXY_TOKEN in production",
+			critical: false,
+		})
+	}
+
+	// --- Warning: account_credential_secret fallback ---
+	if c.AccountCredentialSecret == "" {
+		errs = append(errs, &configError{
+			field:    "account_credential_secret",
+			value:    "(empty)",
+			msg:     "UNSAFE: account credential encryption key not set — stored credentials are NOT encrypted",
+			critical: false,
+		})
+	}
+
+	// --- Warning: OAuth client IDs are placeholders ---
+	if c.ClaudeClientId == "" || c.ClaudeClientId == DefaultClaudeClientId {
+		errs = append(errs, &configError{
+			field:    "claude_client_id",
+			value:    "(placeholder)",
+			msg:     "Claude OAuth login will fail — set CLAUDE_CLIENT_ID",
+			critical: false,
+		})
+	}
+	if c.CodexClientId == "" || c.CodexClientId == DefaultCodexClientId {
+		errs = append(errs, &configError{
+			field:    "codex_client_id",
+			value:    "(placeholder)",
+			msg:     "Codex OAuth login will fail — set CODEX_CLIENT_ID",
+			critical: false,
+		})
+	}
+	if c.GeminiCliClientId == "" || c.GeminiCliClientId == DefaultGeminiCliClientId {
+		errs = append(errs, &configError{
+			field:    "gemini_cli_client_id",
+			value:    "(placeholder)",
+			msg:     "Gemini CLI OAuth login will fail — set GEMINI_CLI_CLIENT_ID",
+			critical: false,
+		})
+	}
+
 	return errs
 }
 

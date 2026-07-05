@@ -3,7 +3,7 @@ package oauth
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -267,10 +267,10 @@ func CreateOauthRouteUnit(input CreateRouteUnitInput) (*CreateRouteUnitResult, e
 	if hooks != nil {
 		if err := hooks.RebuildRoutesOnly(context.Background()); err != nil {
 			// Step 6: On rebuild failure, rollback created route unit.
-			log.Printf("[oauth] route rebuild failed after creating route unit %d, rolling back: %v", unitID, err)
+			slog.Warn("route rebuild failed after creating route unit, rolling back", "unitID", unitID, "error", err)
 			rollbackErr := rollbackCreateRouteUnit(unitID, accountIDs)
 			if rollbackErr != nil {
-				log.Printf("[oauth] rollback route unit creation failed: %v", rollbackErr)
+				slog.Warn("rollback route unit creation failed", "error", rollbackErr)
 			}
 			// Best-effort retry rebuild after rollback.
 			_ = hooks.RebuildRoutesOnly(context.Background())
@@ -398,10 +398,10 @@ func DeleteOauthRouteUnit(routeUnitID int64) error {
 	if hooks != nil {
 		if err := hooks.RebuildRoutesOnly(context.Background()); err != nil {
 			// Step 5: On rebuild failure: full rollback (re-insert unit + members + channels).
-			log.Printf("[oauth] route rebuild failed after deleting route unit %d, rolling back: %v", routeUnitID, err)
+			slog.Warn("route rebuild failed after deleting route unit, rolling back", "routeUnitID", routeUnitID, "error", err)
 			rbErr := rollbackDeleteRouteUnit(db, &unit, snapshotMembers, snapshotChannels)
 			if rbErr != nil {
-				log.Printf("[oauth] rollback route unit deletion failed: %v", rbErr)
+				slog.Warn("rollback route unit deletion failed", "error", rbErr)
 			}
 			// Best-effort retry rebuild after rollback.
 			_ = hooks.RebuildRoutesOnly(context.Background())

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -143,7 +144,7 @@ func AuthorizeDownstreamToken(token string, cfg *config.Config) DownstreamTokenA
 	}
 
 	// ---- Check global proxy token ----
-	if normalized == cfg.ProxyToken {
+	if subtle.ConstantTimeCompare([]byte(normalized), []byte(cfg.ProxyToken)) == 1 {
 		return DownstreamTokenAuthResult{
 			OK:     true,
 			Source: "global",

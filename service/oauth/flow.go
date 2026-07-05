@@ -3,7 +3,7 @@ package oauth
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -384,7 +384,7 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 	}
 
 	// Build OAuth info.
-	oauthInfo := BuildOauthInfo(nil, &OauthInfo{
+	oauthInfo, err := BuildOauthInfo(nil, &OauthInfo{
 		Provider:       string(def.Metadata.Provider),
 		AccountID:      input.Exchange.AccountID,
 		AccountKey:     input.Exchange.AccountKey,
@@ -396,6 +396,9 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 		IDToken:        input.Exchange.IDToken,
 		ProviderData:   input.Exchange.ProviderData,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// Build extra config merge patch.
 	extraPatch := map[string]interface{}{
@@ -504,10 +507,10 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 		allowInactive := !created
 		if err := hooks.RefreshModelsForAccount(ctx, accountID, allowInactive); err != nil {
 			// Step 7d: Full rollback on model refresh failure.
-			log.Printf("[oauth] model refresh failed for account %d, rolling back: %v", accountID, err)
+			slog.Warn("model refresh failed for account, rolling back", "accountID", accountID, "error", err)
 			rollbackErr := revertPersistedOauthAccount(db, accountID, created, snapshot)
 			if rollbackErr != nil {
-				log.Printf("[oauth] rollback failed for account %d: %v", accountID, rollbackErr)
+				slog.Warn("rollback failed for account", "accountID", accountID, "error", rollbackErr)
 			}
 			return nil, fmt.Errorf("model refresh failed for oauth account: %w", err)
 		}
@@ -520,10 +523,10 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 		// Step 7f: Rebuild routes.
 		if err := hooks.RebuildRoutesOnly(ctx); err != nil {
 			// Step 7g: On route rebuild fail: rollback account + restore routes.
-			log.Printf("[oauth] route rebuild failed after account %d, rolling back: %v", accountID, err)
+			slog.Warn("route rebuild failed after account, rolling back", "accountID", accountID, "error", err)
 			rollbackErr := revertPersistedOauthAccount(db, accountID, created, snapshot)
 			if rollbackErr != nil {
-				log.Printf("[oauth] rollback failed for account %d: %v", accountID, rollbackErr)
+				slog.Warn("rollback failed for account", "accountID", accountID, "error", rollbackErr)
 			}
 			// Best-effort retry rebuild after rollback.
 			_ = hooks.RebuildRoutesOnly(ctx)
@@ -615,7 +618,7 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 				strings.Join(cols, ", "), strings.Join(placeholders, ", "))
 			_, err := tx.Exec(query, vals...)
 			if err != nil {
-				log.Printf("[oauth] rollback model_availability re-insert failed: %v", err)
+				slog.Warn("rollback model_availability re-insert failed", "error", err)
 			}
 		}
 	}

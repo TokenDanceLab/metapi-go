@@ -2,7 +2,7 @@ package oauth
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -195,7 +195,7 @@ func DeleteOauthConnection(accountID int64) error {
 	hooks := getWorkflowHooks()
 	if hooks != nil {
 		if rebuildErr := hooks.RebuildRoutesOnly(context.Background()); rebuildErr != nil {
-			log.Printf("[oauth] route rebuild failed after deleting connection %d: %v", accountID, rebuildErr)
+			slog.Warn("route rebuild failed after deleting connection", "accountID", accountID, "error", rebuildErr)
 		}
 		hooks.InvalidateTokenRouterCache()
 	}
@@ -249,10 +249,10 @@ func UpdateOauthConnectionProxySettings(accountID int64, proxyURL *string, useSy
 		if refreshErr := hooks.RefreshModelsForAccount(context.Background(), accountID, true); refreshErr != nil {
 			modelRefreshStatus = "error"
 			modelRefreshErrMsg = refreshErr.Error()
-			log.Printf("[oauth] model refresh failed in UpdateProxySettings for account %d: %v", accountID, refreshErr)
+			slog.Warn("model refresh failed in UpdateProxySettings", "accountID", accountID, "error", refreshErr)
 		}
 		if rebuildErr := hooks.RebuildRoutesOnly(context.Background()); rebuildErr != nil {
-			log.Printf("[oauth] route rebuild failed in UpdateProxySettings for account %d: %v", accountID, rebuildErr)
+			slog.Warn("route rebuild failed in UpdateProxySettings", "accountID", accountID, "error", rebuildErr)
 		}
 		hooks.InvalidateTokenRouterCache()
 	}

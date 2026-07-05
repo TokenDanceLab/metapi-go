@@ -55,12 +55,12 @@ func init() {
 	})
 }
 
-func requireClaudeClientID() string {
+func requireClaudeClientID() (string, error) {
 	id := strings.TrimSpace(config.Get().ClaudeClientId)
 	if id == "" {
-		panic("CLAUDE_CLIENT_ID is not configured")
+		return "", fmt.Errorf("CLAUDE_CLIENT_ID is not configured")
 	}
-	return id
+	return id, nil
 }
 
 // ---- Auth URL ----
@@ -68,7 +68,11 @@ func requireClaudeClientID() string {
 func buildClaudeAuthorizationURL(ctx context.Context, input BuildAuthURLInput) (string, error) {
 	params := url.Values{}
 	params.Set("code", "true")
-	params.Set("client_id", requireClaudeClientID())
+	clientID, err := requireClaudeClientID()
+	if err != nil {
+		return "", err
+	}
+	params.Set("client_id", clientID)
 	params.Set("response_type", "code")
 	params.Set("redirect_uri", input.RedirectURI)
 	params.Set("scope", "org:create_api_key user:profile user:inference")
@@ -147,11 +151,15 @@ func postClaudeToken(body map[string]interface{}, proxyURL *string) (*claudeToke
 }
 
 func exchangeClaudeAuthorizationCode(ctx context.Context, input ExchangeCodeInput) (*TokenSet, error) {
+	clientID, err := requireClaudeClientID()
+	if err != nil {
+		return nil, err
+	}
 	payload, err := postClaudeToken(map[string]interface{}{
 		"code":          input.Code,
 		"state":         input.State,
 		"grant_type":    "authorization_code",
-		"client_id":     requireClaudeClientID(),
+		"client_id":     clientID,
 		"redirect_uri":  input.RedirectURI,
 		"code_verifier": input.CodeVerifier,
 	}, input.ProxyURL)
@@ -188,8 +196,12 @@ func exchangeClaudeAuthorizationCode(ctx context.Context, input ExchangeCodeInpu
 // ---- Token Refresh ----
 
 func refreshClaudeAccessToken(ctx context.Context, input RefreshTokenInput) (*TokenSet, error) {
+	clientID, idErr := requireClaudeClientID()
+	if idErr != nil {
+		return nil, idErr
+	}
 	payload, err := postClaudeToken(map[string]interface{}{
-		"client_id":     requireClaudeClientID(),
+		"client_id":     clientID,
 		"grant_type":    "refresh_token",
 		"refresh_token": input.RefreshToken,
 	}, input.ProxyURL)

@@ -30,7 +30,10 @@ func BuildOauthProviderHeaders(account *store.Account, extraConfig *string, down
 
 // BuildCodexOauthProviderHeaders builds headers specifically for Codex provider.
 func BuildCodexOauthProviderHeaders(extraConfig *string, downstreamHeaders map[string]interface{}) map[string]string {
-	oauth := BuildOauthInfo(extraConfig, &OauthInfo{Provider: string(ProviderCodex)})
+	oauth, err := BuildOauthInfo(extraConfig, &OauthInfo{Provider: string(ProviderCodex)})
+	if err != nil {
+		return map[string]string{}
+	}
 	def := GetProviderDefinition(string(ProviderCodex))
 	if def == nil || def.BuildProxyHeaders == nil {
 		return map[string]string{}

@@ -22,13 +22,16 @@ func CORS() func(http.Handler) http.Handler {
 }
 
 // RequestLogger logs every incoming request using slog.
+// Includes request_id for log correlation when RequestID middleware is active.
 // Equivalent to TS Fastify `logger: true`.
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqID := middleware.GetReqID(r.Context())
 		slog.Info("request",
 			"method", r.Method,
 			"path", r.URL.Path,
 			"remote", r.RemoteAddr,
+			"request_id", reqID,
 		)
 		next.ServeHTTP(w, r)
 	})

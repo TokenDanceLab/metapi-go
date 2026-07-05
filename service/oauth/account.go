@@ -210,7 +210,9 @@ func GetOauthInfoFromAccount(account *store.Account) *OauthInfo {
 }
 
 // BuildOauthInfo builds OauthInfo from extraConfig with an optional patch.
-func BuildOauthInfo(extraConfig *string, patch *OauthInfo) *OauthInfo {
+// Returns an error when no OAuth provider can be determined — the caller should
+// return a clean 4xx error to the client rather than panicking.
+func BuildOauthInfo(extraConfig *string, patch *OauthInfo) (*OauthInfo, error) {
 	provider := ""
 	if patch != nil {
 		provider = patch.Provider
@@ -222,7 +224,7 @@ func BuildOauthInfo(extraConfig *string, patch *OauthInfo) *OauthInfo {
 		}
 	}
 	if provider == "" {
-		panic("oauth provider is required")
+		return nil, fmt.Errorf("oauth provider is required")
 	}
 	current := GetOauthInfoFromExtraConfig(extraConfig)
 	info := &OauthInfo{Provider: provider}
@@ -279,11 +281,12 @@ func BuildOauthInfo(extraConfig *string, patch *OauthInfo) *OauthInfo {
 	if info.AccountID == "" && info.AccountKey != "" {
 		info.AccountID = info.AccountKey
 	}
-	return info
+	return info, nil
 }
 
 // BuildOauthInfoFromAccount builds OauthInfo from an account with optional patch.
-func BuildOauthInfoFromAccount(account *store.Account, patch *OauthInfo) *OauthInfo {
+// Returns an error when no OAuth provider can be determined.
+func BuildOauthInfoFromAccount(account *store.Account, patch *OauthInfo) (*OauthInfo, error) {
 	provider := ""
 	if patch != nil {
 		provider = patch.Provider
@@ -295,7 +298,7 @@ func BuildOauthInfoFromAccount(account *store.Account, patch *OauthInfo) *OauthI
 		}
 	}
 	if provider == "" {
-		panic("oauth provider is required")
+		return nil, fmt.Errorf("oauth provider is required")
 	}
 	current := GetOauthInfoFromAccount(account)
 	info := &OauthInfo{Provider: provider}
@@ -340,7 +343,7 @@ func BuildOauthInfoFromAccount(account *store.Account, patch *OauthInfo) *OauthI
 	if info.AccountID == "" && info.AccountKey != "" {
 		info.AccountID = info.AccountKey
 	}
-	return info
+	return info, nil
 }
 
 // BuildStoredOauthState strips identity fields from OauthInfo.
@@ -364,8 +367,12 @@ func BuildStoredOauthState(oauth *OauthInfo) *StoredOauthState {
 }
 
 // BuildStoredOauthStateFromAccount builds stored state from account with optional patch.
-func BuildStoredOauthStateFromAccount(account *store.Account, patch *OauthInfo) *StoredOauthState {
-	return BuildStoredOauthState(BuildOauthInfoFromAccount(account, patch))
+func BuildStoredOauthStateFromAccount(account *store.Account, patch *OauthInfo) (*StoredOauthState, error) {
+	info, err := BuildOauthInfoFromAccount(account, patch)
+	if err != nil {
+		return nil, err
+	}
+	return BuildStoredOauthState(info), nil
 }
 
 // BuildOauthIdentityBackfillPatch produces backfill patches for column fields.

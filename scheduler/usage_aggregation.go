@@ -137,8 +137,10 @@ func (s *UsageAggregationScheduler) runPass() *ProjectionPassResult {
 
 	defer func() {
 		if r := recover(); r != nil {
+			slog.Error("usage aggregation pass panicked", "panic", r)
 			s.releaseLease(dbw, lease, fmt.Errorf("panic: %v", r))
-			panic(r)
+			// Do NOT re-panic — this runs inside a goroutine launched by runPass().
+			// Re-panicking would crash the entire server.
 		}
 	}()
 

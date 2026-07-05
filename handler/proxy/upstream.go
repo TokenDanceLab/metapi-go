@@ -24,6 +24,14 @@ type UpstreamConfig struct {
 
 var upstreamCfg *UpstreamConfig
 
+// defaultUpstreamClient is used as a safety fallback when the RuntimeExecutor
+// has not been wired (e.g., during tests). It carries a 90s timeout so a hung
+// upstream never leaks a goroutine. Production deployments should always wire
+// the Executor field via SetUpstreamConfig.
+var defaultUpstreamClient = &http.Client{
+	Timeout: 90 * time.Second,
+}
+
 // SetUpstreamConfig sets the package-level upstream forwarding dependencies.
 // Called during server startup to wire in the routing engine and HTTP executor.
 func SetUpstreamConfig(cfg *UpstreamConfig) {
@@ -93,7 +101,12 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 			req.Header.Set("Authorization", "Bearer "+selected.TokenValue)
 		}
 
-		resp, err := http.DefaultClient.Do(req)
+		var resp *http.Response
+		if cfg.Executor != nil {
+			resp, err = cfg.Executor.Do(req)
+		} else {
+			resp, err = defaultUpstreamClient.Do(req)
+		}
 		latencyMs := time.Since(startedAt).Milliseconds()
 
 		if err != nil {
@@ -164,9 +177,20 @@ func writeStubResponse(w http.ResponseWriter, ctx *Ctx) {
 // handleStreamUpstream relays an SSE stream from upstream to the downstream client.
 // It performs raw byte passthrough for minimal latency, then optionally parses the
 // accumulated stream body to detect SSE error events and empty content.
+//
+// Disables the server-level WriteTimeout via http.ResponseController so long-running
+// LLM streams (>60s) are not torn down mid-response.
 func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs int64) {
 	writeSSEHeaders(w)
 	w.WriteHeader(200)
+
+	// Disable server-level WriteTimeout for SSE streaming.
+	// Without this, any stream exceeding app.Server.WriteTimeout (60s) gets
+	// forcibly closed — a hard break for reasoning models and long completions.
+	if rc, ok := w.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = rc.SetWriteDeadline(time.Time{})
+	}
+
 	flusher, _ := w.(http.Flusher)
 
 	// Copy upstream headers that are relevant

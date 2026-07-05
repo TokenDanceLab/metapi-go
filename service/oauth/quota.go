@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -405,7 +405,7 @@ func persistQuotaSnapshot(db *store.DB, accountID int64, snapshot *OauthQuotaSna
 	}
 	quotaJSON, err := json.Marshal(snapshot)
 	if err != nil {
-		log.Printf("[oauth] failed to serialize quota snapshot: %v", err)
+		slog.Warn("failed to serialize quota snapshot", "error", err)
 		return
 	}
 

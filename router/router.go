@@ -22,6 +22,8 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	r := chi.NewRouter()
 
 	// ---- Middleware stack ----
+	r.Use(WithRequestID)
+	r.Use(SecurityHeaders)
 	r.Use(RealIP)
 	r.Use(CORS())
 	r.Use(RequestLogger)
@@ -32,17 +34,19 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	// Registered before route groups so it bypasses auth middleware.
 	r.Get("/health", app.Health)
 
-	// ---- /debug/vars (metrics endpoint, bypasses auth) ----
-	r.Get("/debug/vars", app.MetricsHandler)
+	// ---- /metrics (Prometheus text format, bypasses auth) ----
+	r.Get("/metrics", app.PrometheusHandler)
 
-	// ---- Route groups ----
-	// /api/* routes (excluding public routes) → admin auth middleware
+	// ---- /api/* routes (excluding public routes) → admin auth middleware ----
 	r.Route("/api", func(r chi.Router) {
 		r.Use(auth.AdminAuth(cfg))
 		// Rate limiting: per-IP token bucket (100 req/s, burst 200)
 		r.Use(auth.AdminRateLimit(100, 200))
 		// Stricter OAuth rate limit: 10 req/s, burst 20 (only /api/oauth/*)
 		r.Use(auth.OAuthRateLimit(10, 20))
+
+		// /debug/vars moved behind admin auth
+		r.Get("/debug/vars", app.MetricsHandler)
 
 		// P3: Sites + Accounts + AccountTokens CRUD API
 		db := store.GetDB()

@@ -42,6 +42,13 @@ func NewRuntimeExecutor(requestTimeout time.Duration) *RuntimeExecutor {
 	}
 }
 
+// Do sends an HTTP request through the executor's client, returning the raw
+// *http.Response. Unlike Dispatch, this does NOT read the body — callers
+// (especially streaming handlers) must close resp.Body themselves.
+func (e *RuntimeExecutor) Do(req *http.Request) (*http.Response, error) {
+	return e.client.Do(req)
+}
+
 // Dispatch sends an HTTP request to the upstream.
 func (e *RuntimeExecutor) Dispatch(ctx context.Context, input ExecutorDispatchInput) (*ExecutorDispatchResult, error) {
 	var bodyReader io.Reader

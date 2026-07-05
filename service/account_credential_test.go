@@ -189,7 +189,9 @@ func TestBuildCredentialKeyFromAuthToken(t *testing.T) {
 		t.Errorf("expected 32-byte key, got %d", len(key))
 	}
 
-	expected := sha256.Sum256([]byte("my-auth-token"))
+	// When AccountCredentialSecret is empty, uses standalone default
+	// (no longer chains to AuthToken).
+	expected := sha256.Sum256([]byte("metapi-go-default-credential-key-change-me"))
 	for i, b := range expected {
 		if key[i] != b {
 			t.Errorf("key mismatch at byte %d", i)
@@ -209,7 +211,7 @@ func TestBuildCredentialKeyFallback(t *testing.T) {
 		t.Errorf("expected 32-byte key from fallback, got %d", len(key))
 	}
 
-	expected := sha256.Sum256([]byte("change-me-admin-token"))
+	expected := sha256.Sum256([]byte("metapi-go-default-credential-key-change-me"))
 	for i, b := range expected {
 		if key[i] != b {
 			t.Errorf("key mismatch at byte %d", i)

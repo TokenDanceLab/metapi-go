@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -197,10 +198,11 @@ func applySQLitePragmas(db *DB) error {
 }
 
 // configurePostgresPool sets connection pool defaults for PostgreSQL.
-// Default pool_max=20 mirrors TS pg.Pool behavior.
 func configurePostgresPool(db *DB) error {
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 	return nil
 }
 

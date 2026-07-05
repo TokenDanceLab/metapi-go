@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"net/netip"
@@ -56,7 +57,7 @@ func AdminAuth(cfg *config.Config) func(http.Handler) http.Handler {
 			// Case-sensitive simple replace of the first "Bearer " literal.
 			// TS: token = auth.replace('Bearer ', '')
 			token := strings.Replace(auth, "Bearer ", "", 1)
-			if token != cfg.AuthToken {
+			if subtle.ConstantTimeCompare([]byte(token), []byte(cfg.AuthToken)) != 1 {
 				writeJSON(w, http.StatusForbidden, jsonError("Invalid token"))
 				return
 			}

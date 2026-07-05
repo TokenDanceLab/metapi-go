@@ -1,6 +1,6 @@
 # MASTER.md — MetAPI Go Rewrite
 
-**Task**: MetAPI TypeScript → Go 完整重写
+**Task**: MetAPI TypeScript → Go 完整重写 + 生产就绪优化
 **Tracking Mode**: LOCAL_ONLY
 **Repository**: https://github.com/TokenDanceLab/metapi-go
 
@@ -25,33 +25,31 @@
 | **COMPARE** | TS vs Go deep comparison | ✅ |
 | **AUDIT** | 16-dimension audit | ✅ |
 | **FIX** | Audit findings remediation | ✅ |
+| **HARDEN** | Production hardening (23 findings) | ⏳ Planning |
+
+## Hardening Status
+**Task**: 消除综合审计全部 CRITICAL/HIGH/MEDIUM 问题（23 项发现）
+**Target**: v0.4.0
+**Specs**: 
+- 审计: `docs/analysis/hardening-audit.md`
+- 任务分解: `docs/plan/task-breakdown-hardening.md`
+- 依赖图: `docs/plan/dependency-graph-hardening.md`
+- 里程碑: `docs/plan/milestones-hardening.md`
+
+| Phase | Name | Status |
+|:------|:-----|:-------|
+| H1 | Critical Fixes (4 tasks) | Pending |
+| H2 | Security & Reliability (7 tasks) | Pending |
+| H3 | Observability & Tests (5 tasks) | Pending |
+| H4 | Polish (5 tasks) | Pending |
+| H5 | Release (4 tasks) | Pending |
 
 ## CI/CD Status
 - CI: ✅ (build + test-sqlite + test-pg + lint)
 - CD: ✅ (ghcr.io/tokendancelab/metapi-go:latest)
 - Release: v0.3.0
 
-## Deep Comparison Results
-- **Routing**: ALL MATCH (9 algorithm steps verified)
-- **Schema**: 27/27 tables, 20/20 FKs, 77/77 indexes MATCH
-- **Config**: ~100 env vars MATCH
-- **API format**: camelCase normalization applied
-- **E2E tests**: 13/13 pass
-
-## Audit Findings Summary (16 agents)
-See `docs/plan/audit-fix-plan.md` for full prioritized fix plan.
-
-| Severity | Count | Key Issues |
-|:---------|:-----|:-----------|
-| CRITICAL | 10 | No rate limiting, RWMutexStub no-op, proxy failures silenced, DB never closed, backup/factory-reset stubs, SSE byte passthrough, usage aggregation no transaction |
-| HIGH | 12 | Error leak, AES key fallback, platform shield, OAuth coverage 24.9%, streaming gaps |
-| MEDIUM | 15 | Log levels, alloc efficiency, password validation |
-| LOW | 10 | Style, docs, minor optimizations |
-
 ## Next Steps
-1. ~~Write fix plan~~ (done)
-2. ~~Execute CRITICAL fixes first~~ (done)
-3. ~~Verify locally (build + vet + test + e2e)~~ (done)
-4. ~~Push + verify CI/CD green~~ (done)
-5. ~~Tag v0.2.0~~ (done, now v0.3.0)
-6. Monitor production metrics, observability tuning
+1. 用户确认 H1-H5 执行计划
+2. 按 Phase 1→2→3→4→5 顺序执行
+3. 全量验证 → CI 全绿 → tag v0.4.0
