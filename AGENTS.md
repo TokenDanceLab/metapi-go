@@ -52,7 +52,22 @@ go build -o metapi ./cmd/server       # Build server
 go build -o metapi-migrate ./cmd/migrate  # Build migration tool
 go test ./... -count=1 -race          # Run all tests with race detector
 go vet ./...                          # Static analysis
+golangci-lint run --timeout=3m        # Lint check
 ```
+
+## Release Workflow
+
+1. 确保本地 CI 全部通过（pre-push hook 自动检查）
+2. 更新 `CHANGELOG.md`（按 Keep a Changelog 格式）
+3. Tag + push：`git tag -a vX.Y.Z -m "vX.Y.Z — 简述"` → `git push origin vX.Y.Z`
+4. Tag push 触发 GitHub Actions `release.yml` → 自动创建 GitHub Release
+5. CD 自动构建 Docker 镜像推送到 `ghcr.io/tokendancelab/metapi-go:vX.Y.Z`
+
+**版本号**：`vMAJOR.MINOR.PATCH`（SemVer 2.0）
+- PATCH：bug 修复
+- MINOR：新功能/性能优化
+- MAJOR：不兼容 API 变更
+- v0.x 阶段 minor 可用于新功能
 
 ## CI Discipline
 
