@@ -1,0 +1,26 @@
+#!/bin/bash
+# MetAPI-Go pre-push hook — run full CI locally before pushing.
+# Installation: git config core.hooksPath .githooks
+# Skip with:      git push --no-verify
+set -euo pipefail
+
+echo "=============================================="
+echo "pre-push: running local CI (vet + test -race)"
+echo "=============================================="
+
+# 1. go vet — fast static analysis
+echo ""
+echo "[1/2] go vet ./..."
+go vet ./...
+echo "  ✓ vet passed"
+
+# 2. full test suite with race detector
+echo ""
+echo "[2/2] go test ./... -count=1 -race"
+go test ./... -count=1 -race -timeout 120s
+echo "  ✓ tests passed (-race clean)"
+
+echo ""
+echo "=============================================="
+echo "pre-push OK — all checks passed"
+echo "=============================================="

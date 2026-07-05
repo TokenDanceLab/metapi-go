@@ -13,6 +13,7 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Feature parity with 
 - **API compatibility**: All JSON responses must use camelCase field names matching the TS frontend.
   All env var names are identical to the TS version (no prefix).
 - **Before pushing**: `go build ./cmd/server && go vet ./... && go test ./... -count=1 -race` must pass.
+  🚫 **严禁跳过本地 CI** — GitHub Actions 是验证闸不是调试环境。pre-push hook 强制拦截。
 
 ## Project Structure
 
@@ -49,9 +50,17 @@ docs/specs/             14 implementation specifications
 ```bash
 go build -o metapi ./cmd/server       # Build server
 go build -o metapi-migrate ./cmd/migrate  # Build migration tool
-go test ./... -count=1                # Run all tests
+go test ./... -count=1 -race          # Run all tests with race detector
 go vet ./...                          # Static analysis
 ```
+
+## CI Discipline
+
+- **本地不过不推 GitHub**：所有 push 前必须先通过 `go vet ./... && go test ./... -count=1 -race`
+- git pre-push hook（`.githooks/pre-push`）自动拦截未通过本地 CI 的 push
+- 紧急跳过：`git push --no-verify`
+- Claude Code hook（`~/.claude/hooks/metapi-go-push-guard.sh`）额外兜底
+- GitHub Actions 的算力是最后验证闸，不是调试环境
 
 ## Specs & Docs
 
