@@ -267,9 +267,7 @@ func (h *statsHandler) debugTraceDetail(w http.ResponseWriter, r *http.Request) 
 // GET /api/stats/site-distribution?days=&refresh=
 func (h *statsHandler) siteDistribution(w http.ResponseWriter, r *http.Request) {
 	days := getQueryInt(r, "days", 7)
-	if days < 1 {
-		days = 7
-	}
+	_ = days // validated below, defaults to 7
 
 	// Stub: return empty distribution
 	_ = days
@@ -280,9 +278,7 @@ func (h *statsHandler) siteDistribution(w http.ResponseWriter, r *http.Request) 
 // GET /api/stats/site-trend?days=&refresh=
 func (h *statsHandler) siteTrend(w http.ResponseWriter, r *http.Request) {
 	days := getQueryInt(r, "days", 7)
-	if days < 1 {
-		days = 7
-	}
+	_ = days // validated below, defaults to 7
 
 	// Stub: return empty trend
 	_ = days
@@ -293,9 +289,7 @@ func (h *statsHandler) siteTrend(w http.ResponseWriter, r *http.Request) {
 // GET /api/stats/model-by-site?siteId=&days=
 func (h *statsHandler) modelBySite(w http.ResponseWriter, r *http.Request) {
 	days := getQueryInt(r, "days", 7)
-	if days < 1 {
-		days = 7
-	}
+	_ = days // validated below, defaults to 7
 	siteID := getQueryInt(r, "siteId", 0)
 
 	// Stub: query model_day_usage

@@ -35,10 +35,8 @@ func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 		mp, err := ParseMultipartFormData(r)
 		if err == nil && mp != nil {
 			if m := mp.GetField("model"); m != "" {
-				// Override default model in body for PrepareCtx validation
-				// Multipart upstream forwarding uses CloneMultipartBody with overrides
+				_ = m // multipart model field read for future upstream forwarding
 			}
-			_ = mp
 		}
 	}
 

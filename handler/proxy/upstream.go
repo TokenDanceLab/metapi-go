@@ -193,9 +193,9 @@ func handleStreamUpstream(w http.ResponseWriter, resp *http.Response, latencyMs 
 
 	flusher, _ := w.(http.Flusher)
 
-	// Copy upstream headers that are relevant
+	// Copy upstream Content-Type if SSE; writeSSEHeaders already sets it.
 	if ct := resp.Header.Get("Content-Type"); ct != "" && strings.Contains(ct, "text/event-stream") {
-		// Already set by writeSSEHeaders
+		_ = ct // SSE content type already handled by writeSSEHeaders
 	}
 
 	var accumulated bytes.Buffer

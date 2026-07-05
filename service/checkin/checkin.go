@@ -260,7 +260,7 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 
 	// 8. Post-success processing
 	if effectiveSuccess {
-		healthState := service.HealthHealthy
+		var healthState service.RuntimeHealthState
 		healthReason := ""
 		if unsupportedCheckin {
 			healthState = service.HealthDegraded
@@ -334,7 +334,7 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 				inferredReward := InferRewardFromBalanceDelta(account.Balance, refreshedBalanceInfo.Balance)
 				if inferredReward > 0 {
 					parsedReward = inferredReward
-					logReward = fmt.Sprintf("%v", inferredReward)
+					logReward = fmt.Sprintf("%v", parsedReward)
 				}
 			}
 		}

@@ -27,7 +27,7 @@ type authSettingsHandler struct {
 // GET /api/settings/auth/info
 func (h *authSettingsHandler) getInfo(w http.ResponseWriter, r *http.Request) {
 	token := h.cfg.AuthToken
-	masked := token
+	var masked string
 	if len(token) > 8 {
 		masked = token[:4] + "****" + token[len(token)-4:]
 	} else {

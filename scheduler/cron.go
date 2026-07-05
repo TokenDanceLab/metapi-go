@@ -69,7 +69,7 @@ func (cr *cronRunner) addJob(spec string, fn func()) (cron.EntryID, error) {
 	return cr.cron.AddFunc(spec, func() {
 		defer func() {
 			if r := recover(); r != nil {
-				// Panic recovered; logged inside the job itself
+				_ = r // panic recovered; logged inside the job itself
 			}
 		}()
 		fn()

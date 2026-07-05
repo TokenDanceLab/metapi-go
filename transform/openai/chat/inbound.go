@@ -53,6 +53,7 @@ func (sb *StreamBridge) SerializeEvent(event shared.NormalizedStreamEvent, cc *s
 	if cc == nil {
 		cc = shared.CreateClaudeDownstreamContext()
 	}
+	_ = cc // may be updated inside SerializeEvent branches
 	// OpenAI chat multi-choice handling: use direct serialization
 	chunk := buildOpenAIStreamChunk(sb.Ctx, event)
 	if chunk == nil {
@@ -66,6 +67,7 @@ func (sb *StreamBridge) SerializeDone(cc *shared.ClaudeDownstreamContext) []stri
 	if cc == nil {
 		cc = shared.CreateClaudeDownstreamContext()
 	}
+	_ = cc // may be updated inside SerializeEvent branches
 	return shared.SerializeStreamDone(shared.FormatOpenAI, sb.Ctx, cc)
 }
 
