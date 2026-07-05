@@ -303,6 +303,7 @@ func setupE2ERouter(mockR *mockRouter, coordinator *proxy.ProxyChannelCoordinato
 		Router:         mockR,
 		RouteRefresher: &mockRouteRefresher{},
 		Coordinator:    coordinator,
+		Executor:       proxy.NewRuntimeExecutor(30 * time.Second),
 	}
 	proxyhandler.SetUpstreamConfig(wired)
 
