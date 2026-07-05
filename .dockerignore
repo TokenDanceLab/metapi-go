@@ -1,0 +1,33 @@
+# Build artifacts
+metapi
+metapi.exe
+metapi-migrate
+metapi-migrate.exe
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docs & specs (not needed in container)
+docs
+*.md
+!go.sum
+
+# CI
+.githooks
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,6 +17,19 @@ import (
 )
 
 func main() {
+	// ---- Healthcheck subcommand (for Docker HEALTHCHECK without curl) ----
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		resp, err := http.Get("http://localhost:4000/health")
+		if err != nil {
+			os.Exit(1)
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			os.Exit(0)
+		}
+		os.Exit(1)
+	}
+
 	// ---- 0. Load .env file (silently skip if not found) ----
 	_ = godotenv.Load()
 
