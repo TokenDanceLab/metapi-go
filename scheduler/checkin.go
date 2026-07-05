@@ -116,9 +116,18 @@ func (s *CheckinScheduler) stopLocked() {
 	}
 	if s.intervalTimer != nil {
 		s.intervalTimer.Stop()
-		close(s.intervalStop)
-		s.intervalTimer = nil
-		s.intervalStop = nil
+	}
+	// Only close intervalStop if it hasn't been closed yet.
+	// The background goroutine reads intervalStop without holding the lock,
+	// so we must NOT nil it out — closing is the signal, and Go's closed-channel
+	// read returns immediately without a data race.
+	if s.intervalStop != nil {
+		select {
+		case <-s.intervalStop:
+			// already closed, skip
+		default:
+			close(s.intervalStop)
+		}
 	}
 }
 
