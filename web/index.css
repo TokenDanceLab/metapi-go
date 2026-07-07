@@ -3732,6 +3732,50 @@ textarea {
     linear-gradient(180deg, #eef4fb 0%, #e9eef7 100%);
 }
 
+.login-tools {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg-card) 86%, transparent);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.login-theme-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.login-theme-option:hover {
+  background: color-mix(in srgb, var(--color-primary-light) 56%, transparent);
+  color: var(--color-primary);
+}
+
+.login-theme-option.active {
+  background: var(--color-primary);
+  color: white;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+
 [data-theme="dark"] .login-shell {
   background:
     radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%),
@@ -3780,6 +3824,13 @@ textarea {
     radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 26%),
     radial-gradient(circle at right 20%, rgba(34, 211, 238, 0.16), transparent 22%),
     linear-gradient(160deg, #f8fbff 0%, #edf4ff 52%, #e9f0fa 100%);
+}
+
+[data-theme="dark"] .login-brand-panel-light {
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 28%),
+    radial-gradient(circle at right 20%, rgba(34, 211, 238, 0.16), transparent 24%),
+    linear-gradient(160deg, #111827 0%, #0f172a 52%, #101826 100%);
 }
 
 .login-brand-panel::before {
@@ -4103,13 +4154,35 @@ textarea {
   border-color: color-mix(in srgb, var(--color-border) 86%, transparent);
 }
 
-[data-theme="dark"] .login-shell,
-[data-theme="dark"] .login-surface,
 [data-theme="dark"] .brand-mark-frame,
 [data-theme="dark"] .brand-mark-canvas,
 [data-theme="dark"] .login-auth-stage,
 [data-theme="dark"] .login-auth-panel {
   background: color-mix(in srgb, var(--color-bg-card) 92%, #0f172a);
+}
+
+[data-theme="dark"] .login-brand-panel {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .login-brand-name,
+[data-theme="dark"] .login-brand-copy,
+[data-theme="dark"] .login-capability-desc {
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .login-icon-link,
+[data-theme="dark"] .login-doc-link {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+[data-theme="dark"] .login-doc-link {
+  color: #a5b4fc;
+}
+
+[data-theme="dark"] .login-theme-option.active {
+  color: #ffffff;
 }
 
 [data-theme="dark"] .login-brand-kicker,
@@ -4166,6 +4239,20 @@ textarea {
 @media (max-width: 640px) {
   .login-shell {
     padding: 12px;
+  }
+
+  .login-tools {
+    position: static;
+    width: 100%;
+    margin-bottom: 12px;
+    justify-content: center;
+    border-radius: 18px;
+  }
+
+  .login-theme-option {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
   }
 
   .login-surface {

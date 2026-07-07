@@ -5,6 +5,12 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.6.3] — 2026-07-07
+
+### Fixed
+- 修复后台 Admin API 被重复挂载成 `/api/api/*` 的生产路由问题，恢复 `/api/settings/auth/info`、站点、账号、签到等管理接口的正常访问。
+- 登录页增加登录前明暗/跟随系统主题切换，并修复深色模式下品牌面板、链接和图标对比度。
+
 ## [v0.6.2] — 2026-07-07
 
 ### Fixed
@@ -104,6 +110,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - 15 后台调度任务
 - 单二进制 + Docker 部署
 
+[v0.6.3]: https://github.com/TokenDanceLab/metapi-go/compare/v0.6.2...v0.6.3
 [v0.6.2]: https://github.com/TokenDanceLab/metapi-go/compare/v0.6.1...v0.6.2
 [v0.6.1]: https://github.com/TokenDanceLab/metapi-go/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.5.0...v0.6.0

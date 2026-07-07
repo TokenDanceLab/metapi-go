@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -74,11 +75,55 @@ func TestAdminRouteStillRequiresAuth(t *testing.T) {
 	r := New(cfg, web.Dist)
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/desktop/healthz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/debug/vars", nil)
 	r.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("admin route without auth status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAdminRoutesAreMountedWithoutDoubleAPIPrefix(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		AuthToken:        "admin-token",
+		ProxyToken:       "proxy-token",
+		RequestBodyLimit: config.DefaultRequestBodyLimit,
+		DbType:           store.DialectSQLite,
+		DbUrl:            filepath.Join(dataDir, "router-admin.db"),
+		DataDir:          dataDir,
+	}
+	if err := store.EnsureRuntimeDatabase(cfg); err != nil {
+		t.Fatalf("EnsureRuntimeDatabase: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = store.CloseDatabase()
+	})
+
+	r := New(cfg, web.Dist)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/auth/info", nil)
+	req.Header.Set("Authorization", "Bearer admin-token")
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin auth info status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode auth info: %v", err)
+	}
+	if got := body["masked"]; got != "admi****oken" {
+		t.Fatalf("masked token = %q, want %q", got, "admi****oken")
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/api/settings/auth/info", nil)
+	req.Header.Set("Authorization", "Bearer admin-token")
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("double-prefixed admin route status = %d, want 404", rec.Code)
 	}
 }
 

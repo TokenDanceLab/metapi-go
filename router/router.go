@@ -38,7 +38,11 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	r.With(CORS()).Get("/metrics", app.PrometheusHandler)
 
 	// ---- /api/* routes (excluding public routes) → admin auth middleware ----
-	r.Route("/api", func(r chi.Router) {
+	//
+	// Admin route registrars use absolute /api/... paths so they can also be
+	// tested on standalone routers. Keep this as a middleware group rather
+	// than Route("/api"), otherwise production paths become /api/api/....
+	r.Group(func(r chi.Router) {
 		r.Use(AdminCORS(cfg))
 		r.Use(auth.AdminAuth(cfg))
 		// Rate limiting: per-IP token bucket (100 req/s, burst 200)
@@ -47,7 +51,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 		r.Use(auth.OAuthRateLimit(10, 20))
 
 		// /debug/vars moved behind admin auth
-		r.Get("/debug/vars", app.MetricsHandler)
+		r.Get("/api/debug/vars", app.MetricsHandler)
 
 		// P3: Sites + Accounts + AccountTokens CRUD API
 		db := store.GetDB()
@@ -83,7 +87,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 			admin.RegisterMonitorRoutes(r, db.DB, cfg)
 		}
 
-		r.Get("/desktop/health", func(w http.ResponseWriter, r *http.Request) {
+		r.Get("/api/desktop/health", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"status":"ok"}`))

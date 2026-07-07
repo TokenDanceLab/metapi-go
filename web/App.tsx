@@ -128,7 +128,21 @@ function resolveStoredProfile(): UserProfile {
   }
 }
 
-export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (text: string) => string }) {
+type LoginProps = {
+  onLogin: (token: string) => void;
+  t: (text: string) => string;
+  themeMode?: ThemeMode;
+  resolvedThemeLabel?: string;
+  onThemeModeChange?: (mode: ThemeMode) => void;
+};
+
+export function Login({
+  onLogin,
+  t,
+  themeMode = 'system',
+  resolvedThemeLabel = '',
+  onThemeModeChange,
+}: LoginProps) {
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -183,6 +197,32 @@ export function Login({ onLogin, t }: { onLogin: (token: string) => void; t: (te
 
   return (
     <div className="login-shell">
+      {onThemeModeChange && (
+        <div className="login-tools" aria-label={t('外观设置')}>
+          {([
+            { mode: 'system' as const, label: t('跟随系统'), suffix: resolvedThemeLabel ? ` / ${resolvedThemeLabel}` : '' },
+            { mode: 'light' as const, label: t('浅色模式'), suffix: '' },
+            { mode: 'dark' as const, label: t('深色模式'), suffix: '' },
+          ]).map((item) => (
+            <button
+              key={item.mode}
+              type="button"
+              className={`login-theme-option ${themeMode === item.mode ? 'active' : ''}`}
+              onClick={() => onThemeModeChange(item.mode)}
+              aria-pressed={themeMode === item.mode}
+            >
+              {item.mode === 'system' ? (
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5h16v10H4V5zm6 12h4m-7 2h10" /></svg>
+              ) : item.mode === 'light' ? (
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+              ) : (
+                <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+              )}
+              <span>{item.label}{item.suffix}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="login-surface animate-scale-in">
         <section className="login-brand-panel login-brand-panel-light">
           <div className="login-brand-header">
@@ -639,7 +679,11 @@ function AppShell() {
     return <Login t={t} onLogin={(token) => {
       persistAuthSession(localStorage, token);
       setAuthed(true);
-    }} />;
+    }}
+      themeMode={themeMode}
+      resolvedThemeLabel={resolvedThemeLabel}
+      onThemeModeChange={handleSelectThemeMode}
+    />;
   }
 
   return (
