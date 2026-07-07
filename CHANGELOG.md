@@ -5,6 +5,13 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.6.2] — 2026-07-07
+
+### Fixed
+- 修复根路径 WebUI 被非 `/v1` 代理别名鉴权拦截的问题，确保嵌入式 SPA fallback 正常返回前端页面。
+- 修复嵌入式前端文件系统路径兼容性，支持 `web/dist` 作为 embed 根。
+- 稳定 routing golden 与加权随机测试，避免 Windows CRLF checkout 和单次随机抽样导致 CI 偶发失败。
+
 ## [v0.6.1] — 2026-07-07
 
 ### Fixed
@@ -97,6 +104,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - 15 后台调度任务
 - 单二进制 + Docker 部署
 
+[v0.6.2]: https://github.com/TokenDanceLab/metapi-go/compare/v0.6.1...v0.6.2
 [v0.6.1]: https://github.com/TokenDanceLab/metapi-go/compare/v0.6.0...v0.6.1
 [v0.6.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.4.0...v0.5.0

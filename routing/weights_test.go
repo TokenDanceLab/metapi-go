@@ -289,9 +289,21 @@ func TestCalculateWeightedSelection_FallbackPenalty(t *testing.T) {
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
 	}
-	// c1 has fallback cost 100, so it should be heavily penalized; c2 should win
-	if result.Selected.Channel.ID != 2 {
-		t.Errorf("expected channel 2 (with observed cost), got channel %d", result.Selected.Channel.ID)
+
+	var prob1, prob2 float64
+	for _, d := range result.Details {
+		switch d.Candidate.Channel.ID {
+		case 1:
+			prob1 = d.Probability
+		case 2:
+			prob2 = d.Probability
+		}
+	}
+	// c1 has fallback cost 100, so it should be heavily penalized. The
+	// selector is weighted-random, so assert the deterministic probability
+	// calculation instead of one random draw.
+	if prob2 <= prob1 {
+		t.Errorf("expected channel 2 probability to exceed channel 1 after fallback penalty, got ch1=%.6f ch2=%.6f", prob1, prob2)
 	}
 }
 

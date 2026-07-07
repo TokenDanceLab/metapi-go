@@ -97,8 +97,10 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 		proxyhandler.RegisterProxyRoutes(r)
 	})
 
-	// Non-/v1 proxy routes (chat alias, responses aliases, Gemini native paths)
-	r.Route("/", func(r chi.Router) {
+	// Non-/v1 proxy routes (chat alias, responses aliases, Gemini native paths).
+	// Use an inline group instead of Route("/") so proxy auth only applies to
+	// the exact registered proxy paths and does not shadow the SPA fallback.
+	r.Group(func(r chi.Router) {
 		r.Use(CORS())
 		r.Use(auth.ProxyAuth(cfg))
 		proxyhandler.RegisterNonV1ProxyRoutes(r)
@@ -113,6 +115,10 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 // setupSPAFallback configures static asset serving and SPA fallback.
 // distFS is the embedded frontend filesystem, rooted at web/dist/.
 func setupSPAFallback(r chi.Router, distFS fs.FS) {
+	if rootedFS, err := fs.Sub(distFS, "dist"); err == nil {
+		distFS = rootedFS
+	}
+
 	// /assets/* → immutable cache for 1 year
 	assetsFS, err := fs.Sub(distFS, "assets")
 	if err == nil {

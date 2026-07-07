@@ -144,6 +144,46 @@ func TestProxyCORSRemainsWildcard(t *testing.T) {
 	}
 }
 
+func TestSPAFallbackRootBypassesProxyAuth(t *testing.T) {
+	cfg := &config.Config{
+		AuthToken:        "admin-token",
+		ProxyToken:       "proxy-token",
+		RequestBodyLimit: config.DefaultRequestBodyLimit,
+	}
+	r := New(cfg, web.Dist)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("SPA root status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("SPA root content-type = %q, want text/html", ct)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "<html") {
+		t.Fatalf("SPA root body does not look like HTML: %q", body[:min(len(body), 120)])
+	}
+}
+
+func TestNonV1ProxyAliasStillRequiresProxyAuth(t *testing.T) {
+	cfg := &config.Config{
+		AuthToken:        "admin-token",
+		ProxyToken:       "proxy-token",
+		RequestBodyLimit: config.DefaultRequestBodyLimit,
+	}
+	r := New(cfg, web.Dist)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/chat/completions", strings.NewReader(`{"model":"gpt-test"}`))
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("non-/v1 proxy alias without auth status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHealthCORSRemainsWildcard(t *testing.T) {
 	cfg := &config.Config{
 		AuthToken:        "admin-token",

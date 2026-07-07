@@ -31,10 +31,23 @@ func readOrUpdateGoldenFile(t *testing.T, path string, content []byte) []byte {
 	if len(readBack) == 0 {
 		t.Fatalf("golden file %s is empty", path)
 	}
-	if !bytes.Equal(readBack, content) {
+	if !bytes.Equal(normalizeGoldenNewlines(readBack), normalizeGoldenNewlines(content)) {
 		t.Fatalf("golden file %s does not match generated content (set %s=1 to regenerate)", path, updateRoutingGoldenEnv)
 	}
 	return readBack
+}
+
+func normalizeGoldenNewlines(b []byte) []byte {
+	return bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
+}
+
+func TestReadOrUpdateGoldenFileAcceptsCRLFCheckout(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "golden.txt")
+	if err := os.WriteFile(path, []byte("same\r\ncontent\r\n"), 0644); err != nil {
+		t.Fatalf("write golden: %v", err)
+	}
+
+	readOrUpdateGoldenFile(t, path, []byte("same\ncontent\n"))
 }
 
 func TestReadOrUpdateGoldenFileMismatchFails(t *testing.T) {
