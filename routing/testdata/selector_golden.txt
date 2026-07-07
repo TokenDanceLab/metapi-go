@@ -1,9 +1,8 @@
-# Golden file: weight formula selection distribution
-# Iterations: 10000
+# Golden file: weight formula contribution probabilities
 # Routing weights: baseWeightFactor=0.5 valueScoreFactor=0.5 costWeight=0.4 balanceWeight=0.3 usageWeight=0.3
-# Format: channelID,siteID,accountID,selectionCount,selectionPercent
-1,10,101,2444,24.44
-2,10,102,3393,33.929999
-3,20,201,1332,13.32
-4,20,202,1292,12.92
-5,30,301,1539,15.39
+# Format: channelID,siteID,accountID,probability
+1,10,101,0.253712
+2,10,102,0.336556
+3,20,201,0.13303
+4,20,202,0.122505
+5,30,301,0.154195

@@ -2,6 +2,7 @@ package proxyhandler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -13,14 +14,14 @@ import (
 
 // SurfConfig is the configuration for a proxy surface handler.
 type SurfConfig struct {
-	Endpoint        string
-	DownstreamPath  string
-	RequireModel    bool
-	DefaultModel    string
-	Method          string
-	ExtraHeaders    map[string]string
-	MaxRetries      int
-	SurfaceFormat   string // "openai", "claude", or empty
+	Endpoint       string
+	DownstreamPath string
+	RequireModel   bool
+	DefaultModel   string
+	Method         string
+	ExtraHeaders   map[string]string
+	MaxRetries     int
+	SurfaceFormat  string // "openai", "claude", or empty
 }
 
 // SurfResult is the result of processing a proxy surface request.
@@ -40,17 +41,19 @@ type SurfResult struct {
 
 // Ctx holds all context needed for a proxy request.
 type Ctx struct {
-	Auth      *auth.ProxyAuthContext
-	Policy    auth.DownstreamRoutingPolicy
-	Body      map[string]any
-	RawBody   []byte // raw request body bytes for zero-copy model swap in upstream
-	Headers   map[string]string
-	ClientCtx proxy.DownstreamClientContext
+	Auth           *auth.ProxyAuthContext
+	Policy         auth.DownstreamRoutingPolicy
+	Body           map[string]any
+	RawBody        []byte // raw request body bytes for zero-copy model swap in upstream
+	Headers        map[string]string
+	ClientCtx      proxy.DownstreamClientContext
+	DownstreamPath string
 	RequestedModel string
 	SurfaceFormat  string
-	IsStream  bool
-	Retries   int
-	MaxRetries int
+	IsStream       bool
+	Multipart      bool
+	Retries        int
+	MaxRetries     int
 }
 
 // PrepareCtx extracts all context needed for proxy request handling.
@@ -60,21 +63,41 @@ func PrepareCtx(r *http.Request, cfg SurfConfig) (*Ctx, *SurfResult) {
 		return nil, &SurfResult{OK: false, Status: 401, Error: "unauthorized", ErrorType: "invalid_request_error"}
 	}
 
-	// Read body
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return nil, &SurfResult{OK: false, Status: 400, Error: "failed to read request body", ErrorType: "invalid_request_error"}
-	}
-	r.Body.Close()
+	isMultipart := IsMultipartRequest(r)
+	var bodyBytes []byte
+	body := make(map[string]any)
 
-	var body map[string]any
-	if len(bodyBytes) > 0 {
-		if err := json.Unmarshal(bodyBytes, &body); err != nil {
-			return nil, &SurfResult{OK: false, Status: 400, Error: "invalid JSON body", ErrorType: "invalid_request_error"}
+	if isMultipart {
+		mp, err := ParseMultipartFormData(r)
+		if err != nil {
+			if isRequestBodyTooLarge(err) {
+				return nil, &SurfResult{OK: false, Status: http.StatusRequestEntityTooLarge, Error: "request body too large", ErrorType: "invalid_request_error"}
+			}
+			return nil, &SurfResult{OK: false, Status: 400, Error: err.Error(), ErrorType: "invalid_request_error"}
 		}
-	}
-	if body == nil {
-		body = make(map[string]any)
+		if mp != nil {
+			for key, values := range mp.Values {
+				if len(values) > 0 {
+					body[key] = strings.TrimSpace(values[0])
+				}
+			}
+		}
+	} else {
+		var err error
+		bodyBytes, err = io.ReadAll(r.Body)
+		if err != nil {
+			if isRequestBodyTooLarge(err) {
+				return nil, &SurfResult{OK: false, Status: http.StatusRequestEntityTooLarge, Error: "request body too large", ErrorType: "invalid_request_error"}
+			}
+			return nil, &SurfResult{OK: false, Status: 400, Error: "failed to read request body", ErrorType: "invalid_request_error"}
+		}
+		r.Body.Close()
+
+		if len(bodyBytes) > 0 {
+			if err := json.Unmarshal(bodyBytes, &body); err != nil {
+				return nil, &SurfResult{OK: false, Status: 400, Error: "invalid JSON body", ErrorType: "invalid_request_error"}
+			}
+		}
 	}
 
 	// Validate requested model
@@ -106,17 +129,24 @@ func PrepareCtx(r *http.Request, cfg SurfConfig) (*Ctx, *SurfResult) {
 	}
 
 	return &Ctx{
-		Auth:      authCtx,
-		Policy:    authCtx.Policy,
-		Body:      body,
-		RawBody:   bodyBytes,
-		Headers:   headers,
-		ClientCtx:  clientCtx,
+		Auth:           authCtx,
+		Policy:         authCtx.Policy,
+		Body:           body,
+		RawBody:        bodyBytes,
+		Headers:        headers,
+		ClientCtx:      clientCtx,
+		DownstreamPath: cfg.DownstreamPath,
 		RequestedModel: requestedModel,
 		SurfaceFormat:  cfg.SurfaceFormat,
-		IsStream:   isStream,
-		MaxRetries: maxRetries,
+		IsStream:       isStream,
+		Multipart:      isMultipart,
+		MaxRetries:     maxRetries,
 	}, nil
+}
+
+func isRequestBodyTooLarge(err error) bool {
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr) || errors.Is(err, ErrMultipartLimitExceeded)
 }
 
 // isStreamFromBody checks the stream flag from the request body.

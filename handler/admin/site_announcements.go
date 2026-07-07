@@ -55,7 +55,7 @@ func (h *siteAnnouncementsHandler) listAnnouncements(w http.ResponseWriter, r *h
 	}
 	query += " ORDER BY first_seen_at DESC"
 
-	rows, err := h.db.Queryx(query, args...)
+	rows, err := h.db.Queryx(h.db.Rebind(query), args...)
 	if err != nil {
 		slog.Error("Failed to load announcements", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load announcements"})
@@ -148,14 +148,14 @@ func (h *siteAnnouncementsHandler) markRead(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	h.db.Exec("UPDATE site_announcements SET read_at = ? WHERE id = ?", now, id)
+	h.db.Exec(h.db.Rebind("UPDATE site_announcements SET read_at = ? WHERE id = ?"), now, id)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 // POST /api/site-announcements/read-all
 func (h *siteAnnouncementsHandler) markAllRead(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
-	h.db.Exec("UPDATE site_announcements SET read_at = ?", now)
+	h.db.Exec(h.db.Rebind("UPDATE site_announcements SET read_at = ?"), now)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 

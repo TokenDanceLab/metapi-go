@@ -3,17 +3,17 @@
 **Date:** 2026-07-05
 **Scope:** Reverse proxy header handling, IP extraction, scheme/protocol awareness, trusted proxy configuration
 **Files audited:**
-- `D:/Code/TokenDance/metapi-go/router/middleware.go`
-- `D:/Code/TokenDance/metapi-go/app/app.go`
-- `D:/Code/TokenDance/metapi-go/router/router.go`
-- `D:/Code/TokenDance/metapi-go/auth/admin.go`
-- `D:/Code/TokenDance/metapi-go/handler/admin/settings.go` (lines 698-710)
-- `D:/Code/TokenDance/metapi-go/config/config.go`
-- `D:/Code/TokenDance/metapi-go/docs/deployment.md`
-- `D:/Code/TokenDance/metapi-go/service/oauth/flow.go`
-- `D:/Code/TokenDance/metapi-go/service/oauth/callback_server.go`
-- `C:/Users/Ding/go/pkg/mod/github.com/go-chi/chi/v5@v5.3.0/middleware/realip.go`
-- `C:/Users/Ding/go/pkg/mod/github.com/go-chi/chi/v5@v5.3.0/middleware/client_ip.go`
+- `<repo>/router/middleware.go`
+- `<repo>/app/app.go`
+- `<repo>/router/router.go`
+- `<repo>/auth/admin.go`
+- `<repo>/handler/admin/settings.go` (lines 698-710)
+- `<repo>/config/config.go`
+- `<repo>/docs/deployment.md`
+- `<repo>/service/oauth/flow.go`
+- `<repo>/service/oauth/callback_server.go`
+- `<go-module-cache>/github.com/go-chi/chi/v5@v5.3.0/middleware/realip.go`
+- `<go-module-cache>/github.com/go-chi/chi/v5@v5.3.0/middleware/client_ip.go`
 
 **Final verdict:** NEEDS_FIX (2 CRITICAL, 1 MEDIUM, 2 LOW)
 
@@ -360,15 +360,15 @@ curl -H "X-Forwarded-Proto: https" http://localhost:4000/api/sites
 
 | File | Role |
 |---|---|
-| `D:/Code/TokenDance/metapi-go/router/middleware.go` | Custom middleware: RealIP (uses deprecated chi.RealIP), CORS, RequestLogger |
-| `D:/Code/TokenDance/metapi-go/router/router.go` | Middleware chain registration |
-| `D:/Code/TokenDance/metapi-go/auth/admin.go` | AdminAuth with IP extraction and allowlist |
-| `D:/Code/TokenDance/metapi-go/handler/admin/settings.go` | Duplicate extractClientIP in notify test handler |
-| `D:/Code/TokenDance/metapi-go/config/config.go` | No trusted proxy CIDR config fields |
-| `D:/Code/TokenDance/metapi-go/app/app.go` | HTTP server startup (no proxy awareness) |
-| `D:/Code/TokenDance/metapi-go/docs/deployment.md` | Nginx config sending proxy headers |
-| `C:/Users/Ding/go/pkg/mod/github.com/go-chi/chi/v5@v5.3.0/middleware/realip.go` | Deprecated RealIP -- trusts all, no CIDR filter |
-| `C:/Users/Ding/go/pkg/mod/github.com/go-chi/chi/v5@v5.3.0/middleware/client_ip.go` | Replacement APIs: ClientIPFromXFF, ClientIPFromXFFTrustedProxies, ClientIPFromHeader |
+| `<repo>/router/middleware.go` | Custom middleware: RealIP (uses deprecated chi.RealIP), CORS, RequestLogger |
+| `<repo>/router/router.go` | Middleware chain registration |
+| `<repo>/auth/admin.go` | AdminAuth with IP extraction and allowlist |
+| `<repo>/handler/admin/settings.go` | Duplicate extractClientIP in notify test handler |
+| `<repo>/config/config.go` | No trusted proxy CIDR config fields |
+| `<repo>/app/app.go` | HTTP server startup (no proxy awareness) |
+| `<repo>/docs/deployment.md` | Nginx config sending proxy headers |
+| `<go-module-cache>/github.com/go-chi/chi/v5@v5.3.0/middleware/realip.go` | Deprecated RealIP -- trusts all, no CIDR filter |
+| `<go-module-cache>/github.com/go-chi/chi/v5@v5.3.0/middleware/client_ip.go` | Replacement APIs: ClientIPFromXFF, ClientIPFromXFFTrustedProxies, ClientIPFromHeader |
 
 ---
 

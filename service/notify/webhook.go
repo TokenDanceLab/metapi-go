@@ -3,7 +3,6 @@ package notify
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,7 +50,12 @@ func (c *WebhookChannel) Send(cfg *config.Config, title, message, level, timeFoo
 		})
 	}
 
-	resp, err := http.Post(cfg.WebhookUrl, "application/json", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, cfg.WebhookUrl, strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("webhook request build failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := doNotifyRequest(req)
 	if err != nil {
 		return fmt.Errorf("webhook request failed: %w", err)
 	}
@@ -62,7 +66,10 @@ func (c *WebhookChannel) Send(cfg *config.Config, title, message, level, timeFoo
 	}
 
 	// Parse response for known bot types
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := readNotifyResponseBody(resp.Body)
+	if err != nil {
+		return fmt.Errorf("webhook response read failed: %w", err)
+	}
 	if isWeCom {
 		var payload struct {
 			ErrCode int    `json:"errcode"`

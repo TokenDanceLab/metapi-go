@@ -16,8 +16,9 @@ var (
 )
 
 type refreshPromise struct {
-	ch    chan refreshResult
-	ready bool
+	done   chan struct{}
+	once   sync.Once
+	result refreshResult
 }
 
 type refreshResult struct {
@@ -28,18 +29,32 @@ type refreshResult struct {
 	Err         error
 }
 
+func newRefreshPromise() *refreshPromise {
+	return &refreshPromise{done: make(chan struct{})}
+}
+
+func (p *refreshPromise) wait() refreshResult {
+	<-p.done
+	return p.result
+}
+
+func (p *refreshPromise) resolve(result refreshResult) {
+	p.once.Do(func() {
+		p.result = result
+		close(p.done)
+	})
+}
+
 // RefreshAccessTokenSingleflight refreshes an OAuth access token with singleflight dedup.
 func RefreshAccessTokenSingleflight(accountID int64) (*refreshResult, error) {
 	refreshInFlightMu.Lock()
-	if p, exists := refreshInFlight[accountID]; exists && p.ready {
-		ch := p.ch
+	if p, exists := refreshInFlight[accountID]; exists {
 		refreshInFlightMu.Unlock()
-		result := <-ch
+		result := p.wait()
 		return &result, result.Err
 	}
 
-	ch := make(chan refreshResult, 1)
-	p := &refreshPromise{ch: ch, ready: true}
+	p := newRefreshPromise()
 	refreshInFlight[accountID] = p
 	refreshInFlightMu.Unlock()
 
@@ -51,7 +66,7 @@ func RefreshAccessTokenSingleflight(accountID int64) (*refreshResult, error) {
 	}()
 
 	result := doRefreshAccessToken(accountID)
-	ch <- result
+	p.resolve(result)
 
 	if result.Err != nil {
 		return nil, result.Err
@@ -101,16 +116,16 @@ func doRefreshAccessToken(accountID int64) refreshResult {
 
 	// Merge refreshed fields with existing.
 	nextOauth, err := BuildOauthInfoFromAccount(&account, &OauthInfo{
-		Provider:   oauth.Provider,
-		AccountID:  coalesceStr(refreshed.AccountID, oauth.AccountID),
-		AccountKey: coalesceStr(refreshed.AccountKey, oauth.AccountKey, refreshed.AccountID, oauth.AccountID),
-		Email:      coalesceStr(refreshed.Email, oauth.Email),
-		PlanType:   coalesceStr(refreshed.PlanType, oauth.PlanType),
-		ProjectID:  coalesceStr(refreshed.ProjectID, oauth.ProjectID),
-		RefreshToken: coalesceStr(refreshed.RefreshToken, oauth.RefreshToken),
+		Provider:       oauth.Provider,
+		AccountID:      coalesceStr(refreshed.AccountID, oauth.AccountID),
+		AccountKey:     coalesceStr(refreshed.AccountKey, oauth.AccountKey, refreshed.AccountID, oauth.AccountID),
+		Email:          coalesceStr(refreshed.Email, oauth.Email),
+		PlanType:       coalesceStr(refreshed.PlanType, oauth.PlanType),
+		ProjectID:      coalesceStr(refreshed.ProjectID, oauth.ProjectID),
+		RefreshToken:   coalesceStr(refreshed.RefreshToken, oauth.RefreshToken),
 		TokenExpiresAt: coalesceInt64(refreshed.TokenExpiresAt, oauth.TokenExpiresAt),
-		IDToken:    coalesceStr(refreshed.IDToken, oauth.IDToken),
-		ProviderData: mergeProviderData(oauth.ProviderData, refreshed.ProviderData),
+		IDToken:        coalesceStr(refreshed.IDToken, oauth.IDToken),
+		ProviderData:   mergeProviderData(oauth.ProviderData, refreshed.ProviderData),
 	})
 	if err != nil {
 		return refreshResult{AccountID: accountID, Err: err}

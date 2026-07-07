@@ -4,11 +4,11 @@
 
 ## Original TS Reference
 
-- `D:\Code\TokenDance\metapi\vite.config.ts` -- frontend build config
-- `D:\Code\TokenDance\metapi\Dockerfile.slim` -- existing Docker deployment
-- `D:\Code\TokenDance\metapi\docker\docker-compose.yml`
-- `D:\Code\TokenDance\metapi\src\server\services\databaseMigrationService.ts` -- cross-dialect migration
-- `D:\Code\TokenDance\metapi\.github\workflows\cd-slim.yml` -- CD workflow (TS has no CI)
+- `<metapi-ts>\vite.config.ts` -- frontend build config
+- `<metapi-ts>\Dockerfile.slim` -- existing Docker deployment
+- `<metapi-ts>\docker\docker-compose.yml`
+- `<metapi-ts>\src\server\services\databaseMigrationService.ts` -- cross-dialect migration
+- `<metapi-ts>\.github\workflows\cd-slim.yml` -- CD workflow (TS has no CI)
 
 ## Go Module Structure
 
@@ -91,19 +91,19 @@ The TS version serves the frontend via Express `express.static()`. The Go versio
 go build -o metapi-migrate ./cmd/migrate
 
 # Basic usage
-metapi-migrate --from sqlite://data/hub.db --to postgres://user:pass@host:5432/db
+metapi-migrate --from sqlite://data/hub.db --to 'postgres://<user>:<password>@<host>:5432/db?sslmode=require'
 
 # With overwrite (default: true, matching TS behavior)
-metapi-migrate --from sqlite://data/hub.db --to postgres://user:pass@host:5432/db --overwrite
+metapi-migrate --from sqlite://data/hub.db --to 'postgres://<user>:<password>@<host>:5432/db?sslmode=require' --overwrite
 
 # Dry-run mode [NEW Go feature - not in TS]
-metapi-migrate --from sqlite://data/hub.db --to postgres://user:pass@host:5432/db --dry-run
+metapi-migrate --from sqlite://data/hub.db --to 'postgres://<user>:<password>@<host>:5432/db?sslmode=require' --dry-run
 
 # Show progress bar [NEW Go feature - not in TS]
-metapi-migrate --from sqlite://data/hub.db --to postgres://user:pass@host:5432/db --progress
+metapi-migrate --from sqlite://data/hub.db --to 'postgres://<user>:<password>@<host>:5432/db?sslmode=require' --progress
 
 # Checksum verification [NEW Go feature - not in TS]
-metapi-migrate --from sqlite://data/hub.db --to postgres://user:pass@host:5432/db --verify
+metapi-migrate --from sqlite://data/hub.db --to 'postgres://<user>:<password>@<host>:5432/db?sslmode=require' --verify
 ```
 
 ### 2.2 Dialect support
@@ -303,7 +303,7 @@ After a successful migration, the tool prints a summary with per-table row count
 
 ```
 dialect: postgres
-connection: postgres://user:***@host:5432/db  (password masked)
+connection: postgres://<user>:***@<host>:5432/db  (password masked)
 overwrite: true
 version: live-db-snapshot
 timestamp: 1720000000000
@@ -366,9 +366,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - run: go test ./... -count=1 -tags=integration
+      - run: |
+          dsn="${PG_SCHEME}://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DATABASE}?sslmode=disable"
+          DATABASE_URL="$dsn" go test ./... -count=1 -tags=integration
         env:
-          DATABASE_URL: postgres://postgres:test@localhost:5432/metapi_test?sslmode=disable
+          PG_SCHEME: postgres
+          PG_USER: postgres
+          PG_PASSWORD: test
+          PG_DATABASE: metapi_test
 
   build:
     runs-on: ubuntu-latest

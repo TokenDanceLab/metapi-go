@@ -3,11 +3,11 @@
 **S.U.P.E.R**: S (单一职责) · P (端口优先) | **依赖**: P1 | **Size**: M
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\middleware\auth.ts` — 双中间件 (admin + proxy)
-- `D:\Code\TokenDance\metapi\src\server\desktop.ts` — `isPublicApiRoute`
-- `D:\Code\TokenDance\metapi\src\server\services\downstreamApiKeyService.ts` — managed key 授权核心
-- `D:\Code\TokenDance\metapi\src\server\services\downstreamPolicyTypes.ts` — 下游策略类型
-- `D:\Code\TokenDance\metapi\src\server\config.ts` — `adminIpAllowlist`, `authToken`, `proxyToken`
+- `<metapi-ts>\src\server\middleware\auth.ts` — 双中间件 (admin + proxy)
+- `<metapi-ts>\src\server\desktop.ts` — `isPublicApiRoute`
+- `<metapi-ts>\src\server\services\downstreamApiKeyService.ts` — managed key 授权核心
+- `<metapi-ts>\src\server\services\downstreamPolicyTypes.ts` — 下游策略类型
+- `<metapi-ts>\src\server\config.ts` — `adminIpAllowlist`, `authToken`, `proxyToken`
 
 ## Go 模块结构
 ```

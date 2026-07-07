@@ -75,18 +75,31 @@ func (s *UpdateCenterScheduler) Stop() error {
 }
 
 func (s *UpdateCenterScheduler) runSync() {
+	s.mu.Lock()
 	if s.inFlight {
+		s.mu.Unlock()
 		return
 	}
 	s.inFlight = true
-	defer func() { s.inFlight = false }()
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		s.inFlight = false
+		s.mu.Unlock()
+	}()
 
 	dbw := store.GetDB()
 	if dbw == nil {
 		return
 	}
-	_ = dbw
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runSyncLocked(dbw)
+	})
+}
 
+func (s *UpdateCenterScheduler) runSyncLocked(dbw *store.DB) {
+	_ = dbw
 	slog.Info("update-center: checking for updates")
 	// Stub: calls update center API
 	// TODO: wire actual update center polling logic

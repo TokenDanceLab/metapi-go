@@ -1,7 +1,7 @@
 # Multi-Instance Safety Audit: 2 MetAPI instances, 1 PostgreSQL
 
 **Date**: 2026-07-05
-**Auditor**: Automated audit of `D:/Code/TokenDance/metapi-go`
+**Auditor**: Automated audit of `<repo>`
 **Scope**: What breaks when 2 MetAPI instances share 1 PostgreSQL instance. Five dimensions: scheduler lease, sticky session affinity, cache invalidation, settings hot-reload, backup export concurrency.
 
 ---

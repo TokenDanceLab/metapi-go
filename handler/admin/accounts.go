@@ -1,7 +1,10 @@
 package admin
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -14,9 +17,11 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/admin/payloads"
-	"github.com/tokendancelab/metapi-go/service"
-	"github.com/tokendancelab/metapi-go/store"
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/service"
+	balanceService "github.com/tokendancelab/metapi-go/service/balance"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // RegisterAccountsRoutes registers all /api/accounts routes.
@@ -45,10 +50,10 @@ type accountsHandler struct {
 // accountsSnapshotCache is an in-memory TTL cache for GET /api/accounts responses.
 // Mirrors TS getAccountsSnapshot() behavior: cached response, ?refresh=true bypasses.
 type accountsSnapshotCache struct {
-	mu       sync.RWMutex
-	data     []byte
+	mu        sync.RWMutex
+	data      []byte
 	expiresAt time.Time
-	ttl      time.Duration
+	ttl       time.Duration
 }
 
 func (c *accountsSnapshotCache) isValid() bool {
@@ -71,6 +76,13 @@ func (c *accountsSnapshotCache) set(data []byte) {
 	defer c.mu.Unlock()
 	c.data = data
 	c.expiresAt = time.Now().Add(c.ttl)
+}
+
+func (c *accountsSnapshotCache) clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data = nil
+	c.expiresAt = time.Time{}
 }
 
 var globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
@@ -119,7 +131,7 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 
 func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountCreatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account payload."})
 		return
 	}
@@ -131,7 +143,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 
 	// Check site exists
 	var site store.Site
-	if err := h.db.Get(&site, "SELECT * FROM sites WHERE id = ?", body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "site not found"})
 		return
 	}
@@ -144,15 +156,23 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 
 	// Resolve tokens to create
 	var requestedTokens []string
+	appendRequestedToken := func(token string) {
+		token = strings.TrimSpace(token)
+		if token != "" {
+			requestedTokens = append(requestedTokens, token)
+		}
+	}
 	if credentialMode != service.CredentialModeAPIKey {
 		if body.AccessToken != nil && strings.TrimSpace(*body.AccessToken) != "" {
-			requestedTokens = []string{strings.TrimSpace(*body.AccessToken)}
+			appendRequestedToken(*body.AccessToken)
 		}
 	} else {
 		if body.AccessTokens != nil && len(body.AccessTokens) > 0 {
-			requestedTokens = body.AccessTokens
+			for _, token := range body.AccessTokens {
+				appendRequestedToken(token)
+			}
 		} else if body.AccessToken != nil && strings.TrimSpace(*body.AccessToken) != "" {
-			requestedTokens = []string{strings.TrimSpace(*body.AccessToken)}
+			appendRequestedToken(*body.AccessToken)
 		}
 	}
 
@@ -210,6 +230,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 		}
 
 		routing.InvalidateCache()
+		globalAccountsCache.clear()
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success":      true,
 			"batch":        true,
@@ -227,18 +248,19 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		slog.Error("Account creation failed", "err", err)
 		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"success":  false,
-			"message":  "Account creation failed",
+			"success": false,
+			"message": "Account creation failed",
 		})
 		return
 	}
 
 	// Fetch created account
 	var account store.Account
-	h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", accountID)
+	h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), accountID)
 
 	caps := service.BuildCapabilitiesForAccount(&account)
 	routing.InvalidateCache()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":               account.ID,
 		"siteId":           account.SiteID,
@@ -261,12 +283,17 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 	sortOrder, _ := service.GetNextAccountSortOrder(h.db)
 
 	checkinEnabled := true
-	if body.CheckinEnabled != nil {
+	if credentialMode == service.CredentialModeAPIKey {
+		checkinEnabled = false
+	} else if body.CheckinEnabled != nil {
 		checkinEnabled = *body.CheckinEnabled
 	}
 
 	accessTokenVal := accessToken
 	apiTokenVal := body.APIToken
+	if credentialMode == service.CredentialModeAPIKey && (apiTokenVal == nil || strings.TrimSpace(*apiTokenVal) == "") {
+		apiTokenVal = &accessTokenVal
+	}
 
 	// Stub: Verify token against upstream (P4 adapter)
 	// For now, just create the account row
@@ -291,21 +318,17 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 		_ = *body.SkipModelFetch
 	}
 
-	result, err := h.db.Exec(
-		`INSERT INTO accounts (site_id, username, access_token, api_token, status, is_pinned, sort_order,
+	var id int64
+	err := h.db.QueryRowx(
+		h.db.Rebind(`INSERT INTO accounts (site_id, username, access_token, api_token, status, is_pinned, sort_order,
 		 checkin_enabled, extra_config, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 RETURNING id`),
 		site.ID, username, accessTokenVal, apiTokenVal, status, isPinned, sortOrder,
 		checkinEnabled, extraConfigStr, now, now,
-	)
+	).Scan(&id)
 	if err != nil {
 		return 0, err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = h.db.Get(&id, "SELECT id FROM accounts WHERE site_id = ? AND username = ? ORDER BY id DESC LIMIT 1", site.ID, username)
 	}
 	return id, nil
 }
@@ -314,7 +337,7 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 
 func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountLoginPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid login payload."})
 		return
 	}
@@ -334,20 +357,39 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 
 	// Get site
 	var site store.Site
-	if err := h.db.Get(&site, "SELECT * FROM sites WHERE id = ?", body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "site not found"})
 		return
 	}
 
-	// Stub: P4 platform adapter.login()
-	// Simulate login success
-	loginAccessToken := "session_" + strconv.Itoa(int(body.SiteID)) + "_" + body.Username
+	adp := platform.GetAdapter(site.Platform)
+	if adp == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "unsupported platform: " + site.Platform})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	loginResult, err := adp.Login(ctx, site.URL, body.Username, body.Password, nil, service.BuildPlatformProxyConfig(h.cfg, nil, &site))
+	if err != nil {
+		slog.Warn("Account login failed", "err", err, "site_id", site.ID, "platform", site.Platform)
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "login failed"})
+		return
+	}
+	if loginResult == nil || !loginResult.Success || strings.TrimSpace(loginResult.AccessToken) == "" {
+		message := "login failed"
+		if loginResult != nil && strings.TrimSpace(loginResult.Message) != "" {
+			message = strings.TrimSpace(loginResult.Message)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": message})
+		return
+	}
+	loginAccessToken := strings.TrimSpace(loginResult.AccessToken)
 
 	// Check for existing account (reusedAccount)
 	var existing store.Account
 	reused := false
-	err := h.db.Get(&existing,
-		"SELECT * FROM accounts WHERE site_id = ? AND username = ?",
+	err = h.db.Get(&existing,
+		h.db.Rebind("SELECT * FROM accounts WHERE site_id = ? AND username = ?"),
 		body.SiteID, body.Username,
 	)
 	if err == nil {
@@ -366,9 +408,9 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	extraConfig := map[string]any{
 		"credentialMode": "session",
 		"autoRelogin": map[string]any{
-			"username":      body.Username,
+			"username":       body.Username,
 			"passwordCipher": passwordCipher,
-			"updatedAt":     now,
+			"updatedAt":      now,
 		},
 	}
 
@@ -376,40 +418,53 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 
 	if reused {
 		// Update existing account
-		h.db.Exec(
-			`UPDATE accounts SET access_token = ?, checkin_enabled = 1, status = 'active',
-			 extra_config = ?, updated_at = ? WHERE id = ?`,
-			loginAccessToken, extraConfigStr, now, existing.ID,
-		)
+		if _, err := h.db.Exec(
+			h.db.Rebind(`UPDATE accounts SET access_token = ?, checkin_enabled = ?, status = 'active',
+			 extra_config = ?, updated_at = ? WHERE id = ?`),
+			loginAccessToken, true, extraConfigStr, now, existing.ID,
+		); err != nil {
+			slog.Error("Failed to update login account", "err", err, "account_id", existing.ID)
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to save account."})
+			return
+		}
 	} else {
 		sortOrder, _ := service.GetNextAccountSortOrder(h.db)
-		h.db.Exec(
-			`INSERT INTO accounts (site_id, username, access_token, checkin_enabled, status,
+		if _, err := h.db.Exec(
+			h.db.Rebind(`INSERT INTO accounts (site_id, username, access_token, checkin_enabled, status,
 			 is_pinned, sort_order, extra_config, created_at, updated_at)
-			 VALUES (?, ?, ?, 1, 'active', 0, ?, ?, ?, ?)`,
-			body.SiteID, body.Username, loginAccessToken, sortOrder, extraConfigStr, now, now,
-		)
+			 VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`),
+			body.SiteID, body.Username, loginAccessToken, true, false, sortOrder, extraConfigStr, now, now,
+		); err != nil {
+			slog.Error("Failed to insert login account", "err", err, "site_id", body.SiteID)
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to save account."})
+			return
+		}
 	}
 
 	// Fetch the created/updated account for response
 	var loginAcct store.Account
-	h.db.Get(&loginAcct, "SELECT * FROM accounts WHERE site_id = ? AND username = ?", body.SiteID, body.Username)
+	if err := h.db.Get(&loginAcct, h.db.Rebind("SELECT * FROM accounts WHERE site_id = ? AND username = ?"), body.SiteID, body.Username); err != nil {
+		slog.Error("Failed to load login account", "err", err, "site_id", body.SiteID)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load account."})
+		return
+	}
 	loginAcctMap := map[string]any{
-		"id":            loginAcct.ID,
-		"siteId":        loginAcct.SiteID,
-		"username":      loginAcct.Username,
-		"accessToken":   loginAcct.AccessToken,
-		"apiToken":      loginAcct.APIToken,
-		"balance":       loginAcct.Balance,
-		"status":        loginAcct.Status,
-		"isPinned":      loginAcct.IsPinned,
-		"sortOrder":     loginAcct.SortOrder,
+		"id":             loginAcct.ID,
+		"siteId":         loginAcct.SiteID,
+		"username":       loginAcct.Username,
+		"accessToken":    loginAcct.AccessToken,
+		"apiToken":       loginAcct.APIToken,
+		"balance":        loginAcct.Balance,
+		"status":         loginAcct.Status,
+		"isPinned":       loginAcct.IsPinned,
+		"sortOrder":      loginAcct.SortOrder,
 		"checkinEnabled": loginAcct.CheckinEnabled,
-		"extraConfig":   loginAcct.ExtraConfig,
-		"createdAt":     loginAcct.CreatedAt,
-		"updatedAt":     loginAcct.UpdatedAt,
+		"extraConfig":    loginAcct.ExtraConfig,
+		"createdAt":      loginAcct.CreatedAt,
+		"updatedAt":      loginAcct.UpdatedAt,
 	}
 	routing.InvalidateCache()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":       true,
 		"account":       loginAcctMap,
@@ -423,7 +478,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 
 func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountVerifyTokenPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid verify-token payload."})
 		return
 	}
@@ -444,19 +499,81 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 
 	// Get site
 	var site store.Site
-	if err := h.db.Get(&site, "SELECT * FROM sites WHERE id = ?", body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "site not found"})
 		return
 	}
 
-	// Stub: P4 adapter.verifyToken()
-	// Simulate verification - treat as valid apikey
+	adp := platform.GetAdapter(site.Platform)
+	if adp == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "unsupported platform: " + site.Platform})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	result, err := adp.VerifyToken(ctx, site.URL, accessToken, body.PlatformUserID, service.BuildPlatformProxyConfig(h.cfg, nil, &site))
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": err.Error()})
+		return
+	}
+	if result == nil || result.TokenType == "" || result.TokenType == "unknown" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success":   false,
+			"tokenType": "unknown",
+			"message":   "token verification failed",
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":    true,
-		"tokenType":  "apikey",
-		"modelCount": 0,
-		"models":     []string{},
+		"success":       true,
+		"tokenType":     result.TokenType,
+		"modelCount":    len(result.Models),
+		"models":        result.Models,
+		"userInfo":      result.UserInfo,
+		"balance":       result.Balance,
+		"apiToken":      result.APIToken,
+		"apiTokenFound": result.APIToken != "",
 	})
+}
+
+func shouldMirrorAPIKeyToken(account store.Account, requestedAPIToken any) bool {
+	if service.ResolveStoredCredentialMode(&account) != service.CredentialModeAPIKey {
+		return false
+	}
+	if requestedAPIToken == nil {
+		return true
+	}
+	requested, ok := requestedAPIToken.(string)
+	if !ok {
+		return false
+	}
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return true
+	}
+	current := ""
+	if account.APIToken != nil {
+		current = strings.TrimSpace(*account.APIToken)
+	}
+	return requested == current
+}
+
+func normalizeAPITokenUpdate(value any) any {
+	if s, ok := value.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return value
+}
+
+func normalizeAccountStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "active", "disabled", "expired":
+		return strings.ToLower(strings.TrimSpace(status))
+	default:
+		return ""
+	}
 }
 
 // ---- Rebind Session ----
@@ -470,7 +587,7 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body payloads.AccountRebindSessionPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid rebind payload."})
 		return
 	}
@@ -499,30 +616,37 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 	}
 	extraConfigStr := service.MergeExtraConfig(row.Account.ExtraConfig, extraConfigPatch)
 
-	h.db.Exec(
-		"UPDATE accounts SET access_token = ?, status = 'active', extra_config = ?, updated_at = ? WHERE id = ?",
+	if _, err := h.db.Exec(
+		h.db.Rebind("UPDATE accounts SET access_token = ?, status = 'active', extra_config = ?, updated_at = ? WHERE id = ?"),
 		nextAccessToken, extraConfigStr, now, accountID,
-	)
+	); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "failed to update account"})
+		return
+	}
 
 	// Fetch updated account for response
 	var rebindAcct store.Account
-	h.db.Get(&rebindAcct, "SELECT * FROM accounts WHERE id = ?", accountID)
+	if err := h.db.Get(&rebindAcct, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), accountID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "failed to read updated account"})
+		return
+	}
 	rebindAcctMap := map[string]any{
-		"id":            rebindAcct.ID,
-		"siteId":        rebindAcct.SiteID,
-		"username":      rebindAcct.Username,
-		"accessToken":   rebindAcct.AccessToken,
-		"apiToken":      rebindAcct.APIToken,
-		"balance":       rebindAcct.Balance,
-		"status":        rebindAcct.Status,
-		"isPinned":      rebindAcct.IsPinned,
-		"sortOrder":     rebindAcct.SortOrder,
+		"id":             rebindAcct.ID,
+		"siteId":         rebindAcct.SiteID,
+		"username":       rebindAcct.Username,
+		"accessToken":    rebindAcct.AccessToken,
+		"apiToken":       rebindAcct.APIToken,
+		"balance":        rebindAcct.Balance,
+		"status":         rebindAcct.Status,
+		"isPinned":       rebindAcct.IsPinned,
+		"sortOrder":      rebindAcct.SortOrder,
 		"checkinEnabled": rebindAcct.CheckinEnabled,
-		"extraConfig":   rebindAcct.ExtraConfig,
-		"createdAt":     rebindAcct.CreatedAt,
-		"updatedAt":     rebindAcct.UpdatedAt,
+		"extraConfig":    rebindAcct.ExtraConfig,
+		"createdAt":      rebindAcct.CreatedAt,
+		"updatedAt":      rebindAcct.UpdatedAt,
 	}
 	routing.InvalidateCache()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":        true,
 		"account":        rebindAcctMap,
@@ -544,7 +668,7 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body payloads.AccountUpdatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account payload."})
 		return
 	}
@@ -556,37 +680,64 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	updates := map[string]any{}
+	pendingExtraConfig := row.Account.ExtraConfig
+	mergeExtraConfigUpdate := func(patch map[string]any) {
+		merged := service.MergeExtraConfig(pendingExtraConfig, patch)
+		if merged != nil {
+			pendingExtraConfig = merged
+			updates["extraConfig"] = *merged
+		}
+	}
 	if body.Username != nil {
 		updates["username"] = *body.Username
 	}
+	mirrorAPIKeyToken := false
 	if body.AccessToken != nil {
-		updates["accessToken"] = *body.AccessToken
+		nextAccessToken := strings.TrimSpace(*body.AccessToken)
+		updates["accessToken"] = nextAccessToken
+		mirrorAPIKeyToken = shouldMirrorAPIKeyToken(row.Account, body.APIToken)
+		if mirrorAPIKeyToken {
+			updates["apiToken"] = nextAccessToken
+		}
 	}
-	if body.APIToken != nil {
-		updates["apiToken"] = body.APIToken
+	if body.APIToken != nil && !mirrorAPIKeyToken {
+		updates["apiToken"] = normalizeAPITokenUpdate(body.APIToken)
 	}
 	if body.Status != nil {
-		updates["status"] = strings.TrimSpace(*body.Status)
-	}
-	if body.CheckinEnabled != nil {
-		updates["checkinEnabled"] = *body.CheckinEnabled
+		status := normalizeAccountStatus(*body.Status)
+		if status == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account status. Expected active, disabled, or expired."})
+			return
+		}
+		updates["status"] = status
 	}
 	if body.UnitCost != nil {
+		if *body.UnitCost <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid unitCost value. Expected positive number."})
+			return
+		}
 		updates["unitCost"] = *body.UnitCost
 	}
 	if body.ExtraConfig != nil {
 		// Merge with existing extraConfig to preserve keys not in the update
 		if ecMap, ok := body.ExtraConfig.(map[string]any); ok {
-			baseEC := row.Account.ExtraConfig
-			ecStr := ""
-			if baseEC != nil {
-				ecStr = *baseEC
-			}
-			merged := service.MergeExtraConfig(&ecStr, ecMap)
-			if merged != nil {
-				updates["extraConfig"] = *merged
-			}
+			mergeExtraConfigUpdate(ecMap)
 		}
+	}
+	nextAccount := row.Account
+	nextAccount.ExtraConfig = pendingExtraConfig
+	if accessToken, ok := updates["accessToken"].(string); ok {
+		nextAccount.AccessToken = accessToken
+	}
+	if apiToken, ok := updates["apiToken"].(*string); ok {
+		nextAccount.APIToken = apiToken
+	}
+	if service.BuildCapabilitiesForAccount(&nextAccount).CanCheckin {
+		if body.CheckinEnabled != nil {
+			updates["checkinEnabled"] = *body.CheckinEnabled
+		}
+	} else if row.Account.CheckinEnabled || body.CheckinEnabled != nil {
+		updates["checkinEnabled"] = false
 	}
 	if body.IsPinned != nil {
 		updates["isPinned"] = *body.IsPinned
@@ -600,15 +751,9 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		updates["sortOrder"] = int64(*so)
 	}
 	if body.ProxyURL != nil {
-		baseEC := row.Account.ExtraConfig
-		ecStr := ""
-		if baseEC != nil {
-			ecStr = *baseEC
-		}
-		ec := service.MergeExtraConfig(&ecStr, map[string]any{
+		mergeExtraConfigUpdate(map[string]any{
 			"proxyUrl": service.NormalizeNullable(body.ProxyURL),
 		})
-		updates["extraConfig"] = *ec
 	}
 	// TODO(P4): handle sub2api managed auth (extraConfig.sub2apiAuth.refreshToken / tokenExpiresAt)
 	// Spec lines 530-542: updateAccount for sub2api platform must merge sub2apiAuth fields.
@@ -623,8 +768,9 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var updated store.Account
-	h.db.Get(&updated, "SELECT * FROM accounts WHERE id = ?", id)
+	h.db.Get(&updated, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), id)
 	routing.InvalidateCache()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, updated)
 }
 
@@ -643,6 +789,7 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	service.RebuildRoutesBestEffort()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -650,7 +797,7 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 
 func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountBatchPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid account batch payload."})
 		return
 	}
@@ -667,47 +814,77 @@ func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var successIDs []int64
-	var failedItems []map[string]any
+	successIDs := []int64{}
+	failedItems := []map[string]any{}
+	skippedItems := []map[string]any{}
 	shouldRebuildRoutes := false
+	shouldInvalidateRoutes := false
 
 	for _, rawID := range body.IDs {
 		id := int64(rawID)
 
 		if action == "refreshBalance" {
-			// Stub: P4 balance refresh
+			result, err := balanceService.RefreshBalance(h.cfg, h.db, id)
+			if result == nil && err == nil {
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "Account not found"})
+				continue
+			}
+			if err != nil {
+				slog.Warn("Batch balance refresh failed", "err", err, "account_id", id)
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "Balance refresh failed"})
+				continue
+			}
+			if result.Skipped {
+				skippedItems = append(skippedItems, map[string]any{"id": id, "reason": result.Reason})
+				continue
+			}
 			successIDs = append(successIDs, id)
 			continue
 		}
 
 		var existing store.Account
-		err := h.db.Get(&existing, "SELECT * FROM accounts WHERE id = ?", id)
+		err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), id)
 		if err != nil {
 			failedItems = append(failedItems, map[string]any{"id": id, "message": "Account not found"})
 			continue
 		}
 
 		now := time.Now().UTC().Format(time.RFC3339)
+		var execErr error
 		switch action {
 		case "delete":
-			h.db.Exec("DELETE FROM accounts WHERE id = ?", id)
-			shouldRebuildRoutes = true
+			_, execErr = h.db.Exec(h.db.Rebind("DELETE FROM accounts WHERE id = ?"), id)
 		case "enable":
-			h.db.Exec("UPDATE accounts SET status = 'active', updated_at = ? WHERE id = ?", now, id)
+			_, execErr = h.db.Exec(h.db.Rebind("UPDATE accounts SET status = 'active', updated_at = ? WHERE id = ?"), now, id)
 		case "disable":
-			h.db.Exec("UPDATE accounts SET status = 'disabled', updated_at = ? WHERE id = ?", now, id)
+			_, execErr = h.db.Exec(h.db.Rebind("UPDATE accounts SET status = 'disabled', updated_at = ? WHERE id = ?"), now, id)
+		}
+		if execErr != nil {
+			failedItems = append(failedItems, map[string]any{"id": id, "message": "Account update failed"})
+			continue
+		}
+		if action == "delete" {
+			shouldRebuildRoutes = true
+		} else if action == "enable" || action == "disable" {
+			shouldInvalidateRoutes = true
 		}
 		successIDs = append(successIDs, id)
 	}
 
 	if shouldRebuildRoutes {
 		service.RebuildRoutesBestEffort()
+	} else if shouldInvalidateRoutes {
+		routing.InvalidateCache()
+	}
+	if len(successIDs) > 0 {
+		globalAccountsCache.clear()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":     true,
-		"successIds":  successIDs,
-		"failedItems": failedItems,
+		"success":      true,
+		"successIds":   successIDs,
+		"failedItems":  failedItems,
+		"skippedItems": skippedItems,
 	})
 }
 
@@ -715,7 +892,7 @@ func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) 
 
 func (h *accountsHandler) healthRefresh(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountHealthRefreshPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid health refresh payload."})
 		return
 	}
@@ -756,17 +933,27 @@ func (h *accountsHandler) refreshBalance(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var account store.Account
-	if err := h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", id); err != nil {
+	result, err := balanceService.RefreshBalance(h.cfg, h.db, id)
+	if result == nil && err == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found or platform not supported"})
 		return
 	}
+	if err != nil {
+		if strings.Contains(err.Error(), "unsupported platform") {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found or platform not supported"})
+			return
+		}
+		slog.Warn("Balance refresh failed", "err", err, "account_id", id)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"message": "balance refresh failed"})
+		return
+	}
 
-	// Stub: P4 balance refresh
 	writeJSON(w, http.StatusOK, map[string]any{
-		"balance":     account.Balance,
-		"balanceUsed": account.BalanceUsed,
-		"quota":       account.Quota,
+		"balance":     result.Balance,
+		"balanceUsed": result.Used,
+		"quota":       result.Quota,
+		"skipped":     result.Skipped,
+		"reason":      result.Reason,
 	})
 }
 
@@ -788,17 +975,17 @@ func (h *accountsHandler) getAccountModels(w http.ResponseWriter, r *http.Reques
 
 	// Get available models for this account
 	type modelRow struct {
-		ModelName string  `db:"model_name"`
-		Available int     `db:"available"`
-		LatencyMs *int64  `db:"latency_ms"`
-		IsManual  int     `db:"is_manual"`
+		ModelName string `db:"model_name"`
+		Available int    `db:"available"`
+		LatencyMs *int64 `db:"latency_ms"`
+		IsManual  int    `db:"is_manual"`
 	}
 	var modelRows []modelRow
-	h.db.Select(&modelRows, "SELECT model_name, available, latency_ms, is_manual FROM model_availability WHERE account_id = ?", id)
+	h.db.Select(&modelRows, h.db.Rebind("SELECT model_name, CASE WHEN available THEN 1 ELSE 0 END AS available, latency_ms, CASE WHEN is_manual THEN 1 ELSE 0 END AS is_manual FROM model_availability WHERE account_id = ?"), id)
 
 	// Get disabled models for this site
 	var disabledRows []string
-	h.db.Select(&disabledRows, "SELECT model_name FROM site_disabled_models WHERE site_id = ?", row.Account.SiteID)
+	h.db.Select(&disabledRows, h.db.Rebind("SELECT model_name FROM site_disabled_models WHERE site_id = ?"), row.Account.SiteID)
 
 	disabledSet := map[string]bool{}
 	for _, m := range disabledRows {
@@ -836,7 +1023,7 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body payloads.AccountManualModelsPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid models. Expected string[]."})
 		return
 	}
@@ -862,23 +1049,51 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var account store.Account
-	if err := h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", id); err != nil {
+	if err := h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "账号不存在"})
 		return
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
+	tx, err := h.db.Beginx()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to start transaction"})
+		return
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
 	for _, m := range models {
 		var existingID int64
-		err := h.db.Get(&existingID, "SELECT id FROM model_availability WHERE account_id = ? AND model_name = ?", id, m)
+		err := tx.Get(&existingID, tx.Rebind("SELECT id FROM model_availability WHERE account_id = ? AND model_name = ?"), id, m)
 		if err == nil {
-			h.db.Exec("UPDATE model_availability SET available = 1, latency_ms = NULL, is_manual = 1, checked_at = ? WHERE id = ?", now, existingID)
-		} else {
-			h.db.Exec("INSERT INTO model_availability (account_id, model_name, available, is_manual, latency_ms, checked_at) VALUES (?, ?, 1, 1, NULL, ?)", id, m, now)
+			if _, err := tx.Exec(tx.Rebind("UPDATE model_availability SET available = ?, latency_ms = NULL, is_manual = ?, checked_at = ? WHERE id = ?"), true, true, now, existingID); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update manual model"})
+				return
+			}
+			continue
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read manual model"})
+			return
+		}
+		if _, err := tx.Exec(tx.Rebind("INSERT INTO model_availability (account_id, model_name, available, is_manual, latency_ms, checked_at) VALUES (?, ?, ?, ?, NULL, ?)"), id, m, true, true, now); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to insert manual model"})
+			return
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to commit manual models"})
+		return
+	}
+	committed = true
 
 	routing.InvalidateCache()
+	globalAccountsCache.clear()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 

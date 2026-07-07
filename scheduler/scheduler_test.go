@@ -2,14 +2,21 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	backupsvc "github.com/tokendancelab/metapi-go/service/backup"
 	"github.com/tokendancelab/metapi-go/service/checkin"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // =============================================================================
@@ -212,10 +219,10 @@ func TestNormalizeCronExpr(t *testing.T) {
 		{"0 */6 * * *", "0 0 */6 * * *"},
 		{"0 8 * * *", "0 0 8 * * *"},
 		{"58 23 * * *", "0 58 23 * * *"},
-		{"  0 8 * * *  ", "0 0 8 * * *"},          // with surrounding whitespace
-		{"0 0 */6 * * *", "0 0 */6 * * *"},         // already 6-field, unchanged
+		{"  0 8 * * *  ", "0 0 8 * * *"},                   // with surrounding whitespace
+		{"0 0 */6 * * *", "0 0 */6 * * *"},                 // already 6-field, unchanged
 		{"0   0   */6   *  *  *", "0   0   */6   *  *  *"}, // irregular spacing preserved (not 5 fields)
-		{"@every 1h", "@every 1h"},                  // non-standard, passed through
+		{"@every 1h", "@every 1h"},                         // non-standard, passed through
 	}
 
 	for _, tc := range tests {
@@ -1285,9 +1292,21 @@ func TestIsValidHTTPURL(t *testing.T) {
 		{"", false},
 		{"   ", false},
 		{"ftp://example.com/file", false},
+		{"http://", false},
+		{"https://", false},
+		{"https:///backup.json", false},
+		{"http://user:pass@example.com/file", false},
 		{"http://example.com/file", true},
 		{"https://example.com/file", true},
 		{"https://webdav.example.com/backup.json", true},
+		{"http://localhost/backup.json", false},
+		{"http://127.0.0.1/backup.json", false},
+		{"http://[::1]/backup.json", false},
+		{"http://10.0.0.1/backup.json", false},
+		{"http://169.254.169.254/latest/meta-data", false},
+		{"http://[fe80::1]/backup.json", false},
+		{"http://224.0.0.1/backup.json", false},
+		{"http://0.0.0.0/backup.json", false},
 		{"not-a-url", false},
 	}
 
@@ -1296,6 +1315,245 @@ func TestIsValidHTTPURL(t *testing.T) {
 		if got != tc.valid {
 			t.Errorf("isValidHTTPURL(%q) = %v, want %v", tc.url, got, tc.valid)
 		}
+	}
+}
+
+func allowPrivateBackupWebdavTargetsForTest(t *testing.T) {
+	t.Helper()
+	old := allowPrivateBackupWebdavTargets
+	allowPrivateBackupWebdavTargets = true
+	t.Cleanup(func() { allowPrivateBackupWebdavTargets = old })
+}
+
+func setSchedulerBackupExportLimitsForTest(t *testing.T, maxRows int, maxCellBytes int, maxPayloadBytes int64) {
+	t.Helper()
+	oldMaxRows := backupsvc.MaxExportRowsPerTable
+	oldMaxCellBytes := backupsvc.MaxExportCellBytes
+	oldMaxPayloadBytes := backupsvc.MaxExportPayloadBytes
+	backupsvc.MaxExportRowsPerTable = maxRows
+	backupsvc.MaxExportCellBytes = maxCellBytes
+	backupsvc.MaxExportPayloadBytes = maxPayloadBytes
+	t.Cleanup(func() {
+		backupsvc.MaxExportRowsPerTable = oldMaxRows
+		backupsvc.MaxExportCellBytes = oldMaxCellBytes
+		backupsvc.MaxExportPayloadBytes = oldMaxPayloadBytes
+	})
+}
+
+func TestBackupWebdavSchedulerRunExportUploadsRestorableBackupPayload(t *testing.T) {
+	allowPrivateBackupWebdavTargetsForTest(t)
+
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	if _, err := db.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", "theme", `"dark"`); err != nil {
+		t.Fatalf("insert setting: %v", err)
+	}
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	var observedMethod string
+	var observedBody string
+	var observedPayload map[string]any
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observedMethod = r.Method
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		observedBody = string(data)
+		if err := json.Unmarshal(data, &observedPayload); err != nil {
+			t.Fatalf("uploaded body is not JSON: %v; body=%s", err, string(data))
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(webdav.Close)
+
+	s := NewBackupWebdavScheduler(testConfig())
+	s.runExport(&BackupWebdavConfig{
+		Enabled:    true,
+		FileURL:    webdav.URL + "/backup.json",
+		ExportType: "all",
+	})
+
+	if observedMethod != http.MethodPut {
+		t.Fatalf("method = %q, want PUT", observedMethod)
+	}
+	if strings.Contains(observedBody, "\n  ") {
+		t.Fatalf("uploaded scheduler backup is indented, want compact JSON: %q", observedBody)
+	}
+	if observedPayload["type"] != "all" {
+		t.Fatalf("uploaded type = %v, want all", observedPayload["type"])
+	}
+	tables, ok := observedPayload["tables"].(map[string]any)
+	if !ok {
+		t.Fatalf("uploaded tables = %#v, want object", observedPayload["tables"])
+	}
+	settingsRows, ok := tables["settings"].([]any)
+	if !ok || len(settingsRows) == 0 {
+		t.Fatalf("uploaded settings rows = %#v, want non-empty array", tables["settings"])
+	}
+	foundTheme := false
+	for _, row := range settingsRows {
+		obj, ok := row.(map[string]any)
+		if ok && obj["key"] == "theme" {
+			foundTheme = true
+			break
+		}
+	}
+	if !foundTheme {
+		t.Fatalf("uploaded settings rows do not include seeded theme row: %#v", settingsRows)
+	}
+}
+
+func TestBackupWebdavSchedulerDoesNotUploadOversizedPayload(t *testing.T) {
+	allowPrivateBackupWebdavTargetsForTest(t)
+	setSchedulerBackupExportLimitsForTest(t, 50_000, 4<<20, 32)
+
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	called := false
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(webdav.Close)
+
+	s := NewBackupWebdavScheduler(testConfig())
+	s.runExport(&BackupWebdavConfig{
+		Enabled:    true,
+		FileURL:    webdav.URL + "/backup.json",
+		ExportType: "preferences",
+	})
+
+	if called {
+		t.Fatal("WebDAV server was called after export payload exceeded limit")
+	}
+
+	raw, err := store.NewSettingsStore(db).Get(backupWebdavStateSettingKey)
+	if err != nil {
+		t.Fatalf("read backup state: %v", err)
+	}
+	if !strings.Contains(raw, "备份导出超过") {
+		t.Fatalf("state = %s, want export limit error", raw)
+	}
+}
+
+func TestBackupWebdavHTTPClientRejectsHTTPSDowngradeRedirect(t *testing.T) {
+	client := newBackupWebdavHTTPClient()
+	if client.CheckRedirect == nil {
+		t.Fatal("CheckRedirect is nil, want downgrade protection")
+	}
+
+	from := httptest.NewRequest(http.MethodPut, "https://webdav.example.com/backup.json", nil)
+	to := httptest.NewRequest(http.MethodGet, "http://webdav.example.com/backup.json", nil)
+
+	if err := client.CheckRedirect(to, []*http.Request{from}); err == nil {
+		t.Fatal("HTTPS-to-HTTP redirect was allowed, want rejection")
+	}
+}
+
+func TestBackupWebdavHTTPClientRejectsPrivateRedirectTarget(t *testing.T) {
+	client := newBackupWebdavHTTPClient()
+	if client.CheckRedirect == nil {
+		t.Fatal("CheckRedirect is nil, want redirect validation")
+	}
+
+	from := httptest.NewRequest(http.MethodPut, "https://webdav.example.com/backup.json", nil)
+	to := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/backup.json", nil)
+
+	if err := client.CheckRedirect(to, []*http.Request{from}); err == nil {
+		t.Fatal("redirect to loopback was allowed, want rejection")
+	}
+}
+
+func TestBackupWebdavHTTPTransportDoesNotUseEnvironmentProxy(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://127.0.0.1:9")
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+
+	transport := newBackupWebdavHTTPTransport()
+	if transport.Proxy != nil {
+		t.Fatal("backup WebDAV transport uses an environment proxy hook, want direct dial with SSRF checks")
+	}
+}
+
+func TestBackupWebdavSchedulerFailurePreservesLastSuccessfulSync(t *testing.T) {
+	allowPrivateBackupWebdavTargetsForTest(t)
+
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+	if _, err := db.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", "theme", `"dark"`); err != nil {
+		t.Fatalf("insert setting: %v", err)
+	}
+
+	settingsStore := store.NewSettingsStore(db)
+	const previousSuccess = "2026-07-01T00:00:00Z"
+	if err := settingsStore.Set(backupWebdavStateSettingKey, `{"lastSyncAt":"`+previousSuccess+`","lastAttemptAt":"2026-07-01T00:00:00Z","lastError":null}`); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	webdav := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("upload failed"))
+	}))
+	t.Cleanup(webdav.Close)
+
+	s := NewBackupWebdavScheduler(testConfig())
+	s.runExport(&BackupWebdavConfig{
+		Enabled:    true,
+		FileURL:    webdav.URL + "/backup.json",
+		ExportType: "preferences",
+	})
+
+	raw, err := settingsStore.Get(backupWebdavStateSettingKey)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	var saved struct {
+		LastSyncAt    string  `json:"lastSyncAt"`
+		LastAttemptAt string  `json:"lastAttemptAt"`
+		LastError     *string `json:"lastError"`
+	}
+	if err := json.Unmarshal([]byte(raw), &saved); err != nil {
+		t.Fatalf("decode state: %v", err)
+	}
+	if saved.LastSyncAt != previousSuccess {
+		t.Fatalf("lastSyncAt = %q, want previous success %q", saved.LastSyncAt, previousSuccess)
+	}
+	if saved.LastAttemptAt == "" || saved.LastAttemptAt == previousSuccess {
+		t.Fatalf("lastAttemptAt = %q, want fresh failed attempt", saved.LastAttemptAt)
+	}
+	if saved.LastError == nil || !strings.Contains(*saved.LastError, "HTTP 500") {
+		t.Fatalf("lastError = %v, want HTTP 500 error", saved.LastError)
 	}
 }
 
@@ -1719,23 +1977,23 @@ func TestAllSchedulersImplementInterface(t *testing.T) {
 // testConfig returns a Config with safe defaults for testing.
 func testConfig() *config.Config {
 	return &config.Config{
-		CheckinCron:                          "0 0 */6 * * *",
-		CheckinScheduleMode:                  "cron",
-		CheckinIntervalHours:                 6,
-		BalanceRefreshCron:                   "0 0 0 * * *",
-		LogCleanupCron:                       "0 0 6 * * *",
-		LogCleanupRetentionDays:              90,
-		LogCleanupConfigured:                 false,
-		LogCleanupUsageLogsEnabled:           true,
-		LogCleanupProgramLogsEnabled:         true,
-		ModelAvailabilityProbeEnabled:        false,
-		ModelAvailabilityProbeIntervalMs:     120_000,
-		ModelAvailabilityProbeConcurrency:    4,
-		ProxyLogRetentionDays:                90,
-		ProxyLogRetentionPruneIntervalMinutes: 30,
-		ProxyFileRetentionDays:               90,
+		CheckinCron:                            "0 0 */6 * * *",
+		CheckinScheduleMode:                    "cron",
+		CheckinIntervalHours:                   6,
+		BalanceRefreshCron:                     "0 0 0 * * *",
+		LogCleanupCron:                         "0 0 6 * * *",
+		LogCleanupRetentionDays:                90,
+		LogCleanupConfigured:                   false,
+		LogCleanupUsageLogsEnabled:             true,
+		LogCleanupProgramLogsEnabled:           true,
+		ModelAvailabilityProbeEnabled:          false,
+		ModelAvailabilityProbeIntervalMs:       120_000,
+		ModelAvailabilityProbeConcurrency:      4,
+		ProxyLogRetentionDays:                  90,
+		ProxyLogRetentionPruneIntervalMinutes:  30,
+		ProxyFileRetentionDays:                 90,
 		ProxyFileRetentionPruneIntervalMinutes: 60,
-		ProxyFirstByteTimeoutSec:             30,
+		ProxyFirstByteTimeoutSec:               30,
 	}
 }
 
@@ -1750,22 +2008,22 @@ func newMockScheduler(name string) *mockScheduler {
 	return &mockScheduler{name: name}
 }
 
-func (m *mockScheduler) Name() string           { return m.name }
+func (m *mockScheduler) Name() string                    { return m.name }
 func (m *mockScheduler) Start(ctx context.Context) error { m.started.Store(true); return nil }
-func (m *mockScheduler) Stop() error            { m.stopped.Store(true); return nil }
+func (m *mockScheduler) Stop() error                     { m.stopped.Store(true); return nil }
 
 // panicScheduler panics on Start to test panic recovery in Registry.StartAll.
 type panicScheduler struct{}
 
-func (p *panicScheduler) Name() string                        { return "panic-scheduler" }
-func (p *panicScheduler) Start(ctx context.Context) error      { panic("simulated panic on start") }
-func (p *panicScheduler) Stop() error                         { return nil }
+func (p *panicScheduler) Name() string                    { return "panic-scheduler" }
+func (p *panicScheduler) Start(ctx context.Context) error { panic("simulated panic on start") }
+func (p *panicScheduler) Stop() error                     { return nil }
 
 // errorStopScheduler returns an error on Stop to test error tolerance in Registry.StopAll.
 type errorStopScheduler struct {
 	name string
 }
 
-func (e *errorStopScheduler) Name() string                        { return e.name }
-func (e *errorStopScheduler) Start(ctx context.Context) error      { return nil }
-func (e *errorStopScheduler) Stop() error                         { return fmt.Errorf("simulated stop error") }
+func (e *errorStopScheduler) Name() string                    { return e.name }
+func (e *errorStopScheduler) Start(ctx context.Context) error { return nil }
+func (e *errorStopScheduler) Stop() error                     { return fmt.Errorf("simulated stop error") }

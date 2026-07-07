@@ -1,96 +1,41 @@
 package proxyhandler
 
 import (
-	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-func TestHandleChatCompletions_NonStream(t *testing.T) {
+func TestHandleChatCompletions_UnconfiguredUpstreamReturns503(t *testing.T) {
+	t.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
+
 	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
 	rec := httptest.NewRecorder()
 	HandleChatCompletions(rec, req)
 
-	if rec.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
-
-	m := unmarshalResponse(t, rec)
-	if m["object"] != "chat.completion" {
-		t.Errorf("object = %v, want chat.completion", m["object"])
-	}
-	choices, _ := m["choices"].([]any)
-	if len(choices) == 0 {
-		t.Fatal("expected choices")
-	}
-	choice := choices[0].(map[string]any)
-	msg := choice["message"].(map[string]any)
-	if msg["role"] != "assistant" {
-		t.Errorf("role = %v", msg["role"])
-	}
-	if !strings.Contains(msg["content"].(string), "MetAPI Go") {
-		t.Errorf("content = %q", msg["content"])
-	}
-	if choice["finish_reason"] != "stop" {
-		t.Errorf("finish_reason = %v", choice["finish_reason"])
-	}
-	if m["model"] != "gpt-4o" {
-		t.Errorf("model = %v", m["model"])
+	if body := rec.Body.String(); !strings.Contains(body, "Proxy upstream is not configured") {
+		t.Fatalf("body = %q, want unconfigured upstream error", body)
 	}
 }
 
-func TestHandleChatCompletions_Stream(t *testing.T) {
+func TestHandleChatCompletions_StreamUnconfiguredUpstreamReturns503(t *testing.T) {
+	t.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
+
 	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
 	rec := httptest.NewRecorder()
 	HandleChatCompletions(rec, req)
 
-	if rec.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
-
-	ct := rec.Header().Get("Content-Type")
-	if ct != "text/event-stream" {
-		t.Errorf("Content-Type = %q, want text/event-stream", ct)
-	}
-
-	body := rec.Body.String()
-	if !strings.Contains(body, "data: [DONE]") {
-		t.Error("SSE stream should contain [DONE] marker")
-	}
-	if !strings.Contains(body, "chat.completion.chunk") {
-		t.Error("SSE stream should contain chat.completion.chunk")
-	}
-
-	// Parse SSE lines
-	lines := strings.Split(strings.TrimSpace(body), "\n")
-	var events []string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "data: ") && !strings.HasPrefix(line, "data: [DONE]") {
-			events = append(events, strings.TrimPrefix(line, "data: "))
-		}
-	}
-
-	if len(events) < 2 {
-		t.Errorf("expected at least 2 SSE events, got %d", len(events))
-	}
-
-	// First event should have content delta
-	var firstEvent map[string]any
-	json.Unmarshal([]byte(events[0]), &firstEvent)
-	choices := firstEvent["choices"].([]any)
-	ch := choices[0].(map[string]any)
-	delta := ch["delta"].(map[string]any)
-	if delta["content"] != "Hello from MetAPI Go (stub)" {
-		t.Errorf("delta content = %v", delta["content"])
-	}
-
-	// Last event should have finish_reason stop
-	var lastEvent map[string]any
-	json.Unmarshal([]byte(events[len(events)-1]), &lastEvent)
-	lc := lastEvent["choices"].([]any)[0].(map[string]any)
-	if lc["finish_reason"] != "stop" {
-		t.Errorf("finish_reason = %v", lc["finish_reason"])
+	if body := rec.Body.String(); !strings.Contains(body, "Proxy upstream is not configured") {
+		t.Fatalf("body = %q, want unconfigured upstream error", body)
 	}
 }
 
@@ -122,7 +67,9 @@ func TestHandleChatCompletions_StreamHeaders(t *testing.T) {
 // Benchmarks
 // =============================================================================
 
-func BenchmarkHandleChatCompletions_NonStream(b *testing.B) {
+func BenchmarkHandleChatCompletions_UnconfiguredUpstream(b *testing.B) {
+	b.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -132,7 +79,9 @@ func BenchmarkHandleChatCompletions_NonStream(b *testing.B) {
 	}
 }
 
-func BenchmarkHandleChatCompletions_Stream(b *testing.B) {
+func BenchmarkHandleChatCompletions_StreamUnconfiguredUpstream(b *testing.B) {
+	b.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

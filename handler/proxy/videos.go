@@ -10,14 +10,14 @@ import (
 
 // ProxyVideoTask holds a video task mapping (publicId -> upstreamVideoId).
 type ProxyVideoTask struct {
-	PublicID       string `json:"publicId"`
+	PublicID        string `json:"publicId"`
 	UpstreamVideoID string `json:"upstreamVideoId"`
-	SiteURL        string `json:"siteUrl"`
-	TokenValue     string `json:"tokenValue"`
-	RequestedModel string `json:"requestedModel"`
-	ActualModel    string `json:"actualModel"`
-	ChannelID      int64  `json:"channelId"`
-	AccountID      int64  `json:"accountId"`
+	SiteURL         string `json:"siteUrl"`
+	TokenValue      string `json:"tokenValue"`
+	RequestedModel  string `json:"requestedModel"`
+	ActualModel     string `json:"actualModel"`
+	ChannelID       int64  `json:"channelId"`
+	AccountID       int64  `json:"accountId"`
 }
 
 var (
@@ -29,16 +29,6 @@ var (
 // Supports multipart/form-data or JSON body. Model is required.
 func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 	EnsureMultipartBufferParser()
-
-	// Try multipart model extraction first
-	if IsMultipartRequest(r) {
-		mp, err := ParseMultipartFormData(r)
-		if err == nil && mp != nil {
-			if m := mp.GetField("model"); m != "" {
-				_ = m // multipart model field read for future upstream forwarding
-			}
-		}
-	}
 
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "videos",
@@ -57,6 +47,7 @@ func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 
 	dispatchUpstream(w, r, ctx)
 }
+
 // HandleVideosGet handles GET /v1/videos/{id}.
 func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 	publicID := chi.URLParam(r, "id")

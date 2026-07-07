@@ -4,7 +4,7 @@ import {
   resolveUpdateReminderCandidate,
   type UpdateHelperRuntimeLike,
   type UpdateVersionCandidateLike,
-} from '../../../shared/updateCenterReminder.js';
+} from '../../shared/updateCenterReminder.js';
 
 export type UpdateDeployState = {
   kind: 'disabled' | 'missing' | 'helper-unhealthy' | 'same-version' | 'same-image' | 'new-version' | 'new-digest' | 'available';

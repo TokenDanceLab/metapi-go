@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const pages = [
-  'src/web/pages/Accounts.tsx',
-  'src/web/pages/CheckinLog.tsx',
-  'src/web/pages/DownstreamKeys.tsx',
-  'src/web/pages/Models.tsx',
-  'src/web/pages/ProgramLogs.tsx',
-  'src/web/pages/ProxyLogs.tsx',
-  'src/web/pages/Sites.tsx',
-  'src/web/pages/TokenRoutes.tsx',
-  'src/web/pages/Tokens.tsx',
+  'pages/Accounts.tsx',
+  'pages/CheckinLog.tsx',
+  'pages/DownstreamKeys.tsx',
+  'pages/Models.tsx',
+  'pages/ProgramLogs.tsx',
+  'pages/ProxyLogs.tsx',
+  'pages/Sites.tsx',
+  'pages/TokenRoutes.tsx',
+  'pages/Tokens.tsx',
 ];
 
 describe('ResponsiveFilterPanel adoption', () => {

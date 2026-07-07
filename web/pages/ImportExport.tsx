@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../api.js';
+import { api, type BackupWebdavResponse, type BackupWebdavExportType, type BackupWebdavState } from '../api.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { tr } from '../i18n.js';
 
-type BackupType = 'all' | 'accounts' | 'preferences';
+type BackupType = BackupWebdavExportType;
 
 type ParsedSummary = {
   valid: boolean;
@@ -42,6 +42,7 @@ type WebdavConfigForm = {
 
 type WebdavSyncState = {
   lastSyncAt: string | null;
+  lastAttemptAt: string | null;
   lastError: string | null;
 };
 
@@ -283,7 +284,7 @@ export default function ImportExport() {
   const [dragOver, setDragOver] = useState(false);
   const [webdavConfig, setWebdavConfig] = useState<WebdavConfigForm>(DEFAULT_WEBDAV_CONFIG);
   const [savedWebdavConfig, setSavedWebdavConfig] = useState<WebdavConfigSnapshot>(DEFAULT_WEBDAV_SNAPSHOT);
-  const [webdavState, setWebdavState] = useState<WebdavSyncState>({ lastSyncAt: null, lastError: null });
+  const [webdavState, setWebdavState] = useState<WebdavSyncState>({ lastSyncAt: null, lastAttemptAt: null, lastError: null });
   const [webdavSaving, setWebdavSaving] = useState(false);
   const [webdavAction, setWebdavAction] = useState<'export' | 'import' | ''>('');
   const [clearWebdavPassword, setClearWebdavPassword] = useState(false);
@@ -313,7 +314,7 @@ export default function ImportExport() {
     hasPassword: config.hasPassword === true,
   });
 
-  const applyWebdavResponse = (result: any) => {
+  const applyWebdavResponse = (result: Partial<BackupWebdavResponse & BackupWebdavState> | null | undefined) => {
     const config = result?.config;
     if (config) {
       setWebdavConfig(buildWebdavForm(config));
@@ -323,6 +324,7 @@ export default function ImportExport() {
     const state = result?.state || result;
     setWebdavState((prev) => ({
       lastSyncAt: typeof state?.lastSyncAt === 'string' ? state.lastSyncAt : prev.lastSyncAt,
+      lastAttemptAt: typeof state?.lastAttemptAt === 'string' ? state.lastAttemptAt : prev.lastAttemptAt,
       lastError: typeof state?.lastError === 'string'
         ? state.lastError
         : (state?.lastError === null ? null : prev.lastError),
@@ -862,7 +864,8 @@ export default function ImportExport() {
         ) : null}
 
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.7 }}>
-          <div>上次同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未同步'}</div>
+          <div>上次成功同步：{webdavState.lastSyncAt ? new Date(webdavState.lastSyncAt).toLocaleString() : '尚未成功同步'}</div>
+          <div>最近尝试：{webdavState.lastAttemptAt ? new Date(webdavState.lastAttemptAt).toLocaleString() : '尚未尝试'}</div>
           <div>最近错误：{webdavState.lastError || '无'}</div>
         </div>
       </div>

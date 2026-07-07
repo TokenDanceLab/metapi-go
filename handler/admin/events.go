@@ -41,9 +41,11 @@ func (h *eventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		args = append(args, typeFilter)
 	}
 	if readFilter == "true" {
-		conditions = append(conditions, "read = 1")
+		conditions = append(conditions, "read = ?")
+		args = append(args, true)
 	} else if readFilter == "false" {
-		conditions = append(conditions, "read = 0")
+		conditions = append(conditions, "read = ?")
+		args = append(args, false)
 	}
 
 	query := "SELECT * FROM events"
@@ -53,7 +55,7 @@ func (h *eventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
-	rows, err := h.db.Queryx(query, args...)
+	rows, err := h.db.Queryx(h.db.Rebind(query), args...)
 	if err != nil {
 		slog.Error("Failed to load events", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load events"})
@@ -82,7 +84,7 @@ func (h *eventsHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 // GET /api/events/count
 func (h *eventsHandler) countUnread(w http.ResponseWriter, r *http.Request) {
 	var count int
-	err := h.db.Get(&count, "SELECT COUNT(*) FROM events WHERE read = 0")
+	err := h.db.Get(&count, h.db.Rebind("SELECT COUNT(*) FROM events WHERE read = ?"), false)
 	if err != nil {
 		slog.Error("Failed to count unread events", "err", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load events"})
@@ -100,14 +102,14 @@ func (h *eventsHandler) markRead(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 		return
 	}
-	h.db.Exec("UPDATE events SET read = 1 WHERE id = ?", id)
+	h.db.Exec(h.db.Rebind("UPDATE events SET read = ? WHERE id = ?"), true, id)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 // ---- Mark All Read ----
 // POST /api/events/read-all
 func (h *eventsHandler) markAllRead(w http.ResponseWriter, r *http.Request) {
-	h.db.Exec("UPDATE events SET read = 1 WHERE read = 0")
+	h.db.Exec(h.db.Rebind("UPDATE events SET read = ? WHERE read = ?"), true, false)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 

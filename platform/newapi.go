@@ -674,8 +674,8 @@ func (n *NewApiAdapter) Checkin(ctx context.Context, baseURL, accessToken string
 		for _, cookie := range buildCookieCandidates(accessToken) {
 			// Try sign_in first
 			signInHeaders := map[string]string{
-				"Cookie":            cookie,
-				"X-Requested-With":  "XMLHttpRequest",
+				"Cookie":           cookie,
+				"X-Requested-With": "XMLHttpRequest",
 			}
 			signInResp, _ := fetchJSON(ctx, baseURL+"/api/user/sign_in", "POST", map[string]interface{}{}, signInHeaders, proxy)
 			if signInResp != nil {
@@ -882,10 +882,10 @@ func (n *NewApiAdapter) parseBalance(data map[string]interface{}) BalanceInfo {
 	}
 
 	return BalanceInfo{
-		Balance:              quotaUSD,
-		Used:                 usedUSD,
-		Quota:                totalUSD,
-		TodayIncome:          todayIncome,
+		Balance:               quotaUSD,
+		Used:                  usedUSD,
+		Quota:                 totalUSD,
+		TodayIncome:           todayIncome,
 		TodayQuotaConsumption: todayQuotaConsumption,
 	}
 }
@@ -1415,7 +1415,7 @@ func parseChallengeXorSeed(html string) string {
 	rotateEnd += rotateStart
 
 	helperCode := html[fnStart:bStart]
-	rotateCode := html[rotateStart : rotateEnd+1] + ")"
+	rotateCode := html[rotateStart:rotateEnd+1] + ")"
 
 	// Extract the rotate function call: a0j(0x115)
 	// Look for the pattern in the rotate code
@@ -1548,7 +1548,7 @@ func (n *NewApiAdapter) fetchWithShieldRetry(ctx context.Context, url, method st
 		// Track Set-Cookie
 		newCookie := mergeSetCookie(cookieHeader, resp.Header["Set-Cookie"])
 
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := readPlatformResponseBody(resp.Body, platformTextResponseBodyLimit)
 		resp.Body.Close()
 		if err != nil {
 			return nil, newCookie, fmt.Errorf("read body: %w", err)

@@ -3,6 +3,10 @@ metapi
 metapi.exe
 metapi-migrate
 metapi-migrate.exe
+web/build
+web/dist
+web/node_modules
+node_modules
 
 # Git
 .git
@@ -27,6 +31,14 @@ docs
 *.test
 *.out
 coverage.txt
+coverage.out
+
+# Local runtime data and secrets
+data
+backups
+.env
+.env.*
+!.env.example
 
 # OS junk
 .DS_Store

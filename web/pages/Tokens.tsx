@@ -19,6 +19,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import { clearFocusParams, readFocusTokenId } from './helpers/navigationFocus.js';
 import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { tr } from '../i18n.js';
+import { safeExternalHref } from '../shared/sitePrimaryUrl.js';
 
 type SyncStatus = 'success' | 'skipped' | 'failed';
 type TokensPanelProps = {
@@ -1244,7 +1245,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                           label="来源站点"
                           value={token.site?.url ? (
                             <a
-                              href={token.site.url}
+                              href={safeExternalHref(token.site.url) || undefined}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="badge-link"
@@ -1356,7 +1357,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
                     <td>
                       {token.site?.url ? (
                         <a
-                          href={token.site.url}
+                          href={safeExternalHref(token.site.url) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="badge-link"

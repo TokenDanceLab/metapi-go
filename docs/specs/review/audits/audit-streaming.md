@@ -439,15 +439,15 @@ The current Go tests (`chat_test.go`) only cover the **stub** streaming path (wh
 
 | File | Role |
 |---|---|
-| `D:/Code/TokenDance/metapi-go/handler/proxy/chat.go` | Chat completions entry point |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/responses.go` | Responses entry point |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/upstream.go` | Core upstream dispatch + `handleStreamUpstream` |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/surface.go` | SSE helpers (`writeSSEHeaders`, `sseEvent`, `sseDone`) |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/messages.go` | Claude messages entry point |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/completions.go` | Legacy completions entry point |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/chat_test.go` | Stub streaming tests only |
-| `D:/Code/TokenDance/metapi-go/handler/proxy/helpers_test.go` | SSE header/event unit tests |
-| `D:/Code/TokenDance/metapi/src/server/proxy-core/surfaces/chatSurface.ts` | TS reference: full streaming surface |
-| `D:/Code/TokenDance/metapi/src/server/transformers/openai/chat/proxyStream.ts` | TS reference: stream session + event handler |
-| `D:/Code/TokenDance/metapi/src/server/transformers/shared/protocolLifecycle.ts` | TS reference: SSE lifecycle (read loop + event extraction) |
-| `D:/Code/TokenDance/metapi/src/server/transformers/shared/chatFormatsCore.ts` | TS reference: `pullSseEventsWithDone` SSE parser |
+| `<repo>/handler/proxy/chat.go` | Chat completions entry point |
+| `<repo>/handler/proxy/responses.go` | Responses entry point |
+| `<repo>/handler/proxy/upstream.go` | Core upstream dispatch + `handleStreamUpstream` |
+| `<repo>/handler/proxy/surface.go` | SSE helpers (`writeSSEHeaders`, `sseEvent`, `sseDone`) |
+| `<repo>/handler/proxy/messages.go` | Claude messages entry point |
+| `<repo>/handler/proxy/completions.go` | Legacy completions entry point |
+| `<repo>/handler/proxy/chat_test.go` | Stub streaming tests only |
+| `<repo>/handler/proxy/helpers_test.go` | SSE header/event unit tests |
+| `<metapi-ts>/src/server/proxy-core/surfaces/chatSurface.ts` | TS reference: full streaming surface |
+| `<metapi-ts>/src/server/transformers/openai/chat/proxyStream.ts` | TS reference: stream session + event handler |
+| `<metapi-ts>/src/server/transformers/shared/protocolLifecycle.ts` | TS reference: SSE lifecycle (read loop + event extraction) |
+| `<metapi-ts>/src/server/transformers/shared/chatFormatsCore.ts` | TS reference: `pullSseEventsWithDone` SSE parser |

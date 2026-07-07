@@ -1,20 +1,24 @@
 package adapter
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tokendancelab/metapi-go/platform"
+)
 
 type mockAdapter struct {
 	name string
 }
 
-func (m *mockAdapter) Checkin(baseURL, accessToken string, platformUserID int64, proxyURL string) (*CheckinResult, error) {
+func (m *mockAdapter) Checkin(baseURL, accessToken string, platformUserID int64, proxyConfig *platform.ProxyConfig) (*CheckinResult, error) {
 	return &CheckinResult{Success: true, Message: "ok", Reward: "10"}, nil
 }
 
-func (m *mockAdapter) Login(baseURL, username, password, proxyURL string) (*LoginResult, error) {
+func (m *mockAdapter) Login(baseURL, username, password string, proxyConfig *platform.ProxyConfig) (*LoginResult, error) {
 	return &LoginResult{Success: true, AccessToken: "mock-token"}, nil
 }
 
-func (m *mockAdapter) GetBalance(baseURL, accessToken string, platformUserID int64, proxyURL string) (*BalanceInfo, error) {
+func (m *mockAdapter) GetBalance(baseURL, accessToken string, platformUserID int64, proxyConfig *platform.ProxyConfig) (*BalanceInfo, error) {
 	return &BalanceInfo{Balance: 100.0, Used: 50.0, Quota: 200.0}, nil
 }
 
@@ -27,7 +31,7 @@ func TestRegisterAndGetAdapter(t *testing.T) {
 		t.Fatal("expected adapter, got nil")
 	}
 
-	result, err := got.Checkin("url", "token", 1, "")
+	result, err := got.Checkin("url", "token", 1, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -49,7 +53,7 @@ func TestBalanceInfo(t *testing.T) {
 	if got == nil {
 		t.Fatal("expected adapter")
 	}
-	info, err := got.GetBalance("url", "token", 1, "")
+	info, err := got.GetBalance("url", "token", 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

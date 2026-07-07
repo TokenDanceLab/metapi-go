@@ -3,20 +3,20 @@
 **S.U.P.E.R**: S (单一职责) · E (环境无关) | **依赖**: P5 + P6 + P7 + P8 | **Size**: M
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\services\checkinScheduler.ts` — 签到/余额/每日汇总/日志清理调度器
-- `D:\Code\TokenDance\metapi\src\server\services\backupService.ts` — WebDAV 备份调度 + 导入/导出
-- `D:\Code\TokenDance\metapi\src\server\services\siteAnnouncementPollingService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\modelAvailabilityProbeService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\channelRecoveryProbeService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\sub2apiRefreshScheduler.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\updateCenterPollingService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\usageAggregationService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\adminSnapshotWarmService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\proxyFileRetentionService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\proxyLogRetentionService.ts` (legacy fallback)
-- `D:\Code\TokenDance\metapi\src\server\services\logCleanupService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\dailySummaryService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\localCallbackServer.ts` — OAuth loopback
+- `<metapi-ts>\src\server\services\checkinScheduler.ts` — 签到/余额/每日汇总/日志清理调度器
+- `<metapi-ts>\src\server\services\backupService.ts` — WebDAV 备份调度 + 导入/导出
+- `<metapi-ts>\src\server\services\siteAnnouncementPollingService.ts`
+- `<metapi-ts>\src\server\services\modelAvailabilityProbeService.ts`
+- `<metapi-ts>\src\server\services\channelRecoveryProbeService.ts`
+- `<metapi-ts>\src\server\services\sub2apiRefreshScheduler.ts`
+- `<metapi-ts>\src\server\services\updateCenterPollingService.ts`
+- `<metapi-ts>\src\server\services\usageAggregationService.ts`
+- `<metapi-ts>\src\server\services\adminSnapshotWarmService.ts`
+- `<metapi-ts>\src\server\services\proxyFileRetentionService.ts`
+- `<metapi-ts>\src\server\services\proxyLogRetentionService.ts` (legacy fallback)
+- `<metapi-ts>\src\server\services\logCleanupService.ts`
+- `<metapi-ts>\src\server\services\dailySummaryService.ts`
+- `<metapi-ts>\src\server\services\oauth\localCallbackServer.ts` — OAuth loopback
 
 ## Go 模块结构
 ```

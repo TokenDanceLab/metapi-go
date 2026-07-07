@@ -66,7 +66,7 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 	}
 
 	// Open database connection.
-	db, err := Open(dialect, dsn, cfg.DbSsl)
+	db, err := OpenWithPostgresSSLMode(dialect, dsn, cfg.PostgresSSLMode())
 	if err != nil {
 		return fmt.Errorf("bootstrap: failed to open database: %w", err)
 	}

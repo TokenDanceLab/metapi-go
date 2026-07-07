@@ -26,7 +26,12 @@ func (c *ServerChanChannel) Send(cfg *config.Config, title, message, level, time
 	}
 
 	reqURL := fmt.Sprintf("https://sctapi.ftqq.com/%s.send", cfg.ServerChanKey)
-	resp, err := http.Post(reqURL, "application/x-www-form-urlencoded", strings.NewReader(formData.Encode()))
+	req, err := http.NewRequest(http.MethodPost, reqURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("serverchan request build failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := doNotifyRequest(req)
 	if err != nil {
 		return fmt.Errorf("serverchan request failed: %w", err)
 	}

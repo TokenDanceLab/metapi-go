@@ -20,11 +20,69 @@ env:
   IMAGE_NAME: ghcr.io/tokendancelab/metapi-go
 
 jobs:
+  release-gate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: metapi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "25"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Verify module checksums
+        run: |
+          go mod download
+          go mod verify
+      - name: Test Go packages with race detector
+        run: go test ./... -count=1 -race
+      - name: Test PostgreSQL integration paths
+        run: |
+          dsn="${PG_SCHEME}://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DATABASE}?sslmode=disable"
+          PG_TEST_DSN="$dsn" DATABASE_URL="$dsn" go test ./... -count=1 -tags=integration
+        env:
+          PG_SCHEME: postgres
+          PG_USER: postgres
+          PG_PASSWORD: test
+          PG_DATABASE: metapi_test
+      - name: Test and build frontend
+        working-directory: web
+        run: |
+          npm ci --ignore-scripts
+          npm run audit:prod
+          npm run typecheck:web
+          npm run typecheck:web:test
+          npm test
+          npm run build:web
+
   build-and-push:
     runs-on: ubuntu-latest
+    needs: release-gate
     permissions:
       contents: read
       packages: write
+      attestations: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +106,48 @@ jobs:
             type=sha,prefix=,format=short
 
       - uses: docker/build-push-action@v6
+        id: build-smoke
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          load: true
+      - name: Smoke Docker image
+        run: |
+          set -euo pipefail
+          image="$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)"
+          name=metapi-cd-smoke
+          port=49041
+          docker rm -f "$name" >/dev/null 2>&1 || true
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --name "$name" \
+            -p "127.0.0.1:${port}:4000" \
+            -e AUTH_TOKEN=cd-admin-token \
+            -e PROXY_TOKEN=cd-proxy-token \
+            "$image"
+
+          ready=
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${port}/ready" | grep -q '"status":"ok"'; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$ready" ]; then
+            docker logs "$name"
+            exit 1
+          fi
+
+          curl -fsS "http://127.0.0.1:${port}/health" | grep -q '"status":"ok"'
+          curl -fsS "http://127.0.0.1:${port}/ready" | grep -q '"database":"ok"'
+      - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -57,3 +157,5 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          provenance: mode=max
+          sbom: true

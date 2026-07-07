@@ -10,8 +10,8 @@ type UpstreamEndpoint string
 
 const (
 	EndpointChat      UpstreamEndpoint = "chat"      // /v1/chat/completions
-	EndpointMessages   UpstreamEndpoint = "messages"  // /v1/messages (Anthropic)
-	EndpointResponses  UpstreamEndpoint = "responses" // /v1/responses (Codex)
+	EndpointMessages  UpstreamEndpoint = "messages"  // /v1/messages (Anthropic)
+	EndpointResponses UpstreamEndpoint = "responses" // /v1/responses (Codex)
 )
 
 // BuiltEndpointRequest is a built upstream request for a specific endpoint.
@@ -79,19 +79,19 @@ type EndpointFlowResult struct {
 
 // ExecuteEndpointFlowInput is the input for ExecuteEndpointFlow.
 type ExecuteEndpointFlowInput struct {
-	SiteURL                     string
-	ProxyURL                    string
-	DisableCrossProtocolFallback bool
-	EndpointCandidates          []UpstreamEndpoint
-	BuildRequest                func(endpoint UpstreamEndpoint, endpointIndex int) BuiltEndpointRequest
-	DispatchRequest             func(request BuiltEndpointRequest, targetURL string, firstByteTimeoutMs int64) (*ExecutorDispatchResult, error)
-	FirstByteTimeoutMs          int64
-	TryRecover                  func(ctx *EndpointAttemptContext) *RecoverResult
-	ShouldDowngrade             func(ctx EndpointAttemptContext) bool
+	SiteURL                       string
+	ProxyURL                      string
+	DisableCrossProtocolFallback  bool
+	EndpointCandidates            []UpstreamEndpoint
+	BuildRequest                  func(endpoint UpstreamEndpoint, endpointIndex int) BuiltEndpointRequest
+	DispatchRequest               func(request BuiltEndpointRequest, targetURL string, firstByteTimeoutMs int64) (*ExecutorDispatchResult, error)
+	FirstByteTimeoutMs            int64
+	TryRecover                    func(ctx *EndpointAttemptContext) *RecoverResult
+	ShouldDowngrade               func(ctx EndpointAttemptContext) bool
 	ShouldAbortRemainingEndpoints func(ctx EndpointAttemptContext) bool
-	OnDowngrade                 func(ctx EndpointAttemptContext)
-	OnAttemptFailure            func(ctx EndpointAttemptContext)
-	OnAttemptSuccess            func(ctx EndpointAttemptSuccessContext)
+	OnDowngrade                   func(ctx EndpointAttemptContext)
+	OnAttemptFailure              func(ctx EndpointAttemptContext)
+	OnAttemptSuccess              func(ctx EndpointAttemptSuccessContext)
 }
 
 // BuildUpstreamURL constructs an upstream URL from a site URL and path.
@@ -100,7 +100,59 @@ func BuildUpstreamURL(siteURL, path string) string {
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
+	if hasVersionedBasePath(siteURL) {
+		path = stripLeadingVersionSegment(path)
+	}
 	return siteURL + path
+}
+
+func hasVersionedBasePath(siteURL string) bool {
+	base := siteURL
+	if i := strings.IndexAny(base, "?#"); i >= 0 {
+		base = base[:i]
+	}
+	base = strings.TrimRight(base, "/")
+	if base == "" {
+		return false
+	}
+	lastSlash := strings.LastIndex(base, "/")
+	if lastSlash < 0 || lastSlash == len(base)-1 {
+		return false
+	}
+	return isVersionSegment(base[lastSlash+1:])
+}
+
+func stripLeadingVersionSegment(path string) string {
+	trimmed := strings.TrimPrefix(path, "/")
+	segment, rest, found := strings.Cut(trimmed, "/")
+	if !found || !isVersionSegment(segment) {
+		return path
+	}
+	if rest == "" {
+		return "/"
+	}
+	return "/" + rest
+}
+
+func isVersionSegment(segment string) bool {
+	if len(segment) < 2 || (segment[0] != 'v' && segment[0] != 'V') || !isASCIIDigit(segment[1]) {
+		return false
+	}
+	for i := 2; i < len(segment); i++ {
+		c := segment[i]
+		if !isASCIIDigit(c) && !isASCIIAlpha(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+func isASCIIAlpha(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // SummarizeUpstreamError creates a human-readable upstream error summary.

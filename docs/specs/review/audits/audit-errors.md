@@ -1,6 +1,6 @@
 # Error Handling & Propagation Audit
 
-**Scope:** `D:/Code/TokenDance/metapi-go`
+**Scope:** `<repo>`
 **Date:** 2026-07-04
 **Files audited:** `proxy/failure_judge.go`, `proxy/retry_policy.go`, `proxy/executor.go`, `handler/proxy/upstream.go`, `handler/proxy/surface.go`, `handler/proxy/router.go`, `handler/proxy/messages.go`, `handler/admin/account_tokens.go`, `handler/admin/accounts.go`, `handler/admin/sites.go`, `handler/admin/events.go`, `routing/runtime_health.go`, `routing/ports.go`
 

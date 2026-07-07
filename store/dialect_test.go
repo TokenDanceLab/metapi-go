@@ -228,3 +228,47 @@ func TestOpenInvalidDialect(t *testing.T) {
 		t.Errorf("error should mention 'unsupported dialect': %v", err)
 	}
 }
+
+func TestApplyPostgresSSLModeURL(t *testing.T) {
+	got := applyPostgresSSLMode("postgres://user:pass@example.com:5432/metapi", "verify-full")
+	if !strings.Contains(got, "sslmode=verify-full") {
+		t.Fatalf("expected sslmode=verify-full in %q", got)
+	}
+}
+
+func TestApplyPostgresSSLModeReplacesExistingURLParam(t *testing.T) {
+	got := applyPostgresSSLMode("postgres://user:pass@example.com:5432/metapi?sslmode=disable&connect_timeout=5", "require")
+	if strings.Contains(got, "sslmode=disable") {
+		t.Fatalf("old sslmode was not replaced: %q", got)
+	}
+	if strings.Count(got, "sslmode=") != 1 {
+		t.Fatalf("expected exactly one sslmode parameter, got %q", got)
+	}
+	if !strings.Contains(got, "sslmode=require") || !strings.Contains(got, "connect_timeout=5") {
+		t.Fatalf("expected sslmode=require and preserved connect_timeout, got %q", got)
+	}
+}
+
+func TestApplyPostgresSSLModeKeywordDSN(t *testing.T) {
+	got := applyPostgresSSLMode("host=localhost dbname=metapi sslmode=disable connect_timeout=5", "verify-ca")
+	if got != "host=localhost dbname=metapi sslmode=verify-ca connect_timeout=5" {
+		t.Fatalf("unexpected keyword DSN: %q", got)
+	}
+}
+
+func TestApplyPostgresSSLModeKeywordDSNAppend(t *testing.T) {
+	got := applyPostgresSSLMode("host=localhost dbname=metapi", "require")
+	if got != "host=localhost dbname=metapi sslmode=require" {
+		t.Fatalf("unexpected keyword DSN append: %q", got)
+	}
+}
+
+func TestOpenWithPostgresSSLModeRejectsInvalidMode(t *testing.T) {
+	_, err := OpenWithPostgresSSLMode(DialectPostgres, "postgres://example.invalid/metapi", "invalid")
+	if err == nil {
+		t.Fatal("expected invalid sslmode error")
+	}
+	if !strings.Contains(err.Error(), "unsupported postgres sslmode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

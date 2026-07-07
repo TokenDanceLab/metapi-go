@@ -9,7 +9,7 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
-import { ROUTE_DECISION_REFRESH_TASK_TYPE } from '../../shared/tokenRouteContract.js';
+import { ROUTE_DECISION_REFRESH_TASK_TYPE } from '../shared/tokenRouteContract.js';
 import {
   buildRouteModelCandidatesIndex,
   type RouteCandidateView,

@@ -7,9 +7,14 @@ import (
 // HandleChatCompletions handles POST /v1/chat/completions and POST /chat/completions.
 // Surface format: "openai".
 func HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	downstreamPath := r.URL.Path
+	if downstreamPath == "/chat/completions" {
+		downstreamPath = "/v1/chat/completions"
+	}
+
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "chat",
-		DownstreamPath: r.URL.Path,
+		DownstreamPath: downstreamPath,
 		RequireModel:   true,
 		SurfaceFormat:  "openai",
 	})

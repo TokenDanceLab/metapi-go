@@ -60,22 +60,30 @@ func TestPostgresOpen(t *testing.T) {
 	}
 }
 
-// TestPostgresSSLMode verifies that SSL mode is appended correctly.
+// TestPostgresSSLMode verifies the legacy DB_SSL=true path maps to
+// sslmode=require without panicking. Local test containers usually do not
+// enable TLS, so a TLS refusal is acceptable here.
 func TestPostgresSSLMode(t *testing.T) {
 	skipIfNoPG(t)
 
-	// Reconstruct DSN with sslmode flag; the test DSN may already include it,
-	// but Open(true) will append another &sslmode=require. We just verify
-	// that Open succeeds without error when SSL is requested.
 	db, err := Open(DialectPostgres, pgDSN(), true)
 	if err != nil {
-		// It's OK if this fails — the test DSN might not support SSL.
-		// This just verifies the code path doesn't panic.
 		t.Logf("Open with SSL mode result: %v", err)
 		return
 	}
 	defer db.Close()
 	t.Log("Open with SSL mode succeeded")
+}
+
+func TestPostgresSSLModeOverrideCanDisableTLS(t *testing.T) {
+	skipIfNoPG(t)
+
+	dsnWithTLSRequired := applyPostgresSSLMode(pgDSN(), "require")
+	db, err := OpenWithPostgresSSLMode(DialectPostgres, dsnWithTLSRequired, "disable")
+	if err != nil {
+		t.Fatalf("OpenWithPostgresSSLMode(disable) failed to override DSN sslmode: %v", err)
+	}
+	defer db.Close()
 }
 
 // TestPostgresAutoMigrateAllTables verifies all 27 tables exist after AutoMigrate.
@@ -273,14 +281,62 @@ func TestPostgresInsertTimestamp(t *testing.T) {
 func TestPostgresPlaceholder(t *testing.T) {
 	db := openTestPG(t)
 
-	// This tests that pgx $1, $2, etc. work (not SQLite ? placeholders).
+	// This tests that the store wrapper rebinds SQLite-style ? placeholders to
+	// pgx $N placeholders. Casts avoid PostgreSQL's untyped-parameter ambiguity
+	// for arithmetic-only expressions.
 	var result int
-	err := db.QueryRow(`SELECT $1 + $2`, 3, 4).Scan(&result)
+	err := db.QueryRow(`SELECT ?::int + ?::int`, 3, 4).Scan(&result)
 	if err != nil {
 		t.Fatalf("placeholder query failed: %v", err)
 	}
 	if result != 7 {
 		t.Errorf("expected 3+4=7, got %d", result)
+	}
+}
+
+func TestPostgresSQLXHelpersRebindPlaceholders(t *testing.T) {
+	db := openTestPG(t)
+
+	var one int
+	if err := db.Get(&one, `SELECT ?::int`, 1); err != nil {
+		t.Fatalf("Get with ? placeholder failed: %v", err)
+	}
+	if one != 1 {
+		t.Fatalf("Get result = %d, want 1", one)
+	}
+
+	var rows []struct {
+		N int `db:"n"`
+	}
+	if err := db.Select(&rows, `SELECT ?::int AS n UNION ALL SELECT ?::int AS n`, 2, 3); err != nil {
+		t.Fatalf("Select with ? placeholders failed: %v", err)
+	}
+	if len(rows) != 2 || rows[0].N != 2 || rows[1].N != 3 {
+		t.Fatalf("Select rows = %#v, want 2 and 3", rows)
+	}
+
+	queryRows, err := db.Queryx(`SELECT ?::text AS value`, "ok")
+	if err != nil {
+		t.Fatalf("Queryx with ? placeholder failed: %v", err)
+	}
+	defer queryRows.Close()
+	if !queryRows.Next() {
+		t.Fatal("Queryx returned no rows")
+	}
+	var value string
+	if err := queryRows.Scan(&value); err != nil {
+		t.Fatalf("Queryx scan failed: %v", err)
+	}
+	if value != "ok" {
+		t.Fatalf("Queryx value = %q, want ok", value)
+	}
+
+	var four int
+	if err := db.QueryRowx(`SELECT ?::int`, 4).Scan(&four); err != nil {
+		t.Fatalf("QueryRowx with ? placeholder failed: %v", err)
+	}
+	if four != 4 {
+		t.Fatalf("QueryRowx result = %d, want 4", four)
 	}
 }
 

@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 
 describe('TooltipLayer component', () => {
   it('uses a portal-based fixed tooltip layer and is mounted by App', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/components/TooltipLayer.tsx'), 'utf8');
-    const appSource = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'components/TooltipLayer.tsx'), 'utf8');
+    const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
 
     expect(source).toContain('createPortal');
     expect(source).toContain('[data-tooltip]');

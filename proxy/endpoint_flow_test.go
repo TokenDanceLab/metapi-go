@@ -47,6 +47,9 @@ func TestBuildUpstreamURL(t *testing.T) {
 		{"https://api.example.com", "v1/chat/completions", "https://api.example.com/v1/chat/completions"},
 		{"https://api.example.com/path", "/v1/messages", "https://api.example.com/path/v1/messages"},
 		{"https://api.example.com/path/", "/v1/messages", "https://api.example.com/path/v1/messages"},
+		{"https://api.example.com/v1", "/v1/chat/completions", "https://api.example.com/v1/chat/completions"},
+		{"https://ark.cn-beijing.volces.com/api/v3", "/v1/chat/completions", "https://ark.cn-beijing.volces.com/api/v3/chat/completions"},
+		{"https://api.example.com/api/v3/", "v1/responses", "https://api.example.com/api/v3/responses"},
 	}
 
 	for _, tt := range tests {
@@ -90,9 +93,9 @@ func TestExecuteEndpointFlow_Success(t *testing.T) {
 		onFailure := false
 
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{
 					Endpoint: endpoint,
@@ -127,9 +130,9 @@ func TestExecuteEndpointFlow_Success(t *testing.T) {
 	t.Run("success on second endpoint via downgrade", func(t *testing.T) {
 		count := 0
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointResponses, EndpointChat),
+			EndpointCandidates:           makeEndpointCandidates(EndpointResponses, EndpointChat),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -175,9 +178,9 @@ func TestExecuteEndpointFlow_FirstByteTimeout(t *testing.T) {
 	t.Run("timeout falls back to next endpoint", func(t *testing.T) {
 		callCount := 0
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -200,9 +203,9 @@ func TestExecuteEndpointFlow_FirstByteTimeout(t *testing.T) {
 
 	t.Run("timeout on last endpoint stops iteration with 502", func(t *testing.T) {
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -222,9 +225,9 @@ func TestExecuteEndpointFlow_FirstByteTimeout(t *testing.T) {
 	t.Run("timeout with disableCrossProtocolFallback stops iteration", func(t *testing.T) {
 		callCount := 0
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: true,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -300,9 +303,9 @@ func TestExecuteEndpointFlow_ShouldAbortRemainingEndpoints(t *testing.T) {
 	t.Run("abort on rate limit", func(t *testing.T) {
 		callCount := 0
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -333,9 +336,9 @@ func TestExecuteEndpointFlow_ShouldAbortRemainingEndpoints(t *testing.T) {
 		// A 400 by itself falls through the endpoint flow without continuing.
 		// Generic failure on non-last endpoint breaks by default.
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -360,9 +363,9 @@ func TestExecuteEndpointFlow_ShouldDowngrade(t *testing.T) {
 		downgradeCalled := false
 
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointResponses, EndpointChat),
+			EndpointCandidates:           makeEndpointCandidates(EndpointResponses, EndpointChat),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				callCount++
 				if callCount == 1 {
@@ -394,9 +397,9 @@ func TestExecuteEndpointFlow_ShouldDowngrade(t *testing.T) {
 
 	t.Run("no downgrade on last endpoint", func(t *testing.T) {
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -417,9 +420,9 @@ func TestExecuteEndpointFlow_ShouldDowngrade(t *testing.T) {
 func TestExecuteEndpointFlow_AllEndpointsExhausted(t *testing.T) {
 	failureCount := 0
 	result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-		SiteURL:                     "https://api.example.com",
+		SiteURL:                      "https://api.example.com",
 		DisableCrossProtocolFallback: false,
-		EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
+		EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
 		BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 			return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 		},
@@ -444,9 +447,9 @@ func TestExecuteEndpointFlow_DisableCrossProtocolFallback(t *testing.T) {
 	t.Run("disableCrossProtocolFallback stops on first non-timeout failure", func(t *testing.T) {
 		callCount := 0
 		result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: true,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -582,9 +585,9 @@ func BenchmarkExecuteEndpointFlow_Success(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{
 					Endpoint: endpoint,
@@ -603,9 +606,9 @@ func BenchmarkExecuteEndpointFlow_TimeoutFallback(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		callCount := 0
 		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},
@@ -651,9 +654,9 @@ func BenchmarkExecuteEndpointFlow_AllExhausted(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
-			SiteURL:                     "https://api.example.com",
+			SiteURL:                      "https://api.example.com",
 			DisableCrossProtocolFallback: false,
-			EndpointCandidates:          makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
+			EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages, EndpointResponses),
 			BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
 				return BuiltEndpointRequest{Endpoint: endpoint, Path: "/v1/chat/completions"}
 			},

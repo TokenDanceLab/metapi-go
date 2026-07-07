@@ -1,7 +1,7 @@
 # Code Smell Audit: metapi-go
 
 **Date**: 2026-07-05
-**Scope**: `D:/Code/TokenDance/metapi-go` (300 `.go` files)
+**Scope**: `<repo>` (300 `.go` files)
 **Categories**: `panic()` abuse, `init()` side effects, global mutable state, magic numbers, TODO/FIXME, commented-out code, long functions, deep nesting
 
 ---

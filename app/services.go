@@ -3,13 +3,16 @@ package app
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/scheduler"
 )
 
 var (
-	registry *scheduler.Registry
+	servicesMu       sync.RWMutex
+	registry         *scheduler.Registry
+	checkinScheduler *scheduler.CheckinScheduler
 )
 
 // StartBackgroundServices creates and starts all 15 background schedulers.
@@ -17,66 +20,89 @@ func StartBackgroundServices() {
 	slog.Info("starting background schedulers")
 
 	cfg := config.Get()
-	registry = scheduler.NewRegistry()
+	newRegistry := scheduler.NewRegistry()
 
 	// ---- Usage Aggregation (needed by admin-snapshot) ----
 	usageAgg := scheduler.NewUsageAggregationScheduler(cfg)
-	registry.Register(usageAgg)
+	newRegistry.Register(usageAgg)
 
 	// ---- Scheduler 1: Checkin ----
-	registry.Register(scheduler.NewCheckinScheduler(cfg))
+	checkin := scheduler.NewCheckinScheduler(cfg)
+	newRegistry.Register(checkin)
 
 	// ---- Scheduler 2: Balance Refresh ----
-	registry.Register(scheduler.NewBalanceScheduler(cfg, nil))
+	newRegistry.Register(scheduler.NewBalanceScheduler(cfg, nil))
 
 	// ---- Scheduler 3: Daily Summary ----
-	registry.Register(scheduler.NewDailySummaryScheduler(cfg))
+	newRegistry.Register(scheduler.NewDailySummaryScheduler(cfg))
 
 	// ---- Scheduler 4: Log Cleanup ----
-	registry.Register(scheduler.NewLogCleanupScheduler(cfg))
+	newRegistry.Register(scheduler.NewLogCleanupScheduler(cfg))
 
 	// ---- Scheduler 5: Backup WebDAV ----
-	registry.Register(scheduler.NewBackupWebdavScheduler(cfg))
+	newRegistry.Register(scheduler.NewBackupWebdavScheduler(cfg))
 
 	// ---- Scheduler 6: Site Announcements ----
-	registry.Register(scheduler.NewSiteAnnouncementScheduler(cfg))
+	newRegistry.Register(scheduler.NewSiteAnnouncementScheduler(cfg))
 
 	// ---- Scheduler 7: Model Probe ----
-	registry.Register(scheduler.NewModelProbeScheduler(cfg))
+	newRegistry.Register(scheduler.NewModelProbeScheduler(cfg))
 
 	// ---- Scheduler 8: Channel Recovery ----
-	registry.Register(scheduler.NewChannelRecoveryScheduler(cfg))
+	newRegistry.Register(scheduler.NewChannelRecoveryScheduler(cfg))
 
 	// ---- Scheduler 9: Sub2API Refresh ----
-	registry.Register(scheduler.NewSub2APIRefreshScheduler(cfg))
+	newRegistry.Register(scheduler.NewSub2APIRefreshScheduler(cfg))
 
 	// ---- Scheduler 10: Update Center ----
-	registry.Register(scheduler.NewUpdateCenterScheduler(cfg))
+	newRegistry.Register(scheduler.NewUpdateCenterScheduler(cfg))
 
 	// ---- Scheduler 12: Admin Snapshot ----
-	registry.Register(scheduler.NewAdminSnapshotScheduler(cfg, usageAgg))
+	newRegistry.Register(scheduler.NewAdminSnapshotScheduler(cfg, usageAgg))
 
 	// ---- Scheduler 13: Proxy File Retention ----
-	registry.Register(scheduler.NewProxyFileRetentionScheduler(cfg))
+	newRegistry.Register(scheduler.NewProxyFileRetentionScheduler(cfg))
 
 	// ---- Scheduler 14: Proxy Log Retention (legacy fallback) ----
-	registry.Register(scheduler.NewProxyLogRetentionScheduler(cfg))
+	newRegistry.Register(scheduler.NewProxyLogRetentionScheduler(cfg))
 
 	// ---- Scheduler 15: OAuth Loopback ----
-	registry.Register(scheduler.NewOAuthLoopbackScheduler(cfg))
+	newRegistry.Register(scheduler.NewOAuthLoopbackScheduler(cfg))
+
+	servicesMu.Lock()
+	registry = newRegistry
+	checkinScheduler = checkin
+	servicesMu.Unlock()
 
 	// Start all
-	registry.StartAll(context.Background())
+	newRegistry.StartAll(context.Background())
 
 	slog.Info("all background schedulers registered",
-		"count", len(registry.List()),
+		"count", len(newRegistry.List()),
 	)
 }
 
 // StopBackgroundServices stops all background schedulers.
 func StopBackgroundServices() {
 	slog.Info("stopping background schedulers")
-	if registry != nil {
-		registry.StopAll()
+	servicesMu.Lock()
+	activeRegistry := registry
+	registry = nil
+	checkinScheduler = nil
+	servicesMu.Unlock()
+	if activeRegistry != nil {
+		activeRegistry.StopAll()
 	}
+}
+
+// UpdateCheckinSchedule applies a persisted checkin schedule to the running
+// scheduler. It is a no-op before background services have started.
+func UpdateCheckinSchedule(mode, cronExpr string, intervalHours int) error {
+	servicesMu.RLock()
+	activeScheduler := checkinScheduler
+	servicesMu.RUnlock()
+	if activeScheduler == nil {
+		return nil
+	}
+	return activeScheduler.UpdateCheckinSchedule(mode, cronExpr, intervalHours)
 }

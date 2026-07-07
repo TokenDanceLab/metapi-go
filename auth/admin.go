@@ -15,7 +15,7 @@ import (
 // Applied to /api/* routes (except public endpoints).
 //
 // Order of checks (first failure returns immediately):
-//   1. Extract client IP from X-Forwarded-For (with RemoteAddr fallback) + normalize.
+//   1. Extract client IP from RemoteAddr + normalize.
 //   2. If allowlist is non-empty and IP is not allowed → 403
 //   3. If Authorization header is missing → 401
 //   4. If Bearer token does not match config.AuthToken → 403
@@ -82,38 +82,13 @@ func isPublicAPIRoute(urlPath string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// IP extraction and normalization — matches TS extractClientIp + normalizeIp.
+// IP extraction and normalization.
 // ---------------------------------------------------------------------------
 
-// extractClientIP extracts the client IP from the request, preferring
-// X-Forwarded-For over RemoteAddr. Normalizes IPv4-mapped IPv6 and ::1.
-//
-// Mirrors TS extractClientIp():
-//   - Array XFF: find first non-empty element, split by comma, take first segment.
-//   - String XFF: split by comma, take first segment.
-//   - Empty/missing XFF: fall back to RemoteAddr.
+// extractClientIP extracts the client IP from RemoteAddr. Forwarded headers are
+// intentionally ignored here; router.TrustedRealIP rewrites RemoteAddr only
+// when the direct peer matches an explicitly configured trusted proxy CIDR.
 func extractClientIP(r *http.Request) string {
-	// chi's middleware.RealIP already processes X-Forwarded-For and sets
-	// r.RemoteAddr. But to match TS behavior exactly, we re-extract manually.
-	//
-	// In Go, http.Request.RemoteAddr is always "IP:port". chi RealIP replaces
-	// it with the X-Forwarded-For IP (still with :port). We strip the port.
-	//
-	// Use r.Header.Values to handle the rare case of multiple X-Forwarded-For
-	// header lines (violating RFC 7239 but handled by TS via array iteration).
-	// Iterate to find the first non-empty header value, then comma-split.
-	for _, xff := range r.Header.Values("X-Forwarded-For") {
-		xff = strings.TrimSpace(xff)
-		if xff != "" {
-			if idx := strings.IndexByte(xff, ','); idx >= 0 {
-				xff = xff[:idx]
-			}
-			ip := strings.TrimSpace(xff)
-			if ip != "" {
-				return normalizeIP(ip)
-			}
-		}
-	}
 	return normalizeIP(stripPort(r.RemoteAddr))
 }
 

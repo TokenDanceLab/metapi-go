@@ -5,6 +5,25 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.6.0] — 2026-07-07
+
+### Security
+- CI/CD 发布门禁加入 gitleaks、Go module 校验、race 测试、PostgreSQL integration 测试、前端 typecheck/test/build 和生产依赖 audit。
+- CD 镜像发布前执行 Docker smoke test；发布镜像启用 provenance 和 SBOM。
+- 测试和文档中的 PostgreSQL DSN 改为运行时拼接，减少 secret scanner 噪声。
+- 站点自定义 headers 过滤 `Authorization`、`Cookie`、`New-API-User`、`Content-Type`、`Content-Length`、`Host` 等保留头，避免覆盖运行时认证语义。
+
+### Fixed
+- `/v1/*` 数据面接入数据库路由和真实上游选择，不再停留在未配置 stub 行为。
+- 上游代理支持站点/账号代理、自定义 headers、失败记录和非流式可重试 failover。
+- AnyRouter 禁用 NewAPI 风格 token 管理端点，避免错误调用 `/api/token`。
+- API-key/proxy-only 账号不再执行签到或余额上游调用，禁用状态判断改为大小写不敏感。
+- 账号 session rebind、manual models、account token 默认值维护补齐事务和错误处理，失败路径回滚。
+
+### Added
+- 覆盖 SQLite 和 PostgreSQL 的账号、签到、余额、AnyRouter、代理上游和路由选择回归测试。
+- 运行时说明明确当前支持 SQLite 单节点和 PostgreSQL 部署；Redis 尚未集成。
+
 ## [v0.5.0] — 2026-07-05
 
 ### Security
@@ -73,6 +92,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - 15 后台调度任务
 - 单二进制 + Docker 部署
 
+[v0.6.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.5.0...v0.6.0
 [v0.5.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.3.0...v0.4.0
 [v0.3.0]: https://github.com/TokenDanceLab/metapi-go/compare/v0.2.0...v0.3.0

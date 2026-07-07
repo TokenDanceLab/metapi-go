@@ -11,32 +11,32 @@ import (
 // ---- Site runtime health constants ----
 
 const (
-	SiteRuntimeHealthDecayHalfLifeMs       = 10 * 60 * 1000
-	SiteRuntimeMinMultiplier               = 0.08
-	SiteRuntimeLatencyBaselineMs           = 2500
-	SiteRuntimeLatencyWindowMs             = 30000
-	SiteRuntimeMaxLatencyPenalty           = 0.35
-	SiteRuntimeLatencyEMAAlpha             = 0.3
-	SiteRuntimeBreakerStreakThreshold      = 3
-	SiteTransientStreakWindowMs            = 5 * 60 * 1000
-	SiteRecentOutcomeHalfLifeMs            = 30 * 60 * 1000
-	SiteRecentSuccessConfidenceSamples     = 12
-	SiteRecentSuccessPriorSuccesses        = 1
-	SiteRecentSuccessPriorFailures         = 1
-	SiteRecentSuccessFallbackRate          = 0.5
-	SiteRecentModelWeight                  = 0.65
+	SiteRuntimeHealthDecayHalfLifeMs   = 10 * 60 * 1000
+	SiteRuntimeMinMultiplier           = 0.08
+	SiteRuntimeLatencyBaselineMs       = 2500
+	SiteRuntimeLatencyWindowMs         = 30000
+	SiteRuntimeMaxLatencyPenalty       = 0.35
+	SiteRuntimeLatencyEMAAlpha         = 0.3
+	SiteRuntimeBreakerStreakThreshold  = 3
+	SiteTransientStreakWindowMs        = 5 * 60 * 1000
+	SiteRecentOutcomeHalfLifeMs        = 30 * 60 * 1000
+	SiteRecentSuccessConfidenceSamples = 12
+	SiteRecentSuccessPriorSuccesses    = 1
+	SiteRecentSuccessPriorFailures     = 1
+	SiteRecentSuccessFallbackRate      = 0.5
+	SiteRecentModelWeight              = 0.65
 
-	SiteHistoricalHealthMinMultiplier     = 0.45
-	SiteHistoricalHealthMaxSample         = 24
-	SiteHistoricalLatencyBaselineMs       = 2000
-	SiteHistoricalLatencyWindowMs         = 20000
-	SiteHistoricalMaxLatencyPenalty       = 0.18
+	SiteHistoricalHealthMinMultiplier = 0.45
+	SiteHistoricalHealthMaxSample     = 24
+	SiteHistoricalLatencyBaselineMs   = 2000
+	SiteHistoricalLatencyWindowMs     = 20000
+	SiteHistoricalMaxLatencyPenalty   = 0.18
 
-	SiteRuntimeHealthSettingKey           = "token_router_site_runtime_health_v1"
-	SiteRuntimeHealthPersistDebounceMs    = 500
-	SiteRuntimeHealthPersistStaleTTLMs    = 7 * 24 * 60 * 60 * 1000
-	SiteRuntimeHealthPersistIdleTTLMs     = 12 * 60 * 60 * 1000
-	SiteRuntimeHealthPersistMinPenalty    = 0.02
+	SiteRuntimeHealthSettingKey        = "token_router_site_runtime_health_v1"
+	SiteRuntimeHealthPersistDebounceMs = 500
+	SiteRuntimeHealthPersistStaleTTLMs = 7 * 24 * 60 * 60 * 1000
+	SiteRuntimeHealthPersistIdleTTLMs  = 12 * 60 * 60 * 1000
+	SiteRuntimeHealthPersistMinPenalty = 0.02
 
 	StableFirstPrimarySuccessRateRatio    = 0.92
 	StableFirstTrustedRecentConfidence    = 0.5
@@ -114,18 +114,18 @@ var usageLimitRateLimitPatterns = []*regexp.Regexp{
 
 // SiteRuntimeHealthState tracks runtime health for a site or (site, model).
 type SiteRuntimeHealthState struct {
-	PenaltyScore            float64  `json:"penaltyScore"`
-	LatencyEMAMs            *float64 `json:"latencyEmaMs,omitempty"`
-	TransientFailureStreak  int64    `json:"transientFailureStreak"`
-	LastTransientFailureAtMs *int64  `json:"lastTransientFailureAtMs,omitempty"`
-	RecentSuccessCount      float64  `json:"recentSuccessCount"`
-	RecentFailureCount      float64  `json:"recentFailureCount"`
-	RecentWindowUpdatedAtMs int64    `json:"recentWindowUpdatedAtMs"`
-	BreakerLevel            int64    `json:"breakerLevel"`
-	BreakerUntilMs          *int64   `json:"breakerUntilMs,omitempty"`
-	LastUpdatedAtMs         int64    `json:"lastUpdatedAtMs"`
-	LastFailureAtMs         *int64   `json:"lastFailureAtMs,omitempty"`
-	LastSuccessAtMs         *int64   `json:"lastSuccessAtMs,omitempty"`
+	PenaltyScore             float64  `json:"penaltyScore"`
+	LatencyEMAMs             *float64 `json:"latencyEmaMs,omitempty"`
+	TransientFailureStreak   int64    `json:"transientFailureStreak"`
+	LastTransientFailureAtMs *int64   `json:"lastTransientFailureAtMs,omitempty"`
+	RecentSuccessCount       float64  `json:"recentSuccessCount"`
+	RecentFailureCount       float64  `json:"recentFailureCount"`
+	RecentWindowUpdatedAtMs  int64    `json:"recentWindowUpdatedAtMs"`
+	BreakerLevel             int64    `json:"breakerLevel"`
+	BreakerUntilMs           *int64   `json:"breakerUntilMs,omitempty"`
+	LastUpdatedAtMs          int64    `json:"lastUpdatedAtMs"`
+	LastFailureAtMs          *int64   `json:"lastFailureAtMs,omitempty"`
+	LastSuccessAtMs          *int64   `json:"lastSuccessAtMs,omitempty"`
 }
 
 // SiteRuntimeHealthDetails is the resolved health for selection.
@@ -171,9 +171,9 @@ var (
 
 // SiteRuntimeHealthPersistencePayload is the serialization format.
 type SiteRuntimeHealthPersistencePayload struct {
-	Version       int                                     `json:"version"`
-	SavedAtMs     int64                                   `json:"savedAtMs"`
-	GlobalBySiteID map[string]*SiteRuntimeHealthState      `json:"globalBySiteId"`
+	Version        int                                           `json:"version"`
+	SavedAtMs      int64                                         `json:"savedAtMs"`
+	GlobalBySiteID map[string]*SiteRuntimeHealthState            `json:"globalBySiteId"`
 	ModelBySiteID  map[string]map[string]*SiteRuntimeHealthState `json:"modelBySiteId"`
 }
 
@@ -340,18 +340,18 @@ func getOrCreateRuntimeHealthState(states map[int64]*SiteRuntimeHealthState, sit
 	}
 	n := nowMs()
 	s := &SiteRuntimeHealthState{
-		PenaltyScore:            0,
-		LatencyEMAMs:            nil,
-		TransientFailureStreak:  0,
+		PenaltyScore:             0,
+		LatencyEMAMs:             nil,
+		TransientFailureStreak:   0,
 		LastTransientFailureAtMs: nil,
-		RecentSuccessCount:      0,
-		RecentFailureCount:      0,
-		RecentWindowUpdatedAtMs: n,
-		BreakerLevel:            0,
-		BreakerUntilMs:          nil,
-		LastUpdatedAtMs:         n,
-		LastFailureAtMs:         nil,
-		LastSuccessAtMs:         nil,
+		RecentSuccessCount:       0,
+		RecentFailureCount:       0,
+		RecentWindowUpdatedAtMs:  n,
+		BreakerLevel:             0,
+		BreakerUntilMs:           nil,
+		LastUpdatedAtMs:          n,
+		LastFailureAtMs:          nil,
+		LastSuccessAtMs:          nil,
 	}
 	states[siteID] = s
 	return s
@@ -396,18 +396,18 @@ func getOrCreateSiteModelRuntimeHealthState(siteID int64, modelName string) *Sit
 	}
 	n := nowMs()
 	s := &SiteRuntimeHealthState{
-		PenaltyScore:            0,
-		LatencyEMAMs:            nil,
-		TransientFailureStreak:  0,
+		PenaltyScore:             0,
+		LatencyEMAMs:             nil,
+		TransientFailureStreak:   0,
 		LastTransientFailureAtMs: nil,
-		RecentSuccessCount:      0,
-		RecentFailureCount:      0,
-		RecentWindowUpdatedAtMs: n,
-		BreakerLevel:            0,
-		BreakerUntilMs:          nil,
-		LastUpdatedAtMs:         n,
-		LastFailureAtMs:         nil,
-		LastSuccessAtMs:         nil,
+		RecentSuccessCount:       0,
+		RecentFailureCount:       0,
+		RecentWindowUpdatedAtMs:  n,
+		BreakerLevel:             0,
+		BreakerUntilMs:           nil,
+		LastUpdatedAtMs:          n,
+		LastFailureAtMs:          nil,
+		LastSuccessAtMs:          nil,
 	}
 	modelStates[modelKey] = s
 	return s
@@ -444,7 +444,7 @@ func GetRuntimeHealthMultiplier(state *SiteRuntimeHealthState) float64 {
 	latencyPenaltyRatio := 0.0
 	if state.LatencyEMAMs != nil {
 		latencyPenaltyRatio = ClampNumber(
-			(*state.LatencyEMAMs - SiteRuntimeLatencyBaselineMs) / SiteRuntimeLatencyWindowMs,
+			(*state.LatencyEMAMs-SiteRuntimeLatencyBaselineMs)/SiteRuntimeLatencyWindowMs,
 			0, 1,
 		)
 	}
@@ -454,6 +454,9 @@ func GetRuntimeHealthMultiplier(state *SiteRuntimeHealthState) float64 {
 
 // GetSiteRuntimeHealthDetails returns combined health details for a site and model.
 func GetSiteRuntimeHealthDetails(siteID int64, modelName string) SiteRuntimeHealthDetails {
+	healthStateMu.RLock()
+	defer healthStateMu.RUnlock()
+
 	modelKey := NormalizeModelAlias(modelName)
 	globalState := siteRuntimeHealthStates[siteID]
 	var modelState *SiteRuntimeHealthState
@@ -487,12 +490,18 @@ func GetSiteRuntimeHealthDetails(siteID int64, modelName string) SiteRuntimeHeal
 
 // GetSiteRuntimeHealthMultiplier is a convenience wrapper.
 func GetSiteRuntimeHealthMultiplier(siteID int64) float64 {
+	healthStateMu.RLock()
+	defer healthStateMu.RUnlock()
+
 	state := siteRuntimeHealthStates[siteID]
 	return GetRuntimeHealthMultiplier(state)
 }
 
 // IsSiteRuntimeBreakerOpen checks if a site's global breaker is open.
 func IsSiteRuntimeBreakerOpen(siteID int64) bool {
+	healthStateMu.RLock()
+	defer healthStateMu.RUnlock()
+
 	state := siteRuntimeHealthStates[siteID]
 	return isRuntimeHealthBreakerOpen(state)
 }
@@ -942,8 +951,8 @@ func persistSiteRuntimeHealthState() {
 func buildSiteRuntimeHealthPersistencePayload() SiteRuntimeHealthPersistencePayload {
 	n := nowMs()
 	payload := SiteRuntimeHealthPersistencePayload{
-		Version:       1,
-		SavedAtMs:     n,
+		Version:        1,
+		SavedAtMs:      n,
 		GlobalBySiteID: make(map[string]*SiteRuntimeHealthState),
 		ModelBySiteID:  make(map[string]map[string]*SiteRuntimeHealthState),
 	}

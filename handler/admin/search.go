@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,7 +27,7 @@ type searchRequestBody struct {
 // POST /api/search
 func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 	var body searchRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"accounts":      []any{},
 			"accountTokens": []any{},
@@ -127,7 +126,7 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryRows(db *sqlx.DB, query string, args ...any) []map[string]any {
-	rows, err := db.Queryx(query, args...)
+	rows, err := db.Queryx(rebindAdminQuery(db, query), args...)
 	if err != nil {
 		return nil
 	}
@@ -142,6 +141,13 @@ func queryRows(db *sqlx.DB, query string, args ...any) []map[string]any {
 		result = append(result, mapKeysToCamel(row))
 	}
 	return result
+}
+
+func rebindAdminQuery(db *sqlx.DB, query string) string {
+	if db == nil {
+		return query
+	}
+	return db.Rebind(query)
 }
 
 func normalizeSlice(rows []map[string]any) []map[string]any {

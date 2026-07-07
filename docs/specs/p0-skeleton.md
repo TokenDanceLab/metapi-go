@@ -3,11 +3,11 @@
 **S.U.P.E.R**: E (环境无关) · R (可替换) | **依赖**: 无 | **Size**: M
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\config.ts` -- 全量 config (172 行, 88+ 字段)
-- `D:\Code\TokenDance\metapi\src\server\index.ts` -- 启动流程 (309 行)
-- `D:\Code\TokenDance\metapi\src\server\desktop.ts` -- 公开路由白名单
-- `D:\Code\TokenDance\metapi\.env.example` -- env var 清单 (31 行)
-- `D:\Code\TokenDance\metapi\Dockerfile.slim` -- TS 构建/部署参考
+- `<metapi-ts>\src\server\config.ts` -- 全量 config (172 行, 88+ 字段)
+- `<metapi-ts>\src\server\index.ts` -- 启动流程 (309 行)
+- `<metapi-ts>\src\server\desktop.ts` -- 公开路由白名单
+- `<metapi-ts>\.env.example` -- env var 清单 (31 行)
+- `<metapi-ts>\Dockerfile.slim` -- TS 构建/部署参考
 
 本 spec 将 Chi router 架构作为 **设计翻译目标**（TS 使用 Fastify）。路由顺序、中间件选择是 Go 生态的等价翻译，非一字一句照搬。
 

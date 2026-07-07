@@ -48,7 +48,7 @@ describe('CenteredModal component', () => {
   });
 
   it('uses the shared centered modal shell pattern', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/components/CenteredModal.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'components/CenteredModal.tsx'), 'utf8');
 
     expect(source).toContain('modal-backdrop');
     expect(source).toContain('modal-content');

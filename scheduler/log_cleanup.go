@@ -102,7 +102,12 @@ func (s *LogCleanupScheduler) runJob() {
 		slog.Error("log-cleanup: database not available")
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runJobLocked(dbw)
+	})
+}
 
+func (s *LogCleanupScheduler) runJobLocked(dbw *store.DB) {
 	now := time.Now()
 	cutoff := now.Add(-time.Duration(s.cfg.LogCleanupRetentionDays) * 24 * time.Hour)
 	cutoffStr := formatTimeToSQL(cutoff)

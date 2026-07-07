@@ -1,7 +1,7 @@
 # Error Recovery Paths Audit: metapi-go
 
 **Date**: 2026-07-05  
-**Auditor**: Automated audit of `D:/Code/TokenDance/metapi-go`  
+**Auditor**: Automated audit of `<repo>`
 **Scope**: Error recovery paths -- DB connection loss, upstream timeout, disk full, memory exhaustion, handler-level recovery, health check integrity, retry logic, circuit breaker
 
 ---
@@ -191,7 +191,9 @@ There is no `/ready` (readiness) vs `/health` (liveness) distinction. For Kubern
 
 **DB/admin retry**: **None.** If a DB query fails in an admin handler, the handler returns a 500 error and does not retry. There is no retry middleware or retry wrapper for DB operations.
 
-**DB connection retry on startup**: **None.** `EnsureRuntimeDatabase` in `store/bootstrap.go` calls `Open()` which calls `db.Ping()` once. If ping fails, the error is returned and logged as a warning, but the server continues to start without a database.
+**DB connection retry on startup**: **None.** Status as of 2026-07-06: startup is fail-fast. `EnsureRuntimeDatabase` still calls `Open()` and `db.Ping()` once, but bootstrap errors now make `cmd/server` exit before binding the HTTP port.
+
+**Proxy fallback behavior**: Status as of 2026-07-06: local proxy stub responses require `METAPI_ENABLE_PROXY_STUB=1`. Production default is fail-closed with HTTP 503 when upstream forwarding dependencies are not configured.
 
 ---
 

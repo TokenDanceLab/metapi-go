@@ -158,6 +158,44 @@ func TestGetAvailableModels(t *testing.T) {
 	}
 }
 
+func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
+	denyAll := auth.DownstreamRoutingPolicy{DenyAllWhenEmpty: true}
+	if got := getAvailableModels(denyAll); len(got) != 0 {
+		t.Fatalf("deny-all policy returned %v, want empty", got)
+	}
+
+	supported := auth.DownstreamRoutingPolicy{
+		SupportedModels:  []string{"gpt-4o"},
+		DenyAllWhenEmpty: true,
+	}
+	got := getAvailableModels(supported)
+	if len(got) != 1 || got[0] != "gpt-4o" {
+		t.Fatalf("supported policy returned %v, want [gpt-4o]", got)
+	}
+
+	wildcard := auth.DownstreamRoutingPolicy{
+		SupportedModels:  []string{"claude-*"},
+		DenyAllWhenEmpty: true,
+	}
+	got = getAvailableModels(wildcard)
+	if len(got) == 0 {
+		t.Fatal("wildcard supported policy returned empty, want Claude models")
+	}
+	for _, model := range got {
+		if !matchModelPattern(model, "claude-*") {
+			t.Fatalf("wildcard supported policy returned non-Claude model %q in %v", model, got)
+		}
+	}
+
+	routeOnly := auth.DownstreamRoutingPolicy{
+		AllowedRouteIDs:  []int64{1},
+		DenyAllWhenEmpty: true,
+	}
+	if got := getAvailableModels(routeOnly); len(got) != 0 {
+		t.Fatalf("route-only policy returned %v, want empty until route-aware model listing is available", got)
+	}
+}
+
 // ---- HandleModels ----
 
 func TestHandleModels_OpenAIFormat(t *testing.T) {
@@ -229,6 +267,57 @@ func TestHandleModels_XApiKeyFormat(t *testing.T) {
 	m := unmarshalResponse(t, rec)
 	if _, ok := m["data"]; !ok {
 		t.Error("Claude format should have data field")
+	}
+}
+
+func TestHandleModelsFiltersManagedKeyPolicy(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "managed-key",
+		Source: "managed",
+		Policy: auth.DownstreamRoutingPolicy{
+			SupportedModels:  []string{"gpt-4o"},
+			DenyAllWhenEmpty: true,
+		},
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 1 {
+		t.Fatalf("expected 1 model, got %d: %#v", len(data), data)
+	}
+	first := data[0].(map[string]any)
+	if first["id"] != "gpt-4o" {
+		t.Fatalf("model id = %v, want gpt-4o", first["id"])
+	}
+}
+
+func TestHandleModelsDenyAllManagedPolicyReturnsEmptyList(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "managed-key",
+		Source: "managed",
+		Policy: auth.DownstreamRoutingPolicy{
+			DenyAllWhenEmpty: true,
+		},
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 0 {
+		t.Fatalf("expected empty model list, got %#v", data)
 	}
 }
 

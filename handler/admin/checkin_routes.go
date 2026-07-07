@@ -1,18 +1,21 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/config"
+	checkinservice "github.com/tokendancelab/metapi-go/service/checkin"
 )
 
 // RegisterCheckinRoutes registers all /api/checkin routes.
-func RegisterCheckinRoutes(r chi.Router, db *sqlx.DB) {
-	handler := &checkinHandler{db: db}
+func RegisterCheckinRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	handler := &checkinHandler{db: db, cfg: cfg}
 
 	r.Post("/api/checkin/trigger", handler.triggerAll)
 	r.Post("/api/checkin/trigger/{id}", handler.triggerOne)
@@ -21,19 +24,21 @@ func RegisterCheckinRoutes(r chi.Router, db *sqlx.DB) {
 }
 
 type checkinHandler struct {
-	db *sqlx.DB
+	db  *sqlx.DB
+	cfg *config.Config
 }
 
 // POST /api/checkin/trigger
 func (h *checkinHandler) triggerAll(w http.ResponseWriter, r *http.Request) {
-	// Stub: background task not yet wired
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"success": true,
-		"queued":  true,
-		"reused":  false,
-		"jobId":   "stub-checkin-all",
-		"status":  "pending",
-		"message": "已开始全部签到，请稍后查看签到日志",
+	results := checkinservice.CheckinAll(h.cfg, h.db, nil, "manual")
+	summary := summarizeCheckinResults(results)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": summary.Failed == 0,
+		"queued":  false,
+		"status":  "completed",
+		"message": "签到执行完成",
+		"summary": summary,
+		"results": results,
 	})
 }
 
@@ -46,10 +51,23 @@ func (h *checkinHandler) triggerOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stub: checkin not yet wired
+	result := checkinservice.CheckinAccount(h.cfg, h.db, id, &checkinservice.CheckinOptions{
+		ScheduleMode: "manual",
+	})
+	if result.Message == "account not found" {
+		writeJSON(w, http.StatusNotFound, map[string]any{
+			"success": false,
+			"message": result.Message,
+			"id":      id,
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": false,
-		"message": "checkin not yet implemented",
+		"success": result.Success,
+		"status":  result.Status,
+		"skipped": result.Skipped,
+		"message": result.Message,
+		"reward":  result.Reward,
 		"id":      id,
 	})
 }
@@ -87,26 +105,47 @@ func (h *checkinHandler) updateSchedule(w http.ResponseWriter, r *http.Request) 
 		Cron          *string `json:"cron,omitempty"`
 		IntervalHours *int    `json:"intervalHours,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusOK, map[string]string{"error": "Invalid body"})
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid body"})
 		return
 	}
 
-	// Stub: persist to settings
-	now := time.Now().UTC().Format(time.RFC3339)
-	_ = now
+	state, err := applyCheckinScheduleSettings(h.db, h.cfg, checkinSchedulePatch{
+		Mode:          body.Mode,
+		Cron:          body.Cron,
+		IntervalHours: body.IntervalHours,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":      true,
-		"mode":         coalesceStr(body.Mode, "cron"),
-		"cron":         coalesceStr(body.Cron, ""),
-		"intervalHours": coalesceInt(body.IntervalHours, 0),
+		"success":       true,
+		"mode":          state.Mode,
+		"cron":          state.Cron,
+		"intervalHours": state.IntervalHours,
 	})
 }
 
-func coalesceInt(i *int, fallback int) int {
-	if i == nil {
-		return fallback
+type checkinSummary struct {
+	Total   int `json:"total"`
+	Success int `json:"success"`
+	Failed  int `json:"failed"`
+	Skipped int `json:"skipped"`
+}
+
+func summarizeCheckinResults(results []checkinservice.CheckinAllResult) checkinSummary {
+	summary := checkinSummary{Total: len(results)}
+	for _, item := range results {
+		switch item.Result.Status {
+		case checkinservice.CheckinSuccess:
+			summary.Success++
+		case checkinservice.CheckinSkipped:
+			summary.Skipped++
+		default:
+			summary.Failed++
+		}
 	}
-	return *i
+	return summary
 }

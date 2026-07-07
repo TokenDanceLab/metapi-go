@@ -14,11 +14,11 @@ const defaultProxyFileRetentionIntervalMin = 60 // 60 minutes default
 
 // ProxyFileRetentionScheduler periodically prunes expired proxy files.
 type ProxyFileRetentionScheduler struct {
-	cfg      *config.Config
-	ticker   *time.Ticker
-	stopCh   chan struct{}
-	running  bool
-	mu       sync.Mutex
+	cfg     *config.Config
+	ticker  *time.Ticker
+	stopCh  chan struct{}
+	running bool
+	mu      sync.Mutex
 }
 
 // NewProxyFileRetentionScheduler creates a new proxy file retention scheduler.
@@ -96,7 +96,12 @@ func (s *ProxyFileRetentionScheduler) runCleanup() {
 	if retentionDays <= 0 {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runCleanupLocked(dbw, retentionDays)
+	})
+}
 
+func (s *ProxyFileRetentionScheduler) runCleanupLocked(dbw *store.DB, retentionDays int) {
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
 	cutoffStr := formatTimeToSQL(cutoff)
 

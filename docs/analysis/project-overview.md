@@ -124,7 +124,7 @@ TS 版有广泛测试 (vitest), 每个 route/service 几乎都有 `.test.ts` 配
 ### 现有 surface
 - `AGENTS.md` — 工程规则 (Golden Principles, Server Layers, DB Rules, Web Rules)
 - `CLAUDE.md` → 重定向到 `@AGENTS.md`
-- metapi skill (`C:\Users\Ding\.claude\skills\metapi\SKILL.md`) — 运维/API 操作参考
+- metapi skill (`<agent-skill-dir>\metapi\SKILL.md`) — 运维/API 操作参考
 
 ### Target surface
 - Go 版 `AGENTS.md` — Go 版特定的工程规则

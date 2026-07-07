@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,26 +16,26 @@ import (
 )
 
 const (
-	codexAuthURL           = "https://auth.openai.com/oauth/authorize"
-	codexTokenURL          = "https://auth.openai.com/oauth/token"
-	codexLoopbackPort      = 1455
-	codexLoopbackPath      = "/auth/callback"
+	codexAuthURL             = "https://auth.openai.com/oauth/authorize"
+	codexTokenURL            = "https://auth.openai.com/oauth/token"
+	codexLoopbackPort        = 1455
+	codexLoopbackPath        = "/auth/callback"
 	codexLoopbackRedirectURI = "http://localhost:1455/auth/callback"
-	codexUpstreamBaseURL   = "https://chatgpt.com/backend-api/codex"
+	codexUpstreamBaseURL     = "https://chatgpt.com/backend-api/codex"
 )
 
 func init() {
 	RegisterProvider(&OAuthProviderDefinition{
 		Metadata: ProviderMetadata{
-			Provider:                    ProviderCodex,
-			Label:                       "Codex",
-			Platform:                    "codex",
-			Enabled:                     true,
-			LoginType:                   "oauth",
-			RequiresProjectId:           false,
+			Provider:                     ProviderCodex,
+			Label:                        "Codex",
+			Platform:                     "codex",
+			Enabled:                      true,
+			LoginType:                    "oauth",
+			RequiresProjectId:            false,
 			SupportsDirectAccountRouting: true,
-			SupportsCloudValidation:     true,
-			SupportsNativeProxy:         true,
+			SupportsCloudValidation:      true,
+			SupportsNativeProxy:          true,
 		},
 		Site: ProviderSiteConfig{
 			Name:     "ChatGPT Codex OAuth",
@@ -48,10 +48,10 @@ func init() {
 			Path:        codexLoopbackPath,
 			RedirectURI: codexLoopbackRedirectURI,
 		},
-		BuildAuthorizationURL:  buildCodexAuthorizationURL,
+		BuildAuthorizationURL:     buildCodexAuthorizationURL,
 		ExchangeAuthorizationCode: exchangeCodexAuthorizationCode,
-		RefreshAccessToken:     refreshCodexAccessToken,
-		BuildProxyHeaders:      buildCodexProxyHeaders,
+		RefreshAccessToken:        refreshCodexAccessToken,
+		BuildProxyHeaders:         buildCodexProxyHeaders,
 	})
 }
 
@@ -95,9 +95,9 @@ type codexJWTClaims struct {
 }
 
 type codexTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	IDToken      string      `json:"id_token"`
 	ExpiresIn    interface{} `json:"expires_in"`
 }
 
@@ -146,9 +146,14 @@ func exchangeCodexToken(form url.Values, proxyURL *string) (*codexTokenResponse,
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		body := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(body))
+	}
+
+	body, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload codexTokenResponse
@@ -317,15 +322,37 @@ func getHeaderValue(headers map[string]interface{}, key string) string {
 
 func doHTTP(req *http.Request, proxyURL *string, client *http.Client) (*http.Response, error) {
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = newOAuthHTTPClient(nil)
 	}
-	if proxyURL != nil && *proxyURL != "" {
-		proxy, err := url.Parse(*proxyURL)
-		if err == nil {
-			client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(proxy),
-			}
+	if proxyURL != nil && strings.TrimSpace(*proxyURL) != "" {
+		proxy, err := url.Parse(strings.TrimSpace(*proxyURL))
+		if err != nil {
+			return nil, fmt.Errorf("invalid oauth proxy URL: %w", err)
 		}
+		if proxy.Scheme == "" || proxy.Host == "" {
+			return nil, fmt.Errorf("invalid oauth proxy URL: missing scheme or host")
+		}
+		client.Transport = newOAuthHTTPTransport(http.ProxyURL(proxy))
 	}
 	return client.Do(req)
+}
+
+func newOAuthHTTPClient(proxy func(*http.Request) (*url.URL, error)) *http.Client {
+	return &http.Client{
+		Transport: newOAuthHTTPTransport(proxy),
+		Timeout:   30 * time.Second,
+	}
+}
+
+func newOAuthHTTPTransport(proxy func(*http.Request) (*url.URL, error)) *http.Transport {
+	return &http.Transport{
+		Proxy: proxy,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	}
 }

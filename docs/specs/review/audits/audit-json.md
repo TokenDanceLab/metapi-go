@@ -1,6 +1,6 @@
 # JSON Encoding Audit Report
 
-**Project:** metapi-go (D:/Code/TokenDance/metapi-go)
+**Project:** metapi-go (<repo>)
 **Audit Date:** 2026-07-05
 **Scope:** All Go source files (304 files), with focus on JSON serialization paths used in API responses
 **Auditor:** Automated code analysis (no runtime execution)

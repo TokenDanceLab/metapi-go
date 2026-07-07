@@ -2,7 +2,6 @@ package routing
 
 import (
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -117,9 +116,7 @@ func TestCalculateWeightedSelection_GoldenFile(t *testing.T) {
 	t.Logf("  Selected: channel=%d, site=%d",
 		result.Selected.Channel.ID, result.Selected.Site.ID)
 
-	// Write golden file
 	goldenPath := filepath.Join("testdata", "weights_golden.txt")
-	os.MkdirAll(filepath.Dir(goldenPath), 0755)
 	var sb strings.Builder
 	sb.WriteString("# Golden file for CalculateWeightedSelection weight formula\n")
 	sb.WriteString("# Format: channelID,siteID,accountID,probability\n")
@@ -134,17 +131,8 @@ func TestCalculateWeightedSelection_GoldenFile(t *testing.T) {
 		sb.WriteString("\n")
 		_ = i
 	}
-	os.WriteFile(goldenPath, []byte(sb.String()), 0644)
-
-	// Check golden file roundtrip: read it back and verify
-	readBack, err := os.ReadFile(goldenPath)
-	if err != nil {
-		t.Fatalf("failed to read golden file: %v", err)
-	}
-	if len(readBack) == 0 {
-		t.Fatal("golden file is empty")
-	}
-	t.Logf("Golden file written to %s (%d bytes)", goldenPath, len(readBack))
+	readBack := readOrUpdateGoldenFile(t, goldenPath, []byte(sb.String()))
+	t.Logf("Golden file checked at %s (%d bytes)", goldenPath, len(readBack))
 }
 
 // =============================================================================
@@ -378,7 +366,7 @@ func TestValueScoreComputation(t *testing.T) {
 	ResetSiteRuntimeHealthState()
 
 	// A candidate with lower cost, higher balance, fewer calls should score higher
-	c1 := makeCandidate(1, 100, 1001, 10, 0, 10, 10, 5.0, 1.0, ptrFloat(0.01), 100.0, nil) // low cost, high balance, few calls
+	c1 := makeCandidate(1, 100, 1001, 10, 0, 10, 10, 5.0, 1.0, ptrFloat(0.01), 100.0, nil)     // low cost, high balance, few calls
 	c2 := makeCandidate(2, 200, 2001, 10, 0, 1000, 1000, 500.0, 1.0, ptrFloat(0.05), 1.0, nil) // high cost, low balance, many calls
 
 	result := CalculateWeightedSelection(

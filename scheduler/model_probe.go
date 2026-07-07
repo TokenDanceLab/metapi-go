@@ -116,7 +116,12 @@ func (s *ModelProbeScheduler) runProbe() {
 	if dbw == nil {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runProbeLocked(dbw)
+	})
+}
 
+func (s *ModelProbeScheduler) runProbeLocked(dbw *store.DB) {
 	slog.Info("model-probe: starting availability probe")
 
 	// Query active accounts

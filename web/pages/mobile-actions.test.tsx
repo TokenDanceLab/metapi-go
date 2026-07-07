@@ -17,7 +17,7 @@ function findRuleValue(source: string, selector: string, property: string): numb
 
 describe('Mobile actions bar styles', () => {
   it('keeps overlay layers above the mobile batch bar', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8');
+    const css = readFileSync(resolve(process.cwd(), 'index.css'), 'utf8');
     const batchBarZIndex = findRuleValue(css, '.mobile-actions-bar', 'z-index');
     const modalBackdropZIndex = findRuleValue(css, '.modal-backdrop', 'z-index');
 

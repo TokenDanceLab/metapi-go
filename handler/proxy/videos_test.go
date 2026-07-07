@@ -1,9 +1,13 @@
 package proxyhandler
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -51,6 +55,42 @@ func TestHandleVideosCreate_ModelRequired(t *testing.T) {
 	}
 }
 
+func TestHandleVideosCreate_MultipartBodyUsesModelField(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("model", "sora-2"); err != nil {
+		t.Fatalf("write model field: %v", err)
+	}
+	if err := writer.WriteField("prompt", "a cat walking"); err != nil {
+		t.Fatalf("write prompt field: %v", err)
+	}
+	part, err := writer.CreateFormFile("video", "clip.mp4")
+	if err != nil {
+		t.Fatalf("create file field: %v", err)
+	}
+	if _, err := part.Write([]byte("fake-video-data")); err != nil {
+		t.Fatalf("write file field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	r := chiRouterForVideo()
+	req := makeProxyReqNoBody("POST", "/v1/videos")
+	req.Body = io.NopCloser(body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	if m["model"] != "sora-2" {
+		t.Errorf("model = %v", m["model"])
+	}
+}
+
 func TestHandleVideosCreate_Unauthorized(t *testing.T) {
 	r := chi.NewRouter()
 	r.Post("/v1/videos", HandleVideosCreate)
@@ -60,6 +100,20 @@ func TestHandleVideosCreate_Unauthorized(t *testing.T) {
 
 	if rec.Code != 401 {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestHandleVideosCreate_InvalidMultipartReturnsBadRequest(t *testing.T) {
+	r := chiRouterForVideo()
+	req := makeProxyReqNoBody("POST", "/v1/videos")
+	req.Body = io.NopCloser(strings.NewReader("not a valid multipart body"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing-boundary")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid multipart, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

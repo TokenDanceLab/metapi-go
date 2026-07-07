@@ -1,7 +1,7 @@
 # Middleware Ordering Audit: metapi-go
 
 **Date:** 2026-07-05
-**Scope:** Router middleware chain in `D:/Code/TokenDance/metapi-go/router/router.go`
+**Scope:** Router middleware chain in `<repo>/router/router.go`
 **Methodology:** Static analysis of middleware implementations + industry best-practice research
 **Final verdict:** NEEDS_FIX (1 CRITICAL ordering issue, 2 informational observations)
 
@@ -199,11 +199,11 @@ Non-/v1 proxy subrouter:
 
 | File | Role |
 |---|---|
-| `D:/Code/TokenDance/metapi-go/router/router.go` | Route registration and middleware chain (PRIMARY) |
-| `D:/Code/TokenDance/metapi-go/router/middleware.go` | Custom middleware implementations (RealIP, CORS, Logger, Recoverer, BodyLimit) |
-| `D:/Code/TokenDance/metapi-go/auth/admin.go` | AdminAuth middleware (IP allowlist + Bearer token) |
-| `D:/Code/TokenDance/metapi-go/auth/ratelimit.go` | AdminRateLimit + OAuthRateLimit (per-IP token bucket) |
-| `D:/Code/TokenDance/metapi-go/auth/proxy.go` | ProxyAuth middleware (managed key lookup) |
+| `<repo>/router/router.go` | Route registration and middleware chain (PRIMARY) |
+| `<repo>/router/middleware.go` | Custom middleware implementations (RealIP, CORS, Logger, Recoverer, BodyLimit) |
+| `<repo>/auth/admin.go` | AdminAuth middleware (IP allowlist + Bearer token) |
+| `<repo>/auth/ratelimit.go` | AdminRateLimit + OAuthRateLimit (per-IP token bucket) |
+| `<repo>/auth/proxy.go` | ProxyAuth middleware (managed key lookup) |
 
 ---
 

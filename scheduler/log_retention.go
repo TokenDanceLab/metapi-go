@@ -15,11 +15,11 @@ const defaultProxyLogRetentionIntervalMin = 30 // 30 minutes default
 // ProxyLogRetentionScheduler is a legacy fallback for cleaning up proxy logs
 // when the main log_cleanup system is not configured (logCleanupConfigured=false).
 type ProxyLogRetentionScheduler struct {
-	cfg      *config.Config
-	ticker   *time.Ticker
-	stopCh   chan struct{}
-	running  bool
-	mu       sync.Mutex
+	cfg     *config.Config
+	ticker  *time.Ticker
+	stopCh  chan struct{}
+	running bool
+	mu      sync.Mutex
 }
 
 // NewProxyLogRetentionScheduler creates a new proxy log retention scheduler.
@@ -102,7 +102,12 @@ func (s *ProxyLogRetentionScheduler) runCleanup() {
 	if retentionDays <= 0 {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runCleanupLocked(dbw, retentionDays)
+	})
+}
 
+func (s *ProxyLogRetentionScheduler) runCleanupLocked(dbw *store.DB, retentionDays int) {
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
 	cutoffStr := formatTimeToSQL(cutoff)
 

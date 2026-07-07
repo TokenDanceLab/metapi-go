@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-05
 **Auditor**: Automated audit via Claude Code
-**Scope**: `D:/Code/TokenDance/metapi-go` — Go build, Docker build, CI/CD pipeline
+**Scope**: `<repo>` — Go build, Docker build, CI/CD pipeline
 **Go version tested**: go1.26.3 windows/amd64
 
 ---
@@ -244,13 +244,13 @@ Patch `-trimpath` into both `go build` commands:
 
 | File | Path |
 |---|---|
-| go.mod | `D:/Code/TokenDance/metapi-go/go.mod` |
-| go.sum | `D:/Code/TokenDance/metapi-go/go.sum` |
-| Dockerfile | `D:/Code/TokenDance/metapi-go/Dockerfile` |
-| Makefile | `D:/Code/TokenDance/metapi-go/Makefile` |
-| CI workflow | `D:/Code/TokenDance/metapi-go/.github/workflows/ci.yml` |
-| CD workflow | `D:/Code/TokenDance/metapi-go/.github/workflows/cd.yml` |
-| .gitignore | `D:/Code/TokenDance/metapi-go/.gitignore` |
-| embed directive | `D:/Code/TokenDance/metapi-go/web/embed.go` |
-| docker-compose.yml | `D:/Code/TokenDance/metapi-go/docker-compose.yml` |
-| docker-compose.prod.yml | `D:/Code/TokenDance/metapi-go/docker-compose.prod.yml` |
+| go.mod | `<repo>/go.mod` |
+| go.sum | `<repo>/go.sum` |
+| Dockerfile | `<repo>/Dockerfile` |
+| Makefile | `<repo>/Makefile` |
+| CI workflow | `<repo>/.github/workflows/ci.yml` |
+| CD workflow | `<repo>/.github/workflows/cd.yml` |
+| .gitignore | `<repo>/.gitignore` |
+| embed directive | `<repo>/web/embed.go` |
+| docker-compose.yml | `<repo>/docker-compose.yml` |
+| docker-compose.prod.yml | `<repo>/docker-compose.prod.yml` |

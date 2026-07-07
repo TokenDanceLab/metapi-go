@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Accounts centered modal adoption', () => {
   it('uses CenteredModal for add/edit/rebind flows instead of inline panel cards', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Accounts.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Accounts.tsx'), 'utf8');
 
     expect(source).toContain(
       'import CenteredModal from "../components/CenteredModal.js";',

@@ -84,8 +84,8 @@ func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request)
 	for _, route := range rows {
 		routeID := toInt64(route["id"])
 		var channelCount, enabledCount int
-		h.db.Get(&channelCount, "SELECT COUNT(*) FROM route_channels WHERE route_id = ?", routeID)
-		h.db.Get(&enabledCount, "SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND enabled = 1", routeID)
+		h.db.Get(&channelCount, h.db.Rebind("SELECT COUNT(*) FROM route_channels WHERE route_id = ?"), routeID)
+		h.db.Get(&enabledCount, h.db.Rebind("SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND enabled = ?"), routeID, true)
 
 		item := map[string]any{
 			"id":                  route["id"],
@@ -133,16 +133,16 @@ func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) 
 		var enrichedChannels []map[string]any
 		for _, ch := range channelRows {
 			enriched := map[string]any{
-				"id":             ch["id"],
-				"routeId":        ch["routeId"],
-				"accountId":      ch["accountId"],
-				"tokenId":        ch["tokenId"],
+				"id":               ch["id"],
+				"routeId":          ch["routeId"],
+				"accountId":        ch["accountId"],
+				"tokenId":          ch["tokenId"],
 				"oauthRouteUnitId": ch["oauthRouteUnitId"],
-				"sourceModel":    ch["sourceModel"],
-				"priority":       ch["priority"],
-				"weight":         ch["weight"],
-				"enabled":        ch["enabled"],
-				"manualOverride": ch["manualOverride"],
+				"sourceModel":      ch["sourceModel"],
+				"priority":         ch["priority"],
+				"weight":           ch["weight"],
+				"enabled":          ch["enabled"],
+				"manualOverride":   ch["manualOverride"],
 				"account": map[string]any{
 					"id":          ch["accountId"],
 					"username":    ch["username"],
@@ -190,7 +190,10 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		ModelMapping    any     `json:"modelMapping"`
 		Enabled         *bool   `json:"enabled"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	routeMode := "pattern"
 	if body.RouteMode != nil {
@@ -229,7 +232,7 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	result, err := h.db.Exec(
+	id, err := execInsertID(h.db,
 		`INSERT INTO token_routes (model_pattern, display_name, display_icon, route_mode, model_mapping, routing_strategy, enabled, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		modelPattern, strOrNull(&displayName), strOrNull(body.DisplayIcon), routeMode,
@@ -240,15 +243,10 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = h.db.Get(&id, "SELECT id FROM token_routes WHERE model_pattern = ? AND display_name = ? ORDER BY id DESC LIMIT 1", modelPattern, strOrNull(&displayName))
-	}
 	// For explicit_group, insert source route references
 	if routeMode == "explicit_group" && len(body.SourceRouteIds) > 0 {
 		for _, srcID := range body.SourceRouteIds {
-			h.db.Exec("INSERT INTO route_group_sources (group_route_id, source_route_id) VALUES (?, ?)", id, srcID)
+			h.db.Exec(h.db.Rebind("INSERT INTO route_group_sources (group_route_id, source_route_id) VALUES (?, ?)"), id, srcID)
 		}
 	}
 
@@ -279,46 +277,49 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	}
 
 	var body map[string]any
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	if v, ok := body["modelPattern"]; ok {
 		if s, ok2 := v.(string); ok2 {
-			h.db.Exec("UPDATE token_routes SET model_pattern = ?, updated_at = ? WHERE id = ?", strings.TrimSpace(s), now, id)
+			h.db.Exec(h.db.Rebind("UPDATE token_routes SET model_pattern = ?, updated_at = ? WHERE id = ?"), strings.TrimSpace(s), now, id)
 		}
 	}
 	if v, ok := body["displayName"]; ok {
 		if s, ok2 := v.(string); ok2 {
-			h.db.Exec("UPDATE token_routes SET display_name = ?, updated_at = ? WHERE id = ?", s, now, id)
+			h.db.Exec(h.db.Rebind("UPDATE token_routes SET display_name = ?, updated_at = ? WHERE id = ?"), s, now, id)
 		}
 	}
 	if v, ok := body["displayIcon"]; ok {
 		if s, ok2 := v.(string); ok2 {
-			h.db.Exec("UPDATE token_routes SET display_icon = ?, updated_at = ? WHERE id = ?", s, now, id)
+			h.db.Exec(h.db.Rebind("UPDATE token_routes SET display_icon = ?, updated_at = ? WHERE id = ?"), s, now, id)
 		}
 	}
 	if v, ok := body["enabled"]; ok {
-		h.db.Exec("UPDATE token_routes SET enabled = ?, updated_at = ? WHERE id = ?", toBool(v), now, id)
+		h.db.Exec(h.db.Rebind("UPDATE token_routes SET enabled = ?, updated_at = ? WHERE id = ?"), toBool(v), now, id)
 	}
 	if v, ok := body["routingStrategy"]; ok {
 		if s, ok2 := v.(string); ok2 {
-			h.db.Exec("UPDATE token_routes SET routing_strategy = ?, updated_at = ? WHERE id = ?", s, now, id)
+			h.db.Exec(h.db.Rebind("UPDATE token_routes SET routing_strategy = ?, updated_at = ? WHERE id = ?"), s, now, id)
 		}
 	}
 	if v, ok := body["modelMapping"]; ok {
 		mappingJSON, _ := json.Marshal(v)
-		h.db.Exec("UPDATE token_routes SET model_mapping = ?, updated_at = ? WHERE id = ?", string(mappingJSON), now, id)
+		h.db.Exec(h.db.Rebind("UPDATE token_routes SET model_mapping = ?, updated_at = ? WHERE id = ?"), string(mappingJSON), now, id)
 	}
 
 	// Update source route IDs for explicit_group
 	if v, ok := body["sourceRouteIds"]; ok {
 		if ids, ok2 := v.([]any); ok2 {
-			h.db.Exec("DELETE FROM route_group_sources WHERE group_route_id = ?", id)
+			h.db.Exec(h.db.Rebind("DELETE FROM route_group_sources WHERE group_route_id = ?"), id)
 			for _, rawID := range ids {
 				switch rid := rawID.(type) {
 				case float64:
-					h.db.Exec("INSERT INTO route_group_sources (group_route_id, source_route_id) VALUES (?, ?)", id, int64(rid))
+					h.db.Exec(h.db.Rebind("INSERT INTO route_group_sources (group_route_id, source_route_id) VALUES (?, ?)"), id, int64(rid))
 				}
 			}
 		}
@@ -326,7 +327,7 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 
 	updated := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
 	var srcIDs []int64
-	h.db.Select(&srcIDs, "SELECT source_route_id FROM route_group_sources WHERE group_route_id = ?", id)
+	h.db.Select(&srcIDs, h.db.Rebind("SELECT source_route_id FROM route_group_sources WHERE group_route_id = ?"), id)
 	updated["sourceRouteIds"] = srcIDs
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, updated)
@@ -342,10 +343,10 @@ func (h *tokenRoutesHandler) deleteRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	h.db.Exec("DELETE FROM route_group_sources WHERE group_route_id = ?", id)
-	h.db.Exec("DELETE FROM route_group_sources WHERE source_route_id = ?", id)
-	h.db.Exec("DELETE FROM route_channels WHERE route_id = ?", id)
-	h.db.Exec("DELETE FROM token_routes WHERE id = ?", id)
+	h.db.Exec(h.db.Rebind("DELETE FROM route_group_sources WHERE group_route_id = ?"), id)
+	h.db.Exec(h.db.Rebind("DELETE FROM route_group_sources WHERE source_route_id = ?"), id)
+	h.db.Exec(h.db.Rebind("DELETE FROM route_channels WHERE route_id = ?"), id)
+	h.db.Exec(h.db.Rebind("DELETE FROM token_routes WHERE id = ?"), id)
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
@@ -357,7 +358,10 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 		Action string  `json:"action"`
 		IDs    []int64 `json:"ids"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	if len(body.IDs) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "ids 必须是非空数组"})
@@ -374,7 +378,7 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 	now := time.Now().UTC().Format(time.RFC3339)
 	updated := 0
 	for _, id := range body.IDs {
-		res, err := h.db.Exec("UPDATE token_routes SET enabled = ?, updated_at = ? WHERE id = ?", enabled, now, id)
+		res, err := h.db.Exec(h.db.Rebind("UPDATE token_routes SET enabled = ?, updated_at = ? WHERE id = ?"), enabled, now, id)
 		if err == nil {
 			n, _ := res.RowsAffected()
 			updated += int(n)
@@ -422,16 +426,16 @@ func (h *tokenRoutesHandler) getRouteChannels(w http.ResponseWriter, r *http.Req
 	var enrichedChans []map[string]any
 	for _, ch := range channelRows {
 		enriched := map[string]any{
-			"id":             ch["id"],
-			"routeId":        ch["routeId"],
-			"accountId":      ch["accountId"],
-			"tokenId":        ch["tokenId"],
+			"id":               ch["id"],
+			"routeId":          ch["routeId"],
+			"accountId":        ch["accountId"],
+			"tokenId":          ch["tokenId"],
 			"oauthRouteUnitId": ch["oauthRouteUnitId"],
-			"sourceModel":    ch["sourceModel"],
-			"priority":       ch["priority"],
-			"weight":         ch["weight"],
-			"enabled":        ch["enabled"],
-			"manualOverride": ch["manualOverride"],
+			"sourceModel":      ch["sourceModel"],
+			"priority":         ch["priority"],
+			"weight":           ch["weight"],
+			"enabled":          ch["enabled"],
+			"manualOverride":   ch["manualOverride"],
 			"account": map[string]any{
 				"id":          ch["accountId"],
 				"username":    ch["username"],
@@ -470,7 +474,10 @@ func (h *tokenRoutesHandler) addChannel(w http.ResponseWriter, r *http.Request) 
 		Priority    *int64  `json:"priority"`
 		Weight      *int64  `json:"weight"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	priority := int64(0)
 	weight := int64(10)
@@ -484,27 +491,25 @@ func (h *tokenRoutesHandler) addChannel(w http.ResponseWriter, r *http.Request) 
 	// Check for duplicates
 	var dupCount int
 	h.db.Get(&dupCount,
-		"SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND account_id = ? AND (token_id = ? OR (token_id IS NULL AND ? IS NULL))",
-		routeID, body.AccountID, body.TokenID, body.TokenID)
+		h.db.Rebind(`SELECT COUNT(*) FROM route_channels
+		 WHERE route_id = ? AND account_id = ?
+		 AND (token_id = ? OR (token_id IS NULL AND ? IS NULL))
+		 AND (source_model = ? OR (source_model IS NULL AND ? IS NULL))`),
+		routeID, body.AccountID, body.TokenID, body.TokenID, body.SourceModel, body.SourceModel)
 	if dupCount > 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "该来源模型的通道已存在"})
 		return
 	}
 
-	result, err := h.db.Exec(
-		"INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override) VALUES (?, ?, ?, ?, ?, ?, 1, 0)",
-		routeID, body.AccountID, body.TokenID, body.SourceModel, priority, weight,
+	id, err := execInsertID(h.db,
+		"INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		routeID, body.AccountID, body.TokenID, body.SourceModel, priority, weight, true, false,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建通道失败"})
 		return
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = h.db.Get(&id, "SELECT id FROM route_channels WHERE route_id = ? AND account_id = ? AND source_model = ? ORDER BY id DESC LIMIT 1", routeID, body.AccountID, body.SourceModel)
-	}
 	created := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", id)
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, created)
@@ -527,7 +532,10 @@ func (h *tokenRoutesHandler) batchAddChannels(w http.ResponseWriter, r *http.Req
 			SourceModel *string `json:"sourceModel"`
 		} `json:"channels"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	created := 0
 	skipped := 0
@@ -536,16 +544,19 @@ func (h *tokenRoutesHandler) batchAddChannels(w http.ResponseWriter, r *http.Req
 	for _, ch := range body.Channels {
 		var dupCount int
 		h.db.Get(&dupCount,
-			"SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND account_id = ? AND (token_id = ? OR (token_id IS NULL AND ? IS NULL))",
-			routeID, ch.AccountID, ch.TokenID, ch.TokenID)
+			h.db.Rebind(`SELECT COUNT(*) FROM route_channels
+			 WHERE route_id = ? AND account_id = ?
+			 AND (token_id = ? OR (token_id IS NULL AND ? IS NULL))
+			 AND (source_model = ? OR (source_model IS NULL AND ? IS NULL))`),
+			routeID, ch.AccountID, ch.TokenID, ch.TokenID, ch.SourceModel, ch.SourceModel)
 		if dupCount > 0 {
 			skipped++
 			continue
 		}
 
 		_, err := h.db.Exec(
-			"INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override) VALUES (?, ?, ?, ?, 0, 10, 1, 1)",
-			routeID, ch.AccountID, ch.TokenID, ch.SourceModel,
+			h.db.Rebind("INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
+			routeID, ch.AccountID, ch.TokenID, ch.SourceModel, 0, 10, true, true,
 		)
 		if err != nil {
 			errors = append(errors, err.Error())
@@ -573,7 +584,7 @@ func (h *tokenRoutesHandler) clearCooldown(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.db.Exec(`UPDATE route_channels SET cooldown_until = NULL, consecutive_fail_count = 0, cooldown_level = 0 WHERE route_id = ?`, routeID)
+	h.db.Exec(h.db.Rebind(`UPDATE route_channels SET cooldown_until = NULL, consecutive_fail_count = 0, cooldown_level = 0 WHERE route_id = ?`), routeID)
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
@@ -587,11 +598,14 @@ func (h *tokenRoutesHandler) batchUpdateChannels(w http.ResponseWriter, r *http.
 			Priority int64 `json:"priority"`
 		} `json:"updates"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	var updatedIDs []int64
 	for _, update := range body.Updates {
-		h.db.Exec("UPDATE route_channels SET priority = ?, manual_override = 1 WHERE id = ?", update.Priority, update.ID)
+		h.db.Exec(h.db.Rebind("UPDATE route_channels SET priority = ?, manual_override = ? WHERE id = ?"), update.Priority, true, update.ID)
 		updatedIDs = append(updatedIDs, update.ID)
 	}
 
@@ -621,16 +635,19 @@ func (h *tokenRoutesHandler) updateChannel(w http.ResponseWriter, r *http.Reques
 	}
 
 	var body map[string]any
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	if v, ok := body["priority"]; ok {
-		h.db.Exec("UPDATE route_channels SET priority = ?, manual_override = 1 WHERE id = ?", toFloat64(v), channelID)
+		h.db.Exec(h.db.Rebind("UPDATE route_channels SET priority = ?, manual_override = ? WHERE id = ?"), toFloat64(v), true, channelID)
 	}
 	if v, ok := body["weight"]; ok {
-		h.db.Exec("UPDATE route_channels SET weight = ?, manual_override = 1 WHERE id = ?", toFloat64(v), channelID)
+		h.db.Exec(h.db.Rebind("UPDATE route_channels SET weight = ?, manual_override = ? WHERE id = ?"), toFloat64(v), true, channelID)
 	}
 	if v, ok := body["enabled"]; ok {
-		h.db.Exec("UPDATE route_channels SET enabled = ?, manual_override = 1 WHERE id = ?", toBool(v), channelID)
+		h.db.Exec(h.db.Rebind("UPDATE route_channels SET enabled = ?, manual_override = ? WHERE id = ?"), toBool(v), true, channelID)
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", channelID)
@@ -648,7 +665,7 @@ func (h *tokenRoutesHandler) deleteChannel(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	h.db.Exec("DELETE FROM route_channels WHERE id = ?", channelID)
+	h.db.Exec(h.db.Rebind("DELETE FROM route_channels WHERE id = ?"), channelID)
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
@@ -711,6 +728,20 @@ func strOrNull(s *string) any {
 		return nil
 	}
 	return *s
+}
+
+func execInsertID(db *sqlx.DB, query string, args ...any) (int64, error) {
+	if db.DriverName() == "pgx" {
+		var id int64
+		err := db.QueryRowx(db.Rebind(query+" RETURNING id"), args...).Scan(&id)
+		return id, err
+	}
+
+	result, err := db.Exec(db.Rebind(query), args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 func toInt64(v any) int64 {

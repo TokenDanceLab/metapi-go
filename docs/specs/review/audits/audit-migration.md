@@ -2,9 +2,9 @@
 
 **Date**: 2026-07-04
 **Audited files**:
-- `D:/Code/TokenDance/metapi-go/cmd/migrate/main.go` (Go, 1191 lines)
-- `D:/Code/TokenDance/metapi/src/server/services/databaseMigrationService.ts` (TS reference, 859 lines)
-- `D:/Code/TokenDance/metapi/src/server/db/generated/schemaContract.json` (canonical schema contract, 3312 lines)
+- `<repo>/cmd/migrate/main.go` (Go, 1191 lines)
+- `<metapi-ts>/src/server/services/databaseMigrationService.ts` (TS reference, 859 lines)
+- `<metapi-ts>/src/server/db/generated/schemaContract.json` (canonical schema contract, 3312 lines)
 
 ---
 

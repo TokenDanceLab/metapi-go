@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,6 +23,7 @@ type App struct {
 	Server *http.Server
 
 	onCloseFns []func()
+	closeOnce  sync.Once
 }
 
 // New creates a new App with the given config and router.
@@ -40,7 +43,14 @@ func (a *App) RegisterOnClose(fn func()) {
 // OnClose executes all registered onClose functions in FIFO order.
 func (a *App) OnClose() {
 	for _, fn := range a.onCloseFns {
-		fn()
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("shutdown hook panicked", "panic", r)
+				}
+			}()
+			fn()
+		}()
 	}
 }
 
@@ -49,13 +59,7 @@ func (a *App) OnClose() {
 // graceful shutdown with a 5-second timeout.
 func (a *App) Start() error {
 	addr := fmt.Sprintf("%s:%d", a.Config.ListenHost, a.Config.Port)
-	a.Server = &http.Server{
-		Addr:         addr,
-		Handler:      a.Router,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
+	a.Server = newHTTPServer(addr, a.Router)
 
 	// Channel to capture listen errors
 	errCh := make(chan error, 1)
@@ -74,7 +78,7 @@ func (a *App) Start() error {
 	select {
 	case err := <-errCh:
 		slog.Error("server listen failed", "error", err)
-		return err
+		return errors.Join(err, a.cleanup())
 	case sig := <-sigCh:
 		slog.Info("received signal, shutting down", "signal", sig.String())
 	}
@@ -83,25 +87,51 @@ func (a *App) Start() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	a.OnClose()
-	if err := a.Server.Shutdown(ctx); err != nil {
+	if err := a.shutdown(ctx); err != nil {
 		slog.Error("graceful shutdown failed", "error", err)
 		return err
-	}
-
-	if err := store.CloseDatabase(); err != nil {
-		slog.Warn("failed to close database", "error", err)
 	}
 
 	slog.Info("server stopped")
 	return nil
 }
 
+func newHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+}
+
 // Shutdown performs a graceful shutdown of the HTTP server with the given context.
 func (a *App) Shutdown(ctx context.Context) error {
-	if a.Server == nil {
-		return nil
+	return a.shutdown(ctx)
+}
+
+func (a *App) shutdown(ctx context.Context) error {
+	markReadinessDraining(true)
+	defer markReadinessDraining(false)
+
+	var shutdownErr error
+	if a.Server != nil {
+		shutdownErr = a.Server.Shutdown(ctx)
 	}
-	a.OnClose()
-	return a.Server.Shutdown(ctx)
+	return errors.Join(shutdownErr, a.cleanup())
+}
+
+func (a *App) cleanup() error {
+	var cleanupErr error
+	a.closeOnce.Do(func() {
+		a.OnClose()
+		if err := store.CloseDatabase(); err != nil {
+			slog.Warn("failed to close database", "error", err)
+			cleanupErr = err
+		}
+	})
+	return cleanupErr
 }

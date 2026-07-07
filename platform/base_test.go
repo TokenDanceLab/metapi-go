@@ -3,6 +3,8 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -110,6 +112,53 @@ func TestBaseAdapterDefaults(t *testing.T) {
 	}
 	if tvr.TokenType != "unknown" {
 		t.Errorf("BaseAdapter.VerifyToken expected 'unknown', got %q", tvr.TokenType)
+	}
+}
+
+func TestFetchJSONRejectsOversizedSuccessBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":"` + strings.Repeat("x", platformJSONResponseBodyLimit) + `"}`))
+	}))
+	defer server.Close()
+
+	_, err := fetchJSON(context.Background(), server.URL, http.MethodGet, nil, nil, nil)
+	if err == nil {
+		t.Fatal("expected oversized JSON response body to fail")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("error = %q, want response body size failure", err)
+	}
+}
+
+func TestFetchJSONRejectsOversizedErrorBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, strings.Repeat("x", platformErrorResponseBodyLimit+1), http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	_, err := fetchJSON(context.Background(), server.URL, http.MethodGet, nil, nil, nil)
+	if err == nil {
+		t.Fatal("expected oversized error response body to fail")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("error = %q, want response body size failure", err)
+	}
+}
+
+func TestFetchTextRejectsOversizedBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(strings.Repeat("x", platformTextResponseBodyLimit+1)))
+	}))
+	defer server.Close()
+
+	_, _, err := fetchText(context.Background(), server.URL, nil)
+	if err == nil {
+		t.Fatal("expected oversized text response body to fail")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("error = %q, want response body size failure", err)
 	}
 }
 

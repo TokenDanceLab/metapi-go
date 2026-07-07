@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.web.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "*.d.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "pages/**/*.ts",
+    "pages/**/*.tsx",
+    "shared/**/*.ts",
+    "shared/**/*.tsx",
+    "shared/**/*.js"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

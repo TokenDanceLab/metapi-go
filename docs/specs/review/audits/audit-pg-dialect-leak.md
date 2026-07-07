@@ -1,7 +1,7 @@
 # PostgreSQL Dialect Leak Audit
 
 **Date**: 2026-07-05  
-**Scope**: `D:/Code/TokenDance/metapi-go/` -- all `.go` files  
+**Scope**: `<repo>/` -- all `.go` files
 **Goal**: Identify SQLite-specific SQL patterns that would fail or behave incorrectly on PostgreSQL.
 
 ---

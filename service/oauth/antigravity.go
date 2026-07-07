@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,22 +12,22 @@ import (
 )
 
 const (
-	antigravityAuthURL             = "https://accounts.google.com/o/oauth2/v2/auth"
-	antigravityTokenURL            = "https://oauth2.googleapis.com/token"
-	antigravityUserinfoURL         = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
-	antigravityClientID            = "ANTIGRAVITY_CLIENT_ID_PLACEHOLDER"
-	antigravityClientSecret        = "ANTIGRAVITY_CLIENT_SECRET_PLACEHOLDER"
-	antigravityLoopbackPort        = 51121
-	antigravityLoopbackPath        = "/oauth-callback"
-	antigravityLoopbackRedirectURI = "http://localhost:51121/oauth-callback"
-	antigravityUpstreamBaseURL     = "https://cloudcode-pa.googleapis.com"
-	antigravityGoogleAPIClient     = "google-cloud-sdk vscode_cloudshelleditor/0.1"
-	antigravityUserAgent           = "google-api-nodejs-client/9.15.1"
-	antigravityModelsUserAgent     = "antigravity/1.19.6 darwin/arm64"
-	antigravityClientMetadata      = `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`
-	antigravityInternalAPIVersion  = "v1internal"
+	antigravityAuthURL               = "https://accounts.google.com/o/oauth2/v2/auth"
+	antigravityTokenURL              = "https://oauth2.googleapis.com/token"
+	antigravityUserinfoURL           = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
+	antigravityClientID              = "ANTIGRAVITY_CLIENT_ID_PLACEHOLDER"
+	antigravityClientSecret          = "ANTIGRAVITY_CLIENT_SECRET_PLACEHOLDER"
+	antigravityLoopbackPort          = 51121
+	antigravityLoopbackPath          = "/oauth-callback"
+	antigravityLoopbackRedirectURI   = "http://localhost:51121/oauth-callback"
+	antigravityUpstreamBaseURL       = "https://cloudcode-pa.googleapis.com"
+	antigravityGoogleAPIClient       = "google-cloud-sdk vscode_cloudshelleditor/0.1"
+	antigravityUserAgent             = "google-api-nodejs-client/9.15.1"
+	antigravityModelsUserAgent       = "antigravity/1.19.6 darwin/arm64"
+	antigravityClientMetadata        = `{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}`
+	antigravityInternalAPIVersion    = "v1internal"
 	antigravityOnboardPollIntervalMs = 2000
-	antigravityOnboardMaxAttempts  = 5
+	antigravityOnboardMaxAttempts    = 5
 )
 
 var antigravityScopes = []string{
@@ -42,15 +41,15 @@ var antigravityScopes = []string{
 func init() {
 	RegisterProvider(&OAuthProviderDefinition{
 		Metadata: ProviderMetadata{
-			Provider:                    ProviderAntigravity,
-			Label:                       "Antigravity",
-			Platform:                    "antigravity",
-			Enabled:                     true,
-			LoginType:                   "oauth",
-			RequiresProjectId:           false,
+			Provider:                     ProviderAntigravity,
+			Label:                        "Antigravity",
+			Platform:                     "antigravity",
+			Enabled:                      true,
+			LoginType:                    "oauth",
+			RequiresProjectId:            false,
 			SupportsDirectAccountRouting: true,
-			SupportsCloudValidation:     true,
-			SupportsNativeProxy:         true,
+			SupportsCloudValidation:      true,
+			SupportsNativeProxy:          true,
 		},
 		Site: ProviderSiteConfig{
 			Name:     "Google Antigravity OAuth",
@@ -63,10 +62,10 @@ func init() {
 			Path:        antigravityLoopbackPath,
 			RedirectURI: antigravityLoopbackRedirectURI,
 		},
-		BuildAuthorizationURL:   buildAntigravityAuthorizationURL,
+		BuildAuthorizationURL:     buildAntigravityAuthorizationURL,
 		ExchangeAuthorizationCode: exchangeAntigravityAuthorizationCode,
-		RefreshAccessToken:      refreshAntigravityAccessToken,
-		BuildProxyHeaders:       buildAntigravityProxyHeaders,
+		RefreshAccessToken:        refreshAntigravityAccessToken,
+		BuildProxyHeaders:         buildAntigravityProxyHeaders,
 	})
 }
 
@@ -139,9 +138,14 @@ func postAntigravityToken(form url.Values, proxyURL *string) (*TokenSet, error) 
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		respBody := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(respBody))
+	}
+
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload antigravityOAuthTokenPayload
@@ -237,9 +241,9 @@ func refreshAntigravityAccessToken(ctx context.Context, input RefreshTokenInput)
 
 func buildAntigravityProxyHeaders(ctx context.Context, input ProxyHeaderInput) map[string]string {
 	return map[string]string{
-		"User-Agent":      antigravityUserAgent,
+		"User-Agent":        antigravityUserAgent,
 		"X-Goog-Api-Client": antigravityGoogleAPIClient,
-		"Client-Metadata": antigravityClientMetadata,
+		"Client-Metadata":   antigravityClientMetadata,
 	}
 }
 
@@ -305,7 +309,10 @@ func callAntigravityInternalAPI(accessToken, method string, body map[string]inte
 	}
 
 	var result map[string]interface{}
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	_ = json.Unmarshal(respBody, &result)
 	return result, nil
 }
@@ -331,7 +338,10 @@ func fetchAntigravityUserEmail(accessToken string, proxyURL *string) (string, er
 	var payload struct {
 		Email string `json:"email"`
 	}
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return "", err
+	}
 	_ = json.Unmarshal(respBody, &payload)
 	return strings.TrimSpace(payload.Email), nil
 }

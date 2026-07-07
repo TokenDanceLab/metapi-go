@@ -3,13 +3,13 @@
 **S.U.P.E.R**: S (单一职责) · P (端口优先) · E (环境无关) | **依赖**: P0 | **Size**: L
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\db\schema.ts` -- 27 表 Drizzle SQLite 定义 (权威列/索引/约束源)
-- `D:\Code\TokenDance\metapi\src\server\db\index.ts` -- 方言连接管理 (1525 行), 含 SQLite `ensure*Schema()` 兼容层
-- `D:\Code\TokenDance\metapi\src\server\db\migrate.ts` -- SQLite Drizzle 迁移引擎 (journal/recovery/dedup)
-- `D:\Code\TokenDance\metapi\src\server\db\runtimeSchemaBootstrap.ts` -- MySQL/PG 运行时 schema bootstrap (introspect + diff + upgrade)
-- `D:\Code\TokenDance\metapi\src\server\db\generated\schemaContract.json` -- **权威 DDL 源** (84KB JSON: tables + indexes + foreignKeys + uniques)
-- `D:\Code\TokenDance\metapi\src\server\db\generated\postgres.bootstrap.sql` -- PG DDL 参考
-- `D:\Code\TokenDance\metapi\drizzle\` -- Drizzle migration 历史 (0000-0026+)
+- `<metapi-ts>\src\server\db\schema.ts` -- 27 表 Drizzle SQLite 定义 (权威列/索引/约束源)
+- `<metapi-ts>\src\server\db\index.ts` -- 方言连接管理 (1525 行), 含 SQLite `ensure*Schema()` 兼容层
+- `<metapi-ts>\src\server\db\migrate.ts` -- SQLite Drizzle 迁移引擎 (journal/recovery/dedup)
+- `<metapi-ts>\src\server\db\runtimeSchemaBootstrap.ts` -- MySQL/PG 运行时 schema bootstrap (introspect + diff + upgrade)
+- `<metapi-ts>\src\server\db\generated\schemaContract.json` -- **权威 DDL 源** (84KB JSON: tables + indexes + foreignKeys + uniques)
+- `<metapi-ts>\src\server\db\generated\postgres.bootstrap.sql` -- PG DDL 参考
+- `<metapi-ts>\drizzle\` -- Drizzle migration 历史 (0000-0026+)
 
 ## 关键设计决定
 

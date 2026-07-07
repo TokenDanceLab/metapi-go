@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,15 +19,7 @@ import (
 func main() {
 	// ---- Healthcheck subcommand (for Docker HEALTHCHECK without curl) ----
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		resp, err := http.Get("http://localhost:4000/health")
-		if err != nil {
-			os.Exit(1)
-		}
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
-			os.Exit(0)
-		}
-		os.Exit(1)
+		os.Exit(runHealthcheck())
 	}
 
 	// ---- 0. Load .env file (silently skip if not found) ----
@@ -58,43 +50,14 @@ func main() {
 	// Normalize DataDir (E11: trailing slash / Windows backslash)
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
 
-	// ---- Steps 2-11: wrapped in try/catch → failures only warn ----
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Warn("startup bootstrap panicked", "panic", r)
-			}
-		}()
-
-		// E5: ensure data directory exists
-		if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
-			slog.Warn("failed to create data directory", "dir", cfg.DataDir, "error", err)
-		}
-
-		// ---- 2. Bootstrap: ensureRuntimeDatabaseReady ----
-		if err := store.EnsureRuntimeDatabase(cfg); err != nil {
-			slog.Warn("bootstrap: ensureRuntimeDatabase failed", "error", err)
-		}
-
-		// ---- 3. Load settings from DB ----
-		if err := store.LoadRuntimeSettings(cfg); err != nil {
-			slog.Warn("settings: failed to load runtime settings", "error", err)
-		}
-
-		// ---- 4. Switch DB if settings differ (stub) ----
-		// P1: read savedDbConfig, compare, switch if different, rollback on failure
-
-		// ---- 5-6. Schema migrations ----
-		if err := store.Migrate(cfg); err != nil {
-			slog.Warn("migration failed", "error", err)
-		}
-
-		// ---- 7-11. Remaining startup steps (P1+) ----
-		// reload settings, apply runtime overrides, log cleanup config,
-		// remaining migrations, rebuild routes, ensure OAuth provider sites
-
-		slog.Info("bootstrap complete")
-	}()
+	if err := bootstrapRuntime(cfg); err != nil {
+		slog.Error("startup bootstrap failed", "error", err)
+		os.Exit(1)
+	}
+	if err := app.ConfigureProxyUpstream(cfg); err != nil {
+		slog.Error("proxy upstream wiring failed", "error", err)
+		os.Exit(1)
+	}
 
 	// ---- 12. Create HTTP router ----
 	r := router.New(cfg, web.Dist)
@@ -120,11 +83,56 @@ func main() {
 		slog.Error("server exited with error", "error", err)
 		os.Exit(1)
 	}
+}
 
-	// Ensure any remaining cleanup
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = a.Shutdown(ctx)
+func bootstrapRuntime(cfg *config.Config) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("startup bootstrap panicked: %v", r)
+		}
+	}()
+
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+		return fmt.Errorf("create data directory %q: %w", cfg.DataDir, err)
+	}
+	if err := store.EnsureRuntimeDatabase(cfg); err != nil {
+		return fmt.Errorf("ensure runtime database: %w", err)
+	}
+	if err := store.LoadRuntimeSettings(cfg); err != nil {
+		return fmt.Errorf("load runtime settings: %w", err)
+	}
+	if err := store.Migrate(cfg); err != nil {
+		return fmt.Errorf("run runtime migrations: %w", err)
+	}
+
+	slog.Info("bootstrap complete")
+	return nil
+}
+
+func runHealthcheck() int {
+	target := os.Getenv("METAPI_HEALTHCHECK_URL")
+	if target == "" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "4000"
+		}
+		path := os.Getenv("METAPI_HEALTHCHECK_PATH")
+		if path == "" {
+			path = "/ready"
+		}
+		target = "http://127.0.0.1:" + port + path
+	}
+
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(target)
+	if err != nil {
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return 0
+	}
+	return 1
 }
 
 // environMap converts os.Environ() to a map[string]string.

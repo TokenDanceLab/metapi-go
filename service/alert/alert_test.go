@@ -12,8 +12,8 @@ func TestIsCloudflareChallenge_Positive(t *testing.T) {
 		"cf challenge detected",
 		"challenge required",
 		"CLOUDFLARE",
-		"CF CHALLENGE",           // case insensitive
-		"Challenge Required",     // case insensitive
+		"CF CHALLENGE",       // case insensitive
+		"Challenge Required", // case insensitive
 		"site has cloudflare CDN",
 	}
 	for _, msg := range cases {
@@ -81,8 +81,8 @@ func TestIsTokenExpiredError_InvalidTokenPatterns(t *testing.T) {
 
 func TestIsTokenExpiredError_ChineseTokenPatterns(t *testing.T) {
 	cases := []string{
-		"访问令牌无效",    // token + invalid
-		"令牌已过期",      // token + expired
+		"访问令牌无效", // token + invalid
+		"令牌已过期",  // token + expired
 	}
 	for _, msg := range cases {
 		t.Run(msg, func(t *testing.T) {
@@ -117,6 +117,42 @@ func TestIsTokenExpiredError_Excludes(t *testing.T) {
 	// NewAPI specific: "未登录且未提供 access token" should NOT be token expired
 	if IsTokenExpiredError(0, "未登录且未提供 access token") {
 		t.Error("'未登录且未提供 access token' should NOT be token expired (NewAPI specific)")
+	}
+}
+
+func TestIsTokenExpiredError_ExcludesNonAuthUpstreamFailures(t *testing.T) {
+	cases := []struct {
+		name       string
+		httpStatus int
+		message    string
+	}{
+		{
+			name:       "invalid_argument input token limit is request validation",
+			httpStatus: 400,
+			message:    "Error code: 400 - {'error': {'code': 'invalid_argument', 'message': 'input token limit is 202752', 'type': 'invalid_request_error'}}",
+		},
+		{
+			name:       "401 model not supported is capability failure",
+			httpStatus: 401,
+			message:    "Model minimax-m3-free is not supported for format openai",
+		},
+		{
+			name:       "401 billing failure is not token expiry",
+			httpStatus: 401,
+			message:    "No payment method. Add a payment method here: https://example.com/billing",
+		},
+		{
+			name:       "message with HTTP 401 model unsupported is not token expiry",
+			httpStatus: 0,
+			message:    "HTTP 401 - Model gemini-3.1-pro-preview is not supported",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if IsTokenExpiredError(tc.httpStatus, tc.message) {
+				t.Fatalf("IsTokenExpiredError(%d, %q) = true, want false", tc.httpStatus, tc.message)
+			}
+		})
 	}
 }
 

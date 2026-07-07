@@ -6,11 +6,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	proxypkg "github.com/tokendancelab/metapi-go/proxy"
+	routerpkg "github.com/tokendancelab/metapi-go/router"
 )
 
 // TestProxyConcurrentRequests verifies 5 concurrent proxy requests all succeed.
@@ -118,5 +121,69 @@ func TestRateLimitRejection(t *testing.T) {
 	handler.ServeHTTP(rec2, req2)
 	if rec2.Code != 429 {
 		t.Errorf("expected 429 rate limited, got %d", rec2.Code)
+	}
+}
+
+func TestProxyRequestBodyLimitRejectsBeforeUpstream(t *testing.T) {
+	var upstreamHits atomic.Int32
+	mockUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits.Add(1)
+		writeJSONHelper(w, 200, map[string]any{
+			"id": "req", "object": "chat.completion", "model": "gpt-4",
+			"choices": []map[string]any{{"index": 0, "message": map[string]any{"role": "assistant", "content": "ok"}}},
+		})
+	}))
+	defer mockUpstream.Close()
+
+	mockR := newMockRouter()
+	mockR.staticChannel = makeChannel(1, mockUpstream.URL, "gpt-4")
+
+	coord := proxypkg.NewProxyChannelCoordinator(makeTestConfig())
+	proxyRoutes := setupE2ERouter(mockR, coord, injectAuthMiddleware("global", nil, "global-proxy-token"))
+
+	r := chi.NewRouter()
+	r.Use(routerpkg.BodyLimit(96))
+	r.Mount("/v1", proxyRoutes)
+
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{
+			name: "non-stream",
+			body: `{"model":"gpt-4","messages":[{"role":"user","content":"` + strings.Repeat("x", 120) + `"}]}`,
+		},
+		{
+			name: "stream",
+			body: `{"model":"gpt-4","stream":true,"messages":[{"role":"user","content":"` + strings.Repeat("x", 120) + `"}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := upstreamHits.Load()
+			req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("status = %d, want 413; body=%s", rec.Code, rec.Body.String())
+			}
+			if got := upstreamHits.Load(); got != before {
+				t.Fatalf("upstream hits = %d, want unchanged at %d", got, before)
+			}
+		})
+	}
+
+	req := httptest.NewRequest("POST", "/v1/chat/completions",
+		strings.NewReader(`{"model":"gpt-4","messages":[{"role":"user","content":"ok"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("small request status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if got := upstreamHits.Load(); got != 1 {
+		t.Fatalf("upstream hits after small request = %d, want 1", got)
 	}
 }

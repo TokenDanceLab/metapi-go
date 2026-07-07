@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -65,7 +64,7 @@ func (h *accountTokensHandler) listTokens(w http.ResponseWriter, r *http.Request
 
 func (h *accountTokensHandler) createToken(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenCreatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account token payload."})
 		return
 	}
@@ -122,7 +121,9 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	var existingTokens []store.AccountToken
-	h.db.Select(&existingTokens, "SELECT * FROM account_tokens WHERE account_id = ?", body.AccountID)
+	if err := h.db.Select(&existingTokens, h.db.Rebind("SELECT * FROM account_tokens WHERE account_id = ?"), body.AccountID); err != nil {
+		return nil, fmt.Errorf("加载已有令牌失败: %w", err)
+	}
 
 	valueStatus := TokenValueStatusReady
 	if IsMaskedTokenValue(tokenValue) {
@@ -160,8 +161,8 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 	}
 
 	result, err := h.db.Exec(
-		`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		h.db.Rebind(`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		body.AccountID, name, tokenValue, nullIfEmpty(tokenGroup), valueStatus, source, enabled, isDefault, now, now,
 	)
 	if err != nil {
@@ -171,19 +172,38 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 	tokenID, err := result.LastInsertId()
 	if err != nil {
 		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = h.db.Get(&tokenID, "SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1", body.AccountID, tokenValue)
+		if err := h.db.Get(&tokenID, h.db.Rebind("SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1"), body.AccountID, tokenValue); err != nil {
+			return nil, fmt.Errorf("读取新令牌失败: %w", err)
+		}
+	}
+	cleanupInsertedToken := func() {
+		_, _ = h.db.Exec(h.db.Rebind("DELETE FROM account_tokens WHERE id = ?"), tokenID)
 	}
 
 	// Set as default if appropriate
 	if valueStatus == TokenValueStatusReady && (isDefault || (len(existingTokens) == 0 && enabled)) {
-		service.SetDefaultToken(h.db, tokenID)
+		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
+			cleanupInsertedToken()
+			return nil, fmt.Errorf("设置默认令牌失败: %w", err)
+		} else if !ok {
+			cleanupInsertedToken()
+			return nil, fmt.Errorf("设置默认令牌失败")
+		}
 	} else if valueStatus == TokenValueStatusReady && !hasDefaultToken(existingTokens) && enabled {
-		service.SetDefaultToken(h.db, tokenID)
+		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
+			cleanupInsertedToken()
+			return nil, fmt.Errorf("设置默认令牌失败: %w", err)
+		} else if !ok {
+			cleanupInsertedToken()
+			return nil, fmt.Errorf("设置默认令牌失败")
+		}
 	}
 
 	// Fetch the created token
 	var token store.AccountToken
-	h.db.Get(&token, "SELECT * FROM account_tokens WHERE id = ?", tokenID)
+	if err := h.db.Get(&token, h.db.Rebind("SELECT * FROM account_tokens WHERE id = ?"), tokenID); err != nil {
+		return nil, fmt.Errorf("读取新令牌失败: %w", err)
+	}
 
 	return map[string]any{
 		"success": true,
@@ -195,7 +215,7 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 
 func (h *accountTokensHandler) batchTokens(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenBatchPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account token batch payload."})
 		return
 	}
@@ -224,7 +244,11 @@ func (h *accountTokensHandler) batchTokens(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		owner, _ := service.GetAccountByID(h.db, existing.AccountID)
+		owner, ownerErr := service.GetAccountByID(h.db, existing.AccountID)
+		if ownerErr != nil {
+			failedItems = append(failedItems, map[string]any{"id": id, "message": "Account not found"})
+			continue
+		}
 		if owner == nil {
 			failedItems = append(failedItems, map[string]any{"id": id, "message": "Account not found"})
 			continue
@@ -247,10 +271,18 @@ func (h *accountTokensHandler) batchTokens(w http.ResponseWriter, r *http.Reques
 				continue
 			}
 			now := time.Now().UTC().Format(time.RFC3339)
-			h.db.Exec("UPDATE account_tokens SET enabled = ?, updated_at = ? WHERE id = ?", action == "enable", now, id)
+			if _, err := h.db.Exec(h.db.Rebind("UPDATE account_tokens SET enabled = ?, updated_at = ? WHERE id = ?"), action == "enable", now, id); err != nil {
+				slog.Error("Token status update failed", "err", err, "token_id", id)
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "Token status update failed"})
+				continue
+			}
 
 			if existing.IsDefault && action == "disable" {
-				service.RepairDefaultToken(h.db, existing.AccountID)
+				if _, err := service.RepairDefaultToken(h.db, existing.AccountID); err != nil {
+					slog.Error("Default token repair failed", "err", err, "account_id", existing.AccountID)
+					failedItems = append(failedItems, map[string]any{"id": id, "message": "Default token repair failed"})
+					continue
+				}
 			}
 		}
 		successIDs = append(successIDs, id)
@@ -274,7 +306,7 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 	}
 
 	var body payloads.AccountTokenUpdatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account token payload."})
 		return
 	}
@@ -285,7 +317,11 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	owner, _ := service.GetAccountByID(h.db, existing.AccountID)
+	owner, err := service.GetAccountByID(h.db, existing.AccountID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		return
+	}
 	if owner == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
 		return
@@ -341,23 +377,49 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Refresh and handle default logic
-	latest, _ := service.GetTokenByID(h.db, tokenID)
+	latest, err := service.GetTokenByID(h.db, tokenID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		return
+	}
 	if latest == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
 		return
 	}
 
 	if body.IsDefault != nil && *body.IsDefault && service.IsUsableAccountToken(latest) {
-		service.SetDefaultToken(h.db, tokenID)
+		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+			return
+		} else if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "令牌不能设为默认"})
+			return
+		}
 	} else if latest.IsDefault && service.IsUsableAccountToken(latest) {
-		service.SetDefaultToken(h.db, tokenID)
+		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+			return
+		} else if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "令牌不能设为默认"})
+			return
+		}
 	} else if existing.IsDefault && !service.IsUsableAccountToken(latest) {
-		service.RepairDefaultToken(h.db, existing.AccountID)
+		if _, err := service.RepairDefaultToken(h.db, existing.AccountID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "修复默认令牌失败"})
+			return
+		}
 	} else if body.IsDefault != nil && !(*body.IsDefault) && existing.IsDefault {
-		service.RepairDefaultToken(h.db, existing.AccountID)
+		if _, err := service.RepairDefaultToken(h.db, existing.AccountID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "修复默认令牌失败"})
+			return
+		}
 	}
 
-	latest, _ = service.GetTokenByID(h.db, tokenID)
+	latest, err = service.GetTokenByID(h.db, tokenID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取令牌失败"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"token":   latest,
@@ -380,7 +442,11 @@ func (h *accountTokensHandler) setDefault(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	owner, _ := service.GetAccountByID(h.db, token.AccountID)
+	owner, err := service.GetAccountByID(h.db, token.AccountID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		return
+	}
 	if owner == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
 		return
@@ -394,7 +460,11 @@ func (h *accountTokensHandler) setDefault(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ok, _ := service.SetDefaultToken(h.db, tokenID)
+	ok, err := service.SetDefaultToken(h.db, tokenID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+		return
+	}
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
 		return
@@ -418,7 +488,11 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	owner, _ := service.GetAccountByID(h.db, token.AccountID)
+	owner, err := service.GetAccountByID(h.db, token.AccountID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		return
+	}
 	if owner == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
 		return
@@ -439,8 +513,14 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 	// Get site platform
 	var site store.Site
 	var account store.Account
-	h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", token.AccountID)
-	h.db.Get(&site, "SELECT * FROM sites WHERE id = ?", account.SiteID)
+	if err := h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), token.AccountID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取账号失败"})
+		return
+	}
+	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取站点失败"})
+		return
+	}
 
 	displayToken := service.NormalizeTokenForDisplay(token.Token, site.Platform)
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -468,7 +548,11 @@ func (h *accountTokensHandler) deleteToken(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	owner, _ := service.GetAccountByID(h.db, token.AccountID)
+	owner, err := service.GetAccountByID(h.db, token.AccountID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		return
+	}
 	if owner == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
 		return
@@ -522,7 +606,10 @@ func (h *accountTokensHandler) syncAccount(w http.ResponseWriter, r *http.Reques
 
 func (h *accountTokensHandler) syncAll(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenSyncAllPayload
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	wait := body.Wait != nil && *body.Wait
 
@@ -530,7 +617,7 @@ func (h *accountTokensHandler) syncAll(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"success": true,
 			"summary": map[string]int{
-				"total":   0, "synced": 0, "skipped": 0, "failed": 0,
+				"total": 0, "synced": 0, "skipped": 0, "failed": 0,
 				"created": 0, "updated": 0,
 			},
 			"results": []any{},
@@ -593,7 +680,7 @@ func (h *accountTokensHandler) getAccountDefault(w http.ResponseWriter, r *http.
 	}
 
 	var account store.Account
-	if err := h.db.Get(&account, "SELECT * FROM accounts WHERE id = ?", accountID); err != nil {
+	if err := h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), accountID); err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": true, "token": nil})
 		return
 	}
@@ -610,7 +697,10 @@ func (h *accountTokensHandler) getAccountDefault(w http.ResponseWriter, r *http.
 	}
 
 	var site store.Site
-	h.db.Get(&site, "SELECT * FROM sites WHERE id = ?", account.SiteID)
+	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取站点失败"})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -651,17 +741,17 @@ func hasDefaultToken(tokens []store.AccountToken) bool {
 func tokenToMap(token store.AccountToken, platform string) map[string]any {
 	vs := service.ResolveAccountTokenValueStatus(&token)
 	return map[string]any{
-		"id":           token.ID,
-		"accountId":    token.AccountID,
-		"name":         token.Name,
-		"tokenMasked":  service.MaskToken(token.Token, platform),
-		"tokenGroup":   token.TokenGroup,
-		"valueStatus":  vs,
-		"source":       token.Source,
-		"enabled":      token.Enabled,
-		"isDefault":    token.IsDefault,
-		"createdAt":    token.CreatedAt,
-		"updatedAt":    token.UpdatedAt,
+		"id":          token.ID,
+		"accountId":   token.AccountID,
+		"name":        token.Name,
+		"tokenMasked": service.MaskToken(token.Token, platform),
+		"tokenGroup":  token.TokenGroup,
+		"valueStatus": vs,
+		"source":      token.Source,
+		"enabled":     token.Enabled,
+		"isDefault":   token.IsDefault,
+		"createdAt":   token.CreatedAt,
+		"updatedAt":   token.UpdatedAt,
 	}
 }
 

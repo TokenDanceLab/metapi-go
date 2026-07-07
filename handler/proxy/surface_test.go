@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -86,6 +87,96 @@ func TestPrepareCtx_BasicRequest(t *testing.T) {
 	}
 	if ctx.Auth.Token != "test-token" {
 		t.Errorf("token = %q", ctx.Auth.Token)
+	}
+}
+
+func TestPrepareCtx_RequestBodyTooLarge(t *testing.T) {
+	req := authRequest("POST", "/v1/chat/completions", []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"too-large"}]}`))
+	rec := httptest.NewRecorder()
+	req.Body = http.MaxBytesReader(rec, req.Body, 8)
+
+	ctx, errResp := PrepareCtx(req, SurfConfig{
+		Endpoint:       "chat",
+		DownstreamPath: "/v1/chat/completions",
+		RequireModel:   true,
+	})
+
+	if ctx != nil {
+		t.Fatal("ctx should be nil for oversized request body")
+	}
+	if errResp == nil {
+		t.Fatal("errResp should not be nil")
+	}
+	if errResp.Status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", errResp.Status)
+	}
+}
+
+func TestPrepareCtx_MultipartRequestBodyTooLarge(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormField("model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("gpt-4o"))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := authRequest("POST", "/v1/images/generations", body.Bytes())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	req.Body = http.MaxBytesReader(rec, req.Body, 8)
+
+	ctx, errResp := PrepareCtx(req, SurfConfig{
+		Endpoint:       "images",
+		DownstreamPath: "/v1/images/generations",
+		RequireModel:   false,
+	})
+
+	if ctx != nil {
+		t.Fatal("ctx should be nil for oversized multipart body")
+	}
+	if errResp == nil {
+		t.Fatal("errResp should not be nil")
+	}
+	if errResp.Status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", errResp.Status)
+	}
+}
+
+func TestPrepareCtx_MultipartFileLimitExceeded(t *testing.T) {
+	t.Setenv("PROXY_MAX_MULTIPART_FILE_BYTES", "4")
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("image", "large.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("12345"))
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	req := authRequest("POST", "/v1/images/edits", body.Bytes())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	ctx, errResp := PrepareCtx(req, SurfConfig{
+		Endpoint:       "images",
+		DownstreamPath: "/v1/images/edits",
+		RequireModel:   false,
+	})
+
+	if ctx != nil {
+		t.Fatal("ctx should be nil for multipart file limit exceedance")
+	}
+	if errResp == nil {
+		t.Fatal("errResp should not be nil")
+	}
+	if errResp.Status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", errResp.Status)
 	}
 }
 

@@ -49,9 +49,9 @@ The `SolveAcwScV2` function exists in `newapi.go` (lines 1299-1431) but is expor
 **Remediation**: Add shield detection and retry logic to `fetchJSONRawWithCookie` in `base.go`, or create a NewApi-specific wrapper in `newapi.go` that wraps each fetch with the retry loop.
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/newapi.go:423` -- login returns "shield challenge blocked login" on parse failure
-- `D:/Code/TokenDance/metapi-go/platform/base.go:291-337` -- `fetchJSONRawWithCookie` lacks retry/shield logic
-- `D:/Code/TokenDance/metapi/src/server/services/platforms/newApi.ts:715-775` -- TS reference implementation
+- `<repo>/platform/newapi.go:423` -- login returns "shield challenge blocked login" on parse failure
+- `<repo>/platform/base.go:291-337` -- `fetchJSONRawWithCookie` lacks retry/shield logic
+- `<metapi-ts>/src/server/services/platforms/newApi.ts:715-775` -- TS reference implementation
 
 ---
 
@@ -93,8 +93,8 @@ The spec explicitly states the rationale: "Specific forks before generic adapter
 ```
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/registry.go:49-52` -- `Register()` called from per-file `init()`
-- `D:/Code/TokenDance/metapi-go/platform/registry_test.go:27-51` -- test checks presence, not order
+- `<repo>/platform/registry.go:49-52` -- `Register()` called from per-file `init()`
+- `<repo>/platform/registry_test.go:27-51` -- test checks presence, not order
 
 ---
 
@@ -121,7 +121,7 @@ t.Logf("SolveAcwScV2 result (may be empty without JS VM): %q", result)
 **Remediation**: Either integrate a JS VM (e.g., `goja`, `v8go`) to execute the `a0i()`/`a0j(0x115)` functions, or document this as a known limitation and accept that shield-protected NewApi deployments will require manual cookie import via the site UI as a workaround.
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/newapi.go:1380-1431` -- `parseChallengeXorSeed`
+- `<repo>/platform/newapi.go:1380-1431` -- `parseChallengeXorSeed`
 
 ---
 
@@ -148,7 +148,7 @@ Individual adapters that make HTTP requests (NewApi, OneApi, Veloera, CliProxyAp
 **Remediation**: Add a context with a reasonable timeout (e.g., 30 seconds total for the entire sequential probe) and respect context cancellation.
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/registry.go:97-103`
+- `<repo>/platform/registry.go:97-103`
 
 ---
 
@@ -163,7 +163,7 @@ Individual adapters that make HTTP requests (NewApi, OneApi, Veloera, CliProxyAp
 **Remediation**: Add `strings.Contains(host, "antigravity")` check to `DetectPlatformByURLHint`.
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/detect.go:69-125` -- URL hint function
+- `<repo>/platform/detect.go:69-125` -- URL hint function
 
 ---
 
@@ -176,7 +176,7 @@ Individual adapters that make HTTP requests (NewApi, OneApi, Veloera, CliProxyAp
 **Impact**: None -- functionally equivalent. The spec's module structure is a recommendation, not a requirement for correctness.
 
 **Relevant files**:
-- `D:/Code/TokenDance/metapi-go/platform/detect.go` -- contains both detection pipeline and title hint logic
+- `<repo>/platform/detect.go` -- contains both detection pipeline and title hint logic
 
 ---
 

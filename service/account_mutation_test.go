@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -53,6 +54,120 @@ func createTestAccount(t *testing.T, db *store.DB, siteID int64, username *strin
 	}
 	id, _ := res.LastInsertId()
 	return id
+}
+
+func createTestAccountToken(t *testing.T, db *store.DB, accountID int64, name, token string, isDefault bool) int64 {
+	t.Helper()
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	res, err := db.Exec(
+		`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
+		 VALUES (?, ?, ?, 'ready', 'manual', 1, ?, ?, ?)`,
+		accountID, name, token, isDefault, now, now,
+	)
+	if err != nil {
+		t.Fatalf("INSERT account token failed: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return id
+}
+
+func assertTokenDefaultState(t *testing.T, db *store.DB, tokenID int64, want bool) {
+	t.Helper()
+	var got bool
+	if err := db.QueryRow("SELECT is_default FROM account_tokens WHERE id = ?", tokenID).Scan(&got); err != nil {
+		t.Fatalf("read token default state: %v", err)
+	}
+	if got != want {
+		t.Fatalf("token %d is_default = %v, want %v", tokenID, got, want)
+	}
+}
+
+func TestUpdateAccountFieldsPersistsLastBalanceRefresh(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "BalanceRefreshSite", "https://balance-refresh.example.com", "anyrouter")
+	accountID := createTestAccount(t, db, siteID, nil, "session-token")
+	refreshedAt := time.Now().UTC().Format(time.RFC3339)
+
+	if err := UpdateAccountFields(db.DB, accountID, map[string]any{
+		"lastBalanceRefresh": refreshedAt,
+	}); err != nil {
+		t.Fatalf("UpdateAccountFields: %v", err)
+	}
+
+	var got *string
+	if err := db.QueryRow("SELECT last_balance_refresh FROM accounts WHERE id = ?", accountID).Scan(&got); err != nil {
+		t.Fatalf("read last_balance_refresh: %v", err)
+	}
+	if got == nil || *got != refreshedAt {
+		t.Fatalf("last_balance_refresh = %v, want %q", got, refreshedAt)
+	}
+}
+
+func TestSetDefaultTokenRollsBackWhenAccountUpdateFails(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "DefaultTokenRollbackSite", "https://default-token-rollback.example.com", "openai")
+	accountID := createTestAccount(t, db, siteID, strPtr("default-token-user"), "session-token")
+	oldTokenID := createTestAccountToken(t, db, accountID, "old", "old-token", true)
+	newTokenID := createTestAccountToken(t, db, accountID, "new", "new-token", false)
+	if _, err := db.Exec("UPDATE accounts SET api_token = ? WHERE id = ?", "old-token", accountID); err != nil {
+		t.Fatalf("seed account api_token: %v", err)
+	}
+
+	if _, err := db.Exec(`CREATE TRIGGER fail_api_token_update
+		BEFORE UPDATE OF api_token ON accounts
+		BEGIN
+			SELECT RAISE(ABORT, 'forced api_token update failure');
+		END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	ok, err := SetDefaultToken(db.DB, newTokenID)
+	if err == nil {
+		t.Fatal("SetDefaultToken succeeded, want forced update error")
+	}
+	if ok {
+		t.Fatal("SetDefaultToken ok=true despite forced update error")
+	}
+
+	assertTokenDefaultState(t, db, oldTokenID, true)
+	assertTokenDefaultState(t, db, newTokenID, false)
+	var apiToken *string
+	if err := db.QueryRow("SELECT api_token FROM accounts WHERE id = ?", accountID).Scan(&apiToken); err != nil {
+		t.Fatalf("read api_token: %v", err)
+	}
+	if apiToken == nil || *apiToken != "old-token" {
+		t.Fatalf("api_token = %v, want old-token", apiToken)
+	}
+}
+
+func TestEnsureDefaultTokenForAccountRollsBackWhenAccountUpdateFails(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "EnsureDefaultRollbackSite", "https://ensure-default-rollback.example.com", "openai")
+	accountID := createTestAccount(t, db, siteID, strPtr("ensure-default-user"), "session-token")
+
+	if _, err := db.Exec(`CREATE TRIGGER fail_ensure_api_token_update
+		BEFORE UPDATE OF api_token ON accounts
+		BEGIN
+			SELECT RAISE(ABORT, 'forced ensure default failure');
+		END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	id, err := EnsureDefaultTokenForAccount(db.DB, accountID, "new-token", "default", "manual", "default", true)
+	if err == nil {
+		t.Fatal("EnsureDefaultTokenForAccount succeeded, want forced update error")
+	}
+	if id != 0 {
+		t.Fatalf("created token id = %d, want 0 on rollback", id)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM account_tokens WHERE account_id = ?", accountID).Scan(&count); err != nil {
+		t.Fatalf("count account_tokens: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("account token rows = %d, want rollback to leave none", count)
+	}
 }
 
 // ---- Credential Mode Resolution Tests ----
@@ -139,6 +254,15 @@ func TestResolveStoredCredentialMode_NoConfigWithAccessToken(t *testing.T) {
 	}
 }
 
+func TestResolveStoredCredentialMode_LegacyMirroredAPIKey(t *testing.T) {
+	apiToken := "legacy-api-key"
+	account := &store.Account{ExtraConfig: nil, AccessToken: "legacy-api-key", APIToken: &apiToken}
+	mode := ResolveStoredCredentialMode(account)
+	if mode != CredentialModeAPIKey {
+		t.Errorf("expected 'apikey' for mirrored legacy access/api token, got %q", mode)
+	}
+}
+
 func TestResolveStoredCredentialMode_NoConfigNoAccessToken(t *testing.T) {
 	account := &store.Account{ExtraConfig: nil, AccessToken: ""}
 	mode := ResolveStoredCredentialMode(account)
@@ -199,6 +323,14 @@ func TestIsAPIKeyConnection_HasAccessToken(t *testing.T) {
 	account := &store.Account{ExtraConfig: nil, AccessToken: "sk-real-token"}
 	if IsAPIKeyConnection(account) {
 		t.Error("expected NOT API key connection (has accessToken)")
+	}
+}
+
+func TestIsAPIKeyConnection_LegacyMirroredAPIKey(t *testing.T) {
+	apiToken := "legacy-api-key"
+	account := &store.Account{ExtraConfig: nil, AccessToken: "legacy-api-key", APIToken: &apiToken}
+	if !IsAPIKeyConnection(account) {
+		t.Error("expected API key connection for mirrored legacy access/api token")
 	}
 }
 
@@ -363,6 +495,65 @@ func TestGetProxyURLFromExtraConfig_Absent(t *testing.T) {
 	}
 }
 
+func TestBuildPlatformProxyConfigPriority(t *testing.T) {
+	accountProxy := `{"proxyUrl":"http://account-proxy:8080"}`
+	siteProxy := "http://site-proxy:8080"
+	siteHeaders := `{"X-Metapi-Site":"site-header"}`
+
+	proxyCfg := BuildPlatformProxyConfig(
+		&config.Config{SystemProxyUrl: "http://system-proxy:8080"},
+		&store.Account{ExtraConfig: &accountProxy},
+		&store.Site{ProxyURL: &siteProxy, UseSystemProxy: true, CustomHeaders: &siteHeaders},
+	)
+
+	if proxyCfg == nil {
+		t.Fatal("proxy config is nil")
+	}
+	if proxyCfg.ProxyURL != "http://account-proxy:8080" {
+		t.Fatalf("ProxyURL = %q, want account proxy", proxyCfg.ProxyURL)
+	}
+	if proxyCfg.CustomHeaders["X-Metapi-Site"] != "site-header" {
+		t.Fatalf("custom header = %q, want site-header", proxyCfg.CustomHeaders["X-Metapi-Site"])
+	}
+}
+
+func TestBuildPlatformProxyConfigUsesSiteSystemProxy(t *testing.T) {
+	proxyCfg := BuildPlatformProxyConfig(
+		&config.Config{SystemProxyUrl: "http://system-proxy:8080"},
+		&store.Account{},
+		&store.Site{UseSystemProxy: true},
+	)
+
+	if proxyCfg == nil {
+		t.Fatal("proxy config is nil")
+	}
+	if proxyCfg.ProxyURL != "http://system-proxy:8080" || !proxyCfg.UseSystemProxy {
+		t.Fatalf("proxy config = %+v, want system proxy URL with flag", proxyCfg)
+	}
+}
+
+func TestBuildPlatformProxyConfigFiltersReservedCustomHeaders(t *testing.T) {
+	siteHeaders := `{"Authorization":"Bearer wrong","Cookie":"session=bad","New-API-User":"999","Content-Type":"text/plain","X-Metapi-Site":"site-header"}`
+
+	proxyCfg := BuildPlatformProxyConfig(
+		&config.Config{},
+		&store.Account{},
+		&store.Site{CustomHeaders: &siteHeaders},
+	)
+
+	if proxyCfg == nil {
+		t.Fatal("proxy config is nil")
+	}
+	if proxyCfg.CustomHeaders["X-Metapi-Site"] != "site-header" {
+		t.Fatalf("X-Metapi-Site = %q, want site-header", proxyCfg.CustomHeaders["X-Metapi-Site"])
+	}
+	for _, reserved := range []string{"Authorization", "Cookie", "New-API-User", "Content-Type"} {
+		if _, ok := proxyCfg.CustomHeaders[reserved]; ok {
+			t.Fatalf("reserved header %q was not filtered: %#v", reserved, proxyCfg.CustomHeaders)
+		}
+	}
+}
+
 // ---- Account CRUD Integration Tests ----
 
 func TestCreateAndGetAccount(t *testing.T) {
@@ -371,25 +562,25 @@ func TestCreateAndGetAccount(t *testing.T) {
 
 	username := "testuser"
 	accountData := map[string]any{
-		"siteId":          siteID,
-		"username":        &username,
-		"accessToken":     "sk-test-token-123",
-		"apiToken":        nil,
-		"balance":         0.0,
-		"balanceUsed":     0.0,
-		"quota":           0.0,
-		"unitCost":        nil,
-		"valueScore":      0.0,
-		"status":          "active",
-		"isPinned":        false,
-		"sortOrder":       int64(0),
-		"checkinEnabled":  true,
-		"lastCheckinAt":   nil,
+		"siteId":             siteID,
+		"username":           &username,
+		"accessToken":        "session-token-123",
+		"apiToken":           nil,
+		"balance":            0.0,
+		"balanceUsed":        0.0,
+		"quota":              0.0,
+		"unitCost":           nil,
+		"valueScore":         0.0,
+		"status":             "active",
+		"isPinned":           false,
+		"sortOrder":          int64(0),
+		"checkinEnabled":     true,
+		"lastCheckinAt":      nil,
 		"lastBalanceRefresh": nil,
-		"oauthProvider":   nil,
-		"oauthAccountKey": nil,
-		"oauthProjectID":  nil,
-		"extraConfig":     nil,
+		"oauthProvider":      nil,
+		"oauthAccountKey":    nil,
+		"oauthProjectID":     nil,
+		"extraConfig":        nil,
 	}
 
 	id, err := InsertAccount(db.DB, accountData)
@@ -410,6 +601,54 @@ func TestCreateAndGetAccount(t *testing.T) {
 	}
 	if account.Status != "active" {
 		t.Errorf("expected status=active, got %q", account.Status)
+	}
+}
+
+func TestInsertAccount_NilUsernameReturnsID(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "AnyRouter API Key", "https://anyrouter.example.com", "anyrouter")
+
+	accountData := map[string]any{
+		"siteId":             siteID,
+		"username":           nil,
+		"accessToken":        "api-key-token",
+		"apiToken":           "api-key-token",
+		"balance":            0.0,
+		"balanceUsed":        0.0,
+		"quota":              0.0,
+		"unitCost":           nil,
+		"valueScore":         0.0,
+		"status":             "active",
+		"isPinned":           false,
+		"sortOrder":          int64(0),
+		"checkinEnabled":     false,
+		"lastCheckinAt":      nil,
+		"lastBalanceRefresh": nil,
+		"oauthProvider":      nil,
+		"oauthAccountKey":    nil,
+		"oauthProjectID":     nil,
+		"extraConfig": map[string]any{
+			"credentialMode": "apikey",
+		},
+	}
+
+	id, err := InsertAccount(db.DB, accountData)
+	if err != nil {
+		t.Fatalf("InsertAccount failed: %v", err)
+	}
+	if id <= 0 {
+		t.Fatalf("expected positive ID, got %d", id)
+	}
+
+	account, err := GetAccountByID(db.DB, id)
+	if err != nil {
+		t.Fatalf("GetAccountByID failed: %v", err)
+	}
+	if account.Username != nil {
+		t.Fatalf("username = %q, want nil", *account.Username)
+	}
+	if account.CheckinEnabled {
+		t.Fatal("API-key account should not enable checkin")
 	}
 }
 
@@ -456,6 +695,11 @@ func TestDeleteAccount(t *testing.T) {
 func TestGetAccountWithSiteByID(t *testing.T) {
 	db := openTestDB(t)
 	siteID := createTestSite(t, db, "Test Site", "https://api.openai.com", "openai")
+	siteProxy := "http://site-proxy:8080"
+	siteHeaders := `{"X-Metapi-Site":"site-header"}`
+	if _, err := db.Exec("UPDATE sites SET proxy_url = ?, use_system_proxy = ?, custom_headers = ? WHERE id = ?", siteProxy, true, siteHeaders, siteID); err != nil {
+		t.Fatalf("update site proxy fields: %v", err)
+	}
 	accountID := createTestAccount(t, db, siteID, strPtr("testuser"), "sk-with-site")
 
 	row, err := GetAccountWithSiteByID(db.DB, accountID)
@@ -467,6 +711,15 @@ func TestGetAccountWithSiteByID(t *testing.T) {
 	}
 	if row.Site.Platform != "openai" {
 		t.Errorf("expected platform 'openai', got %q", row.Site.Platform)
+	}
+	if row.Site.ProxyURL == nil || *row.Site.ProxyURL != siteProxy {
+		t.Fatalf("site proxy_url = %v, want %q", row.Site.ProxyURL, siteProxy)
+	}
+	if !row.Site.UseSystemProxy {
+		t.Fatal("site use_system_proxy = false, want true")
+	}
+	if row.Site.CustomHeaders == nil || *row.Site.CustomHeaders != siteHeaders {
+		t.Fatalf("site custom_headers = %v, want %q", row.Site.CustomHeaders, siteHeaders)
 	}
 	if row.Account.ID != accountID {
 		t.Errorf("expected account ID %d, got %d", accountID, row.Account.ID)

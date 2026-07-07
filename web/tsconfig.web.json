@@ -1,8 +1,29 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "rootDir": "."
   },
-  "include": ["src/web/**/*.ts", "src/web/**/*.tsx"],
-  "exclude": ["src/web/**/*.test.ts", "src/web/**/*.test.tsx"]
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "pages/**/*.ts",
+    "pages/**/*.tsx",
+    "shared/**/*.ts",
+    "shared/**/*.tsx",
+    "shared/**/*.js",
+    "vite-env.d.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.architecture.test.ts",
+    "**/*.architecture.test.tsx",
+    "node_modules",
+    "dist"
+  ]
 }

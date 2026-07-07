@@ -1,7 +1,7 @@
 # File I/O Security Audit -- metapi-go
 
 **Date:** 2026-07-05
-**Scope:** Full repository (`D:/Code/TokenDance/metapi-go`)
+**Scope:** Full repository (`<repo>`)
 **Auditor:** Claude Code automated audit
 **Files examined:** `store/open.go`, `handler/admin/settings_backup.go`, `cmd/server/main.go`, `store/bootstrap.go`, `scheduler/file_retention.go`, `scheduler/log_cleanup.go`, `scheduler/admin_snapshot.go`, `scheduler/backup_webdav.go`, `router/router.go`, `config/config.go`, `config/defaults.go`, `web/embed.go`, `cmd/migrate/main.go`
 

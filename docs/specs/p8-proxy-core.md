@@ -4,17 +4,17 @@
 
 ## Original TS Reference
 
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\conductor\DefaultProxyConductor.ts` -- action-based retry conductor
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\orchestration\endpointFlow.ts` -- endpoint-level iteration
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\channelSelection.ts` -- sticky session + tester + route refresh
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\surfaces\chatSurface.ts` -- channel retry loop + SSE + count_tokens
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\surfaces\sharedSurface.ts` -- session/sticky/failure/log toolkits
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\cliProfiles\` -- 4 CLI profiles
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\conductor\retryPolicy.ts` -- action routing
-- `D:\Code\TokenDance\metapi\src\server\services\proxyChannelCoordinator.ts` -- lease + sticky bindings
-- `D:\Code\TokenDance\metapi\src\server\services\proxyChannelRetry.ts` -- max attempts/retries
-- `D:\Code\TokenDance\metapi\src\server\services\proxyFailureJudge.ts` -- content-based failure detection
-- `D:\Code\TokenDance\metapi\src\server\services\proxyRetryPolicy.ts` -- HTTP status + text pattern retry
+- `<metapi-ts>\src\server\proxy-core\conductor\DefaultProxyConductor.ts` -- action-based retry conductor
+- `<metapi-ts>\src\server\proxy-core\orchestration\endpointFlow.ts` -- endpoint-level iteration
+- `<metapi-ts>\src\server\proxy-core\channelSelection.ts` -- sticky session + tester + route refresh
+- `<metapi-ts>\src\server\proxy-core\surfaces\chatSurface.ts` -- channel retry loop + SSE + count_tokens
+- `<metapi-ts>\src\server\proxy-core\surfaces\sharedSurface.ts` -- session/sticky/failure/log toolkits
+- `<metapi-ts>\src\server\proxy-core\cliProfiles\` -- 4 CLI profiles
+- `<metapi-ts>\src\server\proxy-core\conductor\retryPolicy.ts` -- action routing
+- `<metapi-ts>\src\server\services\proxyChannelCoordinator.ts` -- lease + sticky bindings
+- `<metapi-ts>\src\server\services\proxyChannelRetry.ts` -- max attempts/retries
+- `<metapi-ts>\src\server\services\proxyFailureJudge.ts` -- content-based failure detection
+- `<metapi-ts>\src\server\services\proxyRetryPolicy.ts` -- HTTP status + text pattern retry
 
 ## Go Module Structure
 

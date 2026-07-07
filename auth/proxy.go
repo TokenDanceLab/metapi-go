@@ -49,9 +49,12 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			// ---- Consume managed key request count (atomic increment) ----
+			// ---- Reserve managed key request count (atomic quota gate) ----
 			if result.Source == "managed" && result.Key != nil {
-				consumeManagedKeyRequest(result.Key.ID)
+				if !consumeManagedKeyRequest(result.Key.ID) {
+					writeJSON(w, http.StatusForbidden, jsonError("API key has exceeded max requests"))
+					return
+				}
 			}
 
 			// ---- Build ProxyAuthContext and store in request context ----

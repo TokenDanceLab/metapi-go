@@ -6,7 +6,7 @@ export {
   stripCommonWrappers,
   type BrandInfo,
   type BrandMatchContext,
-} from '../../server/shared/modelBrand.js';
+} from '../shared/modelBrand.js';
 
 const LEGACY_ICON_ALIASES: Record<string, string> = {
   anthropic: 'claude-color',

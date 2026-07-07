@@ -72,7 +72,7 @@
 | e2e tests | 4 files | **5 files** (+3 hardening tests) |
 
 ## CI/CD Status
-- CI: ✅ (lint + vet + test-sqlite -race + test-pg + build)
+- CI workflow includes lint, vet, vulncheck, frontend, test-sqlite `-race`, test-pg, build, and Docker image build plus `/health` and `/ready` smoke gates.
 - CD: ✅ (ghcr.io/tokendancelab/metapi-go:latest)
 - Release: v0.3.0 → **next: v0.4.0**
 

@@ -3,15 +3,15 @@
 **S.U.P.E.R**: S (单一职责) · R (可替换) | **依赖**: P3 + P4 | **Size**: M
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\services\checkinService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\checkinRewardParser.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\balanceService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\todayIncomeRewardService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\notifyService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\notificationThrottle.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\alertService.ts` + `alertRules.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\dailySummaryService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\failureReasonService.ts`
+- `<metapi-ts>\src\server\services\checkinService.ts`
+- `<metapi-ts>\src\server\services\checkinRewardParser.ts`
+- `<metapi-ts>\src\server\services\balanceService.ts`
+- `<metapi-ts>\src\server\services\todayIncomeRewardService.ts`
+- `<metapi-ts>\src\server\services\notifyService.ts`
+- `<metapi-ts>\src\server\services\notificationThrottle.ts`
+- `<metapi-ts>\src\server\services\alertService.ts` + `alertRules.ts`
+- `<metapi-ts>\src\server\services\dailySummaryService.ts`
+- `<metapi-ts>\src\server\services\failureReasonService.ts`
 
 ## Go 模块结构
 ```

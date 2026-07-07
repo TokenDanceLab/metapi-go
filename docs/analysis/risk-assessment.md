@@ -52,7 +52,7 @@
 ## Project Governance Risks
 
 - 现有 `AGENTS.md` 是 TS 版专用 (Drizzle files, Fastify, Vite, JS 测试框架) — 需为 Go 版重写
-- metapi skill (`C:\Users\Ding\.claude\skills\metapi\SKILL.md`) 是运维/API 参考 — Go 版需同步更新 endpoint/部署说明
+- metapi skill (`<agent-skill-dir>\metapi\SKILL.md`) 是运维/API 参考 — Go 版需同步更新 endpoint/部署说明
 - Go 版从零开始, 无记忆文件 — Phase 4 时建立项目 memory surface
 
 ## Compatibility Concerns

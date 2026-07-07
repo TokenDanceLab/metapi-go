@@ -35,8 +35,8 @@ import {
 } from "./helpers/listSorting.js";
 import { shouldIgnoreRowSelectionClick } from "./helpers/rowSelection.js";
 import { SITE_DOCS_URL } from "../docsLink.js";
-import { getSiteInitializationPreset } from "../../shared/siteInitializationPresets.js";
-import { parseBatchApiKeys } from "../../shared/apiKeyBatch.js";
+import { getSiteInitializationPreset } from "../shared/siteInitializationPresets.js";
+import { parseBatchApiKeys } from "../shared/apiKeyBatch.js";
 
 type ConnectionsSegment = "session" | "apikey" | "tokens";
 

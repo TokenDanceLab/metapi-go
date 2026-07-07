@@ -1,4 +1,4 @@
-import { normalizeTokenRouteMode } from '../../../shared/tokenRouteContract.js';
+import { normalizeTokenRouteMode } from '../../shared/tokenRouteContract.js';
 
 export type RouteListVisibilityItem = {
   id: number;

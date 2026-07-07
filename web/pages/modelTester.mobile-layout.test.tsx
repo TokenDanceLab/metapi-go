@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('ModelTester mobile layout', () => {
   it('switches the playground shell into a true single-column mobile layout', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/ModelTester.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/ModelTester.tsx'), 'utf8');
 
     expect(source).toContain("import { useIsMobile } from '../components/useIsMobile.js'");
     expect(source).toContain('const isMobile = useIsMobile()');

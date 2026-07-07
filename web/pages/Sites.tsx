@@ -40,8 +40,8 @@ import {
   detectSiteInitializationPreset,
   getSiteInitializationPreset,
   listSiteInitializationPresets,
-} from '../../shared/siteInitializationPresets.js';
-import { analyzePrimarySiteUrl } from '../../shared/sitePrimaryUrl.js';
+} from '../shared/siteInitializationPresets.js';
+import { analyzePrimarySiteUrl, safeExternalHref } from '../shared/sitePrimaryUrl.js';
 
 type SiteSubscriptionSummary = {
   activeCount: number;
@@ -757,10 +757,21 @@ export default function Sites() {
       return;
     }
 
+    const persistedSiteUrl = primarySiteUrlAnalysis.persistedUrl;
+    const externalCheckinUrl = form.externalCheckinUrl.trim();
+    if (!persistedSiteUrl) {
+      toast.error('站点 URL 仅支持 http 或 https');
+      return;
+    }
+    if (externalCheckinUrl && !safeExternalHref(externalCheckinUrl)) {
+      toast.error('外部签到 URL 仅支持 http 或 https');
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
-      url: primarySiteUrlAnalysis.persistedUrl || form.url.trim(),
-      externalCheckinUrl: form.externalCheckinUrl.trim(),
+      url: persistedSiteUrl,
+      externalCheckinUrl,
       platform: form.platform.trim(),
       initializationPresetId: selectedInitializationPresetId,
       proxyUrl: form.proxyUrl.trim(),
@@ -1951,7 +1962,7 @@ export default function Sites() {
                         <span>{site.name || '-'}</span>
                         {site.url ? (
                           <a
-                            href={site.url}
+                            href={safeExternalHref(site.url) || undefined}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="sites-url-link"
@@ -2041,7 +2052,7 @@ export default function Sites() {
                           stacked
                           value={site.url ? (
                             <a
-                              href={site.url}
+                              href={safeExternalHref(site.url) || undefined}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="sites-url-link"
@@ -2092,7 +2103,7 @@ export default function Sites() {
                           label="外部签到站URL"
                           value={site.externalCheckinUrl ? (
                             <a
-                              href={site.externalCheckinUrl}
+                              href={safeExternalHref(site.externalCheckinUrl) || undefined}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="sites-url-link"
@@ -2202,7 +2213,7 @@ export default function Sites() {
                     <td style={{ fontWeight: 600 }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                         <a
-                          href={site.url}
+                          href={safeExternalHref(site.url) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -2225,7 +2236,7 @@ export default function Sites() {
                     <td className="sites-url-cell" style={{ maxWidth: 300 }}>
                       {site.externalCheckinUrl ? (
                         <a
-                          href={site.externalCheckinUrl}
+                          href={safeExternalHref(site.externalCheckinUrl) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="sites-url-link"
@@ -2262,7 +2273,7 @@ export default function Sites() {
                     </td>
                     <td>
                       <a
-                        href={site.url}
+                        href={safeExternalHref(site.url) || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ textDecoration: 'none' }}
@@ -2274,7 +2285,7 @@ export default function Sites() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
                       <a
-                        href={site.url}
+                        href={safeExternalHref(site.url) || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ color: 'var(--color-text-muted)', textDecoration: 'underline' }}

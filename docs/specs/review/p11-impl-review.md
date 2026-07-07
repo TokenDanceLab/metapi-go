@@ -2,8 +2,8 @@
 
 **Review date**: 2026-07-04
 **Reviewer**: Claude Code
-**Scope**: `D:/Code/TokenDance/metapi-go/handler/admin/` vs spec `p11-admin-api.md`
-**TS reference**: `D:/Code/TokenDance/metapi/src/server/routes/api/`
+**Scope**: `<repo>/handler/admin/` vs spec `p11-admin-api.md`
+**TS reference**: `<metapi-ts>/src/server/routes/api/`
 
 ---
 
@@ -46,10 +46,10 @@ The Go implementation covers **all 110 endpoint paths** (84 verified + 13 inferr
 | 2 | PUT `/api/settings/runtime` | **PARTIAL** | **Major gaps**: (a) No `changedLabels: string[]` tracking -- writes a single generic event instead of per-field events. (b) Event type always `"status"` instead of per-field heuristic (`checkinCron`->`"checkin"`, `balanceRefreshCron`->`"balance"`, `proxyToken`->`"proxy"`). (c) **No scheduler restarts**: `updateCheckinSchedule()`, `updateBalanceRefreshCron()`, `updateLogCleanupSettings()` not called. (d) **No self-lockout prevention** for `adminIpAllowlist` -- current request IP not validated against new whitelist. (e) **Missing cross-field validation**: `webhookUrl` not validated when `webhookEnabled` is true; `barkUrl` same issue; `telegramBotToken`/`telegramChatId`/`telegramMessageThreadId` not validated when telegram is enabled. (f) `proxyErrorKeywords` only handles `[]any` and `string` -- TS also accepts newline-separated strings. (g) `payloadRules` not validated via `parsePayloadRulesConfigInput()`. (h) No `globalBlockedBrands`/`globalAllowedModels` change detection for background route rebuild. (i) Response only includes `{ success, message }` -- TS returns full config after update. |
 | 3 | GET `/api/settings/brand-list` | **STUB** | Hardcoded brand names instead of querying from DB. |
 | 4 | POST `/api/settings/system-proxy/test` | **STUB** | Always returns `reachable: true` with fake latency. No actual HTTP probe to `https://www.gstatic.com/generate_204`. No `finalUrl` or `probeUrl` in response. |
-| 5 | GET `/api/settings/database/runtime` | **STUB** | Returns hardcoded `"sqlite"` dialect. |
-| 6 | PUT `/api/settings/database/runtime` | **STUB** | Saves settings but returns hardcoded `"sqlite"` response. |
-| 7 | POST `/api/settings/database/test-connection` | **STUB** | Returns success if dialect non-empty. No actual DB connection test. |
-| 8 | POST `/api/settings/database/migrate` | **STUB** | Returns zero rows migrated. No cross-dialect data transfer. No audit event fired. |
+| 5 | GET `/api/settings/database/runtime` | **DONE** | Returns current `active` dialect from runtime config, masks PostgreSQL credentials, and includes `saved` restart-pending overrides. |
+| 6 | PUT `/api/settings/database/runtime` | **PARTIAL** | Saves `db_type`, `db_url`, and `db_ssl`; response separates current `active` from restart-pending `saved`. Runtime switch still requires restart. |
+| 7 | POST `/api/settings/database/test-connection` | **DONE** | Tests SQLite/PostgreSQL connections and rejects unsupported dialects. Error responses mask credentials. |
+| 8 | POST `/api/settings/database/migrate` | **PARTIAL** | Returns 501 with `metapi-migrate` guidance. Admin API migration is still intentionally not wired. |
 | 9 | GET `/api/settings/backup/export` | **STUB** | Returns empty backup object. No actual data export. Missing `exportedAt` timestamp. |
 | 10 | POST `/api/settings/backup/import` | **STUB** | Does not call `applyImportedSettingToRuntime()` for imported settings. No scheduler restarts, no cache invalidation. |
 | 11 | GET `/api/settings/backup/webdav` | **STUB** | Returns hardcoded disabled config. |

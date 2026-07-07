@@ -196,19 +196,19 @@ These are **channel-level retry policies**, not client-facing rate limiting. The
 
 | File | Role |
 |---|---|
-| `D:/Code/TokenDance/metapi-go/router/router.go` | Go route registration (no rate limit middleware) |
-| `D:/Code/TokenDance/metapi-go/auth/admin.go` | Go admin auth (IP allowlist only) |
-| `D:/Code/TokenDance/metapi-go/auth/proxy.go` | Go proxy auth (key auth, no rate limit) |
-| `D:/Code/TokenDance/metapi-go/auth/downstream.go` | Go managed key auth (lifetime caps only) |
-| `D:/Code/TokenDance/metapi-go/proxy/session.go` | Go channel concurrency (well-implemented) |
-| `D:/Code/TokenDance/metapi-go/proxy/retry_policy.go` | Go retry policy (429 handling correct) |
-| `D:/Code/TokenDance/metapi-go/handler/admin/monitor.go` | Go monitor routes (rate limit comment but not enforced) |
-| `D:/Code/TokenDance/metapi-go/handler/admin/oauth_routes.go` | Go OAuth routes (no rate limit middleware) |
-| `D:/Code/TokenDance/metapi/src/server/middleware/requestRateLimit.ts` | TS rate limit guard implementation |
-| `D:/Code/TokenDance/metapi/src/server/routes/api/oauth.ts` | TS OAuth routes (15 guards + 6 rate-limiter instances) |
-| `D:/Code/TokenDance/metapi/src/server/routes/api/accounts.ts` | TS account routes (2 guards) |
-| `D:/Code/TokenDance/metapi/src/server/routes/api/auth.ts` | TS auth routes (1 guard) |
-| `D:/Code/TokenDance/metapi/src/server/routes/api/monitor.ts` | TS monitor routes (4 guards) |
-| `D:/Code/TokenDance/metapi/src/server/routes/api/stats.ts` | TS stats routes (1 guard) |
-| `D:/Code/TokenDance/metapi/src/server/middleware/auth.ts` | TS auth middleware (IP allowlist + proxy auth) |
-| `D:/Code/TokenDance/metapi/src/server/routes/proxy/router.ts` | TS proxy routes (no per-IP rate limiting) |
+| `<repo>/router/router.go` | Go route registration (no rate limit middleware) |
+| `<repo>/auth/admin.go` | Go admin auth (IP allowlist only) |
+| `<repo>/auth/proxy.go` | Go proxy auth (key auth, no rate limit) |
+| `<repo>/auth/downstream.go` | Go managed key auth (lifetime caps only) |
+| `<repo>/proxy/session.go` | Go channel concurrency (well-implemented) |
+| `<repo>/proxy/retry_policy.go` | Go retry policy (429 handling correct) |
+| `<repo>/handler/admin/monitor.go` | Go monitor routes (rate limit comment but not enforced) |
+| `<repo>/handler/admin/oauth_routes.go` | Go OAuth routes (no rate limit middleware) |
+| `<metapi-ts>/src/server/middleware/requestRateLimit.ts` | TS rate limit guard implementation |
+| `<metapi-ts>/src/server/routes/api/oauth.ts` | TS OAuth routes (15 guards + 6 rate-limiter instances) |
+| `<metapi-ts>/src/server/routes/api/accounts.ts` | TS account routes (2 guards) |
+| `<metapi-ts>/src/server/routes/api/auth.ts` | TS auth routes (1 guard) |
+| `<metapi-ts>/src/server/routes/api/monitor.ts` | TS monitor routes (4 guards) |
+| `<metapi-ts>/src/server/routes/api/stats.ts` | TS stats routes (1 guard) |
+| `<metapi-ts>/src/server/middleware/auth.ts` | TS auth middleware (IP allowlist + proxy auth) |
+| `<metapi-ts>/src/server/routes/proxy/router.ts` | TS proxy routes (no per-IP rate limiting) |

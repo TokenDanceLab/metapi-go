@@ -15,7 +15,7 @@ import (
 type OAuthRouteUnitStrategy string
 
 const (
-	RouteUnitStrategyRoundRobin         OAuthRouteUnitStrategy = "round_robin"
+	RouteUnitStrategyRoundRobin            OAuthRouteUnitStrategy = "round_robin"
 	RouteUnitStrategyStickUntilUnavailable OAuthRouteUnitStrategy = "stick_until_unavailable"
 )
 
@@ -48,8 +48,8 @@ type CreateRouteUnitInput struct {
 
 // CreateRouteUnitResult holds the result of creating a route unit.
 type CreateRouteUnitResult struct {
-	Success   bool                    `json:"success"`
-	RouteUnit *OAuthRouteUnitSummary  `json:"routeUnit"`
+	Success   bool                   `json:"success"`
+	RouteUnit *OAuthRouteUnitSummary `json:"routeUnit"`
 }
 
 // ListOauthRouteUnitsByAccountIDs returns route unit participation for a set of accounts.
@@ -112,7 +112,7 @@ func ListEnabledOauthRouteUnitsWithMembers() []struct {
 	}
 
 	var units []store.OAuthRouteUnit
-	if err := db.Select(&units, "SELECT * FROM oauth_route_units WHERE enabled = TRUE"); err != nil {
+	if err := db.Select(&units, "SELECT * FROM oauth_route_units WHERE enabled = ?", true); err != nil {
 		return nil
 	}
 	if len(units) == 0 {
@@ -173,16 +173,17 @@ func CreateOauthRouteUnit(input CreateRouteUnitInput) (*CreateRouteUnitResult, e
 
 	// Load accounts with site join.
 	query, args, _ := sqlx.In(
-		`SELECT a.*, s.* FROM accounts a
+		`SELECT a.id, a.site_id, a.oauth_provider FROM accounts a
 		 INNER JOIN sites s ON a.site_id = s.id
 		 WHERE a.id IN (?)`, accountIDs)
 	query = db.Rebind(query)
 
-	type accountWithSite struct {
-		Account store.Account `db:"accounts"`
-		Site    store.Site    `db:"sites"`
+	type accountRouteUnitRow struct {
+		ID            int64   `db:"id"`
+		SiteID        int64   `db:"site_id"`
+		OAuthProvider *string `db:"oauth_provider"`
 	}
-	var rows []accountWithSite
+	var rows []accountRouteUnitRow
 	if err := db.Select(&rows, query, args...); err != nil {
 		return nil, fmt.Errorf("oauth route unit accounts not found")
 	}
@@ -191,22 +192,22 @@ func CreateOauthRouteUnit(input CreateRouteUnitInput) (*CreateRouteUnitResult, e
 	}
 
 	first := rows[0]
-	expectedSiteID := first.Account.SiteID
+	expectedSiteID := first.SiteID
 	expectedProvider := ""
-	if first.Account.OAuthProvider != nil {
-		expectedProvider = strings.TrimSpace(*first.Account.OAuthProvider)
+	if first.OAuthProvider != nil {
+		expectedProvider = strings.TrimSpace(*first.OAuthProvider)
 	}
 	if expectedProvider == "" {
 		return nil, fmt.Errorf("oauth route unit only supports oauth accounts")
 	}
 
 	for _, row := range rows {
-		if row.Account.SiteID != expectedSiteID {
+		if row.SiteID != expectedSiteID {
 			return nil, fmt.Errorf("oauth route unit accounts must belong to the same site")
 		}
 		p := ""
-		if row.Account.OAuthProvider != nil {
-			p = strings.TrimSpace(*row.Account.OAuthProvider)
+		if row.OAuthProvider != nil {
+			p = strings.TrimSpace(*row.OAuthProvider)
 		}
 		if p != expectedProvider {
 			return nil, fmt.Errorf("oauth route unit accounts must share the same provider")
@@ -233,25 +234,18 @@ func CreateOauthRouteUnit(input CreateRouteUnitInput) (*CreateRouteUnitResult, e
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Format(time.RFC3339)
-	result, err := tx.Exec(
+	unitID, err := execRouteUnitInsertID(db, tx,
 		`INSERT INTO oauth_route_units (site_id, provider, name, strategy, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 1, ?, ?)`,
-		expectedSiteID, expectedProvider, name, string(strategy), now, now)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		expectedSiteID, expectedProvider, name, string(strategy), true, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("oauth route unit creation failed: %w", err)
 	}
 
-	unitID, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres.
-		tx.Get(&unitID, "SELECT id FROM oauth_route_units WHERE site_id = ? AND name = ? ORDER BY id DESC LIMIT 1",
-			expectedSiteID, name)
-	}
-
 	for i, accountID := range accountIDs {
-		_, err := tx.Exec(
+		_, err := tx.Exec(tx.Rebind(
 			`INSERT INTO oauth_route_unit_members (unit_id, account_id, sort_order, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?)`),
 			unitID, accountID, i, now, now)
 		if err != nil {
 			return nil, fmt.Errorf("oauth route unit accounts already grouped")
@@ -445,6 +439,22 @@ func max64(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func execRouteUnitInsertID(db *store.DB, tx *sqlx.Tx, query string, args ...any) (int64, error) {
+	if db.Dialect == store.DialectPostgres {
+		var id int64
+		if err := tx.QueryRowx(tx.Rebind(query+" RETURNING id"), args...).Scan(&id); err != nil {
+			return 0, err
+		}
+		return id, nil
+	}
+
+	result, err := tx.Exec(tx.Rebind(query), args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 // ---- Rollback helpers ----

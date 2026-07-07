@@ -20,6 +20,8 @@ func TestIsMultipartRequest(t *testing.T) {
 	}{
 		{"multipart", "multipart/form-data; boundary=---", true},
 		{"multipart simple", "multipart/form-data", true},
+		{"multipart mixed case", "Multipart/Form-Data; boundary=---", true},
+		{"multipart invalid suffix", "multipart/form-datax; boundary=---", false},
 		{"json", "application/json", false},
 		{"empty", "", false},
 		{"text", "text/plain", false},
@@ -95,10 +97,10 @@ func TestParseMultipartFormData_EmptyContentType(t *testing.T) {
 
 func TestMultipartFormData_GetField(t *testing.T) {
 	tests := []struct {
-		name    string
-		fd      *MultipartFormData
-		key     string
-		want    string
+		name string
+		fd   *MultipartFormData
+		key  string
+		want string
 	}{
 		{"nil fd", nil, "model", ""},
 		{"nil Values", &MultipartFormData{}, "model", ""},
@@ -169,6 +171,28 @@ func TestCloneMultipartBody_NoForm(t *testing.T) {
 	}
 }
 
+func TestCloneMultipartBodyPropagatesFileOpenError(t *testing.T) {
+	req := httptest.NewRequest("POST", "/test", nil)
+	req.MultipartForm = &multipart.Form{
+		Value: map[string][]string{"model": {"gpt-4o"}},
+		File: map[string][]*multipart.FileHeader{
+			"image": {{Filename: "missing.png"}},
+		},
+	}
+
+	clonedBody, _, err := CloneMultipartBody(req, nil)
+	if err != nil {
+		t.Fatalf("CloneMultipartBody returned early error: %v", err)
+	}
+	_, err = io.ReadAll(clonedBody)
+	if err == nil {
+		t.Fatal("reading cloned body succeeded, want propagated file open error")
+	}
+	if !strings.Contains(err.Error(), "open multipart file") {
+		t.Fatalf("error = %v, want file open context", err)
+	}
+}
+
 // ---- MultipartFormData with multiple files ----
 
 func TestParseMultipartFormData_MultipleFiles(t *testing.T) {
@@ -194,6 +218,95 @@ func TestParseMultipartFormData_MultipleFiles(t *testing.T) {
 
 	if len(got.Files) < 2 {
 		t.Errorf("expected 2 files, got %d", len(got.Files))
+	}
+}
+
+func TestParseMultipartFormDataRejectsTooManyFieldNames(t *testing.T) {
+	t.Setenv("PROXY_MAX_MULTIPART_FIELD_NAMES", "2")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("model", "gpt-4o")
+	writer.WriteField("prompt", "a cat")
+	writer.WriteField("extra", "value")
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/test", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	_, err := ParseMultipartFormData(req)
+	if err == nil {
+		t.Fatal("expected multipart field-name limit error")
+	}
+	if !strings.Contains(err.Error(), "field names") {
+		t.Fatalf("error = %v, want field names context", err)
+	}
+}
+
+func TestParseMultipartFormDataRejectsTooManyValuesPerField(t *testing.T) {
+	t.Setenv("PROXY_MAX_MULTIPART_VALUES_PER_FIELD", "2")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("tag", "one")
+	writer.WriteField("tag", "two")
+	writer.WriteField("tag", "three")
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/test", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	_, err := ParseMultipartFormData(req)
+	if err == nil {
+		t.Fatal("expected multipart values-per-field limit error")
+	}
+	if !strings.Contains(err.Error(), "value count") {
+		t.Fatalf("error = %v, want value count context", err)
+	}
+}
+
+func TestParseMultipartFormDataRejectsTooManyFiles(t *testing.T) {
+	t.Setenv("PROXY_MAX_MULTIPART_FILES", "1")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("model", "sora-2")
+	part1, _ := writer.CreateFormFile("video", "one.mp4")
+	part1.Write([]byte("one"))
+	part2, _ := writer.CreateFormFile("audio", "two.wav")
+	part2.Write([]byte("two"))
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/test", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	_, err := ParseMultipartFormData(req)
+	if err == nil {
+		t.Fatal("expected multipart file count limit error")
+	}
+	if !strings.Contains(err.Error(), "file count") {
+		t.Fatalf("error = %v, want file count context", err)
+	}
+}
+
+func TestParseMultipartFormDataRejectsOversizedFile(t *testing.T) {
+	t.Setenv("PROXY_MAX_MULTIPART_FILE_BYTES", "4")
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("image", "large.png")
+	part.Write([]byte("12345"))
+	writer.Close()
+
+	req := httptest.NewRequest("POST", "/test", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	_, err := ParseMultipartFormData(req)
+	if err == nil {
+		t.Fatal("expected multipart file size limit error")
+	}
+	if !strings.Contains(err.Error(), "size") {
+		t.Fatalf("error = %v, want size context", err)
 	}
 }
 

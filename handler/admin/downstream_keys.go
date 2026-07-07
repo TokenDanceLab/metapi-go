@@ -3,7 +3,6 @@ package admin
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"sort"
@@ -49,9 +48,11 @@ func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) 
 	var args []any
 
 	if statusFilter == "enabled" {
-		conditions = append(conditions, "enabled = 1")
+		conditions = append(conditions, "enabled = ?")
+		args = append(args, true)
 	} else if statusFilter == "disabled" {
-		conditions = append(conditions, "enabled = 0")
+		conditions = append(conditions, "enabled = ?")
+		args = append(args, false)
 	}
 	if search != "" {
 		conditions = append(conditions, "(LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)")
@@ -69,7 +70,7 @@ func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) 
 	// Apply group filter and enrich with usage data
 	items := make([]map[string]any, 0)
 	for _, row := range rows {
-		groupName, _ := row["group_name"].(string)
+		groupName := existingString(row, "group_name")
 		if group == "__ungrouped__" && groupName != "" {
 			continue
 		}
@@ -111,22 +112,22 @@ func (h *downstreamKeysHandler) listKeys(w http.ResponseWriter, r *http.Request)
 // POST /api/downstream-keys
 func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Name                   string  `json:"name"`
-		Key                    string  `json:"key"`
-		Description            *string `json:"description"`
-		GroupName              *string `json:"groupName"`
+		Name                   string   `json:"name"`
+		Key                    string   `json:"key"`
+		Description            *string  `json:"description"`
+		GroupName              *string  `json:"groupName"`
 		Tags                   []string `json:"tags"`
-		Enabled                *bool   `json:"enabled"`
-		ExpiresAt              *string `json:"expiresAt"`
+		Enabled                *bool    `json:"enabled"`
+		ExpiresAt              *string  `json:"expiresAt"`
 		MaxCost                *float64 `json:"maxCost"`
-		MaxRequests            *int64  `json:"maxRequests"`
+		MaxRequests            *int64   `json:"maxRequests"`
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
-		SiteWeightMultipliers  any     `json:"siteWeightMultipliers"`
+		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
-		ExcludedCredentialRefs []any   `json:"excludedCredentialRefs"`
+		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
 		return
 	}
@@ -149,7 +150,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 
 	// Check for duplicate key
 	var count int
-	h.db.Get(&count, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ?", body.Key)
+	h.db.Get(&count, rebindAdminQuery(h.db, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ?"), body.Key)
 	if count > 0 {
 		writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
 		return
@@ -190,7 +191,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		desc = &s
 	}
 
-	result, err := h.db.Exec(
+	id, err := execInsertID(h.db,
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
 		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
@@ -208,12 +209,6 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		}
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建失败"})
 		return
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = h.db.Get(&id, "SELECT id FROM downstream_api_keys WHERE key = ? ORDER BY id DESC LIMIT 1", body.Key)
 	}
 	created := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	if created != nil {
@@ -262,7 +257,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
 	}
 
-	bodyBytes, err := io.ReadAll(r.Body)
+	bodyBytes, err := decodeJSONRequestRaw(r, &body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
 		return
@@ -271,12 +266,6 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	// First unmarshal into map to detect which fields were present in JSON.
 	rawBody := map[string]any{}
 	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
-		return
-	}
-
-	// Then unmarshal into typed struct for field values.
-	if err := json.Unmarshal(bodyBytes, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
 		return
 	}
@@ -425,7 +414,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	// Duplicate key check: if key is being changed, verify new key doesn't collide.
 	if hasField["key"] && key != existingString(existing, "key") {
 		var dupCount int
-		h.db.Get(&dupCount, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ? AND id != ?", key, id)
+		h.db.Get(&dupCount, rebindAdminQuery(h.db, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ? AND id != ?"), key, id)
 		if dupCount > 0 {
 			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
 			return
@@ -447,12 +436,13 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	credRefsJSON := toPersistenceJSON(excludedCredentialRefs)
 
 	_, err = h.db.Exec(
-		`UPDATE downstream_api_keys SET
+		rebindAdminQuery(h.db,
+			`UPDATE downstream_api_keys SET
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
 			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?,
 			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
 			excluded_site_ids = ?, excluded_credential_refs = ?, updated_at = ?
-		WHERE id = ?`,
+		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
 		enabled, expiresAt, maxCost, maxRequests,
 		modelsJSON, routeIdsJSON, swmJSON,
@@ -490,7 +480,10 @@ func (h *downstreamKeysHandler) resetUsage(w http.ResponseWriter, r *http.Reques
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	h.db.Exec("UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?", now, id)
+	if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?"), now, id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "重置失败"})
+		return
+	}
 
 	updated := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -508,7 +501,10 @@ func (h *downstreamKeysHandler) deleteKey(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	h.db.Exec("DELETE FROM downstream_api_keys WHERE id = ?", id)
+	if _, err := h.db.Exec(rebindAdminQuery(h.db, "DELETE FROM downstream_api_keys WHERE id = ?"), id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "删除失败"})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
@@ -579,7 +575,10 @@ func (h *downstreamKeysHandler) batchKeys(w http.ResponseWriter, r *http.Request
 		Tags           []string `json:"tags"`
 		TagOperation   *string  `json:"tagOperation"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	if len(body.IDs) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "ids is required"})
@@ -608,18 +607,36 @@ func (h *downstreamKeysHandler) batchKeys(w http.ResponseWriter, r *http.Request
 		now := time.Now().UTC().Format(time.RFC3339)
 		switch action {
 		case "delete":
-			h.db.Exec("DELETE FROM downstream_api_keys WHERE id = ?", id)
+			if _, err := h.db.Exec(rebindAdminQuery(h.db, "DELETE FROM downstream_api_keys WHERE id = ?"), id); err != nil {
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "delete failed"})
+				continue
+			}
 		case "resetUsage":
-			h.db.Exec("UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?", now, id)
+			if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?"), now, id); err != nil {
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "reset failed"})
+				continue
+			}
 		case "enable":
-			h.db.Exec("UPDATE downstream_api_keys SET enabled = 1, updated_at = ? WHERE id = ?", now, id)
+			if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET enabled = ?, updated_at = ? WHERE id = ?"), true, now, id); err != nil {
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "enable failed"})
+				continue
+			}
 		case "disable":
-			h.db.Exec("UPDATE downstream_api_keys SET enabled = 0, updated_at = ? WHERE id = ?", now, id)
+			if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET enabled = ?, updated_at = ? WHERE id = ?"), false, now, id); err != nil {
+				failedItems = append(failedItems, map[string]any{"id": id, "message": "disable failed"})
+				continue
+			}
 		case "updateMetadata":
 			if body.GroupOperation != nil && *body.GroupOperation == "set" && body.GroupName != nil {
-				h.db.Exec("UPDATE downstream_api_keys SET group_name = ?, updated_at = ? WHERE id = ?", *body.GroupName, now, id)
+				if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET group_name = ?, updated_at = ? WHERE id = ?"), *body.GroupName, now, id); err != nil {
+					failedItems = append(failedItems, map[string]any{"id": id, "message": "metadata update failed"})
+					continue
+				}
 			} else if body.GroupOperation != nil && *body.GroupOperation == "clear" {
-				h.db.Exec("UPDATE downstream_api_keys SET group_name = NULL, updated_at = ? WHERE id = ?", now, id)
+				if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET group_name = NULL, updated_at = ? WHERE id = ?"), now, id); err != nil {
+					failedItems = append(failedItems, map[string]any{"id": id, "message": "metadata update failed"})
+					continue
+				}
 			}
 		}
 		successIDs = append(successIDs, id)
@@ -664,8 +681,20 @@ func normalizeStatus(v string) string {
 
 // --- helpers for extracting existing values from DB row maps ---
 
-func existingString(row map[string]any, key string) string {
+func rowValue(row map[string]any, key string) (any, bool) {
 	if v, ok := row[key]; ok {
+		return v, true
+	}
+	camelKey := snakeToCamel(key)
+	if camelKey != key {
+		v, ok := row[camelKey]
+		return v, ok
+	}
+	return nil, false
+}
+
+func existingString(row map[string]any, key string) string {
+	if v, ok := rowValue(row, key); ok {
 		if s, ok2 := v.(string); ok2 {
 			return s
 		}
@@ -674,7 +703,7 @@ func existingString(row map[string]any, key string) string {
 }
 
 func existingStringPtr(row map[string]any, key string) *string {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok || v == nil {
 		return nil
 	}
@@ -686,7 +715,7 @@ func existingStringPtr(row map[string]any, key string) *string {
 }
 
 func existingBool(row map[string]any, key string) bool {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok {
 		return false
 	}
@@ -704,7 +733,7 @@ func existingBool(row map[string]any, key string) bool {
 }
 
 func existingFloat64Ptr(row map[string]any, key string) *float64 {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok || v == nil {
 		return nil
 	}
@@ -725,7 +754,7 @@ func existingFloat64Ptr(row map[string]any, key string) *float64 {
 }
 
 func existingInt64Ptr(row map[string]any, key string) *int64 {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok || v == nil {
 		return nil
 	}
@@ -747,7 +776,7 @@ func existingInt64Ptr(row map[string]any, key string) *int64 {
 
 // parseJsonField unmarshals a DB column value (string or already-parsed) into target.
 func parseJsonField(row map[string]any, key string, target any) {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok || v == nil {
 		return
 	}
@@ -782,7 +811,7 @@ func parseIntArrayFromDB(row map[string]any, key string) []int64 {
 }
 
 func parseMapFromDB(row map[string]any, key string) map[string]float64 {
-	v, ok := row[key]
+	v, ok := rowValue(row, key)
 	if !ok || v == nil {
 		return nil
 	}
@@ -1208,8 +1237,8 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 			if row == nil {
 				return fmt.Sprintf("excludedCredentialRefs 包含不存在的令牌: %d", tokenId)
 			}
-			dbAccountId := int64FromAny(row["account_id"])
-			dbSiteId := int64FromAny(row["site_id"])
+			dbAccountId := int64FromAny(mustRowValue(row, "account_id"))
+			dbSiteId := int64FromAny(mustRowValue(row, "site_id"))
 			if dbAccountId != accountId || dbSiteId != siteId {
 				return fmt.Sprintf("excludedCredentialRefs 中的 account_token 引用与账号/站点不匹配: %d", tokenId)
 			}
@@ -1222,11 +1251,11 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 			if row == nil {
 				return fmt.Sprintf("excludedCredentialRefs 包含不存在的账号: %d", accountId)
 			}
-			dbSiteId := int64FromAny(row["site_id"])
+			dbSiteId := int64FromAny(mustRowValue(row, "site_id"))
 			if dbSiteId != siteId {
 				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 引用与站点不匹配: %d", accountId)
 			}
-			apiToken, _ := row["api_token"].(string)
+			apiToken, _ := mustRowValue(row, "api_token").(string)
 			if strings.TrimSpace(apiToken) == "" {
 				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 账号缺少默认 API Key: %d", accountId)
 			}
@@ -1234,4 +1263,9 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 	}
 
 	return ""
+}
+
+func mustRowValue(row map[string]any, key string) any {
+	v, _ := rowValue(row, key)
+	return v
 }

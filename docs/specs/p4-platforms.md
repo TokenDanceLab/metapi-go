@@ -3,14 +3,14 @@
 **S.U.P.E.R**: S (单一职责) · U (单向流) · R (可替换) | **依赖**: P3 (site/account service) | **Size**: XL
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\index.ts` — 注册表 + detectPlatform 流程
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\base.ts` — `PlatformAdapter` 接口 + `BasePlatformAdapter` + 全部类型定义
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\standardApiProvider.ts` — `StandardApiProviderAdapterBase` (OpenAI/Claude/Gemini 公共基类)
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\newApi.ts` — 最完整 fork 实现 (~1450 LOC, cookie fallback + shield challenge + user-ID probing)
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\oneApi.ts` → oneHub.ts → doneHub.ts (三层继承链)
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\sub2api.ts` — 最复杂非NewApi fork (~895 LOC, JWT auth + subscription summary)
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\openai.ts` / `claude.ts` / `codex.ts` / `gemini.ts` / `geminiCli.ts` / `antigravity.ts` / `cliproxyapi.ts` / `anyrouter.ts` / `veloera.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\platforms\titleHint.ts` — 基于页面 title 的平台识别
+- `<metapi-ts>\src\server\services\platforms\index.ts` — 注册表 + detectPlatform 流程
+- `<metapi-ts>\src\server\services\platforms\base.ts` — `PlatformAdapter` 接口 + `BasePlatformAdapter` + 全部类型定义
+- `<metapi-ts>\src\server\services\platforms\standardApiProvider.ts` — `StandardApiProviderAdapterBase` (OpenAI/Claude/Gemini 公共基类)
+- `<metapi-ts>\src\server\services\platforms\newApi.ts` — 最完整 fork 实现 (~1450 LOC, cookie fallback + shield challenge + user-ID probing)
+- `<metapi-ts>\src\server\services\platforms\oneApi.ts` → oneHub.ts → doneHub.ts (三层继承链)
+- `<metapi-ts>\src\server\services\platforms\sub2api.ts` — 最复杂非NewApi fork (~895 LOC, JWT auth + subscription summary)
+- `<metapi-ts>\src\server\services\platforms\openai.ts` / `claude.ts` / `codex.ts` / `gemini.ts` / `geminiCli.ts` / `antigravity.ts` / `cliproxyapi.ts` / `anyrouter.ts` / `veloera.ts`
+- `<metapi-ts>\src\server\services\platforms\titleHint.ts` — 基于页面 title 的平台识别
 
 ## Go 模块结构
 ```

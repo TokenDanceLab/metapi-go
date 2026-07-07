@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -45,15 +44,18 @@ func (h *updateCenterHandler) check(w http.ResponseWriter, r *http.Request) {
 // PUT /api/update-center/config
 func (h *updateCenterHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Enabled              *bool   `json:"enabled"`
-		HelperBaseUrl         *string `json:"helperBaseUrl"`
-		Namespace            *string `json:"namespace"`
-		ReleaseName          *string `json:"releaseName"`
-		ChartRef             *string `json:"chartRef"`
-		ImageRepository      *string `json:"imageRepository"`
-		DefaultDeploySource   *string `json:"defaultDeploySource"`
+		Enabled             *bool   `json:"enabled"`
+		HelperBaseUrl       *string `json:"helperBaseUrl"`
+		Namespace           *string `json:"namespace"`
+		ReleaseName         *string `json:"releaseName"`
+		ChartRef            *string `json:"chartRef"`
+		ImageRepository     *string `json:"imageRepository"`
+		DefaultDeploySource *string `json:"defaultDeploySource"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	enableVal := false
 	if body.Enabled != nil {
@@ -82,7 +84,10 @@ func (h *updateCenterHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		TargetDigest  *string `json:"targetDigest"`
 		TargetVersion *string `json:"targetVersion"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	targetTag := ""
 	if body.TargetTag != nil {
@@ -114,7 +119,10 @@ func (h *updateCenterHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TargetRevision *string `json:"targetRevision"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	targetRevision := ""
 	if body.TargetRevision != nil {

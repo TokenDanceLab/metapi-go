@@ -224,6 +224,7 @@ describe('ImportExport', () => {
       },
       state: {
         lastSyncAt: null,
+        lastAttemptAt: null,
         lastError: null,
       },
     });
@@ -241,6 +242,7 @@ describe('ImportExport', () => {
       },
       state: {
         lastSyncAt: null,
+        lastAttemptAt: null,
         lastError: null,
       },
     });
@@ -533,6 +535,47 @@ describe('ImportExport', () => {
     }
   });
 
+  it('shows successful and attempted webdav sync times separately', async () => {
+    apiMock.getBackupWebdavConfig.mockResolvedValueOnce({
+      success: true,
+      config: {
+        enabled: true,
+        fileUrl: 'https://dav.example.com/backups/metapi.json',
+        username: 'alice',
+        exportType: 'all',
+        autoSyncEnabled: true,
+        autoSyncCron: '0 */6 * * *',
+        hasPassword: true,
+        passwordMasked: 'se****ss',
+      },
+      state: {
+        lastSyncAt: '2026-07-01T00:00:00Z',
+        lastAttemptAt: '2026-07-06T01:00:00Z',
+        lastError: 'HTTP 500: upload failed',
+      },
+    });
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter>
+            <ImportExport />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const text = collectText(root!.root);
+      expect(text).toContain('上次成功同步：');
+      expect(text).toContain('最近尝试：');
+      expect(text).toContain('最近错误：HTTP 500: upload failed');
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('can clear a saved webdav password', async () => {
     apiMock.saveBackupWebdavConfig.mockResolvedValueOnce({
       success: true,
@@ -548,6 +591,7 @@ describe('ImportExport', () => {
       },
       state: {
         lastSyncAt: null,
+        lastAttemptAt: null,
         lastError: null,
       },
     });

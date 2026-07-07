@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { useToast } from "../components/Toast.js";
 import { useIsMobile } from "../components/useIsMobile.js";
 import { formatCompactTokenMetric } from "../numberFormat.js";
+import { safeExternalHref } from "../shared/sitePrimaryUrl.js";
 
 const ModelAnalysisPanel = lazy(
   () => import("../components/ModelAnalysisPanel.js"),
@@ -1460,7 +1461,7 @@ export default function Dashboard({
                       <span>{renderSiteSpeedLabel(site, idx)}</span>
                     </button>
                     <a
-                      href={site.url}
+                      href={safeExternalHref(site.url) || undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn btn-ghost"
@@ -1493,7 +1494,7 @@ export default function Dashboard({
                     </a>
                   </div>
                   <a
-                    href={site.url}
+                    href={safeExternalHref(site.url) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{

@@ -3,26 +3,26 @@
 **S.U.P.E.R**: S (单一职责) · U (单向流) | **依赖**: P7 + P8 + P9 | **Size**: M
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\router.ts` — 代理路由注册
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\chat.ts` — chat + messages
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\completions.ts` — completions
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\responses.ts` — responses HTTP endpoints
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\responsesWebsocket.ts` — responses WebSocket transport
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\embeddings.ts` — embeddings
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\images.ts` — images (generations + edits + variations)
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\models.ts` — models list
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\files.ts` — files (re-exports from filesSurface)
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\videos.ts` — videos
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\gemini.ts` — Gemini native surface (re-exports from geminiSurface)
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\search.ts` — search
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\multipart.ts` — multipart/form-data helpers
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\upstreamEndpoint.ts` — upstream endpoint request builder
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\upstreamError.ts`
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\downstreamPolicy.ts` — downstream API key policy enforcement
-- `D:\Code\TokenDance\metapi\src\server\routes\proxy\proxyBilling.ts` — billing cost estimation
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\downstreamClientContext.ts` — client detection (287 lines)
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\cliProfiles\types.ts` — CLI profile type definitions
-- `D:\Code\TokenDance\metapi\src\server\proxy-core\cliProfiles\registry.ts` — CLI profile registry
+- `<metapi-ts>\src\server\routes\proxy\router.ts` — 代理路由注册
+- `<metapi-ts>\src\server\routes\proxy\chat.ts` — chat + messages
+- `<metapi-ts>\src\server\routes\proxy\completions.ts` — completions
+- `<metapi-ts>\src\server\routes\proxy\responses.ts` — responses HTTP endpoints
+- `<metapi-ts>\src\server\routes\proxy\responsesWebsocket.ts` — responses WebSocket transport
+- `<metapi-ts>\src\server\routes\proxy\embeddings.ts` — embeddings
+- `<metapi-ts>\src\server\routes\proxy\images.ts` — images (generations + edits + variations)
+- `<metapi-ts>\src\server\routes\proxy\models.ts` — models list
+- `<metapi-ts>\src\server\routes\proxy\files.ts` — files (re-exports from filesSurface)
+- `<metapi-ts>\src\server\routes\proxy\videos.ts` — videos
+- `<metapi-ts>\src\server\routes\proxy\gemini.ts` — Gemini native surface (re-exports from geminiSurface)
+- `<metapi-ts>\src\server\routes\proxy\search.ts` — search
+- `<metapi-ts>\src\server\routes\proxy\multipart.ts` — multipart/form-data helpers
+- `<metapi-ts>\src\server\routes\proxy\upstreamEndpoint.ts` — upstream endpoint request builder
+- `<metapi-ts>\src\server\routes\proxy\upstreamError.ts`
+- `<metapi-ts>\src\server\routes\proxy\downstreamPolicy.ts` — downstream API key policy enforcement
+- `<metapi-ts>\src\server\routes\proxy\proxyBilling.ts` — billing cost estimation
+- `<metapi-ts>\src\server\proxy-core\downstreamClientContext.ts` — client detection (287 lines)
+- `<metapi-ts>\src\server\proxy-core\cliProfiles\types.ts` — CLI profile type definitions
+- `<metapi-ts>\src\server\proxy-core\cliProfiles\registry.ts` — CLI profile registry
 
 ## Go 模块结构
 ```

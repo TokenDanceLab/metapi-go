@@ -2,6 +2,7 @@ package routing
 
 import (
 	"math"
+	"sync"
 	"testing"
 )
 
@@ -508,8 +509,8 @@ func TestIsSiteRuntimeBreakerOpen(t *testing.T) {
 	n := nowMs()
 	breakerUntil := n + 60000
 	siteRuntimeHealthStates[siteID] = &SiteRuntimeHealthState{
-		BreakerLevel:   1,
-		BreakerUntilMs: &breakerUntil,
+		BreakerLevel:    1,
+		BreakerUntilMs:  &breakerUntil,
 		LastUpdatedAtMs: n,
 	}
 	if !IsSiteRuntimeBreakerOpen(siteID) {
@@ -623,6 +624,52 @@ func TestGetSiteRuntimeHealthDetails(t *testing.T) {
 	if details.ModelBreakerOpen {
 		t.Error("expected model breaker NOT open")
 	}
+}
+
+func TestRuntimeHealthPublicReadersConcurrentWithUpdates(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	const workers = 4
+	const iterations = 500
+	modelName := "gpt-4"
+	status500 := 500
+	errText := "bad gateway"
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		siteID := int64(9100 + i)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				if j%3 == 0 {
+					RecordSiteRuntimeFailure(siteID, SiteRuntimeFailureContext{
+						Status:    &status500,
+						ErrorText: &errText,
+						ModelName: &modelName,
+					})
+					continue
+				}
+				RecordSiteRuntimeSuccess(siteID, float64(100+j), &modelName)
+			}
+		}()
+	}
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			for j := 0; j < iterations*2; j++ {
+				siteID := int64(9100 + ((j + offset) % workers))
+				_ = GetSiteRuntimeHealthDetails(siteID, modelName)
+				_ = GetSiteRuntimeHealthMultiplier(siteID)
+				_ = IsSiteRuntimeBreakerOpen(siteID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 // =============================================================================

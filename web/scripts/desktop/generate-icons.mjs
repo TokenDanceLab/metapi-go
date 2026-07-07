@@ -75,10 +75,10 @@ async function renderTrayTemplateIconBuffer({
 }
 
 export async function generateDesktopIconAssets({
-  sourcePath = join(process.cwd(), 'src', 'web', 'public', 'logo.png'),
+  sourcePath = join(process.cwd(), 'public', 'logo.png'),
   buildOutputPath = join(process.cwd(), 'build', 'desktop-icon.png'),
-  webOutputPath = join(process.cwd(), 'src', 'web', 'public', 'desktop-icon.png'),
-  trayTemplateOutputPath = join(process.cwd(), 'src', 'web', 'public', 'desktop-tray-template.png'),
+  webOutputPath = join(process.cwd(), 'public', 'desktop-icon.png'),
+  trayTemplateOutputPath = join(process.cwd(), 'public', 'desktop-tray-template.png'),
   size = DESKTOP_ICON_SIZE,
   padding = DESKTOP_ICON_PADDING,
   cornerRadius = DESKTOP_ICON_RADIUS,

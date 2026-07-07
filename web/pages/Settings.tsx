@@ -45,6 +45,7 @@ const CHECKIN_SCHEDULE_MODE_OPTIONS = [
   { value: 'cron', label: 'Cron' },
   { value: 'interval', label: '间隔签到' },
 ] as const;
+const DATABASE_MIGRATION_UNAVAILABLE_MESSAGE = '数据库迁移尚未接入当前 Go 运行时；请使用 metapi-migrate CLI 迁移 SQLite 到 PostgreSQL。';
 const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
   const hour = index + 1;
   return {
@@ -52,7 +53,7 @@ const CHECKIN_INTERVAL_OPTIONS = Array.from({ length: 24 }, (_, index) => {
     label: `${hour} 小时`,
   };
 });
-type DbDialect = 'sqlite' | 'mysql' | 'postgres';
+type DbDialect = 'sqlite' | 'postgres';
 type RouteCooldownUnit = typeof ROUTE_COOLDOWN_UNIT_OPTIONS[number]['value'];
 type SettingsPillTone = 'neutral' | 'primary' | 'danger' | 'warning';
 type PayloadRulesEditorSectionKey = PayloadRuleAction;
@@ -279,9 +280,6 @@ const defaultWeights: RoutingWeights = {
 };
 
 function getDialectDefaults(dialect: DbDialect) {
-  if (dialect === 'mysql') {
-    return { port: '3306', database: 'mysql' };
-  }
   if (dialect === 'postgres') {
     return { port: '5432', database: 'postgres' };
   }
@@ -297,14 +295,12 @@ function buildShorthandConnectionString(dialect: DbDialect, input: ShorthandConn
   const defaults = getDialectDefaults(dialect);
   const port = (input.port || defaults.port).trim() || defaults.port;
   const database = (input.database || defaults.database).trim() || defaults.database;
-  const protocol = dialect === 'mysql' ? 'mysql' : 'postgres';
-  return `${protocol}://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
+  return `postgres://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
 }
 
-function inferUrlDialect(connectionString: string): 'mysql' | 'postgres' | null {
+function inferUrlDialect(connectionString: string): 'postgres' | null {
   const normalized = (connectionString || '').trim().toLowerCase();
   if (!normalized) return null;
-  if (normalized.startsWith('mysql://')) return 'mysql';
   if (normalized.startsWith('postgres://') || normalized.startsWith('postgresql://')) return 'postgres';
   return null;
 }
@@ -409,7 +405,6 @@ export default function Settings() {
   const [migrationOverwrite, setMigrationOverwrite] = useState(true);
   const [migrationSsl, setMigrationSsl] = useState(false);
   const [testingMigrationConnection, setTestingMigrationConnection] = useState(false);
-  const [migratingDatabase, setMigratingDatabase] = useState(false);
   const [savingRuntimeDatabase, setSavingRuntimeDatabase] = useState(false);
   const [migrationSummary, setMigrationSummary] = useState<DatabaseMigrationSummary | null>(null);
   const [runtimeDatabaseState, setRuntimeDatabaseState] = useState<RuntimeDatabaseState | null>(null);
@@ -1225,37 +1220,7 @@ export default function Settings() {
   };
 
   const handleMigrateToExternalDatabase = async () => {
-    if (!effectiveMigrationConnectionString) {
-      toast.info('Please fill target database connection first');
-      return;
-    }
-
-    const inferredDialect = inferUrlDialect(effectiveMigrationConnectionString);
-    if (migrationDialect === 'sqlite' && inferredDialect) {
-      toast.error(`当前选择 SQLite，但连接串是 ${inferredDialect.toUpperCase()} URL，请先切换方言`);
-      return;
-    }
-
-    const warning = migrationOverwrite
-      ? 'Confirm migration and overwrite existing data in target database?'
-      : 'Confirm migration to target database? If target has data, migration may fail.';
-    if (!window.confirm(warning)) return;
-
-    setMigratingDatabase(true);
-    try {
-      const res = await api.migrateExternalDatabase({
-        dialect: migrationDialect,
-        connectionString: effectiveMigrationConnectionString,
-        overwrite: migrationOverwrite,
-        ssl: migrationSsl,
-      });
-      setMigrationSummary(res);
-      toast.success(res?.message || 'Database migration completed');
-    } catch (err: any) {
-      toast.error(err?.message || 'Database migration failed');
-    } finally {
-      setMigratingDatabase(false);
-    }
+    toast.info(DATABASE_MIGRATION_UNAVAILABLE_MESSAGE);
   };
 
   const handleSaveRuntimeDatabaseConfig = async () => {
@@ -2394,9 +2359,9 @@ export default function Settings() {
         </div>
 
         <div className="card animate-slide-up stagger-8" style={{ padding: 20 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>数据库迁移（SQLite / MySQL / PostgreSQL）</div>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>数据库迁移（SQLite / PostgreSQL）</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            可先测试连接，再迁移数据；迁移完成后可保存为运行数据库配置（重启容器后生效）。
+            可先测试连接，再保存为运行数据库配置（重启容器后生效）。数据迁移请使用 metapi-migrate CLI。
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '180px 1fr', gap: 10, marginBottom: 10, alignItems: 'center' }}>
@@ -2405,7 +2370,6 @@ export default function Settings() {
               onChange={(value) => setMigrationDialect(value as DbDialect)}
               options={[
                 { value: 'postgres', label: 'PostgreSQL' },
-                { value: 'mysql', label: 'MySQL' },
                 { value: 'sqlite', label: 'SQLite' },
               ]}
             />
@@ -2433,9 +2397,7 @@ export default function Settings() {
             <input
               value={migrationConnectionString}
               onChange={(e) => setMigrationConnectionString(e.target.value)}
-              placeholder={migrationDialect === 'mysql'
-                ? 'mysql://user:pass@host:3306/db'
-                : 'postgres://user:pass@host:5432/db'}
+              placeholder="postgres://user:pass@host:5432/db"
               style={{ ...inputStyle, fontFamily: 'var(--font-mono)', marginBottom: 10 }}
             />
           ) : (
@@ -2517,7 +2479,7 @@ export default function Settings() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             <button
               onClick={handleTestExternalDatabaseConnection}
-              disabled={testingMigrationConnection || migratingDatabase || savingRuntimeDatabase}
+              disabled={testingMigrationConnection || savingRuntimeDatabase}
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
@@ -2525,14 +2487,15 @@ export default function Settings() {
             </button>
             <button
               onClick={handleMigrateToExternalDatabase}
-              disabled={migratingDatabase || testingMigrationConnection || savingRuntimeDatabase}
+              disabled
               className="btn btn-primary"
+              title={DATABASE_MIGRATION_UNAVAILABLE_MESSAGE}
             >
-              {migratingDatabase ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 迁移中...</> : '开始迁移'}
+              开始迁移
             </button>
             <button
               onClick={handleSaveRuntimeDatabaseConfig}
-              disabled={savingRuntimeDatabase || migratingDatabase || testingMigrationConnection}
+              disabled={savingRuntimeDatabase || testingMigrationConnection}
               className="btn btn-ghost"
               style={{ border: '1px solid var(--color-border)' }}
             >
@@ -2581,7 +2544,7 @@ export default function Settings() {
         <div className="card animate-slide-up stagger-7" style={{ padding: 20, border: '1px solid color-mix(in srgb, var(--color-danger) 30%, var(--color-border))' }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: 'var(--color-danger)' }}>危险操作</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 12 }}>
-            重新初始化系统会清空当前 metapi 使用中的全部数据库内容；若当前运行在外部 MySQL/Postgres，也会先清空该外部库中的 metapi 数据，然后切回默认 SQLite。
+            重新初始化系统会清空当前 metapi 使用中的全部数据库内容；若当前运行在外部 PostgreSQL，也会先清空该外部库中的 metapi 数据，然后切回默认 SQLite。
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8, marginBottom: 14 }}>
             完成后管理员 Token 会重置为 <code style={{ fontFamily: 'var(--font-mono)' }}>{FACTORY_RESET_ADMIN_TOKEN}</code>，当前会话会立即退出并刷新页面。

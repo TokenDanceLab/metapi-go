@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Accounts mobile layout', () => {
   it('includes hints field in mobile expanded section', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Accounts.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Accounts.tsx'), 'utf8');
     expect(source).toContain('label="提示"');
   });
 });

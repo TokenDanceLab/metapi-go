@@ -40,7 +40,7 @@ type RuntimeHealthEntry struct {
 func SetAccountRuntimeHealth(db *sqlx.DB, accountID int64, entry RuntimeHealthEntry) error {
 	// Fetch current extraConfig
 	var extraConfig *string
-	err := db.Get(&extraConfig, "SELECT extra_config FROM accounts WHERE id = ?", accountID)
+	err := db.Get(&extraConfig, db.Rebind("SELECT extra_config FROM accounts WHERE id = ?"), accountID)
 	if err != nil {
 		return err
 	}
@@ -57,10 +57,10 @@ func SetAccountRuntimeHealth(db *sqlx.DB, accountID int64, entry RuntimeHealthEn
 	})
 	if newConfig == nil {
 		// Keep empty config as null
-		_, err = db.Exec("UPDATE accounts SET extra_config = NULL, updated_at = ? WHERE id = ?",
+		_, err = db.Exec(db.Rebind("UPDATE accounts SET extra_config = NULL, updated_at = ? WHERE id = ?"),
 			time.Now().UTC().Format(time.RFC3339), accountID)
 	} else {
-		_, err = db.Exec("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?",
+		_, err = db.Exec(db.Rebind("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?"),
 			*newConfig, time.Now().UTC().Format(time.RFC3339), accountID)
 	}
 	return err

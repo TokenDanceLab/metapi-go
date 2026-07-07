@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { tr } from '../i18n.js';
+import { safeExternalHref } from '../shared/sitePrimaryUrl.js';
 
 type MonitorSite = {
   id: string;
@@ -79,7 +80,7 @@ export default function Monitors() {
   const usingCookieProxy = activeSite.id === 'ldoh-105117' && monitorConfig.ldohCookieConfigured;
   const oauthHintPresence = useAnimatedVisibility(Boolean(activeSite.requiresLinuxDoOAuth), 220);
   const fallbackHintPresence = useAnimatedVisibility(showFallbackHint && !loaded, 180);
-  const directSiteUrl = `${activeSite.url.replace(/\/$/, '')}/`;
+  const directSiteUrl = `${safeExternalHref(activeSite.url).replace(/\/$/, '')}/`;
   const iframeUrl = usingCookieProxy ? '/monitor-proxy/ldoh/' : directSiteUrl;
   const ldohOauthUrl = `${directSiteUrl}api/oauth/initiate?returnTo=%2F`;
 
@@ -218,6 +219,7 @@ export default function Monitors() {
         <iframe
           key={`${activeSite.id}-${reloadSeed}-${usingCookieProxy ? 'proxy' : 'direct'}`}
           src={iframeUrl}
+          sandbox="allow-forms allow-scripts allow-popups"
           title={`monitor-${activeSite.id}`}
           className="monitor-iframe"
           onLoad={() => setLoaded(true)}

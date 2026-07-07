@@ -1,7 +1,7 @@
 # Dependency Audit -- Deep (metapi-go)
 
 **Date:** 2026-07-05
-**Scope:** `D:/Code/TokenDance/metapi-go/go.mod`
+**Scope:** `<repo>/go.mod`
 **Tooling:** `go list -m -u all`, `go mod graph`, `go mod why`, `go mod tidy`, web OSV/GHSA lookup
 **Go version:** 1.24.0
 

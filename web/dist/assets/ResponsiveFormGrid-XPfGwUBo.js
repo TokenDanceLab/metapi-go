@@ -1,1 +1,0 @@
-import{j as i}from"./index-CZrt0PfL.js";function t({columns:s=2,children:o,className:r}){const e=["responsive-form-grid",`responsive-form-grid-${s}`,r].filter(Boolean).join(" ");return i.jsx("div",{className:e,children:o})}export{t as R};

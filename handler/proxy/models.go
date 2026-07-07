@@ -66,10 +66,8 @@ func buildClaudeModelsResponse(models []string) map[string]any {
 // getAvailableModels returns the list of available model names.
 // Stub: returns common model names.
 func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
-	_ = policy
-
 	// Stub model list. In production, this queries the tokenRouter.
-	return []string{
+	models := []string{
 		"gpt-4o",
 		"gpt-4o-mini",
 		"gpt-4-turbo",
@@ -79,6 +77,23 @@ func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
 		"gemini-2.5-pro",
 		"gemini-2.5-flash",
 	}
+	if len(policy.SupportedModels) == 0 && len(policy.AllowedRouteIDs) == 0 {
+		if policy.DenyAllWhenEmpty {
+			return []string{}
+		}
+		return models
+	}
+	if len(policy.SupportedModels) == 0 {
+		return []string{}
+	}
+
+	filtered := make([]string, 0, len(models))
+	for _, model := range models {
+		if IsModelAllowedByPolicy(model, policy) {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
 }
 
 // IsModelAllowedByPolicy checks if a model is allowed by the downstream policy.

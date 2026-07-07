@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,12 +13,12 @@ import (
 
 // ExecutorDispatchInput is the input for dispatching an HTTP request.
 type ExecutorDispatchInput struct {
-	SiteURL  string
+	SiteURL   string
 	TargetURL string
-	Method   string
-	Headers  map[string]string
-	Body     []byte
-	Signal   <-chan struct{}
+	Method    string
+	Headers   map[string]string
+	Body      []byte
+	Signal    <-chan struct{}
 }
 
 // ExecutorDispatchResult is the result of dispatching an HTTP request.
@@ -75,8 +76,8 @@ func (e *RuntimeExecutor) Dispatch(ctx context.Context, input ExecutorDispatchIn
 		headers[strings.ToLower(k)] = resp.Header.Get(k)
 	}
 
-	// Read body for non-streaming responses
-	body, err := io.ReadAll(resp.Body)
+	// Read body for non-streaming responses.
+	body, err := ReadBufferedResponseBody(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("dispatch read body: %w", err)
@@ -112,8 +113,10 @@ func (e *RuntimeExecutor) WithObservedFirstByte(
 		req.Header.Set(k, v)
 	}
 
+	timeoutCtx := ctx
 	if firstByteTimeoutMs > 0 {
-		timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(firstByteTimeoutMs)*time.Millisecond)
+		var cancel context.CancelFunc
+		timeoutCtx, cancel = context.WithTimeout(ctx, time.Duration(firstByteTimeoutMs)*time.Millisecond)
 		defer cancel()
 		req = req.WithContext(timeoutCtx)
 	}
@@ -123,15 +126,12 @@ func (e *RuntimeExecutor) WithObservedFirstByte(
 
 	if err != nil {
 		// Check if this was a first-byte timeout
-		if firstByteTimeoutMs > 0 {
-			if ctx.Err() == nil {
-				// The timeout context fired
-				return &ExecutorDispatchResult{
-					Status:  0, // timeout marker
-					Headers: map[string]string{},
-					Body:    nil,
-				}, firstByteLatencyMs, nil
-			}
+		if firstByteTimeoutMs > 0 && errors.Is(timeoutCtx.Err(), context.DeadlineExceeded) {
+			return &ExecutorDispatchResult{
+				Status:  0, // timeout marker
+				Headers: map[string]string{},
+				Body:    nil,
+			}, firstByteLatencyMs, nil
 		}
 		return nil, firstByteLatencyMs, fmt.Errorf("dispatch: %w", err)
 	}
@@ -141,7 +141,7 @@ func (e *RuntimeExecutor) WithObservedFirstByte(
 		headers[strings.ToLower(k)] = resp.Header.Get(k)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := ReadBufferedResponseBody(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return nil, firstByteLatencyMs, fmt.Errorf("dispatch read body: %w", err)

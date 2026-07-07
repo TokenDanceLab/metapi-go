@@ -75,17 +75,30 @@ func (s *SiteAnnouncementScheduler) Stop() error {
 }
 
 func (s *SiteAnnouncementScheduler) runSync() {
+	s.mu.Lock()
 	if s.inFlight {
+		s.mu.Unlock()
 		return
 	}
 	s.inFlight = true
-	defer func() { s.inFlight = false }()
+	s.mu.Unlock()
+
+	defer func() {
+		s.mu.Lock()
+		s.inFlight = false
+		s.mu.Unlock()
+	}()
 
 	dbw := store.GetDB()
 	if dbw == nil {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runSyncLocked(dbw)
+	})
+}
 
+func (s *SiteAnnouncementScheduler) runSyncLocked(dbw *store.DB) {
 	slog.Info("site-announcement: syncing announcements")
 	// Stub: calls sync function on active sites
 	// The TS version calls syncSiteAnnouncements() which iterates over sites

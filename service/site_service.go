@@ -86,7 +86,7 @@ func UpsertSiteAPIEndpoints(tx *sqlx.Tx, siteID int64, endpoints []store.SiteAPI
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Delete existing endpoints
-	_, err := tx.Exec("DELETE FROM site_api_endpoints WHERE site_id = ?", siteID)
+	_, err := tx.Exec(tx.Rebind("DELETE FROM site_api_endpoints WHERE site_id = ?"), siteID)
 	if err != nil {
 		return fmt.Errorf("delete site_api_endpoints: %w", err)
 	}
@@ -107,8 +107,8 @@ func UpsertSiteAPIEndpoints(tx *sqlx.Tx, siteID int64, endpoints []store.SiteAPI
 			sortOrder = int64(i)
 		}
 		_, err := tx.Exec(
-			`INSERT INTO site_api_endpoints (site_id, url, enabled, sort_order, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`,
+			tx.Rebind(`INSERT INTO site_api_endpoints (site_id, url, enabled, sort_order, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`),
 			siteID, normalizedURL, enabled, sortOrder, now, now,
 		)
 		if err != nil {
@@ -152,7 +152,7 @@ func LoadSiteAPIEndpoints(db *sqlx.DB, siteIDs []int64) (map[int64][]store.SiteA
 // LoadSiteWithEndpoints loads a single site with its apiEndpoints attached.
 func LoadSiteWithEndpoints(db *sqlx.DB, siteID int64) (map[string]any, error) {
 	var site store.Site
-	err := db.Get(&site, "SELECT * FROM sites WHERE id = ?", siteID)
+	err := db.Get(&site, db.Rebind("SELECT * FROM sites WHERE id = ?"), siteID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -170,26 +170,26 @@ func LoadSiteWithEndpoints(db *sqlx.DB, siteID int64) (map[string]any, error) {
 
 func siteToMap(site store.Site, endpoints []store.SiteAPIEndpoint) map[string]any {
 	return map[string]any{
-		"id":                               site.ID,
-		"name":                             site.Name,
-		"url":                              site.URL,
-		"externalCheckinUrl":               site.ExternalCheckinURL,
-		"platform":                         site.Platform,
-		"proxyUrl":                         site.ProxyURL,
-		"useSystemProxy":                   site.UseSystemProxy,
-		"customHeaders":                    site.CustomHeaders,
-		"status":                           site.Status,
-		"isPinned":                         site.IsPinned,
-		"sortOrder":                        site.SortOrder,
-		"globalWeight":                     site.GlobalWeight,
-		"apiKey":                           site.APIKey,
-		"postRefreshProbeEnabled":          site.PostRefreshProbeEnabled,
-		"postRefreshProbeModel":            site.PostRefreshProbeModel,
-		"postRefreshProbeScope":            site.PostRefreshProbeScope,
+		"id":                                 site.ID,
+		"name":                               site.Name,
+		"url":                                site.URL,
+		"externalCheckinUrl":                 site.ExternalCheckinURL,
+		"platform":                           site.Platform,
+		"proxyUrl":                           site.ProxyURL,
+		"useSystemProxy":                     site.UseSystemProxy,
+		"customHeaders":                      site.CustomHeaders,
+		"status":                             site.Status,
+		"isPinned":                           site.IsPinned,
+		"sortOrder":                          site.SortOrder,
+		"globalWeight":                       site.GlobalWeight,
+		"apiKey":                             site.APIKey,
+		"postRefreshProbeEnabled":            site.PostRefreshProbeEnabled,
+		"postRefreshProbeModel":              site.PostRefreshProbeModel,
+		"postRefreshProbeScope":              site.PostRefreshProbeScope,
 		"postRefreshProbeLatencyThresholdMs": site.PostRefreshProbeLatencyThresholdMs,
-		"createdAt":                        site.CreatedAt,
-		"updatedAt":                        site.UpdatedAt,
-		"apiEndpoints":                     endpoints,
+		"createdAt":                          site.CreatedAt,
+		"updatedAt":                          site.UpdatedAt,
+		"apiEndpoints":                       endpoints,
 	}
 }
 
@@ -252,7 +252,7 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 
 	// Load existing max sort order
 	var maxSort int64
-	tx.Get(&maxSort, "SELECT COALESCE(MAX(sort_order), -1) FROM sites")
+	tx.Get(&maxSort, tx.Rebind("SELECT COALESCE(MAX(sort_order), -1) FROM sites"))
 
 	sortOrder := maxSort + 1
 	if so, ok := siteData["sortOrder"].(int64); ok {
@@ -264,11 +264,11 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	platform := siteData["platform"].(string)
 
 	result, err := tx.Exec(
-		`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
+		tx.Rebind(`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
 		 external_checkin_url, status, is_pinned, sort_order, global_weight,
 		 post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		 post_refresh_probe_latency_threshold_ms, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		name, urlStr, platform,
 		siteData["proxyUrl"], siteData["useSystemProxy"], siteData["customHeaders"],
 		siteData["externalCheckinUrl"], siteData["status"], siteData["isPinned"],
@@ -284,7 +284,7 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	siteID, err := result.LastInsertId()
 	if err != nil {
 		var id int64
-		tx.Get(&id, "SELECT id FROM sites WHERE name = ? AND url = ? AND platform = ? ORDER BY id DESC LIMIT 1", name, urlStr, platform)
+		tx.Get(&id, tx.Rebind("SELECT id FROM sites WHERE name = ? AND url = ? AND platform = ? ORDER BY id DESC LIMIT 1"), name, urlStr, platform)
 		siteID = id
 	}
 
@@ -329,7 +329,7 @@ func UpdateSite(db *sqlx.DB, siteID int64, updates map[string]any) error {
 	args = append(args, siteID)
 
 	query := fmt.Sprintf("UPDATE sites SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-	if _, err := tx.Exec(query, args...); err != nil {
+	if _, err := tx.Exec(tx.Rebind(query), args...); err != nil {
 		return err
 	}
 
@@ -347,7 +347,7 @@ func UpdateSite(db *sqlx.DB, siteID int64, updates map[string]any) error {
 
 // DeleteSite deletes a site by ID (cascade via DB foreign keys).
 func DeleteSite(db *sqlx.DB, siteID int64) error {
-	_, err := db.Exec("DELETE FROM sites WHERE id = ?", siteID)
+	_, err := db.Exec(db.Rebind("DELETE FROM sites WHERE id = ?"), siteID)
 	return err
 }
 
@@ -381,26 +381,26 @@ func ApplySiteStatusSideEffects(db *sqlx.DB, siteID int64, siteName string, newS
 
 	if newStatus == "disabled" {
 		// Disable all accounts under this site
-		db.Exec("UPDATE accounts SET status = 'disabled', updated_at = ? WHERE site_id = ?", now, siteID)
+		db.Exec(db.Rebind("UPDATE accounts SET status = 'disabled', updated_at = ? WHERE site_id = ?"), now, siteID)
 
 		// Create event
 		msg := fmt.Sprintf("%s 已禁用，关联账号已全部置为禁用", siteName)
 		db.Exec(
-			`INSERT INTO events (type, title, message, level, related_id, related_type, created_at)
-			 VALUES ('status', '站点已禁用', ?, 'warning', ?, 'site', ?)`,
+			db.Rebind(`INSERT INTO events (type, title, message, level, related_id, related_type, created_at)
+			 VALUES ('status', '站点已禁用', ?, 'warning', ?, 'site', ?)`),
 			msg, siteID, now,
 		)
 	} else {
 		// Enable only previously-disabled accounts
 		db.Exec(
-			"UPDATE accounts SET status = 'active', updated_at = ? WHERE site_id = ? AND status = 'disabled'",
+			db.Rebind("UPDATE accounts SET status = 'active', updated_at = ? WHERE site_id = ? AND status = 'disabled'"),
 			now, siteID,
 		)
 
 		msg := fmt.Sprintf("%s 已启用，关联禁用账号已恢复为活跃", siteName)
 		db.Exec(
-			`INSERT INTO events (type, title, message, level, related_id, related_type, created_at)
-			 VALUES ('status', '站点已启用', ?, 'info', ?, 'site', ?)`,
+			db.Rebind(`INSERT INTO events (type, title, message, level, related_id, related_type, created_at)
+			 VALUES ('status', '站点已启用', ?, 'info', ?, 'site', ?)`),
 			msg, siteID, now,
 		)
 	}

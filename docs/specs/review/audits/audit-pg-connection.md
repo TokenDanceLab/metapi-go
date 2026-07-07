@@ -1,20 +1,21 @@
 # PostgreSQL Connection Settings Audit: metapi-go
 
 **Date**: 2026-07-05
-**Auditor**: Automated audit of `D:/Code/TokenDance/metapi-go/store/open.go` and `D:/Code/TokenDance/metapi-go/store/schema.go`
+**Auditor**: Automated audit of `<repo>/store/open.go` and `<repo>/store/schema.go`
 **Scope**: PostgreSQL connection pool, sslmode, statement timeout, idle connection lifecycle
 
 ---
 
 ## Summary
 
-The PostgreSQL connection layer has four material deficiencies: (1) sslmode is a hardcoded boolean incapable of expressing `verify-full`, (2) connection pool lifetime limits (`ConnMaxLifetime`, `ConnMaxIdleTime`) are absent, (3) no statement timeout is configured, and (4) pool sizing is hardcoded with zero operator configurability. These issues were previously identified in `audit-memory.md` (2026-07-05) and `audit-resilience.md` (2026-07-05) and remain unfixed as of this audit.
+Status as of 2026-07-06: Finding 1 is fixed by `DB_SSLMODE` and DSN-level `sslmode` replacement in `store/open.go`. Finding 2 is fixed by PostgreSQL pool lifetime and idle-time limits in `configurePostgresPool`. The remaining material gaps are statement timeout policy, operator-configurable pool sizing, and pool health/metrics visibility.
 
 ---
 
 ## Finding 1: sslmode is a bare boolean -- no `verify-ca` or `verify-full` support
 
 **Severity**: HIGH
+**Status**: Fixed on 2026-07-06. `DB_SSLMODE` supports `disable`, `allow`, `prefer`, `require`, `verify-ca`, and `verify-full`; non-empty values replace existing `sslmode` in URL or keyword DSNs. `DB_SSL=true` remains as a legacy alias for `sslmode=require`.
 **File**: `store/open.go`, lines 93-113
 **Config source**: `config/config.go` line 360: `cfg.DbSsl = parseBoolean(get("DB_SSL"), false)`
 
@@ -45,7 +46,7 @@ The function signature accepts `sslMode bool`. When `true`, it unconditionally a
 
 3. **No `disable` override**: If the user sets `DB_SSL=false` but the DSN already contains `?sslmode=require` (e.g., from a connection-string template), the SSL mode from the DSN persists silently. The boolean default of `false` means "do nothing to the DSN" -- it does NOT mean "force disable."
 
-4. **DSN already contains sslmode**: The CI configuration at `.github/workflows/ci.yml:47` uses `DATABASE_URL: postgres://postgres:test@localhost:5432/metapi_test?sslmode=disable`. If `DB_SSL=true` were set simultaneously, the result would be `postgres://...?sslmode=disable&sslmode=require` -- pgx behavior with duplicate query parameters is implementation-defined and may be silently wrong.
+4. **DSN already contains sslmode**: CI and local PostgreSQL DSNs commonly include `sslmode=disable`. If `DB_SSL=true` were set simultaneously, the old implementation produced duplicate `sslmode` parameters, and pgx behavior with duplicate query parameters is implementation-defined.
 
 5. **Incorrect query-string concatenation**: When `sslMode=true` and the DSN already contains query parameters (via `?`), it appends `&sslmode=require`. But if the DSN uses the `postgres://` URI format and already contains an sslmode parameter, this code blindly appends a second one instead of updating it.
 
@@ -67,6 +68,7 @@ func Open(dialect string, dsn string, sslMode string) (*DB, error) {
 ## Finding 2: No connection pool lifetime limits
 
 **Severity**: HIGH
+**Status**: Fixed before the 2026-07-06 status update. `configurePostgresPool` now sets `ConnMaxLifetime` and `ConnMaxIdleTime`; pool-size configurability remains open.
 **File**: `store/open.go`, lines 169-173
 **Previously reported**: `audit-memory.md` section 2, `audit-resilience.md` section 1
 
@@ -234,8 +236,8 @@ Expose `db.Stats()` via a `/health/db` endpoint or log it periodically.
 
 | # | Issue | Severity | File | Line(s) | Previously Reported |
 |---|---|---|---|---|---|
-| 1 | sslmode boolean -- no verify-full | HIGH | store/open.go, config/config.go | 93-113, 360 | No |
-| 2 | No ConnMaxLifetime / ConnMaxIdleTime | HIGH | store/open.go | 169-173 | audit-memory.md, audit-resilience.md |
+| 1 | sslmode boolean -- no verify-full | HIGH | store/open.go, config/config.go | 93-113, 360 | Fixed 2026-07-06 |
+| 2 | No ConnMaxLifetime / ConnMaxIdleTime | HIGH | store/open.go | 169-173 | Fixed before 2026-07-06 |
 | 3 | No statement_timeout | MEDIUM | store/open.go | -- | No |
 | 4 | Repeated sqlx.BindDriver side-effect | LOW | store/open.go | 122-124 | No |
 | 5 | No connection health validation | LOW | -- | -- | Partial (audit-resilience.md mentions no Ping before query) |
@@ -243,13 +245,11 @@ Expose `db.Stats()` via a `/health/db` endpoint or log it periodically.
 
 ## Remediation Priority
 
-1. **IMMEDIATE (P0)**: Add `ConnMaxLifetime` and `ConnMaxIdleTime` to `configurePostgresPool` (Finding 2). This is the most impactful single change -- it prevents silent connection breakage in production after PG restarts or network events. Estimated fix: 5 lines of code, no breaking change.
+1. **NEXT (P1)**: Add a PostgreSQL statement timeout policy (Finding 3). Prefer a DSN/runtime parameter that is explicit and documented.
 
-2. **HIGH (P1)**: Replace `sslMode bool` with `sslMode string` supporting `disable/require/verify-ca/verify-full` (Finding 1). This is a breaking change to the `Open()` function signature and requires updates to all call sites (`store/open.go`, `store/switch.go`, `store/bootstrap.go`, `config/config.go`, and all test files). Estimated fix: 10-15 call sites.
+2. **NEXT (P1)**: Add operator-configurable PostgreSQL pool sizing if production load shows pool wait time or saturation.
 
-3. **MODERATE (P2)**: Add `statement_timeout` connection configuration (Finding 3). Estimate: 3-5 lines in `configurePostgresPool` or DSN assembly.
-
-4. **NICE-TO-HAVE (P3)**: Move `sqlx.BindDriver` to `init()` (Finding 4), expose pool metrics (Finding 6).
+3. **NICE-TO-HAVE (P3)**: Move `sqlx.BindDriver` to `init()` (Finding 4), expose pool metrics (Finding 6).
 
 ## Call-Site Impact Analysis
 

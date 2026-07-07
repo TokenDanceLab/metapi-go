@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -43,15 +42,15 @@ var geminiCliScopes = []string{
 func init() {
 	RegisterProvider(&OAuthProviderDefinition{
 		Metadata: ProviderMetadata{
-			Provider:                    ProviderGeminiCli,
-			Label:                       "Gemini CLI",
-			Platform:                    "gemini-cli",
-			Enabled:                     true,
-			LoginType:                   "oauth",
-			RequiresProjectId:           true,
+			Provider:                     ProviderGeminiCli,
+			Label:                        "Gemini CLI",
+			Platform:                     "gemini-cli",
+			Enabled:                      true,
+			LoginType:                    "oauth",
+			RequiresProjectId:            true,
 			SupportsDirectAccountRouting: true,
-			SupportsCloudValidation:     true,
-			SupportsNativeProxy:         true,
+			SupportsCloudValidation:      true,
+			SupportsNativeProxy:          true,
 		},
 		Site: ProviderSiteConfig{
 			Name:     "Google Gemini CLI OAuth",
@@ -64,10 +63,10 @@ func init() {
 			Path:        geminiCliLoopbackPath,
 			RedirectURI: geminiCliLoopbackRedirectURI,
 		},
-		BuildAuthorizationURL:   buildGeminiCliAuthorizationURL,
+		BuildAuthorizationURL:     buildGeminiCliAuthorizationURL,
 		ExchangeAuthorizationCode: exchangeGeminiCliAuthorizationCode,
-		RefreshAccessToken:      refreshGeminiCliAccessToken,
-		BuildProxyHeaders:       buildGeminiCliProxyHeaders,
+		RefreshAccessToken:        refreshGeminiCliAccessToken,
+		BuildProxyHeaders:         buildGeminiCliProxyHeaders,
 	})
 }
 
@@ -104,12 +103,12 @@ func buildGeminiCliAuthorizationURL(ctx context.Context, input BuildAuthURLInput
 // ---- Token Exchange ----
 
 type geminiOAuthTokenPayload struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	TokenType    string `json:"token_type"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	TokenType    string      `json:"token_type"`
 	ExpiresIn    interface{} `json:"expires_in"`
-	Scope        string `json:"scope"`
-	Expiry       string `json:"expiry"`
+	Scope        string      `json:"scope"`
+	Expiry       string      `json:"expiry"`
 }
 
 func parseGeminiExpiresAt(payload *geminiOAuthTokenPayload) int64 {
@@ -146,9 +145,14 @@ func postGeminiToken(form url.Values, proxyURL *string) (*TokenSet, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		respBody := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(respBody))
+	}
+
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload geminiOAuthTokenPayload
@@ -268,7 +272,7 @@ func refreshGeminiCliAccessToken(ctx context.Context, input RefreshTokenInput) (
 
 func buildGeminiCliProxyHeaders(ctx context.Context, input ProxyHeaderInput) map[string]string {
 	return map[string]string{
-		"User-Agent":      geminiCliUserAgent,
+		"User-Agent":        geminiCliUserAgent,
 		"X-Goog-Api-Client": geminiCliGoogleAPIClient,
 	}
 }
@@ -365,9 +369,14 @@ func callGeminiCliInternalAPI(accessToken, method string, body map[string]interf
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		respBody := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(respBody))
+	}
+
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var result map[string]interface{}
@@ -391,9 +400,14 @@ func fetchGcpProjects(accessToken string, proxyURL *string) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		respBody := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(respBody))
+	}
+
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload struct {
@@ -435,7 +449,10 @@ func fetchGeminiUserEmail(accessToken string, proxyURL *string) (string, error) 
 	var payload struct {
 		Email string `json:"email"`
 	}
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return "", err
+	}
 	_ = json.Unmarshal(respBody, &payload)
 	return strings.TrimSpace(payload.Email), nil
 }
@@ -459,8 +476,10 @@ func checkCloudAIAPIEnabled(accessToken, projectID string, proxyURL *string) err
 		var payload struct {
 			State string `json:"state"`
 		}
-		respBody, _ := io.ReadAll(resp.Body)
-		json.Unmarshal(respBody, &payload)
+		respBody, readErr := readOAuthJSONResponseBody(resp.Body)
+		if readErr == nil {
+			json.Unmarshal(respBody, &payload)
+		}
 		if strings.EqualFold(strings.TrimSpace(payload.State), "ENABLED") {
 			return nil
 		}
@@ -486,7 +505,10 @@ func checkCloudAIAPIEnabled(accessToken, projectID string, proxyURL *string) err
 	}
 	defer enableResp.Body.Close()
 
-	enableBody, _ := io.ReadAll(enableResp.Body)
+	enableBody, err := readOAuthJSONResponseBody(enableResp.Body)
+	if err != nil {
+		return err
+	}
 	if enableResp.StatusCode == 200 {
 		return nil
 	}
@@ -553,8 +575,8 @@ func performGeminiCliSetup(accessToken, requestedProjectID string, proxyURL *str
 	finalProjectID := projectID
 	for attempt := 0; attempt < geminiCliOnboardMaxAttempts; attempt++ {
 		onboardResp, err := callGeminiCliInternalAPI(accessToken, "onboardUser", map[string]interface{}{
-			"tierId":                   tierID,
-			"metadata":                 metadata,
+			"tierId":                  tierID,
+			"metadata":                metadata,
 			"cloudaicompanionProject": projectID,
 		}, proxyURL)
 		if err != nil {

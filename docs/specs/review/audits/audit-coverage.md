@@ -1,7 +1,7 @@
 # Test Coverage Audit Report
 
 **Generated**: 2026-07-04
-**Project**: metapi-go (D:/Code/TokenDance/metapi-go)
+**Project**: metapi-go (<repo>)
 **Overall coverage**: 40.8% of statements
 
 ---
@@ -310,5 +310,5 @@ The existing tests in `handler/admin` appear to use `httptest` with an in-memory
 ## 8. Coverage Data (Raw)
 
 Full function-level coverage data is available at:
-- Coverage profile: `D:/Code/TokenDance/metapi-go/coverage.out`
+- Coverage profile: `<repo>/coverage.out`
 - Per-function report generated via `go tool cover -func=coverage.out` (1,708 functions analyzed)

@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+const (
+	platformJSONResponseBodyLimit  = 4 << 20
+	platformTextResponseBodyLimit  = 2 << 20
+	platformErrorResponseBodyLimit = 64 << 10
+)
+
 // BaseAdapter provides default implementations for PlatformAdapter methods.
 // Concrete adapters embed this and override specific methods as needed.
 type BaseAdapter struct {
@@ -220,7 +226,11 @@ func fetchJSON(ctx context.Context, url, method string, body interface{}, header
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	bodyLimit := int64(platformJSONResponseBodyLimit)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyLimit = platformErrorResponseBodyLimit
+	}
+	respBody, err := readPlatformResponseBody(resp.Body, bodyLimit)
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
@@ -256,13 +266,25 @@ func fetchText(ctx context.Context, url string, proxy *ProxyConfig) (string, str
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readPlatformResponseBody(resp.Body, platformTextResponseBodyLimit)
 	if err != nil {
 		return "", "", fmt.Errorf("read body: %w", err)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
 	return string(body), contentType, nil
+}
+
+func readPlatformResponseBody(body io.Reader, limit int64) ([]byte, error) {
+	limited := io.LimitReader(body, limit+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("response body exceeds %d bytes", limit)
+	}
+	return data, nil
 }
 
 // --- JSON helpers ---

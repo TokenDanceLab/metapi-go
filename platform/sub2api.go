@@ -75,8 +75,13 @@ func (s *Sub2ApiAdapter) matchSub2ApiErrorEnvelope(ctx context.Context, url stri
 		return false
 	}
 
+	respBody, err := readPlatformResponseBody(resp.Body, platformJSONResponseBodyLimit)
+	if err != nil {
+		return false
+	}
+
 	var body map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+	if err := json.Unmarshal(respBody, &body); err != nil {
 		return false
 	}
 

@@ -1,8 +1,10 @@
 package balance
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/service/adapter"
 	"github.com/tokendancelab/metapi-go/service/alert"
@@ -26,31 +29,57 @@ func IsSiteDisabled(status string) bool {
 	if normalized == "" {
 		normalized = "active"
 	}
-	return normalized == "disabled"
+	return strings.EqualFold(normalized, "disabled")
+}
+
+func isAccountDisabled(status string) bool {
+	return strings.EqualFold(strings.TrimSpace(status), "disabled")
 }
 
 // sub2apiRefreshSingleflight provides deduplication for concurrent Sub2Api token refreshes.
 var (
-	sub2apiRefreshMu    sync.Mutex
-	sub2apiRefreshInFlight = map[int64]chan sub2apiRefreshResult{}
+	sub2apiRefreshMu       sync.Mutex
+	sub2apiRefreshInFlight = map[int64]*sub2apiRefreshPromise{}
 )
+
+type sub2apiRefreshPromise struct {
+	done   chan struct{}
+	once   sync.Once
+	result sub2apiRefreshResult
+}
 
 type sub2apiRefreshResult struct {
 	accessToken string
 	err         error
 }
 
+func newSub2APIRefreshPromise() *sub2apiRefreshPromise {
+	return &sub2apiRefreshPromise{done: make(chan struct{})}
+}
+
+func (p *sub2apiRefreshPromise) wait() sub2apiRefreshResult {
+	<-p.done
+	return p.result
+}
+
+func (p *sub2apiRefreshPromise) resolve(result sub2apiRefreshResult) {
+	p.once.Do(func() {
+		p.result = result
+		close(p.done)
+	})
+}
+
 // refreshSub2ApiManagedSessionSingleflight refreshes a Sub2Api managed session token.
 // Uses singleflight pattern: concurrent callers for the same accountID wait on the first call.
 func refreshSub2ApiManagedSessionSingleflight(cfg *config.Config, db *sqlx.DB, accountID int64, account *store.Account, site *store.Site, managedAuth map[string]any) (string, error) {
 	sub2apiRefreshMu.Lock()
-	if ch, ok := sub2apiRefreshInFlight[accountID]; ok {
+	if p, ok := sub2apiRefreshInFlight[accountID]; ok {
 		sub2apiRefreshMu.Unlock()
-		result := <-ch
+		result := p.wait()
 		return result.accessToken, result.err
 	}
-	ch := make(chan sub2apiRefreshResult, 1)
-	sub2apiRefreshInFlight[accountID] = ch
+	p := newSub2APIRefreshPromise()
+	sub2apiRefreshInFlight[accountID] = p
 	sub2apiRefreshMu.Unlock()
 
 	defer func() {
@@ -60,7 +89,7 @@ func refreshSub2ApiManagedSessionSingleflight(cfg *config.Config, db *sqlx.DB, a
 	}()
 
 	token, err := tryAutoReloginBalance(cfg, db, account, site)
-	ch <- sub2apiRefreshResult{accessToken: token, err: err}
+	p.resolve(sub2apiRefreshResult{accessToken: token, err: err})
 	return token, err
 }
 
@@ -83,6 +112,8 @@ func shouldAttemptAutoReloginBalance(message string) bool {
 }
 
 // income log fallback config
+const incomeLogResponseBodyLimit = 1 << 20
+
 var supportedIncomeLogPlatforms = map[string]bool{
 	"new-api":   true,
 	"anyrouter": true,
@@ -102,7 +133,7 @@ func resolveQuotaConversionFactor(platform string) float64 {
 }
 
 // fetchTodayIncomeFromLogs fetches today's income from /api/log/self endpoints.
-func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUserID int64, proxyURL string) (float64, error) {
+func fetchTodayIncomeFromLogs(baseURL, accessToken, platformName string, platformUserID int64, proxyConfig *platform.ProxyConfig) (float64, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	accessToken = strings.TrimSpace(accessToken)
 	if baseURL == "" || accessToken == "" {
@@ -110,7 +141,7 @@ func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUse
 	}
 
 	start, end := service.GetTodayUnixSecondsRange(time.Now())
-	conversionFactor := resolveQuotaConversionFactor(platform)
+	conversionFactor := resolveQuotaConversionFactor(platformName)
 	headers := map[string]string{
 		"Authorization": "Bearer " + accessToken,
 		"Content-Type":  "application/json",
@@ -125,8 +156,6 @@ func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUse
 	hasAnyResponse := false
 	totalIncome := 0.0
 
-	client := service.ProxyAwareHTTPClient(proxyURL, 30*time.Second)
-
 	for _, logType := range logTypes {
 		for page := 1; page <= maxPages; page++ {
 			query := fmt.Sprintf("p=%d&page_size=%d&type=%d&token_name=&model_name=&start_timestamp=%d&end_timestamp=%d&group=",
@@ -140,7 +169,7 @@ func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUse
 			for k, v := range headers {
 				req.Header.Set(k, v)
 			}
-			resp, err := client.Do(req)
+			resp, err := platform.DoWithProxy(context.Background(), req, proxyConfig)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
 					resp.Body.Close()
@@ -149,7 +178,7 @@ func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUse
 			}
 
 			var payload map[string]any
-			if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			if err := decodeIncomeLogPayload(resp.Body, &payload); err != nil {
 				resp.Body.Close()
 				break
 			}
@@ -186,6 +215,18 @@ func fetchTodayIncomeFromLogs(baseURL, accessToken, platform string, platformUse
 		return 0, fmt.Errorf("no log responses")
 	}
 	return math.Round(totalIncome*1_000_000) / 1_000_000, nil
+}
+
+func decodeIncomeLogPayload(body io.Reader, payload *map[string]any) error {
+	limited := &io.LimitedReader{R: body, N: incomeLogResponseBodyLimit + 1}
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) > incomeLogResponseBodyLimit {
+		return fmt.Errorf("income log response exceeds %d bytes", incomeLogResponseBodyLimit)
+	}
+	return json.Unmarshal(data, payload)
 }
 
 func extractLogItems(payload map[string]any) []map[string]any {
@@ -292,9 +333,9 @@ func tryAutoReloginBalance(cfg *config.Config, db *sqlx.DB, account *store.Accou
 		return "", fmt.Errorf("failed to decrypt password")
 	}
 
-	proxyURL := service.GetProxyURLFromExtraConfig(account.ExtraConfig)
+	proxyConfig := service.BuildPlatformProxyConfig(cfg, account, site)
 
-	result, err := adp.Login(site.URL, relogin.Username, password, proxyURL)
+	result, err := adp.Login(site.URL, relogin.Username, password, proxyConfig)
 	if err != nil || !result.Success || result.AccessToken == "" {
 		if err != nil {
 			return "", err
@@ -308,7 +349,7 @@ func tryAutoReloginBalance(cfg *config.Config, db *sqlx.DB, account *store.Accou
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = db.Exec(
-		"UPDATE accounts SET access_token = ?, status = ?, updated_at = ? WHERE id = ?",
+		db.Rebind("UPDATE accounts SET access_token = ?, status = ?, updated_at = ? WHERE id = ?"),
 		result.AccessToken, newStatus, now, account.ID,
 	)
 	if err != nil {
@@ -319,11 +360,11 @@ func tryAutoReloginBalance(cfg *config.Config, db *sqlx.DB, account *store.Accou
 
 // BalanceResult is the result of a balance refresh.
 type BalanceResult struct {
-	Balance float64
-	Used    float64
-	Quota   float64
-	Skipped bool
-	Reason  string
+	Balance     float64
+	Used        float64
+	Quota       float64
+	Skipped     bool
+	Reason      string
 	BalanceInfo *adapter.BalanceInfo
 }
 
@@ -337,7 +378,20 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 	account := &aws.Account
 	site := &aws.Site
 
-	// Site disabled check
+	// Disabled checks
+	if isAccountDisabled(account.Status) {
+		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
+			State: service.HealthDisabled, Reason: "账号已禁用", Source: service.HealthSourceBalance,
+		})
+		return &BalanceResult{
+			Balance: account.Balance,
+			Used:    account.BalanceUsed,
+			Quota:   account.Quota,
+			Skipped: true,
+			Reason:  "account_disabled",
+		}, nil
+	}
+
 	if IsSiteDisabled(site.Status) {
 		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
 			State: service.HealthDisabled, Reason: "站点已禁用", Source: service.HealthSourceBalance,
@@ -369,7 +423,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 	}
 
 	platformUserID := service.ResolvePlatformUserID(account.ExtraConfig, account.Username)
-	accountProxyURL := service.GetProxyURLFromExtraConfig(account.ExtraConfig)
+	proxyConfig := service.BuildPlatformProxyConfig(cfg, account, site)
 	activeAccessToken := account.AccessToken
 	activeExtraConfig := account.ExtraConfig
 
@@ -391,7 +445,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 
 	// Read balance helper
 	readBalance := func(token string) (*adapter.BalanceInfo, error) {
-		return adp.GetBalance(site.URL, token, platformUserID, accountProxyURL)
+		return adp.GetBalance(site.URL, token, platformUserID, proxyConfig)
 	}
 
 	// Error handler
@@ -446,7 +500,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 		}
 	}
 
-	afterRetry:
+afterRetry:
 	if balanceInfo == nil {
 		return nil, fmt.Errorf("failed to fetch balance")
 	}
@@ -454,7 +508,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 	// Today income fallback from logs
 	if balanceInfo.TodayIncome == nil || math.IsNaN(*balanceInfo.TodayIncome) || math.IsInf(*balanceInfo.TodayIncome, 0) {
 		if supportsTodayIncomeLogFallback(site.Platform) {
-			fallbackIncome, fallbackErr := fetchTodayIncomeFromLogs(site.URL, activeAccessToken, site.Platform, platformUserID, accountProxyURL)
+			fallbackIncome, fallbackErr := fetchTodayIncomeFromLogs(site.URL, activeAccessToken, site.Platform, platformUserID, proxyConfig)
 			if fallbackErr == nil {
 				balanceInfo.TodayIncome = &fallbackIncome
 			}
@@ -489,7 +543,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 			return account.Status
 		}(),
 		"lastBalanceRefresh": time.Now().UTC().Format(time.RFC3339),
-		"updatedAt":         time.Now().UTC().Format(time.RFC3339),
+		"updatedAt":          time.Now().UTC().Format(time.RFC3339),
 	}
 
 	if nextExtraConfig != nil && account.ExtraConfig != nil && *nextExtraConfig != *account.ExtraConfig {

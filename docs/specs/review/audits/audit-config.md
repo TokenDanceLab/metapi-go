@@ -1,7 +1,7 @@
 # Config Hardening Audit: metapi-go/config
 
 **Audit date**: 2026-07-04  
-**Scope**: `D:/Code/TokenDance/metapi-go/config/config.go`, `defaults.go`; related files `store/settings.go`, `handler/admin/settings.go`, `cmd/server/main.go`
+**Scope**: `<repo>/config/config.go`, `defaults.go`; related files `store/settings.go`, `handler/admin/settings.go`, `cmd/server/main.go`
 
 ---
 

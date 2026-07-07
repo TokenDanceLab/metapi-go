@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Sites mobile layout', () => {
   it('includes mobile-card usage in Sites page', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Sites.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Sites.tsx'), 'utf8');
     expect(source).toContain('mobile-card');
   });
 });

@@ -1,7 +1,12 @@
 package proxyhandler
 
 import (
+	"bytes"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -69,6 +74,39 @@ func TestHandleImagesEdits_Unauthorized(t *testing.T) {
 
 	if rec.Code != 401 {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestHandleImagesEdits_MultipartUnauthorized(t *testing.T) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("model", "gpt-image-1"); err != nil {
+		t.Fatalf("write model field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest("POST", "/v1/images/edits", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	HandleImagesEdits(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleImagesEdits_InvalidMultipartReturnsBadRequest(t *testing.T) {
+	req := makeProxyReqNoBody("POST", "/v1/images/edits")
+	req.Body = io.NopCloser(strings.NewReader("not a valid multipart body"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing-boundary")
+	rec := httptest.NewRecorder()
+
+	HandleImagesEdits(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid multipart, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

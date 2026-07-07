@@ -1,7 +1,7 @@
 # Graceful Shutdown Safety Audit
 
 **Audit date:** 2026-07-04
-**Scope:** `D:/Code/TokenDance/metapi-go`
+**Scope:** `<repo>`
 **Files examined:** `app/app.go`, `cmd/server/main.go`, `scheduler/scheduler.go`, `service/oauth/callback_server.go`, `app/services.go`, `store/open.go`, `store/bootstrap.go`, `store/switch.go`, `scheduler/*.go` (all 8 scheduler files), `handler/proxy/upstream.go`, `service/proxy_util.go`, `proxy/executor.go`
 
 ---

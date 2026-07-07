@@ -64,7 +64,7 @@ describe('MobileDrawer', () => {
   });
 
   it('defines independent right-side drawer animations in shared css', () => {
-    const css = readFileSync(resolve(process.cwd(), 'src/web/index.css'), 'utf8').replace(/\r\n/g, '\n');
+    const css = readFileSync(resolve(process.cwd(), 'index.css'), 'utf8').replace(/\r\n/g, '\n');
 
     expect(css).toContain('@keyframes drawer-slide-in-right');
     expect(css).toContain('@keyframes drawer-slide-out-right');

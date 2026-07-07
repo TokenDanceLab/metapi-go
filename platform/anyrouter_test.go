@@ -2,6 +2,8 @@ package platform
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -49,7 +51,8 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	// AnyRouter inherits all NewApi methods including cookie fallback, shield challenge, user-ID probing
+	// AnyRouter inherits NewAPI-compatible session methods including cookie fallback,
+	// shield challenge, and user-ID probing.
 	// All HTTP-based methods should gracefully handle unreachable URLs
 
 	// Login
@@ -99,19 +102,61 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 		}
 	}
 
-	// CreateAPIToken
-	created, err := a.CreateAPIToken(ctx, "http://127.0.0.1:1", "token", nil, nil, nil)
-	if err != nil {
-		t.Errorf("CreateAPIToken error: %v", err)
-	}
-	if created {
-		t.Error("CreateAPIToken on unreachable should return false")
+	assertAnyRouterTokenManagementUnsupported(t, a)
+}
+
+func TestAnyRouterAdapter_TokenManagementDoesNotCallNewApiEndpoints(t *testing.T) {
+	a := &AnyRouterAdapter{
+		NewApiAdapter: &NewApiAdapter{BaseAdapter: NewBaseAdapter("anyrouter")},
 	}
 
-	// DeleteAPIToken
-	err = a.DeleteAPIToken(ctx, "http://127.0.0.1:1", "token", "sk-test", nil, nil)
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		http.Error(w, "unexpected upstream call", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	assertAnyRouterTokenManagementUnsupported(t, a, server.URL)
+	if calls != 0 {
+		t.Fatalf("upstream calls = %d, want 0", calls)
+	}
+}
+
+func assertAnyRouterTokenManagementUnsupported(t *testing.T, a *AnyRouterAdapter, urls ...string) {
+	t.Helper()
+	ctx := context.Background()
+	baseURL := "http://127.0.0.1:1"
+	if len(urls) > 0 {
+		baseURL = urls[0]
+	}
+
+	token, err := a.GetAPIToken(ctx, baseURL, "token", nil, nil)
 	if err != nil {
-		t.Errorf("DeleteAPIToken error: %v", err)
+		t.Fatalf("GetAPIToken error: %v", err)
+	}
+	if token != nil {
+		t.Fatalf("GetAPIToken = %v, want nil", *token)
+	}
+
+	tokens, err := a.GetAPITokens(ctx, baseURL, "token", nil, nil)
+	if err != nil {
+		t.Fatalf("GetAPITokens error: %v", err)
+	}
+	if len(tokens) != 0 {
+		t.Fatalf("GetAPITokens = %#v, want empty", tokens)
+	}
+
+	created, err := a.CreateAPIToken(ctx, baseURL, "token", nil, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateAPIToken error: %v", err)
+	}
+	if created {
+		t.Fatal("CreateAPIToken = true, want false")
+	}
+
+	if err := a.DeleteAPIToken(ctx, baseURL, "token", "test-key", nil, nil); err != nil {
+		t.Fatalf("DeleteAPIToken error: %v", err)
 	}
 }
 

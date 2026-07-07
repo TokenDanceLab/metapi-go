@@ -1,7 +1,7 @@
 # Database Query Efficiency Audit
 
 **Date:** 2026-07-04
-**Scope:** `D:/Code/TokenDance/metapi-go`
+**Scope:** `<repo>`
 **Files audited:** `handler/admin/sites.go`, `handler/admin/accounts.go`, `handler/admin/account_tokens.go`, `handler/admin/downstream_keys.go`, `handler/admin/search.go`, `handler/admin/settings_database.go`, `store/schema.go`, `store/migrate.go`, `store/open.go`, `service/site_service.go`, `service/account_service.go`, `scheduler/usage_aggregation.go`, `scheduler/checkin.go`, `scheduler/settings.go`, `scheduler/scheduler.go`
 
 **Severity legend:**

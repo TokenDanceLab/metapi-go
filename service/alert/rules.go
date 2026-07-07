@@ -8,6 +8,14 @@ import (
 
 const sessionTokenRebindHint = "请在中转站重新生成系统访问令牌后重新绑定账号"
 
+var (
+	endpointDispatchDeniedRe    = regexp.MustCompile(`does\s+not\s+allow\s+/v1/[a-z0-9/_:-]+\s+dispatch`)
+	invalidAccessTokenRe        = regexp.MustCompile(`invalid\s+access\s+token`)
+	accessTokenIsInvalidRe      = regexp.MustCompile(`access\s+token\s+is\s+invalid`)
+	modelNotSupportedRe         = regexp.MustCompile(`model\s+.+\s+is\s+not\s+supported`)
+	accessTokenChineseInvalidRe = regexp.MustCompile(`access\s+token.*无效`)
+)
+
 // IsCloudflareChallenge detects Cloudflare challenge messages.
 // Mirrors TS isCloudflareChallenge().
 func IsCloudflareChallenge(message string) bool {
@@ -26,33 +34,36 @@ func isEndpointDispatchDeniedMessage(message string) bool {
 	if text == "" {
 		return false
 	}
-	re := regexp.MustCompile(`does\s+not\s+allow\s+/v1/[a-z0-9/_:-]+\s+dispatch`)
-	return re.MatchString(message) || strings.Contains(text, "dispatch denied")
+	return endpointDispatchDeniedRe.MatchString(text) || strings.Contains(text, "dispatch denied")
 }
 
 // IsTokenExpiredError detects if an error indicates an expired token.
 // Mirrors TS isTokenExpiredError().
 func IsTokenExpiredError(httpStatus int, message string) bool {
 	rawMessage := message
-	text := strings.ToLower(message)
+	text := strings.ToLower(strings.TrimSpace(message))
 
 	// Exclude dispatch denied messages
 	if isEndpointDispatchDeniedMessage(rawMessage) {
 		return false
 	}
 
-	// Check HTTP 401
-	if httpStatus == 401 || containsHTTPStatus(rawMessage, 401) {
-		return true
-	}
-
 	if text == "" {
-		return false
+		return httpStatus == 401
 	}
 
 	// NewAPI-specific: "未登录且未提供 access token" doesn't always mean token expired
 	if strings.Contains(text, "未登录且未提供 access token") {
 		return false
+	}
+
+	if isRequestValidationFailure(text) || isCapabilityOrBillingFailure(text) {
+		return false
+	}
+
+	// Check HTTP 401 after explicit non-auth failure exclusions.
+	if httpStatus == 401 || containsHTTPStatus(rawMessage, 401) {
+		return true
 	}
 
 	tokenPhrase := strings.Contains(text, "token") || strings.Contains(text, "令牌") || strings.Contains(text, "访问令牌")
@@ -62,8 +73,24 @@ func IsTokenExpiredError(httpStatus int, message string) bool {
 	return strings.Contains(text, "jwt expired") ||
 		strings.Contains(text, "token expired") ||
 		(tokenPhrase && (hasInvalid || hasExpired)) ||
-		regexp.MustCompile(`invalid\s+access\s+token`).MatchString(text) ||
-		regexp.MustCompile(`access\s+token\s+is\s+invalid`).MatchString(text)
+		invalidAccessTokenRe.MatchString(text) ||
+		accessTokenIsInvalidRe.MatchString(text)
+}
+
+func isRequestValidationFailure(text string) bool {
+	return strings.Contains(text, "invalid_argument") ||
+		strings.Contains(text, "invalid_request_error") ||
+		strings.Contains(text, "input token limit") ||
+		strings.Contains(text, "context length") ||
+		strings.Contains(text, "maximum context")
+}
+
+func isCapabilityOrBillingFailure(text string) bool {
+	return modelNotSupportedRe.MatchString(text) ||
+		strings.Contains(text, "not supported for format") ||
+		strings.Contains(text, "no payment method") ||
+		strings.Contains(text, "payment method") ||
+		strings.Contains(text, "billing")
 }
 
 // containsHTTPStatus checks if a message contains an HTTP status code.
@@ -87,9 +114,9 @@ func AppendSessionTokenRebindHint(message string) string {
 	text := strings.ToLower(raw)
 	looksLikeInvalidAccessToken :=
 		strings.Contains(raw, "无权进行此操作，access token 无效") ||
-			regexp.MustCompile(`invalid\s+access\s+token`).MatchString(text) ||
-			regexp.MustCompile(`access\s+token\s+is\s+invalid`).MatchString(text) ||
-			regexp.MustCompile(`access\s+token.*无效`).MatchString(raw)
+			invalidAccessTokenRe.MatchString(text) ||
+			accessTokenIsInvalidRe.MatchString(text) ||
+			accessTokenChineseInvalidRe.MatchString(raw)
 
 	if !looksLikeInvalidAccessToken {
 		return raw

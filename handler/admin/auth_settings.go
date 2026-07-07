@@ -42,7 +42,7 @@ func (h *authSettingsHandler) changeToken(w http.ResponseWriter, r *http.Request
 		OldToken string `json:"oldToken"`
 		NewToken string `json:"newToken"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success": false,
 			"message": "请填写所有字段",

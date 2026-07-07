@@ -1,5 +1,5 @@
 import CenteredModal from './CenteredModal.js';
-import { getSiteInitializationPreset } from '../../shared/siteInitializationPresets.js';
+import { getSiteInitializationPreset } from '../shared/siteInitializationPresets.js';
 
 type NextStepChoice = 'session' | 'apikey' | 'later';
 

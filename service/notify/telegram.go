@@ -3,7 +3,6 @@ package notify
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,8 +31,8 @@ func (c *TelegramChannel) Send(cfg *config.Config, title, message, level, timeFo
 	text := buildTelegramText(title, message, level, timeFootnote)
 
 	bodyMap := map[string]any{
-		"chat_id":                cfg.TelegramChatId,
-		"text":                   text,
+		"chat_id":                  cfg.TelegramChatId,
+		"text":                     text,
 		"disable_web_page_preview": true,
 	}
 
@@ -64,7 +63,10 @@ func (c *TelegramChannel) Send(cfg *config.Config, title, message, level, timeFo
 		return fmt.Errorf("telegram response status %d", resp.StatusCode)
 	}
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := readNotifyResponseBody(resp.Body)
+	if err != nil {
+		return fmt.Errorf("telegram response read failed: %w", err)
+	}
 	var payload struct {
 		OK          bool   `json:"ok"`
 		Description string `json:"description"`

@@ -1,13 +1,13 @@
 import type { CSSProperties } from 'react';
 import { getBrand, normalizeBrandIconKey, type BrandInfo } from '../../components/BrandIcon.js';
-import { normalizeTokenRouteMode, type RouteDecisionCandidate, type RouteMode } from '../../../shared/tokenRouteContract.js';
+import { normalizeTokenRouteMode, type RouteDecisionCandidate, type RouteMode } from '../../shared/tokenRouteContract.js';
 import type { RouteRow, RouteChannel, ChannelDecisionState, RouteSummaryRow } from './types.js';
 import {
   isExactTokenRouteModelPattern,
   isTokenRouteRegexPattern,
   matchesTokenRouteModelPattern,
   parseTokenRouteRegexPattern,
-} from '../../../shared/tokenRoutePatterns.js';
+} from '../../shared/tokenRoutePatterns.js';
 
 export const AUTO_ROUTE_DECISION_LIMIT = 80;
 export const ROUTE_RENDER_CHUNK = 40;

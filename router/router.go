@@ -24,21 +24,22 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	// ---- Middleware stack ----
 	r.Use(WithRequestID)
 	r.Use(SecurityHeaders)
-	r.Use(RealIP)
-	r.Use(CORS())
+	r.Use(TrustedRealIP(cfg))
 	r.Use(RequestLogger)
 	r.Use(Recoverer)
 	r.Use(BodyLimit(cfg.RequestBodyLimit))
 
-	// ---- /health (design addition, not in TS) ----
+	// ---- /health and /ready (design addition, not in TS) ----
 	// Registered before route groups so it bypasses auth middleware.
-	r.Get("/health", app.Health)
+	r.With(CORS()).Get("/health", app.Health)
+	r.With(CORS()).Get("/ready", app.Ready)
 
 	// ---- /metrics (Prometheus text format, bypasses auth) ----
-	r.Get("/metrics", app.PrometheusHandler)
+	r.With(CORS()).Get("/metrics", app.PrometheusHandler)
 
 	// ---- /api/* routes (excluding public routes) → admin auth middleware ----
 	r.Route("/api", func(r chi.Router) {
+		r.Use(AdminCORS(cfg))
 		r.Use(auth.AdminAuth(cfg))
 		// Rate limiting: per-IP token bucket (100 req/s, burst 200)
 		r.Use(auth.AdminRateLimit(100, 200))
@@ -58,7 +59,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 			// P11: Admin API routes
 			admin.RegisterStatsRoutes(r, db.DB)
 			admin.RegisterSettingsRoutes(r, db.DB, cfg)
-			admin.RegisterDatabaseRoutes(r, db.DB)
+			admin.RegisterDatabaseRoutes(r, db.DB, cfg)
 			admin.RegisterBackupRoutes(r, db.DB)
 			admin.RegisterNotifyRoutes(r)
 			admin.RegisterMaintenanceRoutes(r, db.DB)
@@ -69,7 +70,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 			admin.RegisterTestRoutes(r)
 			admin.RegisterSiteAnnouncementsRoutes(r, db.DB)
 			admin.RegisterAuthSettingsRoutes(r, db.DB, cfg)
-			admin.RegisterCheckinRoutes(r, db.DB)
+			admin.RegisterCheckinRoutes(r, db.DB, cfg)
 			admin.RegisterTokenRoutes(r, db.DB)
 			admin.RegisterUpdateCenterRoutes(r)
 			admin.RegisterOauthRoutes(r, db.DB)
@@ -91,12 +92,14 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 
 	// /v1/* proxy routes → proxy auth middleware
 	r.Route("/v1", func(r chi.Router) {
+		r.Use(CORS())
 		r.Use(auth.ProxyAuth(cfg))
 		proxyhandler.RegisterProxyRoutes(r)
 	})
 
 	// Non-/v1 proxy routes (chat alias, responses aliases, Gemini native paths)
 	r.Route("/", func(r chi.Router) {
+		r.Use(CORS())
 		r.Use(auth.ProxyAuth(cfg))
 		proxyhandler.RegisterNonV1ProxyRoutes(r)
 	})

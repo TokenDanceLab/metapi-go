@@ -1,7 +1,7 @@
 # MetAPI Go -- Final Dependency Audit
 
 **Date**: 2026-07-05
-**Project**: `github.com/tokendancelab/metapi-go` (`D:/Code/TokenDance/metapi-go`)
+**Project**: `github.com/tokendancelab/metapi-go` (`<repo>`)
 **Go Version**: go1.26.3 windows/amd64
 **Module Go Version**: 1.25.0
 
@@ -238,7 +238,7 @@ all modules verified
 
 ### go.sum line count
 ```
-95 D:/Code/TokenDance/metapi-go/go.sum
+95 <repo>/go.sum
 ```
 
 ### go.list -m -u all (update-available modules)

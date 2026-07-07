@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -14,8 +15,7 @@ import (
 func LoadRuntimeSettings(cfg *config.Config) error {
 	db := GetDB()
 	if db == nil {
-		slog.Warn("settings: database not initialized, skipping runtime settings load")
-		return nil
+		return fmt.Errorf("settings: database not initialized")
 	}
 
 	settingsStore := NewSettingsStore(db)
@@ -104,6 +104,22 @@ func ApplyRuntimeSettings(cfg *config.Config, settingsMap map[string]string) {
 		// Server
 		case "port":
 			cfg.Port = parseInt(value, cfg.Port)
+
+		// Checkin schedule
+		case "checkin_cron":
+			if v := parseJSONSettingString(value); v != "" {
+				cfg.CheckinCron = v
+			}
+		case "checkin_schedule_mode":
+			switch strings.ToLower(parseJSONSettingString(value)) {
+			case "cron", "interval":
+				cfg.CheckinScheduleMode = strings.ToLower(parseJSONSettingString(value))
+			}
+		case "checkin_interval_hours":
+			hours := parseInt(value, cfg.CheckinIntervalHours)
+			if hours >= 1 && hours <= 24 {
+				cfg.CheckinIntervalHours = hours
+			}
 
 		// Notify
 		case "webhook_url":
@@ -202,5 +218,14 @@ func parseInt(value string, fallback int) int {
 
 // parseOptionalString returns the value if non-empty, empty string otherwise.
 func parseOptionalString(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func parseJSONSettingString(value string) string {
+	value = strings.TrimSpace(value)
+	var decoded string
+	if err := json.Unmarshal([]byte(value), &decoded); err == nil {
+		return strings.TrimSpace(decoded)
+	}
 	return strings.TrimSpace(value)
 }

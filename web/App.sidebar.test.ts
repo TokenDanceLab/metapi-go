@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('App sidebar config', () => {
   it('uses 连接管理 for /accounts and removes standalone /tokens navigation item', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
 
     expect(source).toContain("{ to: '/accounts', label: '连接管理'");
     expect(source).not.toContain("{ to: '/accounts', label: '账号'");
@@ -12,7 +12,7 @@ describe('App sidebar config', () => {
   });
 
   it('places downstream key navigation under 控制台 instead of 系统', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
     const consoleGroupIndex = source.indexOf("label: '控制台'");
     const downstreamIndex = source.indexOf("{ to: '/downstream-keys', label: '下游密钥'");
     const systemGroupIndex = source.indexOf("label: '系统'");
@@ -23,7 +23,7 @@ describe('App sidebar config', () => {
   });
 
   it('adds standalone OAuth 管理 navigation entry', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/App.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
 
     expect(source).toContain("{ to: '/oauth', label: 'OAuth 管理'");
     expect(source).toContain("const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'));");

@@ -18,10 +18,22 @@ function parseUrlCandidate(url) {
 
   for (const candidate of candidates) {
     try {
-      return new URL(candidate);
+      const parsed = new URL(candidate);
+      if (isSafeExternalProtocol(parsed.protocol)) return parsed;
     } catch {}
   }
   return null;
+}
+
+function isSafeExternalProtocol(protocol) {
+  return protocol === 'http:' || protocol === 'https:';
+}
+
+export function safeExternalHref(url) {
+  const trimmed = typeof url === 'string' ? url.trim() : '';
+  const parsed = parseUrlCandidate(url);
+  if (!parsed) return '';
+  return trimmed.includes('://') ? trimmed : parsed.href;
 }
 
 const AUTO_STRIP_PRIMARY_SITE_PATHS = new Set([
@@ -46,12 +58,11 @@ const SEMANTIC_PRIMARY_SITE_PATHS = new Set([
 export function analyzePrimarySiteUrl(url) {
   const parsed = parseUrlCandidate(url);
   if (!parsed) {
-    const trimmed = typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
     return {
-      canonicalUrl: trimmed,
-      persistedUrl: trimmed,
+      canonicalUrl: '',
+      persistedUrl: '',
       matchedPath: '',
-      action: 'unchanged',
+      action: 'invalid_url',
     };
   }
 

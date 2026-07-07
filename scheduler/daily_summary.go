@@ -8,6 +8,7 @@ import (
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/service/daily"
 	notifypkg "github.com/tokendancelab/metapi-go/service/notify"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 const dailySummaryDefaultCron = "58 23 * * *"
@@ -48,14 +49,19 @@ func (s *DailySummaryScheduler) Stop() error {
 
 func (s *DailySummaryScheduler) runJob() {
 	slog.Info("daily-summary: collecting metrics")
-	db := getSqlxDB()
-	if db == nil {
+	dbw := store.GetDB()
+	if dbw == nil {
 		slog.Error("daily-summary: database not available")
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runJobLocked(dbw)
+	})
+}
 
+func (s *DailySummaryScheduler) runJobLocked(dbw *store.DB) {
 	now := time.Now()
-	metrics := daily.CollectDailySummaryMetrics(s.cfg, db, now)
+	metrics := daily.CollectDailySummaryMetrics(s.cfg, dbw.DB, now)
 	if metrics == nil {
 		slog.Error("daily-summary: failed to collect metrics")
 		return

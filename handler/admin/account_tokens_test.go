@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,13 @@ func setupTokensTest(t *testing.T) (*store.DB, chi.Router) {
 	r := chi.NewRouter()
 	RegisterSitesRoutes(r, db.DB)
 	RegisterAccountsRoutes(r, db.DB, cfg)
+	RegisterAccountTokensRoutes(r, db.DB)
+	return db, r
+}
+
+func setupTokensPostgresTest(t *testing.T) (*store.DB, chi.Router) {
+	t.Helper()
+	db, r, _ := setupAccountsPostgresTest(t)
 	RegisterAccountTokensRoutes(r, db.DB)
 	return db, r
 }
@@ -172,6 +180,127 @@ func TestTokens_Create_Local(t *testing.T) {
 	}
 	if tok["valueStatus"] != "ready" {
 		t.Errorf("expected valueStatus='ready', got %v", tok["valueStatus"])
+	}
+}
+
+func TestTokens_CreateLocal_DefaultFailureCleansInsertedToken(t *testing.T) {
+	db, r := setupTokensTest(t)
+	_, accountID := tokenFixture(t, db, r)
+
+	if _, err := db.Exec(`CREATE TRIGGER fail_create_default_api_token
+		BEFORE UPDATE OF api_token ON accounts
+		BEGIN
+			SELECT RAISE(ABORT, 'forced create default failure');
+		END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	resp := doPostJSON(t, r, "/api/account-tokens", map[string]any{
+		"accountId": accountID,
+		"token":     "plain-local-token",
+	})
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 on failed default setup, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM account_tokens WHERE account_id = ?", accountID).Scan(&count); err != nil {
+		t.Fatalf("count account_tokens: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("account token rows = %d, want cleanup to leave none", count)
+	}
+}
+
+func TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete(t *testing.T) {
+	db, r := setupTokensPostgresTest(t)
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	siteURL := "https://pg-tokens-" + suffix + ".example.com"
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM sites WHERE url = ?", siteURL)
+	})
+
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "PG Tokens " + suffix,
+		"url":      siteURL,
+		"platform": "openai",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("postgres create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	if err := json.Unmarshal(siteResp.Body.Bytes(), &site); err != nil {
+		t.Fatalf("unmarshal site: %v", err)
+	}
+	siteID := int64(site["id"].(float64))
+
+	accountResp := doPostJSON(t, r, "/api/accounts", map[string]any{
+		"siteId":      siteID,
+		"accessToken": "pg-session-token-" + suffix,
+		"username":    "pg-token-user-" + suffix,
+	})
+	if accountResp.Code != http.StatusOK {
+		t.Fatalf("postgres create account: %d %s", accountResp.Code, accountResp.Body.String())
+	}
+	var account map[string]any
+	if err := json.Unmarshal(accountResp.Body.Bytes(), &account); err != nil {
+		t.Fatalf("unmarshal account: %v", err)
+	}
+	accountID := int64(account["id"].(float64))
+
+	createResp := doPostJSON(t, r, "/api/account-tokens", map[string]any{
+		"accountId": accountID,
+		"token":     "pg-token-" + suffix,
+		"name":      "pg-token",
+		"group":     "pg-group",
+		"isDefault": true,
+	})
+	if createResp.Code != http.StatusOK {
+		t.Fatalf("postgres create token: expected 200, got %d: %s", createResp.Code, createResp.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal token: %v", err)
+	}
+	tokenMap, ok := created["token"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing token object: %#v", created)
+	}
+	tokenID := int64(tokenMap["id"].(float64))
+
+	listResp := doGet(t, r, "/api/account-tokens?accountId="+itoa(accountID))
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("postgres list tokens: expected 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var tokens []map[string]any
+	if err := json.Unmarshal(listResp.Body.Bytes(), &tokens); err != nil {
+		t.Fatalf("unmarshal token list: %v", err)
+	}
+	if len(tokens) != 1 {
+		t.Fatalf("expected 1 token, got %d", len(tokens))
+	}
+
+	updateResp := doPutJSON(t, r, "/api/account-tokens/"+itoa(tokenID), map[string]any{
+		"name":    "pg-token-updated",
+		"enabled": true,
+	})
+	if updateResp.Code != http.StatusOK {
+		t.Fatalf("postgres update token: expected 200, got %d: %s", updateResp.Code, updateResp.Body.String())
+	}
+
+	defaultResp := doPostJSON(t, r, "/api/account-tokens/"+itoa(tokenID)+"/default", nil)
+	if defaultResp.Code != http.StatusOK {
+		t.Fatalf("postgres set default: expected 200, got %d: %s", defaultResp.Code, defaultResp.Body.String())
+	}
+
+	valueResp := doGet(t, r, "/api/account-tokens/"+itoa(tokenID)+"/value")
+	if valueResp.Code != http.StatusOK {
+		t.Fatalf("postgres get value: expected 200, got %d: %s", valueResp.Code, valueResp.Body.String())
+	}
+
+	deleteResp := doDelete(t, r, "/api/account-tokens/"+itoa(tokenID))
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("postgres delete token: expected 200, got %d: %s", deleteResp.Code, deleteResp.Body.String())
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,28 @@ func setupSitesTest(t *testing.T) (*store.DB, chi.Router) {
 
 	if err := store.AutoMigrate(db); err != nil {
 		db.Close()
+		t.Fatalf("AutoMigrate failed: %v", err)
+	}
+
+	r := chi.NewRouter()
+	RegisterSitesRoutes(r, db.DB)
+	return db, r
+}
+
+func setupSitesPostgresTest(t *testing.T) (*store.DB, chi.Router) {
+	t.Helper()
+	dsn := os.Getenv("PG_TEST_DSN")
+	if strings.TrimSpace(dsn) == "" {
+		t.Skip("PG_TEST_DSN not set; skipping PostgreSQL integration test")
+	}
+
+	db, err := store.Open(store.DialectPostgres, dsn, false)
+	if err != nil {
+		t.Fatalf("failed to open PostgreSQL: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	if err := store.AutoMigrate(db); err != nil {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
 
@@ -109,6 +133,65 @@ func TestSites_CreateWithExplicitPlatform(t *testing.T) {
 	}
 }
 
+func TestSites_Postgres_CreateUpdateAndDisabledModels(t *testing.T) {
+	db, r := setupSitesPostgresTest(t)
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	siteURL := "https://pg-sites-" + suffix + ".example.com"
+	endpointURL := siteURL + "/v1"
+	updatedEndpointURL := siteURL + "/api"
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM sites WHERE url = ?", siteURL)
+	})
+
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "PG Sites " + suffix,
+		"url":      siteURL,
+		"platform": "openai",
+		"apiEndpoints": []map[string]any{
+			{"url": endpointURL, "enabled": true, "sortOrder": 0},
+		},
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("postgres create site: expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var created map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
+	siteID, ok := created["id"].(float64)
+	if !ok || siteID <= 0 {
+		t.Fatalf("create response missing numeric id: %#v", created["id"])
+	}
+	pathID := itoa(int64(siteID))
+
+	resp = doPutJSON(t, r, "/api/sites/"+pathID, map[string]any{
+		"name": "PG Sites Updated " + suffix,
+		"apiEndpoints": []map[string]any{
+			{"url": updatedEndpointURL, "enabled": true, "sortOrder": 0},
+		},
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("postgres update site: expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	resp = doPutJSON(t, r, "/api/sites/"+pathID+"/disabled-models", map[string]any{
+		"models": []string{"gpt-4o", "gpt-4o", " o3 "},
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("postgres update disabled models: expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+
+	var disabled map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &disabled); err != nil {
+		t.Fatalf("unmarshal disabled models: %v", err)
+	}
+	models, ok := disabled["models"].([]any)
+	if !ok || len(models) != 2 {
+		t.Fatalf("expected deduplicated disabled models, got %#v", disabled["models"])
+	}
+}
+
 func TestSites_Create_Duplicate(t *testing.T) {
 	_, r := setupSitesTest(t)
 	newSiteFixture(t, r, "Site1", "https://api.openai.com")
@@ -152,6 +235,23 @@ func TestSites_CannotDetectPlatform(t *testing.T) {
 	resp := doPostJSON(t, r, "/api/sites", body)
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for undetectable platform, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestSites_CreateDetectsAnyRouter(t *testing.T) {
+	_, r := setupSitesTest(t)
+	body := map[string]any{
+		"name": "AnyRouter",
+		"url":  "https://anyrouter.example.com",
+	}
+	resp := doPostJSON(t, r, "/api/sites", body)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var created map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &created)
+	if created["platform"] != "anyrouter" {
+		t.Fatalf("platform = %v, want anyrouter", created["platform"])
 	}
 }
 
@@ -334,6 +434,20 @@ func TestSites_Detect_OpenAI(t *testing.T) {
 	json.Unmarshal(resp.Body.Bytes(), &result)
 	if result["platform"] != "openai" {
 		t.Errorf("expected 'openai', got %v", result["platform"])
+	}
+}
+
+func TestSites_Detect_AnyRouter(t *testing.T) {
+	_, r := setupSitesTest(t)
+	body := map[string]string{"url": "https://anyrouter.example.com"}
+	resp := doPostJSON(t, r, "/api/sites/detect", body)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	var result map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	if result["platform"] != "anyrouter" {
+		t.Fatalf("platform = %v, want anyrouter", result["platform"])
 	}
 }
 

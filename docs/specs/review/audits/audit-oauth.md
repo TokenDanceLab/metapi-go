@@ -1,7 +1,7 @@
 # OAuth Flow Security Audit: Go vs TypeScript
 
 **Audit date**: 2026-07-04
-**Scope**: `D:/Code/TokenDance/metapi-go/service/oauth/` vs `D:/Code/TokenDance/metapi/src/server/services/oauth/`
+**Scope**: `<repo>/service/oauth/` vs `<metapi-ts>/src/server/services/oauth/`
 **Method**: Code-review of full flow: PKCE, state, token storage, refresh rotation, clock skew, session TTL, singleflight, callback validation.
 
 ---

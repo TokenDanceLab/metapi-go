@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -38,14 +37,14 @@ func (h *maintenanceHandler) clearCache(w http.ResponseWriter, r *http.Request) 
 
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"success":                   true,
-		"queued":                    true,
-		"reused":                    false,
-		"jobId":                     "stub-clear-cache",
-		"message":                   "缓存已清理，重建路由已开始执行",
-		"deletedModelAvailability":  modelAvail,
-		"deletedRouteChannels":      routeCh,
-		"deletedTokenRoutes":        tokenRoutes,
+		"success":                  true,
+		"queued":                   true,
+		"reused":                   false,
+		"jobId":                    "stub-clear-cache",
+		"message":                  "缓存已清理，重建路由已开始执行",
+		"deletedModelAvailability": modelAvail,
+		"deletedRouteChannels":     routeCh,
+		"deletedTokenRoutes":       tokenRoutes,
 	})
 }
 
@@ -78,7 +77,13 @@ func (h *maintenanceHandler) factoryReset(w http.ResponseWriter, r *http.Request
 		Confirm bool `json:"confirm"`
 	}
 	// Decode body; if confirm is not true, reject.
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "Invalid request body",
+		})
+		return
+	}
 	if !body.Confirm {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success": false,

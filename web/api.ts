@@ -167,6 +167,36 @@ async function request<T = any>(
   return res.json() as Promise<T>;
 }
 
+export type BackupWebdavExportType = "all" | "accounts" | "preferences";
+
+export type BackupWebdavConfig = {
+  enabled: boolean;
+  fileUrl: string;
+  username: string;
+  password?: string;
+  hasPassword: boolean;
+  passwordMasked: string;
+  exportType: BackupWebdavExportType;
+  autoSyncEnabled: boolean;
+  autoSyncCron: string;
+};
+
+export type BackupWebdavState = {
+  lastSyncAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastError?: string | null;
+};
+
+export type BackupWebdavResponse = BackupWebdavConfig & {
+  success: boolean;
+  message?: string;
+  config: BackupWebdavConfig;
+  state: BackupWebdavState;
+  fileUrl?: string;
+  imported?: Record<string, number>;
+  appliedSettings?: unknown[];
+};
+
 async function streamSse(
   url: string,
   handlers: {
@@ -1290,7 +1320,7 @@ export const api = {
     }),
   getRuntimeDatabaseConfig: () => request("/api/settings/database/runtime"),
   updateRuntimeDatabaseConfig: (data: {
-    dialect: "sqlite" | "mysql" | "postgres";
+    dialect: "sqlite" | "postgres";
     connectionString: string;
     ssl?: boolean;
   }) =>
@@ -1299,7 +1329,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   testExternalDatabaseConnection: (data: {
-    dialect: "sqlite" | "mysql" | "postgres";
+    dialect: "sqlite" | "postgres";
     connectionString: string;
     ssl?: boolean;
   }) =>
@@ -1308,7 +1338,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
   migrateExternalDatabase: (data: {
-    dialect: "sqlite" | "mysql" | "postgres";
+    dialect: "sqlite" | "postgres";
     connectionString: string;
     overwrite?: boolean;
     ssl?: boolean;
@@ -1370,29 +1400,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ data }),
     }),
-  getBackupWebdavConfig: () => request("/api/settings/backup/webdav"),
+  getBackupWebdavConfig: () =>
+    request<BackupWebdavResponse>("/api/settings/backup/webdav"),
   saveBackupWebdavConfig: (data: {
     enabled: boolean;
     fileUrl: string;
     username: string;
     password?: string;
     clearPassword?: boolean;
-    exportType: "all" | "accounts" | "preferences";
+    exportType: BackupWebdavExportType;
     autoSyncEnabled: boolean;
     autoSyncCron: string;
   }) =>
-    request("/api/settings/backup/webdav", {
+    request<BackupWebdavResponse>("/api/settings/backup/webdav", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  exportBackupToWebdav: (type?: "all" | "accounts" | "preferences") =>
-    request("/api/settings/backup/webdav/export", {
+  exportBackupToWebdav: (type?: BackupWebdavExportType) =>
+    request<BackupWebdavResponse>("/api/settings/backup/webdav/export", {
       method: "POST",
       body: JSON.stringify(type ? { type } : {}),
       timeoutMs: 60_000,
     }),
   importBackupFromWebdav: () =>
-    request("/api/settings/backup/webdav/import", {
+    request<BackupWebdavResponse>("/api/settings/backup/webdav/import", {
       method: "POST",
       body: JSON.stringify({}),
       timeoutMs: 60_000,

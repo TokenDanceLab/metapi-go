@@ -85,6 +85,9 @@ func DetectSite(rawURL string) *DetectResult {
 		return &DetectResult{URL: canonicalURL, Platform: "gemini"}
 	default:
 		// Check for common NewAPI/OneAPI patterns
+		if strings.Contains(host, "anyrouter") || strings.Contains(parsed.Path, "anyrouter") {
+			return &DetectResult{URL: canonicalURL, Platform: "anyrouter"}
+		}
 		if strings.Contains(host, "oneapi") || strings.Contains(host, "new-api") || strings.Contains(host, "newapi") {
 			return &DetectResult{URL: canonicalURL, Platform: "new-api"}
 		}

@@ -2,16 +2,20 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // RegisterDatabaseRoutes registers all /api/settings/database routes.
-func RegisterDatabaseRoutes(r chi.Router, db *sqlx.DB) {
-	handler := &databaseHandler{db: db}
+func RegisterDatabaseRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
+	handler := &databaseHandler{db: db, cfg: cfg}
 
 	r.Get("/api/settings/database/runtime", handler.getRuntime)
 	r.Put("/api/settings/database/runtime", handler.saveRuntime)
@@ -20,7 +24,122 @@ func RegisterDatabaseRoutes(r chi.Router, db *sqlx.DB) {
 }
 
 type databaseHandler struct {
-	db *sqlx.DB
+	db  *sqlx.DB
+	cfg *config.Config
+}
+
+const runtimeDatabaseConnectionTestTimeoutSec = "5"
+
+func normalizeRuntimeDatabaseDialect(dialect string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(dialect)) {
+	case "sqlite":
+		return "sqlite", true
+	case "postgres", "postgresql":
+		return "postgres", true
+	default:
+		return "", false
+	}
+}
+
+func testRuntimeDatabaseConnection(dialect string, connectionString string, ssl bool) (string, error) {
+	trimmed := strings.TrimSpace(connectionString)
+	if trimmed == "" {
+		return "", fmt.Errorf("connection string is required")
+	}
+
+	dsn := trimmed
+	if dialect == store.DialectSQLite {
+		dsn = store.ResolveSQLitePath(trimmed, ".")
+	} else if dialect == store.DialectPostgres {
+		dsn = applyPostgresTestConnectTimeout(trimmed)
+	}
+
+	sslMode := ""
+	if ssl {
+		sslMode = "require"
+	}
+	db, err := store.OpenWithPostgresSSLMode(dialect, dsn, sslMode)
+	if err != nil {
+		return "", err
+	}
+	if err := db.Close(); err != nil {
+		return "", err
+	}
+	return maskConnectionString(trimmed), nil
+}
+
+func applyPostgresTestConnectTimeout(dsn string) string {
+	trimmed := strings.TrimSpace(dsn)
+	if strings.Contains(strings.ToLower(trimmed), "connect_timeout=") {
+		return dsn
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
+		parsed, err := url.Parse(trimmed)
+		if err == nil {
+			q := parsed.Query()
+			q.Set("connect_timeout", runtimeDatabaseConnectionTestTimeoutSec)
+			parsed.RawQuery = q.Encode()
+			return parsed.String()
+		}
+	}
+	if trimmed == "" {
+		return dsn
+	}
+	return strings.TrimRight(dsn, " ") + " connect_timeout=" + runtimeDatabaseConnectionTestTimeoutSec
+}
+
+func sanitizeConnectionError(err error, connectionString string) string {
+	if err == nil {
+		return ""
+	}
+	message := err.Error()
+	raw := strings.TrimSpace(connectionString)
+	if raw != "" {
+		message = strings.ReplaceAll(message, raw, maskConnectionString(raw))
+	}
+	if at := strings.LastIndex(raw, "@"); at > 0 {
+		for i := at - 1; i >= 0; i-- {
+			if raw[i] == ':' {
+				password := raw[i+1 : at]
+				if password != "" {
+					message = strings.ReplaceAll(message, password, "***")
+				}
+				break
+			}
+		}
+	}
+	return message
+}
+
+func activeRuntimeDatabaseConfig(cfg *config.Config) map[string]any {
+	if cfg == nil {
+		return map[string]any{
+			"dialect":    store.DialectSQLite,
+			"connection": "(default sqlite path)",
+			"ssl":        false,
+		}
+	}
+
+	dialect, ok := normalizeRuntimeDatabaseDialect(cfg.DbType)
+	if !ok {
+		dialect = store.DialectSQLite
+	}
+
+	connection := strings.TrimSpace(cfg.DbUrl)
+	if dialect == store.DialectSQLite {
+		if connection == "" {
+			connection = "(default sqlite path)"
+		}
+	} else {
+		connection = maskConnectionString(connection)
+	}
+
+	return map[string]any{
+		"dialect":    dialect,
+		"connection": connection,
+		"ssl":        cfg.PostgresSSLMode() != "",
+	}
 }
 
 // GET /api/settings/database/runtime
@@ -28,12 +147,8 @@ func (h *databaseHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 	saved, _ := loadSavedDatabaseConfig(h.db)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"active": map[string]any{
-			"dialect":    "sqlite",
-			"connection": "(default sqlite path)",
-			"ssl":        false,
-		},
+		"success":         true,
+		"active":          activeRuntimeDatabaseConfig(h.cfg),
 		"saved":           saved,
 		"restartRequired": saved != nil,
 	})
@@ -47,10 +162,21 @@ func (h *databaseHandler) saveRuntime(w http.ResponseWriter, r *http.Request) {
 		Ssl              *bool   `json:"ssl"`
 		Overwrite        *bool   `json:"overwrite"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	if body.Dialect != nil {
-		upsertSettingDB(h.db, "db_type", strings.TrimSpace(*body.Dialect))
+		dialect, ok := normalizeRuntimeDatabaseDialect(*body.Dialect)
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"success": false,
+				"message": "数据库类型仅支持 sqlite 或 postgres",
+			})
+			return
+		}
+		upsertSettingDB(h.db, "db_type", dialect)
 	}
 	if body.ConnectionString != nil {
 		upsertSettingDB(h.db, "db_url", strings.TrimSpace(*body.ConnectionString))
@@ -59,11 +185,13 @@ func (h *databaseHandler) saveRuntime(w http.ResponseWriter, r *http.Request) {
 		upsertSettingDB(h.db, "db_ssl", *body.Ssl)
 	}
 
+	saved, _ := loadSavedDatabaseConfig(h.db)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":         true,
 		"message":         "数据库运行配置已保存，重启容器后生效",
-		"active":          map[string]any{"dialect": "sqlite", "connection": "(default sqlite path)", "ssl": false},
-		"saved":           map[string]any{"dialect": "sqlite", "connection": "(default sqlite path)", "ssl": false},
+		"active":          activeRuntimeDatabaseConfig(h.cfg),
+		"saved":           saved,
 		"restartRequired": true,
 	})
 }
@@ -75,21 +203,34 @@ func (h *databaseHandler) testConnection(w http.ResponseWriter, r *http.Request)
 		ConnectionString string `json:"connectionString"`
 		Ssl              bool   `json:"ssl"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
-	// Stub: actual connection test not implemented
-	if body.Dialect == "" {
+	dialect, ok := normalizeRuntimeDatabaseDialect(body.Dialect)
+	if !ok {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success": false,
-			"message": "数据库测试连接失败",
+			"message": "数据库类型仅支持 sqlite 或 postgres",
+		})
+		return
+	}
+
+	maskedConnection, err := testRuntimeDatabaseConnection(dialect, body.ConnectionString, body.Ssl)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "数据库测试连接失败: " + sanitizeConnectionError(err, body.ConnectionString),
 		})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "目标数据库连接成功",
-		"dialect": body.Dialect,
+		"success":    true,
+		"message":    "目标数据库连接成功",
+		"dialect":    dialect,
+		"connection": maskedConnection,
 	})
 }
 
@@ -100,21 +241,24 @@ func (h *databaseHandler) migrate(w http.ResponseWriter, r *http.Request) {
 		ConnectionString string `json:"connectionString"`
 		Ssl              bool   `json:"ssl"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
-	// Stub: actual migration not implemented
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "数据库迁移完成",
-		"dialect": body.Dialect,
-		"rows": map[string]int{
-			"sites":         0,
-			"accounts":      0,
-			"accountTokens": 0,
-			"tokenRoutes":   0,
-			"routeChannels": 0,
-			"settings":      0,
-		},
+	dialect, ok := normalizeRuntimeDatabaseDialect(body.Dialect)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "数据库类型仅支持 sqlite 或 postgres",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusNotImplemented, map[string]any{
+		"success": false,
+		"message": "数据库迁移接口尚未接入当前 Go 运行时；请使用 metapi-migrate CLI 执行 SQLite 到 PostgreSQL 迁移",
+		"dialect": dialect,
 	})
 }
 

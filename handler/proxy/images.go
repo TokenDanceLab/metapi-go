@@ -26,16 +26,20 @@ func HandleImagesGenerations(w http.ResponseWriter, r *http.Request) {
 func HandleImagesEdits(w http.ResponseWriter, r *http.Request) {
 	EnsureMultipartBufferParser()
 
-	// For multipart, return stub until full multipart upstream forwarding is implemented
+	ctx, errResp := PrepareCtx(r, SurfConfig{
+		Endpoint:       "images",
+		DownstreamPath: "/v1/images/edits",
+		RequireModel:   false,
+		DefaultModel:   "gpt-image-1",
+	})
+	if errResp != nil {
+		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
+		return
+	}
+
+	// For multipart image edits, return stub until full image edit forwarding is implemented.
 	if IsMultipartRequest(r) {
-		requestedModel := "gpt-image-1"
-		mp, err := ParseMultipartFormData(r)
-		if err == nil && mp != nil {
-			if m := mp.GetField("model"); m != "" {
-				requestedModel = m
-			}
-		}
-		_ = requestedModel
+		_ = ctx.RequestedModel
 		stubResp := map[string]any{
 			"created": 0,
 			"data": []map[string]any{
@@ -45,17 +49,6 @@ func HandleImagesEdits(w http.ResponseWriter, r *http.Request) {
 			},
 		}
 		writeJSON(w, 200, stubResp) // TODO: full multipart upstream forwarding
-		return
-	}
-
-	ctx, errResp := PrepareCtx(r, SurfConfig{
-		Endpoint:       "images",
-		DownstreamPath: "/v1/images/edits",
-		RequireModel:   false,
-		DefaultModel:   "gpt-image-1",
-	})
-	if errResp != nil {
-		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
 		return
 	}
 

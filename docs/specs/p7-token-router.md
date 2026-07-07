@@ -6,14 +6,14 @@
 > The Go port MUST be split into independent modules with interface contracts and unidirectional dependencies.
 
 ## Original TS reference
-- `D:\Code\TokenDance\metapi\src\server\services\tokenRouter.ts` (~3800 LOC, largest monolith)
-- `D:\Code\TokenDance\metapi\src\server\services\routeRoutingStrategy.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\routeCooldownService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\routeRefreshWorkflow.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\routeDecisionRefreshService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\routeDecisionSnapshotStore.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\modelService.ts` (circular dependency)
-- `D:\Code\TokenDance\metapi\src\server\services\modelPricingService.ts`
+- `<metapi-ts>\src\server\services\tokenRouter.ts` (~3800 LOC, largest monolith)
+- `<metapi-ts>\src\server\services\routeRoutingStrategy.ts`
+- `<metapi-ts>\src\server\services\routeCooldownService.ts`
+- `<metapi-ts>\src\server\services\routeRefreshWorkflow.ts`
+- `<metapi-ts>\src\server\services\routeDecisionRefreshService.ts`
+- `<metapi-ts>\src\server\services\routeDecisionSnapshotStore.ts`
+- `<metapi-ts>\src\server\services\modelService.ts` (circular dependency)
+- `<metapi-ts>\src\server\services\modelPricingService.ts`
 
 ## Go module structure (split!)
 ```

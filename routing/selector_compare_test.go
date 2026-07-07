@@ -1,7 +1,6 @@
 package routing
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -55,15 +54,12 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 		}
 	}
 
-	// Write golden file with full breakdown
 	goldenPath := filepath.Join("testdata", "selector_golden.txt")
-	os.MkdirAll(filepath.Dir(goldenPath), 0755)
 
 	var sb strings.Builder
-	sb.WriteString("# Golden file: weight formula selection distribution\n")
-	sb.WriteString("# Iterations: 10000\n")
+	sb.WriteString("# Golden file: weight formula contribution probabilities\n")
 	sb.WriteString("# Routing weights: baseWeightFactor=0.5 valueScoreFactor=0.5 costWeight=0.4 balanceWeight=0.3 usageWeight=0.3\n")
-	sb.WriteString("# Format: channelID,siteID,accountID,selectionCount,selectionPercent\n")
+	sb.WriteString("# Format: channelID,siteID,accountID,probability\n")
 
 	// Single deterministic run for detailed breakdown
 	result := CalculateWeightedSelection(
@@ -72,24 +68,18 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 	)
 
 	for _, d := range result.Details {
-		chID := d.Candidate.Channel.ID
-		count := selectionCounts[chID]
-		pct := float64(count) / float64(iterations) * 100
-		sb.WriteString(formatInt(chID))
+		sb.WriteString(formatInt(d.Candidate.Channel.ID))
 		sb.WriteString(",")
 		sb.WriteString(formatInt(d.Candidate.Site.ID))
 		sb.WriteString(",")
 		sb.WriteString(formatInt(d.Candidate.Account.ID))
 		sb.WriteString(",")
-		sb.WriteString(formatInt(int64(count)))
-		sb.WriteString(",")
-		sb.WriteString(fmtFloat(pct))
+		sb.WriteString(fmtFloat(d.Probability))
 		sb.WriteString("\n")
 	}
 
-	os.WriteFile(goldenPath, []byte(sb.String()), 0644)
-
-	t.Logf("Golden file written to %s", goldenPath)
+	readBack := readOrUpdateGoldenFile(t, goldenPath, []byte(sb.String()))
+	t.Logf("Golden file checked at %s (%d bytes)", goldenPath, len(readBack))
 
 	// Verify selection happened
 	if result.Selected == nil {

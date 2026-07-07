@@ -4,8 +4,8 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Feature parity with 
 
 ## Golden Rules
 
-- **Feature parity**: Every behavior must match the TS reference (`D:\Code\TokenDance\metapi\src\server\`).
-  When in doubt, read the TS source.
+- **Feature parity**: Every behavior must match the original TypeScript MetAPI server.
+  Keep the TS reference checkout outside this public repo, and do not document local checkout paths.
 - **Single binary**: The React SPA is pre-built and embedded via `go:embed`. Do not add `npm`/`node` to the
   production image.
 - **Dual dialect**: SQLite (dev/test) and PostgreSQL (production). Use `store.Open(dialect, dsn)`. Never
@@ -89,8 +89,8 @@ golangci-lint run --timeout=3m        # Lint check
 - `docs/api.md` — admin API reference
 - `docs/migration.md` — TS→Go migration
 
-## Related Repos
+## Related References
 
-- TS source (reference): `D:\Code\TokenDance\metapi`
-- Gateway (production NewAPI fork): `D:\Code\TokenDance\tokendance-gateway`
-- MetAPI skill (ops reference): `C:\Users\Ding\.claude\skills\metapi\SKILL.md`
+- TS source: original TypeScript MetAPI repository, checked out separately when parity work needs it.
+- Gateway fork: private deployment repository, not part of this public repo.
+- Ops skill: operator-local reference only. Do not publish private filesystem paths.

@@ -3,9 +3,9 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const chartFiles = [
-  'src/web/components/charts/SiteDistributionChart.tsx',
-  'src/web/components/charts/SiteTrendChart.tsx',
-  'src/web/components/ModelAnalysisPanel.tsx',
+  'components/charts/SiteDistributionChart.tsx',
+  'components/charts/SiteTrendChart.tsx',
+  'components/ModelAnalysisPanel.tsx',
 ];
 
 describe('VChart compatibility guards', () => {

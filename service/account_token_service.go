@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	TokenValueStatusReady          = "ready"
-	TokenValueStatusMaskedPending  = "masked_pending"
+	TokenValueStatusReady         = "ready"
+	TokenValueStatusMaskedPending = "masked_pending"
 )
 
 // ---- Token value helpers ----
@@ -102,7 +102,7 @@ func IsUsableAccountToken(token *store.AccountToken) bool {
 // GetTokenByID fetches a token by its ID.
 func GetTokenByID(db *sqlx.DB, id int64) (*store.AccountToken, error) {
 	var token store.AccountToken
-	err := db.Get(&token, "SELECT * FROM account_tokens WHERE id = ?", id)
+	err := db.Get(&token, db.Rebind("SELECT * FROM account_tokens WHERE id = ?"), id)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func ListTokensWithRelations(db *sqlx.DB, accountID *int64) ([]map[string]any, e
 		query = baseQuery + " ORDER BY t.id"
 	}
 
-	rows, err := db.Queryx(query, args...)
+	rows, err := db.Queryx(db.Rebind(query), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -197,39 +197,64 @@ func isAPIKeyConnFromRow(row map[string]any) bool {
 // SetDefaultToken sets a token as the default for its account.
 // Mirrors TS setDefaultToken().
 func SetDefaultToken(db *sqlx.DB, tokenID int64) (bool, error) {
-	token, err := GetTokenByID(db, tokenID)
-	if err != nil || token == nil {
+	tx, err := db.Beginx()
+	if err != nil {
 		return false, err
 	}
-	if !IsUsableAccountToken(token) {
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var token store.AccountToken
+	if err := tx.Get(&token, tx.Rebind("SELECT * FROM account_tokens WHERE id = ?"), tokenID); err != nil {
+		return false, err
+	}
+	if !IsUsableAccountToken(&token) {
 		return false, nil
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Clear all defaults for this account
-	_, err = db.Exec("UPDATE account_tokens SET is_default = 0, updated_at = ? WHERE account_id = ?", now, token.AccountID)
-	if err != nil {
+	if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, updated_at = ? WHERE account_id = ?"), false, now, token.AccountID); err != nil {
 		return false, err
 	}
 
 	// Set this token as default
-	_, err = db.Exec("UPDATE account_tokens SET is_default = 1, enabled = 1, updated_at = ? WHERE id = ?", now, tokenID)
-	if err != nil {
+	if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, enabled = ?, updated_at = ? WHERE id = ?"), true, true, now, tokenID); err != nil {
 		return false, err
 	}
 
 	// Update account api_token
-	_, err = db.Exec("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?", token.Token, now, token.AccountID)
-	return err == nil, err
+	if _, err := tx.Exec(tx.Rebind("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?"), token.Token, now, token.AccountID); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	committed = true
+	return true, nil
 }
 
 // RepairDefaultToken finds and sets a new default token for an account.
 // Mirrors TS repairDefaultToken().
 func RepairDefaultToken(db *sqlx.DB, accountID int64) (*store.AccountToken, error) {
-	var tokens []store.AccountToken
-	err := db.Select(&tokens, "SELECT * FROM account_tokens WHERE account_id = ?", accountID)
+	tx, err := db.Beginx()
 	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var tokens []store.AccountToken
+	if err := tx.Select(&tokens, tx.Rebind("SELECT * FROM account_tokens WHERE account_id = ?"), accountID); err != nil {
 		return nil, err
 	}
 
@@ -245,32 +270,45 @@ func RepairDefaultToken(db *sqlx.DB, accountID int64) (*store.AccountToken, erro
 
 	if len(usable) == 0 {
 		// Clear api_token
-		db.Exec("UPDATE accounts SET api_token = NULL, updated_at = ? WHERE id = ?", now, accountID)
+		if _, err := tx.Exec(tx.Rebind("UPDATE accounts SET api_token = NULL, updated_at = ? WHERE id = ?"), now, accountID); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
 		return nil, nil
 	}
 
 	// Find current default or pick first usable
-	var selected *store.AccountToken
+	selected := usable[0]
 	for i := range usable {
 		if usable[i].IsDefault {
-			selected = &usable[i]
+			selected = usable[i]
 			break
 		}
 	}
-	if selected == nil {
-		selected = &usable[0]
-	}
 
 	// Clear all defaults
-	db.Exec("UPDATE account_tokens SET is_default = 0, updated_at = ? WHERE account_id = ?", now, accountID)
+	if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, updated_at = ? WHERE account_id = ?"), false, now, accountID); err != nil {
+		return nil, err
+	}
 
 	// Set new default
-	db.Exec("UPDATE account_tokens SET is_default = 1, enabled = 1, updated_at = ? WHERE id = ?", now, selected.ID)
+	if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, enabled = ?, updated_at = ? WHERE id = ?"), true, true, now, selected.ID); err != nil {
+		return nil, err
+	}
 
 	// Update account api_token
-	db.Exec("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?", selected.Token, now, accountID)
+	if _, err := tx.Exec(tx.Rebind("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?"), selected.Token, now, accountID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
 
-	return selected, nil
+	return &selected, nil
 }
 
 // EnsureDefaultTokenForAccount ensures a token exists and is default for a given account.
@@ -286,8 +324,19 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
+	tx, err := db.Beginx()
+	if err != nil {
+		return 0, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
 	var tokens []store.AccountToken
-	if err := db.Select(&tokens, "SELECT * FROM account_tokens WHERE account_id = ?", accountID); err != nil {
+	if err := tx.Select(&tokens, tx.Rebind("SELECT * FROM account_tokens WHERE account_id = ?"), accountID); err != nil {
 		return 0, err
 	}
 
@@ -315,10 +364,10 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 			src = "manual"
 		}
 
-		result, err := db.Exec(
-			`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-			accountID, tokenName, normalized, tokenGroup, TokenValueStatusReady, src, enabled, now, now,
+		result, err := tx.Exec(
+			tx.Rebind(`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+			accountID, tokenName, normalized, tokenGroup, TokenValueStatusReady, src, enabled, true, now, now,
 		)
 		if err != nil {
 			return 0, err
@@ -326,15 +375,25 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 		id, err := result.LastInsertId()
 		if err != nil {
 			// Fallback for Postgres which doesn't support LastInsertId.
-			_ = db.Get(&id, "SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1", accountID, normalized)
+			if err := tx.Get(&id, tx.Rebind("SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1"), accountID, normalized); err != nil {
+				return 0, err
+			}
 		}
 		targetID := id
 
 		// Clear other defaults
-		db.Exec("UPDATE account_tokens SET is_default = 0, updated_at = ? WHERE account_id = ? AND id != ?", now, accountID, targetID)
+		if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, updated_at = ? WHERE account_id = ? AND id != ?"), false, now, accountID, targetID); err != nil {
+			return 0, err
+		}
 
 		// Update account api_token
-		db.Exec("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?", normalized, now, accountID)
+		if _, err := tx.Exec(tx.Rebind("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?"), normalized, now, accountID); err != nil {
+			return 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		committed = true
 		return targetID, nil
 	}
 
@@ -347,20 +406,28 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 	if src == "" {
 		src = target.Source
 	}
-	_, err := db.Exec(
-		`UPDATE account_tokens SET name = ?, token_group = ?, value_status = ?, source = ?, enabled = ?, is_default = 1, updated_at = ?
-		 WHERE id = ?`,
-		updateName, tokenGroup, TokenValueStatusReady, src, enabled, now, target.ID,
+	_, err = tx.Exec(
+		tx.Rebind(`UPDATE account_tokens SET name = ?, token_group = ?, value_status = ?, source = ?, enabled = ?, is_default = ?, updated_at = ?
+		 WHERE id = ?`),
+		updateName, tokenGroup, TokenValueStatusReady, src, enabled, true, now, target.ID,
 	)
 	if err != nil {
 		return 0, err
 	}
 
 	// Clear other defaults
-	db.Exec("UPDATE account_tokens SET is_default = 0, updated_at = ? WHERE account_id = ? AND id != ?", now, accountID, target.ID)
+	if _, err := tx.Exec(tx.Rebind("UPDATE account_tokens SET is_default = ?, updated_at = ? WHERE account_id = ? AND id != ?"), false, now, accountID, target.ID); err != nil {
+		return 0, err
+	}
 
 	// Update account api_token
-	db.Exec("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?", normalized, now, accountID)
+	if _, err := tx.Exec(tx.Rebind("UPDATE accounts SET api_token = ?, updated_at = ? WHERE id = ?"), normalized, now, accountID); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	committed = true
 	return target.ID, nil
 }
 
@@ -368,9 +435,9 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 func GetDefaultTokenForAccount(db *sqlx.DB, accountID int64) (*store.AccountToken, error) {
 	var token store.AccountToken
 	err := db.Get(&token,
-		`SELECT t.* FROM account_tokens t
+		db.Rebind(`SELECT t.* FROM account_tokens t
 		 INNER JOIN accounts a ON t.account_id = a.id
-		 WHERE t.account_id = ? AND t.is_default = TRUE`, accountID,
+		 WHERE t.account_id = ? AND t.is_default = TRUE`), accountID,
 	)
 	if err != nil {
 		return nil, err
@@ -385,7 +452,7 @@ func GetDefaultTokenForAccount(db *sqlx.DB, accountID int64) (*store.AccountToke
 func GetTokenGroups(db *sqlx.DB, accountID int64) ([]string, error) {
 	var groups []string
 	err := db.Select(&groups,
-		"SELECT DISTINCT COALESCE(token_group, 'default') FROM account_tokens WHERE account_id = ?",
+		db.Rebind("SELECT DISTINCT COALESCE(token_group, 'default') FROM account_tokens WHERE account_id = ?"),
 		accountID,
 	)
 	if err != nil {
@@ -405,14 +472,16 @@ func DeleteTokenByID(db *sqlx.DB, tokenID int64) error {
 		return fmt.Errorf("令牌不存在")
 	}
 
-	_, err = db.Exec("DELETE FROM account_tokens WHERE id = ?", tokenID)
+	_, err = db.Exec(db.Rebind("DELETE FROM account_tokens WHERE id = ?"), tokenID)
 	if err != nil {
 		return err
 	}
 
 	// If this was the default, repair
 	if token.IsDefault {
-		RepairDefaultToken(db, token.AccountID)
+		if _, err := RepairDefaultToken(db, token.AccountID); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -454,7 +523,7 @@ func UpdateTokenFields(db *sqlx.DB, tokenID int64, updates map[string]any) error
 	args = append(args, tokenID)
 
 	query := fmt.Sprintf("UPDATE account_tokens SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-	_, err := db.Exec(query, args...)
+	_, err := db.Exec(db.Rebind(query), args...)
 	return err
 }
 

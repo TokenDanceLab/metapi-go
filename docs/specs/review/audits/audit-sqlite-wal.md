@@ -1,7 +1,7 @@
 # SQLite WAL Configuration Audit
 
 **Audit date:** 2026-07-05
-**Scope:** `D:/Code/TokenDance/metapi-go/store/open.go`, `store/migrate.go`
+**Scope:** `<repo>/store/open.go`, `store/migrate.go`
 **Cross-reference:** `cmd/migrate/main.go`, prior audits: `audit-db.md`, `audit-memory.md`, `audit-shutdown.md`
 
 ---

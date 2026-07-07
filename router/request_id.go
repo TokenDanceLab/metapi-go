@@ -10,7 +10,12 @@ import (
 // It reads/generates a request ID, sets X-Request-Id response header,
 // and stores it in the context for downstream use.
 func WithRequestID(next http.Handler) http.Handler {
-	return middleware.RequestID(next)
+	return middleware.RequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if reqID := middleware.GetReqID(r.Context()); reqID != "" {
+			w.Header().Set("X-Request-Id", reqID)
+		}
+		next.ServeHTTP(w, r)
+	}))
 }
 
 // RequestIDFromContext extracts the request ID from context.

@@ -12,7 +12,7 @@ The migration involves:
 
 ## Prerequisites
 
-- Go 1.24+ installed
+- Go 1.26.4+ installed
 - Built `metapi-migrate` binary: `make migrate-build`
 - PostgreSQL 16+ running (if migrating to PG)
 - Backed up your existing SQLite database
@@ -48,13 +48,13 @@ If you are staying with SQLite, skip to Step 4.
 # Dry-run first to see what will be transferred
 ./metapi-migrate \
   --from sqlite://data/hub.db \
-  --to postgres://user:pass@host:5432/metapi \
+  --to 'postgres://<user>:<password>@<host>:5432/metapi?sslmode=require' \
   --dry-run
 
 # Run actual migration with progress and verification
 ./metapi-migrate \
   --from sqlite://data/hub.db \
-  --to postgres://user:pass@host:5432/metapi \
+  --to 'postgres://<user>:<password>@<host>:5432/metapi?sslmode=require' \
   --overwrite \
   --progress \
   --verify
@@ -83,7 +83,7 @@ Verifying checksums...
 
 Migration Summary:
   dialect:    postgres
-  connection: postgres://user:***@host:5432/metapi
+  connection: postgres://<user>:***@<host>:5432/metapi
   overwrite:  true
   version:    live-db-snapshot
   timestamp:  1720000000000
@@ -133,7 +133,7 @@ export DATA_DIR=./data
 ```bash
 export AUTH_TOKEN=<your-token>
 export PROXY_TOKEN=<your-proxy-token>
-export DATABASE_URL=postgres://user:pass@host:5432/metapi
+export DATABASE_URL='postgres://<user>:<password>@<host>:5432/metapi?sslmode=require'
 ./metapi
 ```
 
@@ -148,11 +148,14 @@ The Go server auto-runs DDL migrations at startup.
 
 ## Step 5: Verify
 
-### Health check
+### Health and readiness checks
 
 ```bash
 curl http://localhost:4000/health
 # {"status":"ok"}
+
+curl http://localhost:4000/ready
+# {"status":"ok","database":"ok"}
 ```
 
 ### Frontend

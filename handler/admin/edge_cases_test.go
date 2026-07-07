@@ -41,7 +41,7 @@ func setupEdgeTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 
 	cfg := &config.Config{
 		AccountCredentialSecret: "test-secret-edge",
-		ProxyToken:              "sk-edge-test-token",
+		ProxyToken:              "edge-test-proxy-token",
 		AuthToken:               "admin-edge-test-token",
 		RequestBodyLimit:        20 * 1024 * 1024, // 20 MB
 	}
@@ -104,6 +104,88 @@ func TestEdge_EmptyRequestBody_UpdateRuntime(t *testing.T) {
 	}
 }
 
+func TestEdge_TrailingJSON_CreateSiteRejected(t *testing.T) {
+	db, r, _ := setupEdgeTest(t)
+	body := `{"name":"Trailing JSON","url":"https://api.openai.com"} {}`
+	req := httptest.NewRequest("POST", "/api/sites", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for trailing JSON, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var count int
+	if err := db.Get(&count, "SELECT COUNT(*) FROM sites WHERE name = ?", "Trailing JSON"); err != nil {
+		t.Fatalf("count sites: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no site to be inserted, got %d", count)
+	}
+}
+
+func TestEdge_TrailingJSON_UpdateRuntimeRejected(t *testing.T) {
+	_, r, cfg := setupEdgeTest(t)
+	body := `{"proxyToken":"new-proxy-token"} {}`
+	req := httptest.NewRequest("PUT", "/api/settings/runtime", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for trailing JSON, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if cfg.ProxyToken != "edge-test-proxy-token" {
+		t.Fatalf("proxy token mutated to %q", cfg.ProxyToken)
+	}
+}
+
+func TestEdge_DuplicateJSONKey_UpdateRuntimeRejected(t *testing.T) {
+	_, r, cfg := setupEdgeTest(t)
+	body := `{"proxyToken":"first-proxy-token","proxyToken":"second-proxy-token"}`
+	req := httptest.NewRequest("PUT", "/api/settings/runtime", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for duplicate JSON key, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if cfg.ProxyToken != "edge-test-proxy-token" {
+		t.Fatalf("proxy token mutated to %q", cfg.ProxyToken)
+	}
+}
+
+func TestEdge_TrailingJSON_CreateAccountRejected(t *testing.T) {
+	db, r, _ := setupEdgeTest(t)
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name": "Account Site",
+		"url":  "https://api.openai.com",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site fixture: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+
+	body := `{"siteId":1,"accessToken":"account-token"} {}`
+	req := httptest.NewRequest("POST", "/api/accounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for trailing JSON, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var count int
+	if err := db.Get(&count, "SELECT COUNT(*) FROM accounts WHERE access_token = ?", "account-token"); err != nil {
+		t.Fatalf("count accounts: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected no account to be inserted, got %d", count)
+	}
+}
+
 func TestEdge_EmptyRequestBody_BatchAccounts(t *testing.T) {
 	_, r, _ := setupEdgeTest(t)
 	req := httptest.NewRequest("POST", "/api/accounts/batch", nil)
@@ -133,17 +215,17 @@ func TestEdge_EmptyRequestBody_Login(t *testing.T) {
 // =============================================================================
 
 // TestEdge_OversizedBody verifies the server handles large payloads without
-// crashing. Note: RequestBodyLimit (20MB default) is SET in config but NOT
-// enforced by any middleware -- this test documents that gap.
+// crashing. The admin JSON decoder has its own cap in addition to router-level
+// BodyLimit, so direct handler tests still exercise a bounded read path.
 func TestEdge_OversizedBody_CreateSite(t *testing.T) {
 	_, r, _ := setupEdgeTest(t)
 
 	// 5MB of JSON data
 	largeStr := strings.Repeat("x", 1024)
 	body := map[string]any{
-		"name":     "oversized-site",
-		"url":      "https://example.com",
-		"platform": "openai",
+		"name":          "oversized-site",
+		"url":           "https://example.com",
+		"platform":      "openai",
 		"customHeaders": strings.Repeat(`{"key":"`+largeStr+`"},`, 5000), // ~5MB
 	}
 	bodyBytes, _ := json.Marshal(body)
@@ -160,15 +242,16 @@ func TestEdge_OversizedBody_CreateSite(t *testing.T) {
 	t.Logf("oversized body (%.1fMB) returned status: %d", float64(len(bodyBytes))/1024/1024, rec.Code)
 }
 
-// TestEdge_MaxBodyLimitNotEnforced verifies that RequestBodyLimit is
-// configured but not wired to any middleware. This is a gap.
-func TestEdge_MaxBodyLimitNotEnforced(t *testing.T) {
+// TestEdge_MaxBodyLimitEnforced verifies direct admin route tests cannot bypass
+// the request-body cap even when they do not build the full router middleware
+// stack.
+func TestEdge_MaxBodyLimitEnforced(t *testing.T) {
 	_, r, _ := setupEdgeTest(t)
 	cfg := config.Get()
 	if cfg.RequestBodyLimit <= 0 {
 		t.Error("RequestBodyLimit is not configured with a positive value")
 	}
-	t.Logf("RequestBodyLimit is configured as %d bytes but NOT enforced by middleware", cfg.RequestBodyLimit)
+	t.Logf("RequestBodyLimit is configured as %d bytes", cfg.RequestBodyLimit)
 
 	// Attempt to send a body larger than the configured limit
 	giantStr := strings.Repeat("x", cfg.RequestBodyLimit+1024)
@@ -178,11 +261,11 @@ func TestEdge_MaxBodyLimitNotEnforced(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	// With limit not enforced, the server accepts it (or fails on JSON parse)
-	if rec.Code == http.StatusRequestEntityTooLarge {
-		t.Log("server returned 413 (unexpected -- limit is not in middleware)")
-	} else {
-		t.Logf("server returned %d (limit not enforced)", rec.Code)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("oversized body unexpectedly succeeded: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body status = %d, want 400 or 413: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -374,7 +457,7 @@ func TestEdge_SQLiteConcurrentWrites_Accounts(t *testing.T) {
 			_, err := db.Exec(
 				`INSERT INTO accounts (site_id, username, access_token, status, checkin_enabled, created_at, updated_at)
 				 VALUES (?, ?, ?, 'active', 1, ?, ?)`,
-				siteID, "user-"+itoa(int64(gid)), "sk-concurrent-"+itoa(int64(gid)), now, now,
+				siteID, "user-"+itoa(int64(gid)), "concurrent-token-"+itoa(int64(gid)), now, now,
 			)
 			if err != nil {
 				errorsCh <- err
@@ -437,7 +520,7 @@ func TestEdge_DuplicateAccountCreation(t *testing.T) {
 	// This is a potential data integrity issue for credential import.
 	body := map[string]any{
 		"siteId":      siteID,
-		"accessToken": "sk-dup-token-test",
+		"accessToken": "dup-token-test",
 	}
 	rec1 := doPostJSON(t, r, "/api/accounts", body)
 	if rec1.Code != http.StatusOK {
@@ -516,7 +599,7 @@ func TestEdge_NULLOptionalFieldsInAccount(t *testing.T) {
 		 balance_used, quota, unit_cost, value_score, status, is_pinned, sort_order,
 		 checkin_enabled, oauth_provider, oauth_account_key, oauth_project_id,
 		 extra_config, created_at, updated_at)
-		 VALUES (?, NULL, 'sk-null', NULL, 0, 0, 0, NULL, 0, 'active', 0, 0, 1,
+		 VALUES (?, NULL, 'null-token', NULL, 0, 0, 0, NULL, 0, 'active', 0, 0, 1,
 		 NULL, NULL, NULL, NULL, ?, ?)`,
 		siteID, now, now,
 	)
@@ -608,6 +691,7 @@ func TestEdge_UpsertSettingDB_RaceCondition(t *testing.T) {
 
 	key := "edge.race.test"
 	key2 := "edge.race.safe"
+	key3 := "edge.race.admin_helper"
 
 	// Phase 1: racy upsertSettingDB (SELECT count + INSERT/UPDATE)
 	const writers = 20
@@ -651,6 +735,31 @@ func TestEdge_UpsertSettingDB_RaceCondition(t *testing.T) {
 	}
 	wg.Wait()
 	t.Log("Safe UPSERT via SettingsStore.Set: completed without errors (ON CONFLICT handles races)")
+
+	// Phase 3: admin settings helper should use the same atomic UPSERT pattern.
+	helperErrors := make(chan error, writers)
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(v int) {
+			defer wg.Done()
+			if err := upsertSettingDB(db.DB, key3, v); err != nil {
+				helperErrors <- err
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(helperErrors)
+	for err := range helperErrors {
+		t.Fatalf("upsertSettingDB returned error under concurrency: %v", err)
+	}
+
+	var count int
+	if err := db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = ?", key3); err != nil {
+		t.Fatalf("count admin helper setting: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("admin helper setting row count = %d, want 1", count)
+	}
 }
 
 // =============================================================================
@@ -789,10 +898,10 @@ func TestEdge_UnicodeAndEmojiInFields(t *testing.T) {
 // TestEdge_NilPointerInJSON tests that nil pointers serialize correctly.
 func TestEdge_NilPointerInJSON(t *testing.T) {
 	type testStruct struct {
-		Name     *string  `json:"name"`
-		Balance  *float64 `json:"balance"`
-		Count    *int64   `json:"count"`
-		Enabled  *bool    `json:"enabled"`
+		Name    *string  `json:"name"`
+		Balance *float64 `json:"balance"`
+		Count   *int64   `json:"count"`
+		Enabled *bool    `json:"enabled"`
 	}
 	ts := testStruct{}
 	b, _ := json.Marshal(ts)

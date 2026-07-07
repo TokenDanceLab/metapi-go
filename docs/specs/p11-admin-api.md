@@ -5,15 +5,15 @@
 ## 原始 TS 参考 (9 verified files + unverified modules)
 
 Verified against TS source:
-- `D:\Code\TokenDance\metapi\src\server\routes\api\stats.ts` -- 12 endpoints (2035 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\settings.ts` -- 18 endpoints (2069 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\tokens.ts` -- 20 endpoints (1509 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\downstreamApiKeys.ts` -- 9 endpoints (775 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\events.ts` -- 5 endpoints (61 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\checkin.ts` -- 4 endpoints (178 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\updateCenter.ts` -- 6 endpoints (324 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\monitor.ts` -- 5 endpoints (244 lines)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\siteAnnouncements.ts` -- 5 endpoints (197 lines)
+- `<metapi-ts>\src\server\routes\api\stats.ts` -- 12 endpoints (2035 lines)
+- `<metapi-ts>\src\server\routes\api\settings.ts` -- 18 endpoints (2069 lines)
+- `<metapi-ts>\src\server\routes\api\tokens.ts` -- 20 endpoints (1509 lines)
+- `<metapi-ts>\src\server\routes\api\downstreamApiKeys.ts` -- 9 endpoints (775 lines)
+- `<metapi-ts>\src\server\routes\api\events.ts` -- 5 endpoints (61 lines)
+- `<metapi-ts>\src\server\routes\api\checkin.ts` -- 4 endpoints (178 lines)
+- `<metapi-ts>\src\server\routes\api\updateCenter.ts` -- 6 endpoints (324 lines)
+- `<metapi-ts>\src\server\routes\api\monitor.ts` -- 5 endpoints (244 lines)
+- `<metapi-ts>\src\server\routes\api\siteAnnouncements.ts` -- 5 endpoints (197 lines)
 
 Not verified (files not provided; implement from inferred requirements):
 - `search.ts` (1 endpoint)
@@ -79,8 +79,8 @@ handler/admin/
 | POST | `/api/settings/system-proxy/test` | -- | Test system proxy connectivity against `https://www.gstatic.com/generate_204` (15s timeout). Body: `{ proxyUrl?: string }` (falls back to `config.systemProxyUrl`). Returns `{ success: true, proxyUrl, reachable, ok, statusCode, latencyMs, probeUrl, finalUrl }` or 400/502 with error message. |
 | GET | `/api/settings/database/runtime` | -- | Current and saved database config with masked connection strings. Returns `{ success: true, active: {...}, saved: {...}, restartRequired: boolean }`. |
 | PUT | `/api/settings/database/runtime` | -- | Save database runtime config (takes effect after restart). Body: `{ dialect, connectionString, ssl?, overwrite? }`. Saved to `db_type`, `db_url`, `db_ssl` settings. Returns `{ success: true, message: "...", ...state }`. |
-| POST | `/api/settings/database/test-connection` | -- | Test database connection. Body: `{ dialect, connectionString, ssl? }`. Returns `{ success: true, message: "...", ...result }`. |
-| POST | `/api/settings/database/migrate` | -- | Cross-dialect data migration (SQLite -> PG). Body: same as test-connection. Returns `{ success: true, message: "...", dialect, rows: { sites, accounts, accountTokens, tokenRoutes, routeChannels, settings } }`. Fires audit event. |
+| POST | `/api/settings/database/test-connection` | -- | Test a SQLite or PostgreSQL connection. Body: `{ dialect, connectionString, ssl? }`. Returns `{ success: true, message, dialect, connection }` on success. Returns 400 for unsupported dialects or connection failures; error text masks credentials. |
+| POST | `/api/settings/database/migrate` | -- | Returns 501. Runtime database migration is not wired into the admin API yet. Use `metapi-migrate` for SQLite to PostgreSQL migration. |
 | GET | `/api/settings/backup/export` | `type` (all\|accounts\|preferences, default all) | Export backup as JSON response. 400 for invalid type. |
 | POST | `/api/settings/backup/import` | -- | Import backup. Body: `{ data: {...} }`. Calls `applyImportedSettingToRuntime()` for each imported setting key (60+ keys with individual validation + scheduler restarts). Reloads WebDAV scheduler if `backup_webdav_config_v1` is among imported settings. |
 | GET | `/api/settings/backup/webdav` | -- | Get WebDAV backup config. Returns masked credentials. |

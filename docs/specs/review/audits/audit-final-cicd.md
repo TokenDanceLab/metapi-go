@@ -324,9 +324,14 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: go.sum
-      - run: go test ./... -count=1 -tags=integration -race -coverprofile=coverage-pg.out -covermode=atomic
+      - run: |
+          dsn="${PG_SCHEME}://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DATABASE}?sslmode=disable"
+          DATABASE_URL="$dsn" go test ./... -count=1 -tags=integration -race -coverprofile=coverage-pg.out -covermode=atomic
         env:
-          DATABASE_URL: postgres://postgres:test@localhost:5432/metapi_test?sslmode=disable
+          PG_SCHEME: postgres
+          PG_USER: postgres
+          PG_PASSWORD: test
+          PG_DATABASE: metapi_test
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-pg
@@ -396,9 +401,14 @@ jobs:
           go-version: '1.25'
           cache: true
           cache-dependency-path: go.sum
-      - run: go test ./... -count=1 -tags=integration
+      - run: |
+          dsn="${PG_SCHEME}://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DATABASE}?sslmode=disable"
+          DATABASE_URL="$dsn" go test ./... -count=1 -tags=integration
         env:
-          DATABASE_URL: postgres://postgres:test@localhost:5432/metapi_test?sslmode=disable
+          PG_SCHEME: postgres
+          PG_USER: postgres
+          PG_PASSWORD: test
+          PG_DATABASE: metapi_test
 
   build-and-push:
     needs: [test]

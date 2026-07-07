@@ -1,8 +1,15 @@
 package oauth
 
 import (
+	"context"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // ---- StartFlow Tests ----
@@ -14,7 +21,7 @@ func TestStartFlow_ValidProvider(t *testing.T) {
 	callbackMu.Unlock()
 
 	result, err := StartFlow(StartFlowInput{
-		Provider:    "codex",
+		Provider:      "codex",
 		RequestOrigin: "http://localhost:8080",
 	})
 	if err != nil {
@@ -92,7 +99,7 @@ func TestStartFlow_AllFourProviders(t *testing.T) {
 
 		t.Run(provider, func(t *testing.T) {
 			result, err := StartFlow(StartFlowInput{
-				Provider:    provider,
+				Provider:      provider,
 				RequestOrigin: "http://localhost:8080",
 			})
 			if err != nil {
@@ -111,7 +118,7 @@ func TestStartFlow_StoresSessionFields(t *testing.T) {
 	callbackMu.Unlock()
 
 	result, err := StartFlow(StartFlowInput{
-		Provider:    "gemini-cli",
+		Provider:        "gemini-cli",
 		RebindAccountID: 99,
 		ProjectID:       "my-gcp-project",
 		ProxyURL:        "http://proxy:3128",
@@ -441,6 +448,155 @@ func TestHandleCallback_MissingCode_Whitespace(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for whitespace-only code")
+	}
+}
+
+func TestActivatePersistedOAuthAccount_PostgresCreate(t *testing.T) {
+	dsn := strings.TrimSpace(os.Getenv("PG_TEST_DSN"))
+	if dsn == "" {
+		t.Skip("PG_TEST_DSN not set; skipping PostgreSQL integration test")
+	}
+
+	store.CloseDatabase()
+	cfg := &config.Config{
+		DbType:  store.DialectPostgres,
+		DbUrl:   dsn,
+		DataDir: ".",
+	}
+	if err := store.EnsureRuntimeDatabase(cfg); err != nil {
+		t.Fatalf("failed to initialize PostgreSQL test database: %v", err)
+	}
+	db := store.GetDB()
+	if db == nil {
+		t.Fatal("GetDB returned nil after PostgreSQL initialization")
+	}
+	suffix := "pg-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM sites WHERE url = ?", "https://oauth-pg-"+suffix+".example.com")
+		store.CloseDatabase()
+	})
+
+	previousHooks := workflowHooks
+	SetOAuthWorkflowHooks(nil)
+	t.Cleanup(func() { SetOAuthWorkflowHooks(previousHooks) })
+
+	def := testOAuthProviderDefinition(suffix)
+	result, err := activatePersistedOAuthAccount(context.Background(), ActivateInput{
+		Definition: def,
+		Exchange: &TokenSet{
+			AccessToken:  "oauth-access-token-" + suffix,
+			AccountKey:   "oauth-account-key-" + suffix,
+			AccountID:    "oauth-account-id-" + suffix,
+			Email:        "oauth-" + suffix + "@example.com",
+			RefreshToken: "oauth-refresh-token-" + suffix,
+		},
+	})
+	if err != nil {
+		t.Fatalf("activatePersistedOAuthAccount postgres create: %v", err)
+	}
+	if result == nil || result.AccountID <= 0 || result.SiteID <= 0 {
+		t.Fatalf("unexpected persist result: %+v", result)
+	}
+
+	var count int
+	if err := db.Get(&count, db.Rebind("SELECT COUNT(*) FROM accounts WHERE id = ? AND oauth_provider = ?"), result.AccountID, string(def.Metadata.Provider)); err != nil {
+		t.Fatalf("count oauth account: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("oauth account count = %d, want 1", count)
+	}
+
+	second, err := activatePersistedOAuthAccount(context.Background(), ActivateInput{
+		Definition: def,
+		Exchange: &TokenSet{
+			AccessToken:  "oauth-access-token-updated-" + suffix,
+			AccountKey:   "oauth-account-key-" + suffix,
+			AccountID:    "oauth-account-id-" + suffix,
+			Email:        "oauth-updated-" + suffix + "@example.com",
+			RefreshToken: "oauth-refresh-token-updated-" + suffix,
+		},
+	})
+	if err != nil {
+		t.Fatalf("activatePersistedOAuthAccount postgres update: %v", err)
+	}
+	if second.AccountID != result.AccountID {
+		t.Fatalf("second persist account id = %d, want %d", second.AccountID, result.AccountID)
+	}
+}
+
+func TestActivatePersistedOAuthAccount_SQLiteCreate(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	previousHooks := workflowHooks
+	SetOAuthWorkflowHooks(nil)
+	t.Cleanup(func() { SetOAuthWorkflowHooks(previousHooks) })
+
+	suffix := "sqlite-" + strings.ReplaceAll(t.Name(), "/", "-")
+	def := testOAuthProviderDefinition(suffix)
+	result, err := activatePersistedOAuthAccount(context.Background(), ActivateInput{
+		Definition: def,
+		Exchange: &TokenSet{
+			AccessToken:  "oauth-access-token-" + suffix,
+			AccountKey:   "oauth-account-key-" + suffix,
+			AccountID:    "oauth-account-id-" + suffix,
+			Email:        "oauth-" + suffix + "@example.com",
+			RefreshToken: "oauth-refresh-token-" + suffix,
+		},
+	})
+	if err != nil {
+		t.Fatalf("activatePersistedOAuthAccount sqlite create: %v", err)
+	}
+	if result == nil || result.AccountID <= 0 || result.SiteID <= 0 {
+		t.Fatalf("unexpected persist result: %+v", result)
+	}
+
+	var count int
+	if err := db.Get(&count, db.Rebind("SELECT COUNT(*) FROM accounts WHERE id = ? AND oauth_provider = ?"), result.AccountID, string(def.Metadata.Provider)); err != nil {
+		t.Fatalf("count oauth account: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("oauth account count = %d, want 1", count)
+	}
+
+	second, err := activatePersistedOAuthAccount(context.Background(), ActivateInput{
+		Definition: def,
+		Exchange: &TokenSet{
+			AccessToken:  "oauth-access-token-updated-" + suffix,
+			AccountKey:   "oauth-account-key-" + suffix,
+			AccountID:    "oauth-account-id-" + suffix,
+			Email:        "oauth-updated-" + suffix + "@example.com",
+			RefreshToken: "oauth-refresh-token-updated-" + suffix,
+		},
+	})
+	if err != nil {
+		t.Fatalf("activatePersistedOAuthAccount sqlite update: %v", err)
+	}
+	if second.AccountID != result.AccountID {
+		t.Fatalf("second persist account id = %d, want %d", second.AccountID, result.AccountID)
+	}
+}
+
+func testOAuthProviderDefinition(suffix string) *OAuthProviderDefinition {
+	provider := OAuthProviderId("test-oauth-" + suffix)
+	return &OAuthProviderDefinition{
+		Metadata: ProviderMetadata{
+			Provider: provider,
+			Label:    "Test OAuth",
+			Platform: "openai",
+			Enabled:  true,
+		},
+		Site: ProviderSiteConfig{
+			Name:     "OAuth PG " + suffix,
+			URL:      "https://oauth-pg-" + suffix + ".example.com",
+			Platform: "openai",
+		},
+		Loopback: LoopbackConfig{
+			Host:        "127.0.0.1",
+			Port:        1455,
+			Path:        "/auth/callback",
+			RedirectURI: "http://127.0.0.1:1455/auth/callback",
+		},
 	}
 }
 

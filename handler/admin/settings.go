@@ -38,10 +38,10 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 		// Balance
 		"balanceRefreshCron": cfg.BalanceRefreshCron,
 		// Log cleanup
-		"logCleanupCron":              cfg.LogCleanupCron,
-		"logCleanupUsageLogsEnabled":  cfg.LogCleanupUsageLogsEnabled,
+		"logCleanupCron":               cfg.LogCleanupCron,
+		"logCleanupUsageLogsEnabled":   cfg.LogCleanupUsageLogsEnabled,
 		"logCleanupProgramLogsEnabled": cfg.LogCleanupProgramLogsEnabled,
-		"logCleanupRetentionDays":     cfg.LogCleanupRetentionDays,
+		"logCleanupRetentionDays":      cfg.LogCleanupRetentionDays,
 		// Model probe
 		"modelAvailabilityProbeEnabled": cfg.ModelAvailabilityProbeEnabled,
 		// Codex
@@ -64,15 +64,15 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 		"proxyDebugRetentionHours":      cfg.ProxyDebugRetentionHours,
 		"proxyDebugMaxBodyBytes":        cfg.ProxyDebugMaxBodyBytes,
 		// Routing
-		"routingFallbackUnitCost":           cfg.RoutingFallbackUnitCost,
-		"proxyFirstByteTimeoutSec":          cfg.ProxyFirstByteTimeoutSec,
-		"tokenRouterFailureCooldownMaxSec":  cfg.TokenRouterFailureCooldownMaxSec,
+		"routingFallbackUnitCost":          cfg.RoutingFallbackUnitCost,
+		"proxyFirstByteTimeoutSec":         cfg.ProxyFirstByteTimeoutSec,
+		"tokenRouterFailureCooldownMaxSec": cfg.TokenRouterFailureCooldownMaxSec,
 		"routingWeights": map[string]any{
-			"baseWeightFactor":  cfg.RoutingWeights.BaseWeightFactor,
-			"valueScoreFactor":  cfg.RoutingWeights.ValueScoreFactor,
-			"costWeight":        cfg.RoutingWeights.CostWeight,
-			"balanceWeight":     cfg.RoutingWeights.BalanceWeight,
-			"usageWeight":       cfg.RoutingWeights.UsageWeight,
+			"baseWeightFactor": cfg.RoutingWeights.BaseWeightFactor,
+			"valueScoreFactor": cfg.RoutingWeights.ValueScoreFactor,
+			"costWeight":       cfg.RoutingWeights.CostWeight,
+			"balanceWeight":    cfg.RoutingWeights.BalanceWeight,
+			"usageWeight":      cfg.RoutingWeights.UsageWeight,
 		},
 		// Notify: Webhook
 		"webhookUrl":     cfg.WebhookUrl,
@@ -84,12 +84,12 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 		"serverChanEnabled":   cfg.ServerChanEnabled,
 		"serverChanKeyMasked": maskValue(cfg.ServerChanKey),
 		// Notify: Telegram
-		"telegramEnabled":          cfg.TelegramEnabled,
-		"telegramApiBaseUrl":       cfg.TelegramApiBaseUrl,
-		"telegramBotTokenMasked":   maskValue(cfg.TelegramBotToken),
-		"telegramChatId":           cfg.TelegramChatId,
-		"telegramUseSystemProxy":   cfg.TelegramUseSystemProxy,
-		"telegramMessageThreadId":  cfg.TelegramMessageThreadId,
+		"telegramEnabled":         cfg.TelegramEnabled,
+		"telegramApiBaseUrl":      cfg.TelegramApiBaseUrl,
+		"telegramBotTokenMasked":  maskValue(cfg.TelegramBotToken),
+		"telegramChatId":          cfg.TelegramChatId,
+		"telegramUseSystemProxy":  cfg.TelegramUseSystemProxy,
+		"telegramMessageThreadId": cfg.TelegramMessageThreadId,
 		// Notify: SMTP
 		"smtpEnabled":    cfg.SmtpEnabled,
 		"smtpHost":       cfg.SmtpHost,
@@ -106,11 +106,11 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 		"currentAdminIp":   extractClientIP(r),
 		"serverTimeZone":   cfg.Tz,
 		// System
-		"systemProxyUrl":  cfg.SystemProxyUrl,
+		"systemProxyUrl":   cfg.SystemProxyUrl,
 		"proxyTokenMasked": maskValue(cfg.ProxyToken),
 		// Proxy
-		"payloadRules":               cfg.PayloadRules,
-		"proxyErrorKeywords":         cfg.ProxyErrorKeywords,
+		"payloadRules":                 cfg.PayloadRules,
+		"proxyErrorKeywords":           cfg.ProxyErrorKeywords,
 		"proxyEmptyContentFailEnabled": cfg.ProxyEmptyContentFailEnabled,
 		// Global filters
 		"globalBlockedBrands": cfg.GlobalBlockedBrands,
@@ -121,7 +121,7 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 // PUT /api/settings/runtime
 func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
 		return
 	}
@@ -152,37 +152,33 @@ func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) 
 		upsertSettingDB(h.db, "system_proxy_url", url)
 	}
 
-	// Checkin cron
-	if v, ok := body["checkinCron"]; ok {
-		cron := normalizeString(v)
-		cfg.CheckinCron = cron
-		upsertSettingDB(h.db, "checkin_cron", cron)
-	}
-
-	// Checkin schedule mode
-	if v, ok := body["checkinScheduleMode"]; ok {
-		mode := normalizeString(v)
-		if mode != "cron" && mode != "interval" {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "签到方式无效：仅支持 cron 或 interval"})
+	if hasAnyKey(body, "checkinCron", "checkinScheduleMode", "checkinIntervalHours") {
+		patch := checkinSchedulePatch{}
+		if v, ok := body["checkinCron"]; ok {
+			cron := normalizeString(v)
+			patch.Cron = &cron
+		}
+		if v, ok := body["checkinScheduleMode"]; ok {
+			mode := normalizeString(v)
+			patch.Mode = &mode
+		}
+		if v, ok := body["checkinIntervalHours"]; ok {
+			hours, err := toFloat64Strict(v)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "checkinIntervalHours 必须是数字类型"})
+				return
+			}
+			if hours != float64(int(hours)) {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "签到间隔必须是 1 到 24 的整数小时"})
+				return
+			}
+			intervalHours := int(hours)
+			patch.IntervalHours = &intervalHours
+		}
+		if _, err := applyCheckinScheduleSettings(h.db, cfg, patch); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": err.Error()})
 			return
 		}
-		cfg.CheckinScheduleMode = mode
-		upsertSettingDB(h.db, "checkin_schedule_mode", mode)
-	}
-
-	// Checkin interval hours
-	if v, ok := body["checkinIntervalHours"]; ok {
-		hours, err := toFloat64Strict(v)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "checkinIntervalHours 必须是数字类型"})
-			return
-		}
-		if hours < 1 || hours > 24 {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "签到间隔必须是 1 到 24 的整数小时"})
-			return
-		}
-		cfg.CheckinIntervalHours = int(hours)
-		upsertSettingDB(h.db, "checkin_interval_hours", int(hours))
 	}
 
 	// Balance refresh cron
@@ -669,7 +665,10 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 	var body struct {
 		ProxyUrl *string `json:"proxyUrl"`
 	}
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
 
 	proxyURL := h.cfg.SystemProxyUrl
 	if body.ProxyUrl != nil {
@@ -696,12 +695,6 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 }
 
 func extractClientIP(r *http.Request) string {
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	// Remove port from remote addr
 	addr := r.RemoteAddr
 	if idx := strings.LastIndex(addr, ":"); idx > 0 {
 		return addr[:idx]
@@ -714,6 +707,15 @@ func normalizeString(v any) string {
 		return strings.TrimSpace(s)
 	}
 	return ""
+}
+
+func hasAnyKey(body map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := body[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func toFloat64(v any) float64 {
@@ -791,20 +793,24 @@ func applyBoolSettingDB(db *sqlx.DB, body map[string]any, key string, target *bo
 			return fmt.Errorf("%s: %w", key, err)
 		}
 		*target = val
-		upsertSettingDB(db, dbKey, *target)
+		if err := upsertSettingDB(db, dbKey, *target); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func upsertSettingDB(db *sqlx.DB, key string, value any) {
-	jsonValue, _ := json.Marshal(value)
-	var count int
-	db.Get(&count, "SELECT COUNT(*) FROM settings WHERE key = ?", key)
-	if count > 0 {
-		db.Exec("UPDATE settings SET value = ? WHERE key = ?", string(jsonValue), key)
-	} else {
-		db.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", key, string(jsonValue))
+func upsertSettingDB(db *sqlx.DB, key string, value any) error {
+	jsonValue, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("settings: marshal %q: %w", key, err)
 	}
+	query := db.Rebind(`INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+	if _, err := db.Exec(query, key, string(jsonValue)); err != nil {
+		return fmt.Errorf("settings: upsert %q: %w", key, err)
+	}
+	return nil
 }
 
 func logSettingsEvent(db *sqlx.DB, eventType, title, message, level, createdAt string) {

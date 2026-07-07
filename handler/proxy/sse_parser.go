@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const maxIncrementalSsePendingBytes = 1 << 20
+
 // SseEvent represents a parsed SSE event with its fields.
 type SseEvent struct {
 	Data  string // joined multi-line data content
@@ -17,10 +19,128 @@ type SseEvent struct {
 
 // SseParseResult contains the parsed events and aggregate state.
 type SseParseResult struct {
-	Events         []SseEvent
-	HasDataEvent   bool // at least one event with non-empty data
-	HasErrorEvent  bool // at least one event with error-type data
-	HasDoneMarker  bool // at least one [DONE] event
+	Events        []SseEvent
+	HasDataEvent  bool // at least one event with non-empty data
+	HasErrorEvent bool // at least one event with error-type data
+	HasDoneMarker bool // at least one [DONE] event
+}
+
+type incrementalSseAnalysisResult struct {
+	ErrorEvents           []SseEvent
+	HasDataEvent          bool
+	HasErrorEvent         bool
+	HasDoneMarker         bool
+	EventCount            int
+	PendingBytes          int
+	DroppedOversizedEvent bool
+}
+
+type incrementalSseAnalyzer struct {
+	pending               string
+	skippingOversized     bool
+	droppedOversizedEvent bool
+	result                incrementalSseAnalysisResult
+}
+
+func newIncrementalSseAnalyzer() *incrementalSseAnalyzer {
+	return &incrementalSseAnalyzer{}
+}
+
+func (a *incrementalSseAnalyzer) Push(chunk []byte) {
+	text := string(chunk)
+	for len(text) > 0 {
+		if a.skippingOversized {
+			boundary := strings.Index(text, "\n\n")
+			if boundary < 0 {
+				return
+			}
+			text = text[boundary+2:]
+			a.skippingOversized = false
+		}
+
+		space := maxIncrementalSsePendingBytes - len(a.pending)
+		if space <= 0 {
+			a.dropCurrentEvent()
+			continue
+		}
+		if len(text) > space {
+			a.pending += text[:space]
+			text = text[space:]
+			a.drainCompleteEvents()
+			if len(a.pending) >= maxIncrementalSsePendingBytes {
+				a.dropCurrentEvent()
+			}
+			continue
+		}
+
+		a.pending += text
+		text = ""
+		a.drainCompleteEvents()
+	}
+}
+
+func (a *incrementalSseAnalyzer) Result() incrementalSseAnalysisResult {
+	result := a.result
+	result.PendingBytes = len(a.pending)
+	result.DroppedOversizedEvent = a.droppedOversizedEvent
+	return result
+}
+
+func (a *incrementalSseAnalyzer) dropCurrentEvent() {
+	a.pending = ""
+	a.skippingOversized = true
+	a.droppedOversizedEvent = true
+}
+
+func (a *incrementalSseAnalyzer) drainCompleteEvents() {
+	for {
+		boundary, sepLen := nextSseBoundary(a.pending)
+		if boundary < 0 {
+			return
+		}
+
+		block := a.pending[:boundary]
+		a.pending = a.pending[boundary+sepLen:]
+		if block == "" {
+			continue
+		}
+		ev := parseSseBlock(block)
+		if ev == nil {
+			continue
+		}
+		a.recordEvent(*ev)
+	}
+}
+
+func nextSseBoundary(s string) (int, int) {
+	lf := strings.Index(s, "\n\n")
+	crlf := strings.Index(s, "\r\n\r\n")
+	switch {
+	case lf < 0 && crlf < 0:
+		return -1, 0
+	case lf < 0:
+		return crlf, 4
+	case crlf < 0:
+		return lf, 2
+	case crlf < lf:
+		return crlf, 4
+	default:
+		return lf, 2
+	}
+}
+
+func (a *incrementalSseAnalyzer) recordEvent(ev SseEvent) {
+	a.result.EventCount++
+	if ev.Data != "" && ev.Data != "[DONE]" {
+		a.result.HasDataEvent = true
+	}
+	if IsSseErrorEvent(ev) {
+		a.result.HasErrorEvent = true
+		a.result.ErrorEvents = append(a.result.ErrorEvents, ev)
+	}
+	if IsSseDoneMarker(ev) {
+		a.result.HasDoneMarker = true
+	}
 }
 
 // ParseSseStream parses a raw SSE byte stream into structured events.
@@ -66,13 +186,23 @@ func ParseSseStream(raw string) ([]SseEvent, string) {
 
 // parseSseBlock parses a single SSE event block (everything between \n\n).
 func parseSseBlock(block string) *SseEvent {
-	var dataLines []string
+	var data string
+	var dataBuilder strings.Builder
+	dataLineCount := 0
+	dataBuilderUsed := false
 	var eventType string
 	var eventID string
 	var retry int64
 
-	lines := strings.Split(block, "\n")
-	for _, line := range lines {
+	for len(block) > 0 {
+		line := block
+		if idx := strings.IndexByte(block, '\n'); idx >= 0 {
+			line = block[:idx]
+			block = block[idx+1:]
+		} else {
+			block = ""
+		}
+		line = strings.TrimSuffix(line, "\r")
 		// Skip comment lines
 		if strings.HasPrefix(line, ":") {
 			continue
@@ -81,7 +211,19 @@ func parseSseBlock(block string) *SseEvent {
 		if strings.HasPrefix(line, "data:") {
 			dataVal := strings.TrimPrefix(line, "data:")
 			dataVal = trimLeadingSpace(dataVal)
-			dataLines = append(dataLines, dataVal)
+			switch dataLineCount {
+			case 0:
+				data = dataVal
+			case 1:
+				dataBuilder.WriteString(data)
+				dataBuilder.WriteByte('\n')
+				dataBuilder.WriteString(dataVal)
+				dataBuilderUsed = true
+			default:
+				dataBuilder.WriteByte('\n')
+				dataBuilder.WriteString(dataVal)
+			}
+			dataLineCount++
 		} else if strings.HasPrefix(line, "event:") {
 			eventVal := strings.TrimPrefix(line, "event:")
 			eventType = strings.TrimSpace(eventVal)
@@ -96,8 +238,9 @@ func parseSseBlock(block string) *SseEvent {
 		}
 	}
 
-	// Join multi-line data
-	data := strings.Join(dataLines, "\n")
+	if dataBuilderUsed {
+		data = dataBuilder.String()
+	}
 
 	// An event block is valid if it has either data or a named event type
 	if data == "" && eventType == "" {
@@ -135,6 +278,9 @@ func IsSseErrorEvent(ev SseEvent) bool {
 	if ev.Data == "" || ev.Data == "[DONE]" {
 		return false
 	}
+	if !looksLikeJSONObject(ev.Data) {
+		return false
+	}
 
 	// Try to parse data as JSON and check for error structure
 	var parsed map[string]interface{}
@@ -152,6 +298,11 @@ func IsSseErrorEvent(ev SseEvent) bool {
 	}
 
 	return false
+}
+
+func looksLikeJSONObject(s string) bool {
+	s = strings.TrimLeft(s, " \t\r\n")
+	return strings.HasPrefix(s, "{")
 }
 
 // IsSseDoneMarker checks if an SSE event is a [DONE] marker.

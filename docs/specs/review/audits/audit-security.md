@@ -1,7 +1,7 @@
 # MetAPI-Go Security Audit Report
 
 **Audit date:** 2026-07-04
-**Scope:** `D:/Code/TokenDance/metapi-go` - full Go source tree
+**Scope:** `<repo>` - full Go source tree
 **Methodology:** Static analysis of auth middleware, handler/admin/*.go, service/*.go, config/*.go, and router setup
 **Final verdict:** NEEDS_FIX (3 CRITICAL, 4 HIGH, 4 MEDIUM, 3 LOW)
 

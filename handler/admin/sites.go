@@ -57,7 +57,7 @@ func (h *sitesHandler) listSites(w http.ResponseWriter, r *http.Request) {
 
 func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteCreatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid site payload."})
 		return
 	}
@@ -146,7 +146,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 
 	// Check for duplicate (platform, url)
 	var existingCount int
-	h.db.Get(&existingCount, "SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ?", platform, canonicalURL)
+	h.db.Get(&existingCount, h.db.Rebind("SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ?"), platform, canonicalURL)
 	if existingCount > 0 {
 		writeJSON(w, http.StatusConflict, map[string]string{
 			"error": fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL),
@@ -231,7 +231,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var existing store.Site
-	err = h.db.Get(&existing, "SELECT * FROM sites WHERE id = ?", id)
+	err = h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id)
 	if err == sql.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
 		return
@@ -242,7 +242,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body payloads.SiteUpdatePayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site payload."})
 		return
 	}
@@ -369,7 +369,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if nextURL != existing.URL || nextPlatform != existing.Platform {
 		var conflictCount int
-		h.db.Get(&conflictCount, "SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ? AND id != ?", nextPlatform, nextURL, id)
+		h.db.Get(&conflictCount, h.db.Rebind("SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ? AND id != ?"), nextPlatform, nextURL, id)
 		if conflictCount > 0 {
 			writeJSON(w, http.StatusConflict, map[string]string{
 				"error": fmt.Sprintf("A %s site with URL %s already exists.", nextPlatform, nextURL),
@@ -424,7 +424,7 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 
 func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteBatchPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site payload."})
 		return
 	}
@@ -450,7 +450,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	for _, rawID := range body.IDs {
 		id := int64(rawID)
 		var existing store.Site
-		err := h.db.Get(&existing, "SELECT * FROM sites WHERE id = ?", id)
+		err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id)
 		if err != nil {
 			failedItems = append(failedItems, map[string]any{"id": id, "message": "Site not found"})
 			continue
@@ -459,16 +459,16 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 		now := time.Now().UTC().Format(time.RFC3339)
 		switch action {
 		case "delete":
-			h.db.Exec("DELETE FROM sites WHERE id = ?", id)
+			h.db.Exec(h.db.Rebind("DELETE FROM sites WHERE id = ?"), id)
 		case "enableSystemProxy":
-			h.db.Exec("UPDATE sites SET use_system_proxy = 1, updated_at = ? WHERE id = ?", now, id)
+			h.db.Exec(h.db.Rebind("UPDATE sites SET use_system_proxy = 1, updated_at = ? WHERE id = ?"), now, id)
 		case "disableSystemProxy":
-			h.db.Exec("UPDATE sites SET use_system_proxy = 0, updated_at = ? WHERE id = ?", now, id)
+			h.db.Exec(h.db.Rebind("UPDATE sites SET use_system_proxy = 0, updated_at = ? WHERE id = ?"), now, id)
 		case "enable":
-			h.db.Exec("UPDATE sites SET status = 'active', updated_at = ? WHERE id = ?", now, id)
+			h.db.Exec(h.db.Rebind("UPDATE sites SET status = 'active', updated_at = ? WHERE id = ?"), now, id)
 			service.ApplySiteStatusSideEffects(h.db, id, existing.Name, "active")
 		case "disable":
-			h.db.Exec("UPDATE sites SET status = 'disabled', updated_at = ? WHERE id = ?", now, id)
+			h.db.Exec(h.db.Rebind("UPDATE sites SET status = 'disabled', updated_at = ? WHERE id = ?"), now, id)
 			service.ApplySiteStatusSideEffects(h.db, id, existing.Name, "disabled")
 		}
 		successIDs = append(successIDs, id)
@@ -492,7 +492,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 
 func (h *sitesHandler) detectSite(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteDetectPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid url. Expected non-empty string."})
 		return
 	}
@@ -520,13 +520,13 @@ func (h *sitesHandler) getDisabledModels(w http.ResponseWriter, r *http.Request)
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, "SELECT * FROM sites WHERE id = ?", id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
 		return
 	}
 
 	var models []string
-	h.db.Select(&models, "SELECT model_name FROM site_disabled_models WHERE site_id = ?", id)
+	h.db.Select(&models, h.db.Rebind("SELECT model_name FROM site_disabled_models WHERE site_id = ?"), id)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"siteId": id,
@@ -536,7 +536,7 @@ func (h *sitesHandler) getDisabledModels(w http.ResponseWriter, r *http.Request)
 
 func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteDisabledModelsPayload
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid models. Expected string[]."})
 		return
 	}
@@ -549,7 +549,7 @@ func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Reque
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, "SELECT * FROM sites WHERE id = ?", id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
 		return
 	}
@@ -566,11 +566,11 @@ func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Full replace
-	h.db.Exec("DELETE FROM site_disabled_models WHERE site_id = ?", id)
+	h.db.Exec(h.db.Rebind("DELETE FROM site_disabled_models WHERE site_id = ?"), id)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	for _, m := range uniqueModels {
-		h.db.Exec("INSERT INTO site_disabled_models (site_id, model_name, created_at) VALUES (?, ?, ?)", id, m, now)
+		h.db.Exec(h.db.Rebind("INSERT INTO site_disabled_models (site_id, model_name, created_at) VALUES (?, ?, ?)"), id, m, now)
 	}
 
 	routing.InvalidateCache()
@@ -591,7 +591,7 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, "SELECT * FROM sites WHERE id = ?", id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
 		return
 	}
@@ -599,18 +599,18 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 	// Account-level models
 	var accountModels []string
 	h.db.Select(&accountModels,
-		`SELECT DISTINCT ma.model_name FROM model_availability ma
+		h.db.Rebind(`SELECT DISTINCT ma.model_name FROM model_availability ma
 		 INNER JOIN accounts a ON ma.account_id = a.id
-		 WHERE a.site_id = ? AND ma.available = TRUE`, id,
+		 WHERE a.site_id = ? AND ma.available = TRUE`), id,
 	)
 
 	// Token-level models
 	var tokenModels []string
 	h.db.Select(&tokenModels,
-		`SELECT DISTINCT tma.model_name FROM token_model_availability tma
+		h.db.Rebind(`SELECT DISTINCT tma.model_name FROM token_model_availability tma
 		 INNER JOIN account_tokens at ON tma.token_id = at.id
 		 INNER JOIN accounts a ON at.account_id = a.id
-		 WHERE a.site_id = ? AND tma.available = TRUE`, id,
+		 WHERE a.site_id = ? AND tma.available = TRUE`), id,
 	)
 
 	// Merge, deduplicate, sort
@@ -644,10 +644,13 @@ func (h *sitesHandler) probeNow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body payloads.ProbeNowBody
-	json.NewDecoder(r.Body).Decode(&body)
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		return
+	}
 
 	// Stub: real probe implementation in P5
-		_ = id
+	_ = id
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":     true,
 		"totalModels": 0,

@@ -1,24 +1,25 @@
 {
   "name": "metapi",
-  "version": "1.3.0",
+  "version": "0.6.0",
+  "private": true,
   "description": "Meta-layer management and unified proxy for AI API aggregation platforms",
-  "main": "dist/desktop/main.js",
   "keywords": [
     "ai",
     "api-gateway",
     "proxy",
-    "fastify",
+    "vite",
+    "react",
     "openai",
     "claude",
     "aggregator"
   ],
-  "homepage": "https://github.com/cita-777/metapi#readme",
+  "homepage": "https://github.com/TokenDanceLab/metapi-go#readme",
   "bugs": {
-    "url": "https://github.com/cita-777/metapi/issues"
+    "url": "https://github.com/TokenDanceLab/metapi-go/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cita-777/metapi.git"
+    "url": "git+https://github.com/TokenDanceLab/metapi-go.git"
   },
   "license": "MIT",
   "engines": {
@@ -26,43 +27,18 @@
   },
   "type": "module",
   "scripts": {
-    "dev:server": "tsx scripts/dev/run-server.ts --watch",
-    "dev": "concurrently \"npm run dev:server\" \"vite\"",
-    "dev:desktop": "concurrently \"npm run dev:server\" \"vite\" \"tsc -p tsconfig.desktop.json --watch --preserveWatchOutput\" \"wait-on tcp:127.0.0.1:4000 http://127.0.0.1:5173 file:dist/desktop/main.js && cross-env METAPI_DESKTOP_DEV_SERVER_URL=http://127.0.0.1:5173 METAPI_DESKTOP_EXTERNAL_SERVER_URL=http://127.0.0.1:4000 electron dist/desktop/main.js\"",
+    "dev": "vite --host 0.0.0.0",
     "desktop:icons": "node scripts/desktop/generate-icons.mjs",
     "build:web": "npm run desktop:icons && vite build",
-    "build:server": "tsc -p tsconfig.server.json && tsx scripts/dev/copy-runtime-db-generated.ts",
-    "build:desktop": "tsc -p tsconfig.desktop.json",
-    "build": "npm run build:web && npm run build:server && npm run build:desktop",
+    "build": "npm run build:web",
     "typecheck:web": "tsc -p tsconfig.web.json",
     "typecheck:web:test": "tsc -p tsconfig.web.test.json",
-    "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
-    "typecheck:desktop": "tsc --noEmit -p tsconfig.desktop.json",
-    "typecheck": "npm run typecheck:web && npm run typecheck:web:test && npm run typecheck:server && npm run typecheck:desktop",
-    "dist:desktop": "npm run build && electron-builder --config electron-builder.yml --publish never",
-    "dist:desktop:mac:intel": "npm run build && electron-builder --config electron-builder.yml --publish never --mac --x64",
-    "package:desktop": "npm run dist:desktop",
-    "package:desktop:mac:intel": "npm run dist:desktop:mac:intel",
+    "typecheck": "npm run typecheck:web && npm run typecheck:web:test",
+    "audit:prod": "npm audit --audit-level=high --omit=dev",
+    "audit": "npm audit --audit-level=moderate",
     "docs:dev": "vitepress dev docs --host 0.0.0.0 --port 4173",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs --host 0.0.0.0 --port 4173",
-    "start": "node dist/server/index.js",
-    "start:deploy-helper": "node dist/server/update-helper/index.js",
-    "start:desktop": "electron dist/desktop/main.js",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/server/db/migrate.ts",
-    "schema:contract": "tsx scripts/dev/generate-schema-contract.ts",
-    "schema:generate": "npm run db:generate && npm run schema:contract",
-    "repo:drift-check": "tsx scripts/dev/repo-drift-check.ts",
-    "readme:contributors": "tsx scripts/dev/update-readme-contributors.ts",
-    "test:schema:unit": "vitest run --root . src/server/db/schemaContract.test.ts src/server/db/schemaArtifactGenerator.test.ts src/server/db/schemaIntrospection.test.ts src/server/db/schemaParity.test.ts",
-    "test:schema:parity": "vitest run --root . src/server/db/schemaParity.live.test.ts",
-    "test:schema:upgrade": "vitest run --root . src/server/db/schemaUpgrade.live.test.ts",
-    "test:schema:runtime": "vitest run --root . src/server/db/runtimeSchemaBootstrap.live.test.ts",
-    "smoke:db": "tsx scripts/dev/db-smoke.ts",
-    "smoke:db:sqlite": "tsx scripts/dev/db-smoke.ts --db-type sqlite",
-    "smoke:db:mysql": "tsx scripts/dev/db-smoke.ts --db-type mysql",
-    "smoke:db:postgres": "tsx scripts/dev/db-smoke.ts --db-type postgres",
     "test": "vitest run --root .",
     "test:watch": "vitest --root ."
   },
@@ -70,46 +46,16 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "@fastify/cors": "^11.2.0",
-    "@fastify/static": "^9.0.0",
     "@visactor/react-vchart": "^2.0.22",
-    "better-sqlite3": "^12.10.0",
-    "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.45.2",
-    "electron-log": "^5.4.4",
-    "electron-updater": "^6.6.2",
-    "fastify": "^5.8.4",
-    "get-port": "^7.2.0",
-    "marked": "^18.0.3",
-    "minimatch": "^10.2.5",
-    "minimist": "^1.2.8",
-    "mysql2": "^3.22.3",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.4",
-    "pg": "^8.16.3",
-    "rate-limiter-flexible": "^11.1.0",
-    "socks": "^2.8.9",
-    "undici": "^6.25.0",
-    "ws": "^8.20.1",
-    "zod": "^4.4.3"
+    "marked": "^18.0.3"
   },
   "devDependencies": {
-    "@electron/notarize": "^3.1.0",
     "@tailwindcss/vite": "^4.3.0",
-    "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.10.1",
-    "@types/node-cron": "^3.0.11",
-    "@types/nodemailer": "^8.0.0",
-    "@types/pg": "^8.20.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-test-renderer": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.0",
-    "cross-env": "^7.0.3",
-    "drizzle-kit": "^0.31.10",
-    "electron": "^42.0.1",
-    "electron-builder": "^26.0.12",
     "jsdom": "^29.1.1",
     "mermaid": "^11.15.0",
     "react": "^18.3.1",
@@ -118,20 +64,20 @@
     "react-test-renderer": "^18.3.1",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
-    "tsx": "^4.19.2",
     "typescript": "^6.0.3",
     "vite": "^6.4.2",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17",
-    "vitest": "^2.1.8",
-    "wait-on": "^9.0.10"
+    "vitest": "^4.1.9"
   },
   "overrides": {
-    "minimist": "^1.2.8"
+    "minimist": "^1.2.8",
+    "vitepress": {
+      "vite": "^6.4.3"
+    }
   },
   "author": {
-    "name": "cita-777",
-    "email": "cita-777@users.noreply.github.com",
-    "url": "https://github.com/cita-777"
+    "name": "TokenDanceLab",
+    "url": "https://github.com/TokenDanceLab"
   }
 }

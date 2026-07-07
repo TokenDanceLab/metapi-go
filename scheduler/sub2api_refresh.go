@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	sub2apiRefreshIntervalMs  = 60_000 // 60s
+	sub2apiRefreshIntervalMs    = 60_000 // 60s
 	sub2apiRefreshMinIntervalMs = 60_000
-	sub2apiRefreshConcurrency = 4
+	sub2apiRefreshConcurrency   = 4
 )
 
 // Sub2APIRefreshScheduler periodically refreshes Sub2API managed authentication
 // tokens for eligible accounts.
 type Sub2APIRefreshScheduler struct {
-	cfg         *config.Config
-	ticker      *time.Ticker
-	stopCh      chan struct{}
-	running     bool
-	mu          sync.Mutex
+	cfg          *config.Config
+	ticker       *time.Ticker
+	stopCh       chan struct{}
+	running      bool
+	mu           sync.Mutex
 	passInFlight bool
 }
 
@@ -110,7 +110,12 @@ func (s *Sub2APIRefreshScheduler) runPass() {
 	if dbw == nil {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runPassLocked(dbw)
+	})
+}
 
+func (s *Sub2APIRefreshScheduler) runPassLocked(dbw *store.DB) {
 	slog.Info("sub2api-refresh: running pass")
 
 	// Query Sub2API platform active accounts

@@ -56,7 +56,11 @@ func IsSiteDisabled(status string) bool {
 	if normalized == "" {
 		normalized = "active"
 	}
-	return normalized == "disabled"
+	return strings.EqualFold(normalized, "disabled")
+}
+
+func isAccountDisabled(status string) bool {
+	return strings.EqualFold(strings.TrimSpace(status), "disabled")
 }
 
 // isAlreadyCheckedInMessage detects "already checked in" patterns in 12 languages/forms.
@@ -133,9 +137,9 @@ func tryAutoRelogin(cfg *config.Config, db *sqlx.DB, account *store.Account, sit
 		return "", fmt.Errorf("failed to decrypt password")
 	}
 
-	proxyURL := service.GetProxyURLFromExtraConfig(account.ExtraConfig)
+	proxyConfig := service.BuildPlatformProxyConfig(cfg, account, site)
 
-	result, err := adp.Login(site.URL, relogin.Username, password, proxyURL)
+	result, err := adp.Login(site.URL, relogin.Username, password, proxyConfig)
 	if err != nil || !result.Success || result.AccessToken == "" {
 		if err != nil {
 			return "", err
@@ -150,7 +154,7 @@ func tryAutoRelogin(cfg *config.Config, db *sqlx.DB, account *store.Account, sit
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = db.Exec(
-		"UPDATE accounts SET access_token = ?, status = ?, updated_at = ? WHERE id = ?",
+		db.Rebind("UPDATE accounts SET access_token = ?, status = ?, updated_at = ? WHERE id = ?"),
 		result.AccessToken, newStatus, now, account.ID,
 	)
 	if err != nil {
@@ -175,24 +179,75 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 	account := &aws.Account
 	site := &aws.Site
 
-	// 2. Site disabled check
+	// 2. Disabled checks
+	if isAccountDisabled(account.Status) {
+		createdAt := service.FormatUtcSqlDateTime(time.Now())
+		if err := service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
+			State: service.HealthDisabled, Reason: "账号已禁用", Source: service.HealthSourceCheckin,
+		}); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist runtime health: " + err.Error()}
+		}
+
+		if _, err := db.Exec(db.Rebind("INSERT INTO checkin_logs (account_id, status, message, created_at) VALUES (?, ?, ?, ?)"),
+			accountID, "skipped", "account disabled", createdAt); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist checkin log: " + err.Error()}
+		}
+
+		if !options.SkipEvent {
+			msg := fmt.Sprintf("%s @ %s: account disabled", orUsername(account.Username, accountID), site.Name)
+			if err := service.CreateEvent(db, "checkin", "checkin skipped", msg, "info", accountID, "account"); err != nil {
+				slog.Warn("CheckinAccount: failed to persist disabled-account skipped event", "accountID", accountID, "error", err)
+			}
+		}
+
+		return CheckinResult{
+			Success: true, Status: CheckinSkipped, Skipped: true,
+			Reason: "account_disabled", Message: "account disabled",
+		}
+	}
+
 	if IsSiteDisabled(site.Status) {
 		createdAt := service.FormatUtcSqlDateTime(time.Now())
-		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
+		if err := service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
 			State: service.HealthDisabled, Reason: "站点已禁用", Source: service.HealthSourceCheckin,
-		})
+		}); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist runtime health: " + err.Error()}
+		}
 
-		db.Exec("INSERT INTO checkin_logs (account_id, status, message, created_at) VALUES (?, ?, ?, ?)",
-			accountID, "skipped", "site disabled", createdAt)
+		if _, err := db.Exec(db.Rebind("INSERT INTO checkin_logs (account_id, status, message, created_at) VALUES (?, ?, ?, ?)"),
+			accountID, "skipped", "site disabled", createdAt); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist checkin log: " + err.Error()}
+		}
 
 		if !options.SkipEvent {
 			msg := fmt.Sprintf("%s @ %s: site disabled", orUsername(account.Username, accountID), site.Name)
-			service.CreateEvent(db, "checkin", "checkin skipped", msg, "info", accountID, "account")
+			if err := service.CreateEvent(db, "checkin", "checkin skipped", msg, "info", accountID, "account"); err != nil {
+				slog.Warn("CheckinAccount: failed to persist skipped event", "accountID", accountID, "error", err)
+			}
 		}
 
 		return CheckinResult{
 			Success: true, Status: CheckinSkipped, Skipped: true,
 			Reason: "site_disabled", Message: "site disabled",
+		}
+	}
+
+	if !service.BuildCapabilitiesForAccount(account).CanCheckin {
+		createdAt := service.FormatUtcSqlDateTime(time.Now())
+		message := "account credential mode does not support checkin"
+		if _, err := db.Exec(db.Rebind("INSERT INTO checkin_logs (account_id, status, message, created_at) VALUES (?, ?, ?, ?)"),
+			accountID, "skipped", message, createdAt); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist checkin log: " + err.Error()}
+		}
+		if !options.SkipEvent {
+			msg := fmt.Sprintf("%s @ %s: %s", orUsername(account.Username, accountID), site.Name, message)
+			if err := service.CreateEvent(db, "checkin", "checkin skipped", msg, "info", accountID, "account"); err != nil {
+				slog.Warn("CheckinAccount: failed to persist proxy-only skipped event", "accountID", accountID, "error", err)
+			}
+		}
+		return CheckinResult{
+			Success: true, Status: CheckinSkipped, Skipped: true,
+			Reason: "checkin_not_supported", Message: message,
 		}
 	}
 
@@ -212,11 +267,11 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 		guessedPlatformUserID = service.GuessPlatformUserIdFromUsername(account.Username)
 	}
 	platformUserID := service.ResolvePlatformUserID(account.ExtraConfig, account.Username)
-	proxyURL := service.GetProxyURLFromExtraConfig(account.ExtraConfig)
+	proxyConfig := service.BuildPlatformProxyConfig(cfg, account, site)
 
 	// 5. First checkin attempt
 	activeAccessToken := account.AccessToken
-	result, err := adp.Checkin(site.URL, activeAccessToken, platformUserID, proxyURL)
+	result, err := adp.Checkin(site.URL, activeAccessToken, platformUserID, proxyConfig)
 	if err != nil {
 		result = &adapter.CheckinResult{Success: false, Message: err.Error()}
 	}
@@ -226,7 +281,7 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 		refreshedToken, reloginErr := tryAutoRelogin(cfg, db, account, site)
 		if reloginErr == nil && refreshedToken != "" {
 			activeAccessToken = refreshedToken
-			result, err = adp.Checkin(site.URL, activeAccessToken, platformUserID, proxyURL)
+			result, err = adp.Checkin(site.URL, activeAccessToken, platformUserID, proxyConfig)
 			if err != nil {
 				result = &adapter.CheckinResult{Success: false, Message: err.Error()}
 			}
@@ -278,9 +333,11 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 				healthReason = result.Message
 			}
 		}
-		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
+		if err := service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
 			State: healthState, Reason: healthReason, Source: service.HealthSourceCheckin,
-		})
+		}); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist runtime health: " + err.Error()}
+		}
 
 		// Update account fields
 		var setClauses []string
@@ -310,7 +367,9 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 		if len(setClauses) > 0 {
 			query := "UPDATE accounts SET " + strings.Join(setClauses, ", ") + " WHERE id = ?"
 			args = append(args, accountID)
-			db.Exec(query, args...)
+			if _, err := db.Exec(db.Rebind(query), args...); err != nil {
+				return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to update account after checkin: " + err.Error()}
+			}
 		}
 
 		// Refresh balance if needed
@@ -342,8 +401,10 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 
 	// 9. Write checkin_logs
 	createdAt := service.FormatUtcSqlDateTime(time.Now())
-	db.Exec("INSERT INTO checkin_logs (account_id, status, message, reward, created_at) VALUES (?, ?, ?, ?, ?)",
-		accountID, string(normalizedStatus), logMessage, logReward, createdAt)
+	if _, err := db.Exec(db.Rebind("INSERT INTO checkin_logs (account_id, status, message, reward, created_at) VALUES (?, ?, ?, ?, ?)"),
+		accountID, string(normalizedStatus), logMessage, logReward, createdAt); err != nil {
+		return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist checkin log: " + err.Error()}
+	}
 
 	// 10. Write events
 	if !options.SkipEvent {
@@ -360,15 +421,19 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 			eventTitle = "checkin skipped"
 		}
 		eventMsg := fmt.Sprintf("%s @ %s: %s", orUsername(account.Username, accountID), site.Name, logMessage)
-		service.CreateEvent(db, "checkin", eventTitle, eventMsg, eventLevel, accountID, "account")
+		if err := service.CreateEvent(db, "checkin", eventTitle, eventMsg, eventLevel, accountID, "account"); err != nil {
+			slog.Warn("CheckinAccount: failed to persist event", "accountID", accountID, "error", err)
+		}
 	}
 
 	// 11. Post-failure processing
 	if !effectiveSuccess {
-		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
+		if err := service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
 			State: service.HealthUnhealthy, Reason: result.Message,
 			Source: service.HealthSourceCheckin,
-		})
+		}); err != nil {
+			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist runtime health: " + err.Error()}
+		}
 
 		if alert.IsTokenExpiredError(0, result.Message) {
 			alert.ReportTokenExpired(cfg, db, alert.TokenExpiredParams{
@@ -439,7 +504,7 @@ func CheckinAll(cfg *config.Config, db *sqlx.DB, accountIDs []int64, scheduleMod
 		} `db:"sites"`
 	}
 
-	if err := db.Select(&rows, query); err != nil {
+	if err := db.Select(&rows, db.Rebind(query)); err != nil {
 		slog.Error("CheckinAll: failed to query accounts", "error", err)
 		return nil
 	}

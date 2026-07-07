@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,9 +27,8 @@ const (
 )
 
 // DB wraps a *sqlx.DB connection pool and provides convenience methods.
-// Exec/Query/QueryRow methods override sqlx.DB to auto-rebind ? placeholders
-// to $N for PostgreSQL. pgx v5 stdlib handles ? natively, but sqlx.BindDriver
-// + Rebind provides a more robust path for complex queries.
+// Query helpers override sqlx.DB methods to rebind ? placeholders to $N for
+// PostgreSQL before queries reach pgx.
 type DB struct {
 	*sqlx.DB
 	Dialect string
@@ -58,6 +59,42 @@ func (db *DB) QueryRow(query string, args ...any) *sql.Row {
 		query = db.Rebind(query)
 	}
 	return db.DB.QueryRow(query, args...)
+}
+
+// Queryx executes a query and returns sqlx rows. For PostgreSQL, the query
+// string is rebound from ? to $N placeholders before execution.
+func (db *DB) Queryx(query string, args ...any) (*sqlx.Rows, error) {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.Queryx(query, args...)
+}
+
+// QueryRowx executes a query and returns an sqlx row. For PostgreSQL, the query
+// string is rebound from ? to $N placeholders before execution.
+func (db *DB) QueryRowx(query string, args ...any) *sqlx.Row {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.QueryRowx(query, args...)
+}
+
+// Get loads one row into dest. For PostgreSQL, the query string is rebound
+// from ? to $N placeholders before execution.
+func (db *DB) Get(dest any, query string, args ...any) error {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.Get(dest, query, args...)
+}
+
+// Select loads all rows into dest. For PostgreSQL, the query string is rebound
+// from ? to $N placeholders before execution.
+func (db *DB) Select(dest any, query string, args ...any) error {
+	if db.Dialect == DialectPostgres {
+		query = db.Rebind(query)
+	}
+	return db.DB.Select(dest, query, args...)
 }
 
 // ResolveSQLitePath resolves the SQLite database file path.
@@ -123,6 +160,16 @@ func decodeURIPath(path string) (string, error) {
 //
 // SQLite connections are configured with WAL journal mode and foreign_keys=ON.
 func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
+	mode := ""
+	if sslMode {
+		mode = "require"
+	}
+	return OpenWithPostgresSSLMode(dialect, dsn, mode)
+}
+
+// OpenWithPostgresSSLMode opens a database connection pool and, for PostgreSQL,
+// applies an explicit sslmode without duplicating existing DSN parameters.
+func OpenWithPostgresSSLMode(dialect string, dsn string, sslMode string) (*DB, error) {
 	var driverName string
 	var connStr string
 
@@ -132,14 +179,11 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 		connStr = dsn
 	case DialectPostgres:
 		driverName = "pgx"
-		connStr = dsn
-		if sslMode {
-			if strings.Contains(connStr, "?") {
-				connStr += "&sslmode=require"
-			} else {
-				connStr += "?sslmode=require"
-			}
+		normalizedSSLMode := normalizePostgresSSLMode(sslMode)
+		if sslMode != "" && normalizedSSLMode == "" {
+			return nil, fmt.Errorf("store: unsupported postgres sslmode %q", sslMode)
 		}
+		connStr = applyPostgresSSLMode(dsn, normalizedSSLMode)
 	default:
 		return nil, fmt.Errorf("store: unsupported dialect %q (expected %q or %q)", dialect, DialectSQLite, DialectPostgres)
 	}
@@ -181,6 +225,43 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 	slog.Info("store: database opened", "dialect", dialect)
 	return db, nil
 }
+
+func normalizePostgresSSLMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "":
+		return ""
+	case "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+		return strings.ToLower(strings.TrimSpace(mode))
+	default:
+		return ""
+	}
+}
+
+func applyPostgresSSLMode(dsn string, mode string) string {
+	if mode == "" {
+		return dsn
+	}
+	trimmed := strings.TrimSpace(dsn)
+	if strings.HasPrefix(strings.ToLower(trimmed), "postgres://") || strings.HasPrefix(strings.ToLower(trimmed), "postgresql://") {
+		parsed, err := url.Parse(trimmed)
+		if err == nil {
+			q := parsed.Query()
+			q.Set("sslmode", mode)
+			parsed.RawQuery = q.Encode()
+			return parsed.String()
+		}
+	}
+
+	if postgresKeywordSSLModeRE.MatchString(dsn) {
+		return postgresKeywordSSLModeRE.ReplaceAllString(dsn, "${1}sslmode="+mode)
+	}
+	if strings.TrimSpace(dsn) == "" {
+		return "sslmode=" + mode
+	}
+	return strings.TrimRight(dsn, " ") + " sslmode=" + mode
+}
+
+var postgresKeywordSSLModeRE = regexp.MustCompile(`(^|\s)sslmode=\S+`)
 
 // applySQLitePragmas enables WAL mode and foreign key enforcement.
 // These are CRITICAL for SQLite correctness (FKs default to OFF in SQLite).

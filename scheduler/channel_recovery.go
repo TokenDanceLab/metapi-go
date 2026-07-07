@@ -12,24 +12,24 @@ import (
 )
 
 const (
-	channelRecoverySweepIntervalMs  = 30_000  // 30s sweep interval
-	channelRecoveryMinIntervalMs    = 10_000  // 10s floor
-	channelRecoveryMaxBatch         = 4       // max candidates per sweep
-	channelRecoveryCooldownRecheckMs = 30_000 // 30s for cooldown
-	channelRecoveryActiveRecheckMs  = 5 * 60_000 // 5min for active
+	channelRecoverySweepIntervalMs   = 30_000     // 30s sweep interval
+	channelRecoveryMinIntervalMs     = 10_000     // 10s floor
+	channelRecoveryMaxBatch          = 4          // max candidates per sweep
+	channelRecoveryCooldownRecheckMs = 30_000     // 30s for cooldown
+	channelRecoveryActiveRecheckMs   = 5 * 60_000 // 5min for active
 )
 
 // ChannelRecoveryScheduler periodically sweeps channels that are in cooldown
 // or active to probe if they have recovered.
 type ChannelRecoveryScheduler struct {
-	cfg                      *config.Config
-	ticker                   *time.Ticker
-	stopCh                   chan struct{}
-	running                  bool
-	mu                       sync.Mutex
-	inFlightKeys             map[string]bool       // "channelId:modelName" -> in flight
-	lastStartedAtByKey       map[string]int64      // "channelId:modelName" -> start timestamp ms
-	sweepInFlight            bool
+	cfg                *config.Config
+	ticker             *time.Ticker
+	stopCh             chan struct{}
+	running            bool
+	mu                 sync.Mutex
+	inFlightKeys       map[string]bool  // "channelId:modelName" -> in flight
+	lastStartedAtByKey map[string]int64 // "channelId:modelName" -> start timestamp ms
+	sweepInFlight      bool
 }
 
 // NewChannelRecoveryScheduler creates a new channel recovery probe scheduler.
@@ -114,6 +114,12 @@ func (s *ChannelRecoveryScheduler) runSweep() {
 	if dbw == nil {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runSweepLocked(dbw)
+	})
+}
+
+func (s *ChannelRecoveryScheduler) runSweepLocked(dbw *store.DB) {
 	nowMs := time.Now().UnixMilli()
 
 	// Query cooling channels

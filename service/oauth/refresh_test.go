@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"testing"
+	"time"
 )
 
 // ---- Singleflight Tests ----
@@ -19,8 +20,7 @@ func TestRefreshInFlight_Dedup(t *testing.T) {
 	}
 	refreshInFlightMu.Unlock()
 
-	ch := make(chan refreshResult, 1)
-	p := &refreshPromise{ch: ch, ready: true}
+	p := newRefreshPromise()
 
 	refreshInFlightMu.Lock()
 	refreshInFlight[42] = p
@@ -49,20 +49,19 @@ func TestRefreshInFlight_CleanupOnFinish(t *testing.T) {
 	// Simulate the singleflight pattern:
 	// 1. Check if inflight — no
 	// 2. Create promise
-	ch := make(chan refreshResult, 1)
-	p := &refreshPromise{ch: ch, ready: true}
+	p := newRefreshPromise()
 
 	refreshInFlightMu.Lock()
 	refreshInFlight[accountID] = p
 	refreshInFlightMu.Unlock()
 
-	// 3. Simulate done — send result and clean up
+	// 3. Simulate done — resolve result and clean up
 	result := refreshResult{
 		AccountID:   accountID,
 		AccessToken: "new-token",
 		AccountKey:  "key-1",
 	}
-	ch <- result
+	p.resolve(result)
 
 	refreshInFlightMu.Lock()
 	delete(refreshInFlight, accountID)
@@ -85,8 +84,7 @@ func TestRefreshInFlight_ConcurrentDedup(t *testing.T) {
 
 	// Test that singleflight dedup works:
 	// Insert a promise manually, then verify a second caller finds it.
-	ch := make(chan refreshResult, 1)
-	p := &refreshPromise{ch: ch, ready: true}
+	p := newRefreshPromise()
 
 	refreshInFlightMu.Lock()
 	refreshInFlight[accountID] = p
@@ -97,7 +95,7 @@ func TestRefreshInFlight_ConcurrentDedup(t *testing.T) {
 	func() {
 		refreshInFlightMu.Lock()
 		defer refreshInFlightMu.Unlock()
-		if p2, exists := refreshInFlight[accountID]; exists && p2.ready {
+		if _, exists := refreshInFlight[accountID]; exists {
 			found = true
 		}
 	}()
@@ -106,14 +104,36 @@ func TestRefreshInFlight_ConcurrentDedup(t *testing.T) {
 		t.Error("second caller should find existing promise")
 	}
 
-	// Cleanup: send result to unblock any waiter and remove.
-	ch <- refreshResult{AccountID: accountID, AccessToken: "deduped-token"}
+	// Cleanup: resolve result to unblock any waiter and remove.
+	p.resolve(refreshResult{AccountID: accountID, AccessToken: "deduped-token"})
 	refreshInFlightMu.Lock()
 	delete(refreshInFlight, accountID)
 	refreshInFlightMu.Unlock()
 
 	if len(refreshInFlight) != 0 {
 		t.Error("map should be empty after cleanup")
+	}
+}
+
+func TestRefreshPromiseBroadcastsResultToAllWaiters(t *testing.T) {
+	p := newRefreshPromise()
+
+	done := make(chan refreshResult, 2)
+	go func() { done <- p.wait() }()
+	go func() { done <- p.wait() }()
+
+	want := refreshResult{AccountID: 42, AccessToken: "shared-token"}
+	p.resolve(want)
+
+	for i := 0; i < 2; i++ {
+		select {
+		case got := <-done:
+			if got.AccountID != want.AccountID || got.AccessToken != want.AccessToken {
+				t.Fatalf("waiter %d got %+v, want %+v", i, got, want)
+			}
+		case <-time.After(500 * time.Millisecond):
+			t.Fatalf("waiter %d did not receive broadcast result", i)
+		}
 	}
 }
 

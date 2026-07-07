@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,27 +14,27 @@ import (
 )
 
 const (
-	claudeAuthURL              = "https://claude.ai/oauth/authorize"
-	claudeTokenURL             = "https://api.anthropic.com/v1/oauth/token"
-	claudeLoopbackPort         = 54545
-	claudeLoopbackPath         = "/callback"
-	claudeLoopbackRedirectURI  = "http://localhost:54545/callback"
-	claudeUpstreamBaseURL      = "https://api.anthropic.com"
+	claudeAuthURL                 = "https://claude.ai/oauth/authorize"
+	claudeTokenURL                = "https://api.anthropic.com/v1/oauth/token"
+	claudeLoopbackPort            = 54545
+	claudeLoopbackPath            = "/callback"
+	claudeLoopbackRedirectURI     = "http://localhost:54545/callback"
+	claudeUpstreamBaseURL         = "https://api.anthropic.com"
 	claudeDefaultAnthropicVersion = "2023-06-01"
 )
 
 func init() {
 	RegisterProvider(&OAuthProviderDefinition{
 		Metadata: ProviderMetadata{
-			Provider:                    ProviderClaude,
-			Label:                       "Claude",
-			Platform:                    "claude",
-			Enabled:                     true,
-			LoginType:                   "oauth",
-			RequiresProjectId:           false,
+			Provider:                     ProviderClaude,
+			Label:                        "Claude",
+			Platform:                     "claude",
+			Enabled:                      true,
+			LoginType:                    "oauth",
+			RequiresProjectId:            false,
 			SupportsDirectAccountRouting: true,
-			SupportsCloudValidation:     true,
-			SupportsNativeProxy:         true,
+			SupportsCloudValidation:      true,
+			SupportsNativeProxy:          true,
 		},
 		Site: ProviderSiteConfig{
 			Name:     "Anthropic Claude OAuth",
@@ -48,10 +47,10 @@ func init() {
 			Path:        claudeLoopbackPath,
 			RedirectURI: claudeLoopbackRedirectURI,
 		},
-		BuildAuthorizationURL:   buildClaudeAuthorizationURL,
+		BuildAuthorizationURL:     buildClaudeAuthorizationURL,
 		ExchangeAuthorizationCode: exchangeClaudeAuthorizationCode,
-		RefreshAccessToken:      refreshClaudeAccessToken,
-		BuildProxyHeaders:       buildClaudeProxyHeaders,
+		RefreshAccessToken:        refreshClaudeAccessToken,
+		BuildProxyHeaders:         buildClaudeProxyHeaders,
 	})
 }
 
@@ -85,9 +84,9 @@ func buildClaudeAuthorizationURL(ctx context.Context, input BuildAuthURLInput) (
 // ---- Token Exchange ----
 
 type claudeTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	TokenType    string `json:"token_type"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	TokenType    string      `json:"token_type"`
 	ExpiresIn    interface{} `json:"expires_in"`
 	Organization struct {
 		UUID string `json:"uuid"`
@@ -133,9 +132,14 @@ func postClaudeToken(body map[string]interface{}, proxyURL *string) (*claudeToke
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
+		respBody := readOAuthErrorResponseBody(resp.Body)
 		return nil, fmt.Errorf("%s", string(respBody))
+	}
+
+	respBody, err := readOAuthJSONResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload claudeTokenResponse

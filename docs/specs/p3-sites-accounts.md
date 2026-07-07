@@ -3,21 +3,21 @@
 **S.U.P.E.R**: S (单一职责) · P (端口优先) | **依赖**: P1 + P2 | **Size**: L
 
 ## 原始 TS 参考
-- `D:\Code\TokenDance\metapi\src\server\routes\api\sites.ts` (含 api-endpoints + disabled-models + available-models + probe-now + probe-stream + detect 子路由)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\accounts.ts` (含 login/verifyToken/rebind-session/balance/models/manual-models/health-refresh)
-- `D:\Code\TokenDance\metapi\src\server\routes\api\accountTokens.ts` (含 sync/groups/default/value/upstream-create)
-- `D:\Code\TokenDance\metapi\src\server\contracts\siteRoutePayloads.ts` — Zod schemas
-- `D:\Code\TokenDance\metapi\src\server\contracts\accountsRoutePayloads.ts` — Zod schemas
-- `D:\Code\TokenDance\metapi\src\server\contracts\accountTokensRoutePayloads.ts` — Zod schemas
-- `D:\Code\TokenDance\metapi\src\server\services\siteDetector.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\siteApiEndpointService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\accountCredentialService.ts` — AES 加密 (password only)
-- `D:\Code\TokenDance\metapi\src\server\services\accountMutationWorkflow.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\accountTokenService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\accountExtraConfig.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\manualAccountCreationService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\accountsOverviewService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\accountUpdateWorkflow.ts`
+- `<metapi-ts>\src\server\routes\api\sites.ts` (含 api-endpoints + disabled-models + available-models + probe-now + probe-stream + detect 子路由)
+- `<metapi-ts>\src\server\routes\api\accounts.ts` (含 login/verifyToken/rebind-session/balance/models/manual-models/health-refresh)
+- `<metapi-ts>\src\server\routes\api\accountTokens.ts` (含 sync/groups/default/value/upstream-create)
+- `<metapi-ts>\src\server\contracts\siteRoutePayloads.ts` — Zod schemas
+- `<metapi-ts>\src\server\contracts\accountsRoutePayloads.ts` — Zod schemas
+- `<metapi-ts>\src\server\contracts\accountTokensRoutePayloads.ts` — Zod schemas
+- `<metapi-ts>\src\server\services\siteDetector.ts`
+- `<metapi-ts>\src\server\services\siteApiEndpointService.ts`
+- `<metapi-ts>\src\server\services\accountCredentialService.ts` — AES 加密 (password only)
+- `<metapi-ts>\src\server\services\accountMutationWorkflow.ts`
+- `<metapi-ts>\src\server\services\accountTokenService.ts`
+- `<metapi-ts>\src\server\services\accountExtraConfig.ts`
+- `<metapi-ts>\src\server\services\manualAccountCreationService.ts`
+- `<metapi-ts>\src\server\services\accountsOverviewService.ts`
+- `<metapi-ts>\src\server\services\accountUpdateWorkflow.ts`
 
 ## Go 模块结构
 ```

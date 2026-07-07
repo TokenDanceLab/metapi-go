@@ -89,7 +89,7 @@ describe('Dashboard hook order', () => {
     }
 
     const errorOutput = consoleErrorSpy.mock.calls
-      .map((args) => args.map((item) => String(item)).join(' '))
+      .map((args: unknown[]) => args.map((item: unknown) => String(item)).join(' '))
       .join('\n');
 
     expect(errorOutput).not.toContain('change in the order of Hooks called by Dashboard');

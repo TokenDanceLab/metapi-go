@@ -1,4 +1,4 @@
-import { parseProxyLogMetadata, type ParsedProxyLogMetadata } from '../../../shared/proxyLogMeta.js';
+import { parseProxyLogMetadata, type ParsedProxyLogMetadata } from '../../shared/proxyLogMeta.js';
 
 type ProxyLogPathMeta = {
   clientFamily: string | null;

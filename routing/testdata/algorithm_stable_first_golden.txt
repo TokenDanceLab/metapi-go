@@ -7,4 +7,4 @@
 4,20,202,0.176119
 5,30,301,0.204474
 # Stable site count: 3
-# Selected: channel=5, site=30
+# Selected: channel=1, site=10

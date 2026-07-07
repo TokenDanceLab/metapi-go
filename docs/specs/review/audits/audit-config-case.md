@@ -1,7 +1,7 @@
 # Config Case Sensitivity Audit: metapi-go/config
 
 **Audit date**: 2026-07-05
-**Scope**: `D:/Code/TokenDance/metapi-go/config/config.go` (Load function), `cmd/server/main.go` (environMap + godotenv), `D:/Code/TokenDance/metapi-go/docs/specs/p0-skeleton.md` (spec)
+**Scope**: `<repo>/config/config.go` (Load function), `cmd/server/main.go` (environMap + godotenv), `<repo>/docs/specs/p0-skeleton.md` (spec)
 
 ---
 
@@ -269,4 +269,4 @@ func TestLoadCaseInsensitive(t *testing.T) {
 
 ## 8. Relationship to TS Original
 
-The TypeScript `metapi` original (at `D:\Code\TokenDance\metapi`) uses `process.env.CHECKIN_CRON` which is case-sensitive on Linux but case-insensitive on Windows. The Go port inherits the same variable names but adds the extra layer of `map[string]string` lookup which is always case-sensitive regardless of platform, making this a **regression** compared to the TS version on Windows.
+The TypeScript `metapi` original (at `<metapi-ts>`) uses `process.env.CHECKIN_CRON` which is case-sensitive on Linux but case-insensitive on Windows. The Go port inherits the same variable names but adds the extra layer of `map[string]string` lookup which is always case-sensitive regardless of platform, making this a **regression** compared to the TS version on Windows.

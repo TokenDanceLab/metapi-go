@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	defaultProxyConnectTimeout       = 10 * time.Second
-	defaultProxyKeepAliveInitial     = 60 * time.Second
-	siteProxyCacheTTL                = 3 * time.Second
+	defaultProxyConnectTimeout   = 10 * time.Second
+	defaultProxyKeepAliveInitial = 60 * time.Second
+	siteProxyCacheTTL            = 3 * time.Second
 )
 
 var supportedProxySchemes = map[string]bool{
@@ -150,36 +150,66 @@ func (sp *SiteProxy) doWithExplicitProxy(ctx context.Context, req *http.Request,
 
 // DoWithProxy is a convenience function that works without a SiteProxy instance.
 func DoWithProxy(ctx context.Context, req *http.Request, proxyConfig *ProxyConfig) (*http.Response, error) {
+	if proxyConfig != nil {
+		for k, v := range proxyConfig.CustomHeaders {
+			req.Header.Set(k, v)
+		}
+	}
+
+	insecureSkipTLS := proxyConfig != nil && proxyConfig.InsecureSkipTLS
 	if proxyConfig != nil && proxyConfig.ProxyURL != "" {
 		proxyURL, err := url.Parse(proxyConfig.ProxyURL)
 		if err != nil {
 			return nil, fmt.Errorf("invalid proxy URL: %w", err)
 		}
-
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxyURL),
-			DialContext: (&net.Dialer{
-				Timeout:   defaultProxyConnectTimeout,
-				KeepAlive: defaultProxyKeepAliveInitial,
-			}).DialContext,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
+		scheme := strings.ToLower(proxyURL.Scheme)
+		if !supportedProxySchemes[scheme] {
+			return nil, fmt.Errorf("unsupported proxy scheme: %s", scheme)
 		}
 
-		if proxyConfig.InsecureSkipTLS {
-			transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		}
-
-		client := &http.Client{
-			Transport: transport,
-			Timeout:   30 * time.Second,
-		}
+		client := newProxyHTTPClient(http.ProxyURL(proxyURL), insecureSkipTLS)
 		return client.Do(req.WithContext(ctx))
 	}
 
-	// Use default HTTP client
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := newProxyHTTPClient(nil, insecureSkipTLS)
 	return client.Do(req.WithContext(ctx))
+}
+
+func newProxyHTTPClient(proxy func(*http.Request) (*url.URL, error), insecureSkipTLS bool) *http.Client {
+	transport := &http.Transport{
+		Proxy: proxy,
+		DialContext: (&net.Dialer{
+			Timeout:   defaultProxyConnectTimeout,
+			KeepAlive: defaultProxyKeepAliveInitial,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+	}
+	if insecureSkipTLS {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	return &http.Client{
+		Transport:     transport,
+		Timeout:       30 * time.Second,
+		CheckRedirect: rejectCrossOriginRedirect,
+	}
+}
+
+func rejectCrossOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return fmt.Errorf("stopped after %d redirects", len(via))
+	}
+	if len(via) == 0 {
+		return nil
+	}
+	previous := via[len(via)-1].URL
+	if previous.Scheme == "https" && req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect from https to %s", req.URL.Scheme)
+	}
+	if !strings.EqualFold(previous.Host, req.URL.Host) {
+		return fmt.Errorf("refusing cross-origin redirect from %s to %s", previous.Host, req.URL.Host)
+	}
+	return nil
 }
 
 // WithTimeout creates a context with timeout for quick probes.

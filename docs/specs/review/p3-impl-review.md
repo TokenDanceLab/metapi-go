@@ -3,7 +3,7 @@
 **Date**: 2026-07-04
 **Review scope**: Cross-reference Go implementation against P3 spec and TS source
 **Files reviewed**:
-- Spec: `D:/Code/TokenDance/metapi-go/docs/specs/p3-sites-accounts.md`
+- Spec: `<repo>/docs/specs/p3-sites-accounts.md`
 - TS contracts: `siteRoutePayloads.ts`, `accountsRoutePayloads.ts`, `accountTokensRoutePayloads.ts`
 - TS routes: `sites.ts`, `accounts.ts`, `accountTokens.ts`
 - Go handlers: `sites.go`, `sites_endpoints.go`, `accounts.go`, `account_tokens.go`

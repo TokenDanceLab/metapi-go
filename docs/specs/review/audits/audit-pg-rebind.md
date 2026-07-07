@@ -1,156 +1,258 @@
-# PG Rebind Audit: scheduler/ `?` Placeholder Safety
+# PostgreSQL Placeholder Rebind Audit
 
-**Date:** 2026-07-05
-**Scope:** `D:/Code/TokenDance/metapi-go/scheduler/` -- 7 target files + 2 extras
-**Verdict:** PASS -- zero issues found.
+**Date:** 2026-07-06
+**Scope:** `store`, admin sites/accounts/account-tokens/downstream-keys/token-routes/events/site-announcements/stats paths, OAuth account persistence, OAuth route units, usage aggregation projection, check-in runtime-health persistence, related service helpers, and known follow-up areas
+**Verdict:** PARTIAL PASS
 
----
+## Summary
 
-## 1. Summary
+PostgreSQL is supported at the database bootstrap layer, but not every business path was safe. The issue was not SQL injection. Queries still used bound parameters, but several `sqlx` calls sent `?` placeholders to PostgreSQL instead of rebinding them to `$1`, `$2`, and so on.
 
-Every raw SQL query containing `?` placeholders in the audited files passes through `sqlx` (either `*sqlx.DB` or `*sqlx.Tx`). The PostgreSQL driver binder is globally registered in `store/open.go`, so all `?` are auto-rebound to `$1`, `$2`, ... on PG. No file imports or uses `database/sql` directly.
+The fixed slices are the admin sites, accounts, account-token, downstream-key, token-route, events, site-announcement, stats proxy-log, OAuth account-persistence, OAuth route-unit, usage-aggregation projection, and check-in runtime-health persistence paths.
 
----
+Sites:
 
-## 2. Safety Mechanism
+- `POST /api/sites`
+- `PUT /api/sites/{id}`
+- `DELETE /api/sites/{id}`
+- `POST /api/sites/batch`
+- `GET/PUT /api/sites/{id}/disabled-models`
+- `GET /api/sites/{id}/available-models`
 
-`store/open.go:122-123`:
-```go
-if driverName == "pgx" {
-    sqlx.BindDriver("pgx", sqlx.DOLLAR)
-}
-```
+Accounts:
 
-This registers a global rebind function. Every `sqlx` method (`Query`, `Exec`, `QueryRow` -- on both `*sqlx.DB` and `*sqlx.Tx`) calls this binder when the driver is `"pgx"`, transforming all `?` tokens into `$1`, `$2`, ... before sending to the wire.
+- `GET /api/accounts`
+- `POST /api/accounts`
+- `POST /api/accounts/login`
+- `POST /api/accounts/verify-token`
+- `POST /api/accounts/{id}/rebind-session`
+- `PUT /api/accounts/{id}`
+- `DELETE /api/accounts/{id}`
+- `POST /api/accounts/batch`
+- `POST /api/accounts/{id}/balance`
+- `GET /api/accounts/{id}/models`
+- `POST /api/accounts/{id}/models/manual`
 
-`store.DB` (defined in `store/open.go:26-29`) embeds `*sqlx.DB`:
-```go
-type DB struct {
-    *sqlx.DB
-    Dialect string
-}
-```
+Account tokens:
 
-Therefore, `dbw.Query()`, `dbw.Exec()`, `dbw.QueryRow()` are all `sqlx` methods and participate in rebinding.
+- `GET /api/account-tokens`
+- `POST /api/account-tokens`
+- `POST /api/account-tokens/batch`
+- `PUT /api/account-tokens/{id}`
+- `POST /api/account-tokens/{id}/default`
+- `GET /api/account-tokens/{id}/value`
+- `DELETE /api/account-tokens/{id}`
+- `POST /api/account-tokens/sync/{accountId}`
+- `GET /api/account-tokens/groups/{accountId}`
+- `GET /api/account-tokens/account/{accountId}/default`
 
----
+Downstream keys:
 
-## 3. Per-File Inventory
+- `GET /api/downstream-keys/summary?status=...&search=...`
+- `POST /api/downstream-keys`
+- `PUT /api/downstream-keys/{id}`
+- `POST /api/downstream-keys/{id}/reset-usage`
+- `DELETE /api/downstream-keys/{id}`
+- `POST /api/downstream-keys/batch`
 
-### 3.1 channel_recovery.go
+Token routes:
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 158-168 | `SELECT ... WHERE rc.cooldown_until > ?` | `dbw.Query` (sqlx) | SAFE |
-| 194-203 | `SELECT ... WHERE rc.cooldown_until IS NULL LIMIT 50` | `dbw.Query` (sqlx) | SAFE (no `?`) |
+- `GET /api/routes/lite`
+- `GET /api/routes/summary`
+- `GET /api/routes`
+- `POST /api/routes`
+- `PUT /api/routes/{id}`
+- `DELETE /api/routes/{id}`
+- `POST /api/routes/batch`
+- `GET /api/routes/{id}/channels`
+- `POST /api/routes/{id}/channels`
+- `POST /api/routes/{id}/channels/batch`
+- `POST /api/routes/{id}/cooldown/clear`
+- `PUT /api/channels/batch`
+- `PUT /api/channels/{channelId}`
+- `DELETE /api/channels/{channelId}`
 
-### 3.2 admin_snapshot.go
+Events:
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 170 | `DELETE FROM admin_snapshots WHERE expires_at < ?` | `dbw.Exec` (sqlx) | SAFE |
+- `GET /api/events`
+- `GET /api/events/count`
+- `POST /api/events/{id}/read`
+- `POST /api/events/read-all`
+- `DELETE /api/events`
 
-### 3.3 file_retention.go
+Site announcements:
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 103 | `DELETE FROM proxy_files WHERE created_at < ? AND deleted_at IS NULL` | `dbw.Exec` (sqlx) | SAFE |
+- `GET /api/site-announcements`
+- `POST /api/site-announcements/{id}/read`
+- `POST /api/site-announcements/read-all`
+- `DELETE /api/site-announcements`
 
-### 3.4 log_retention.go
+Stats:
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 109 | `DELETE FROM proxy_logs WHERE created_at < ?` | `dbw.Exec` (sqlx) | SAFE |
+- `GET /api/stats/proxy-logs?view=full&search=...`
+- `GET /api/stats/proxy-logs?view=query&search=...`
+- `GET /api/stats/proxy-logs?view=meta&search=...`
+- Same path with `siteId` filters
 
-### 3.5 usage_aggregation.go (heaviest file)
+OAuth account persistence:
 
-| Line(s) | Query | Method | Safe? |
-|---------|-------|--------|-------|
-| 261-264 | `INSERT OR IGNORE ... VALUES (?, 'UTC', 0, ?, ?)` (SQLite branch) | `dbw.Exec` (sqlx) | SAFE -- SQLite dialect, no rebind needed |
-| 255-258 | `INSERT INTO ... VALUES ($1, 'UTC', 0, $2, $3)` (PG branch) | `dbw.Exec` (sqlx) | SAFE -- uses `$N` directly |
-| 272-277 | `UPDATE ... SET lease_owner = ?, lease_token = ?, lease_expires_at = ?, updated_at = ? WHERE projector_key = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?)` | `dbw.Exec` (sqlx) | SAFE |
-| 297-302 | `UPDATE ... SET ... last_error = ?, updated_at = ? WHERE projector_key = ? AND lease_token = ?` | `dbw.Exec` (sqlx) | SAFE |
-| 307-312 | `SELECT ... WHERE projector_key = ?` | `dbw.QueryRow` (sqlx) | SAFE |
-| 332-340 | `SELECT ... WHERE pl.id > ? ... LIMIT ?` | `dbw.Query` (sqlx) | SAFE |
-| 412-414 | `INSERT INTO site_day_usage ... VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` | `tx.Exec` (sqlx.Tx) | SAFE |
-| 417-419 | `INSERT INTO site_hour_usage ... VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` | `tx.Exec` (sqlx.Tx) | SAFE |
-| 426-429 | `UPDATE analytics_projection_checkpoints SET last_proxy_log_id = ?, ... WHERE projector_key = ?` | `tx.Exec` (sqlx.Tx) | SAFE |
-| 447-451 | `SELECT id, created_at FROM proxy_logs WHERE id >= ?` | `dbw.QueryRow` (sqlx) | SAFE |
-| 455-457 | `UPDATE ... SET recompute_from_id = NULL, ... WHERE projector_key = ?` | `dbw.Exec` (sqlx) | SAFE |
-| 482-484 | `DELETE FROM site_day_usage WHERE local_day >= ?` etc. | `dbw.Exec` (sqlx) | SAFE |
-| 491-493 | `UPDATE ... SET last_proxy_log_id = ?, ... WHERE projector_key = ?` | `dbw.Exec` (sqlx) | SAFE |
-| 515-517 | `UPDATE ... SET recompute_from_id = ?, recompute_requested_at = ?, updated_at = ? WHERE projector_key = ?` | `dbw.Exec` (sqlx) | SAFE |
+- `activatePersistedOAuthAccount` create-account path
+- `activatePersistedOAuthAccount` update-existing-account path
+- `ensureOAuthProviderSite` create-site path
+- `revertPersistedOauthAccount` rollback transaction path
 
-### 3.6 balance.go
+OAuth route units:
 
-No raw SQL queries in this file. Delegates to `balance.RefreshAllBalances(cfg, db)` where `db` is `*sqlx.DB` from `getSqlxDB()`. The helper `getSqlxDB()` (helpers.go:27-33) extracts `*sqlx.DB` from `*store.DB`.
+- `CreateOauthRouteUnit`
+- `UpdateOauthRouteUnit`
+- `DeleteOauthRouteUnit`
+- `ListOauthRouteUnitsByAccountIDs`
+- `ListEnabledOauthRouteUnitsWithMembers`
 
-### 3.7 checkin.go
+Usage aggregation:
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 181-188 | `SELECT a.id, a.last_checkin_at FROM accounts a ... WHERE ...` | `dbw.Query` (sqlx) | SAFE (no `?` in this query) |
+- `UsageAggregationScheduler.RunProjectionPass`
+- `fetchBatch` proxy-log reads
+- `applyBatch` transaction writes for `site_day_usage`
+- `applyBatch` transaction writes for `site_hour_usage`
+- `applyBatch` transaction writes for `model_day_usage`
+- `analytics_projection_checkpoints` watermark update
 
-Delegates checkin execution to `checkin.CheckinAll(cfg, db, dueIDs, mode)` where `db` is `*sqlx.DB`.
+Check-in runtime health:
 
----
+- `CheckinAccount` disabled-site branch
+- `SetAccountRuntimeHealth`
+- `checkin_logs` writes from check-in execution
+- `CheckinAll` account selection
 
-## 4. Additional Files Checked (Beyond Requested Scope)
+The store wrapper now also covers the common `sqlx` helper methods:
 
-### log_cleanup.go
+- `Get`
+- `Select`
+- `Queryx`
+- `QueryRowx`
 
-| Line | Query | Method | Safe? |
-|------|-------|--------|-------|
-| 113 | `DELETE FROM proxy_logs WHERE created_at < ?` | `dbw.Exec` (sqlx) | SAFE |
-| 122 | `DELETE FROM events WHERE created_at < ?` | `dbw.Exec` (sqlx) | SAFE |
+## What Changed
 
-### sub2api_refresh.go
+`store.DB` already rebound `Exec`, `Query`, and `QueryRow`. It now explicitly rebounds `Get`, `Select`, `Queryx`, and `QueryRowx` before delegating to the embedded `*sqlx.DB`.
 
-Contains `dbw.Query()` with no `?` placeholders. SAFE.
+`handler/admin/sites.go` still receives a bare `*sqlx.DB` through the current router signature, so every parameterized sites query now calls `h.db.Rebind(query)` before `Get`, `Select`, or `Exec`.
 
-### backup_webdav.go
+`service/site_service.go` now calls `db.Rebind(query)` or `tx.Rebind(query)` for the sites CRUD and API endpoint transaction path. This covers PostgreSQL transaction failures during site create/update with `apiEndpoints`.
 
-No SQL queries. SAFE.
+`handler/admin/accounts.go` and `service/account_service.go` now rebind parameterized queries on the account control-plane path. SQLite-style boolean literals in account login, manual model updates, and event creation were replaced with bound boolean parameters where they target boolean columns.
 
----
+`handler/admin/account_tokens.go` and `service/account_token_service.go` now rebind token CRUD, default-token repair, groups, token value, and relation queries. Boolean writes for `enabled` and `is_default` now use bound booleans instead of SQLite-style `0`/`1` literals.
 
-## 5. Notable Pattern: Dialect-Branched Query in usage_aggregation.go
+`handler/admin/downstream_keys.go` now rebinds downstream-key duplicate checks, create/update/reset/delete, and batch updates. PostgreSQL create uses `RETURNING id` through the shared admin insert-id helper, while SQLite keeps `LastInsertId()`. Boolean filters and batch enable/disable writes use bound booleans instead of integer literals.
 
-`tryAcquireLease()` (lines 252-265) is the only place where PG and SQLite queries diverge:
+`handler/admin/token_routes.go` now rebinds route CRUD, route-channel CRUD, batch route updates, batch channel inserts, cooldown clearing, and explicit group source queries. Boolean writes for `token_routes.enabled`, `route_channels.enabled`, and `route_channels.manual_override` now use bound booleans. PostgreSQL inserts that need the new row id use `RETURNING id`; SQLite keeps `LastInsertId()`.
 
-```go
-switch dbw.Dialect {
-case store.DialectPostgres:
-    ensureQuery = `INSERT INTO ... VALUES ($1, 'UTC', 0, $2, $3) ON CONFLICT ...`
-default: // sqlite
-    ensureQuery = `INSERT OR IGNORE INTO ... VALUES (?, 'UTC', 0, ?, ?)`
-}
-```
+`handler/admin/events.go` now rebinds filtered list, unread count, mark-read, and mark-all-read SQL. The `events.read` boolean column uses bound booleans instead of SQLite-style `0`/`1` literals.
 
-This is correct because:
-- PG branch uses `$N` directly, so sqlx does not rebind it (sqlx only rebinds `?`).
-- SQLite branch uses `?` natively; no rebinder is registered for the SQLite driver.
+`handler/admin/site_announcements.go` now rebinds filtered list and mark-read SQL. The delete-all path has no parameters and remains dialect-neutral.
 
-However, this introduces a **maintenance hazard**: if someone adds `?` to the PG branch query without switching to `$N`, it would still work (because sqlx rebinds), creating inconsistency. Recommend either:
-1. Stick to `?` uniformly (rely on sqlx rebind for both) -- simpler, single source of truth.
-2. Or always use `$N` in the PG branch for ALL PG-branch queries (not just this one) for explicit clarity.
+`handler/admin/stats.go` now rebinds the filtered proxy-log count and summary queries. The item query already used the shared admin query helper; before this change, PostgreSQL could return matching items while reporting `total=0` and an empty summary for filtered requests.
 
-Currently, this is the ONLY PG-branch query in the file; all other queries use `?` and rely on sqlx rebind. Consistency would favor option 1.
+`service/oauth/flow.go` now uses bound booleans for OAuth-managed `accounts` and provider `sites` rows. PostgreSQL inserts that need a new `sites.id` or `accounts.id` use `RETURNING id`; SQLite keeps `LastInsertId()`. The rollback transaction now rebinds `*sqlx.Tx` statements before execution.
 
----
+`service/oauth/route_unit.go` now avoids duplicate-column nested scans on the account lookup path. Route-unit creation uses a dialect-aware insert-id helper: PostgreSQL uses `RETURNING id`, while SQLite keeps `LastInsertId()`. Transaction inserts call `tx.Rebind`, and the enabled-unit query uses a bound boolean instead of a database-specific literal.
 
-## 6. Verification Commands Used
+`scheduler/usage_aggregation.go` now keeps projection writes inside a `sqlx` transaction and calls `tx.Rebind` for every parameterized statement. The projection uses additive upserts for `site_day_usage`, `site_hour_usage`, and `model_day_usage`, so later batches accumulate totals instead of being dropped by `DO NOTHING`. Hour buckets now derive from `proxy_logs.created_at`, and model usage uses `proxy_logs.model_actual` with an `unknown` fallback.
+
+`service/account_health.go` now rebinds the `accounts.extra_config` read and update statements used by runtime-health persistence. `service/checkin/checkin.go` now rebinds check-in writes, account updates, and `CheckinAll` selection through the active driver. Core check-in persistence errors are no longer ignored: failures to write runtime health, account updates, or `checkin_logs` are returned as failed check-in results, while non-critical event-write failures are logged and do not change the check-in outcome.
+
+## Verification
+
+Run without PostgreSQL:
 
 ```bash
-# Confirm no database/sql import in any scheduler file
-grep -r "database/sql" D:/Code/TokenDance/metapi-go/scheduler/
-
-# List every ? in SQL queries across the scheduler directory
-grep -rn '\?' D:/Code/TokenDance/metapi-go/scheduler/*.go | grep -E '(Exec|Query|QueryRow)'
+go test ./handler/admin ./service ./store -count=1
 ```
 
----
+Run with a PostgreSQL test database:
 
-## 7. Conclusion
+```bash
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestSites_Postgres_CreateUpdateAndDisabledModels -count=1
 
-**Zero violations.** All `?` placeholder usage in the scheduler package is protected by `sqlx.BindDriver("pgx", sqlx.DOLLAR)` registered globally in `store/open.go`. No raw `database/sql` connections exist. The audit finds no risk of `?` being sent to PostgreSQL unrebound.
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./store \
+  -run TestPostgresSQLXHelpersRebindPlaceholders -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestAccounts_Postgres_CreateUpdateManualModelsAndBatch -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestDownstreamKeys_PostgresCRUDResetBatchAndDelete -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestTokenRoutes_Postgres_CreateUpdateChannelAndDelete -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestEventsAndAnnouncements_PostgresLifecycle -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin \
+  -run TestStats_PostgresProxyLogsFilteredTotals -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./service/oauth \
+  -run TestActivatePersistedOAuthAccount_PostgresCreate -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./service/oauth \
+  -run TestOauthRouteUnit_PostgresLifecycle -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./scheduler \
+  -run TestUsageAggregationProjection_PostgresAccumulatesIncrementalLogs -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./service/checkin \
+  -run TestCheckinAccount_PostgresDisabledSitePersistsRuntimeHealthAndLog -count=1
+
+PG_TEST_DSN="$POSTGRES_TEST_DSN" go test ./handler/admin ./store ./service/oauth ./scheduler ./service/checkin \
+  -run 'TestSites_Postgres_CreateUpdateAndDisabledModels|TestAccounts_Postgres_CreateUpdateManualModelsAndBatch|TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete|TestDownstreamKeys_PostgresCRUDResetBatchAndDelete|TestTokenRoutes_Postgres_CreateUpdateChannelAndDelete|TestEventsAndAnnouncements_PostgresLifecycle|TestStats_PostgresProxyLogsFilteredTotals|TestPostgresSQLXHelpersRebindPlaceholders|TestActivatePersistedOAuthAccount_PostgresCreate|TestOauthRouteUnit_PostgresLifecycle|TestUsageAggregationProjection_PostgresAccumulatesIncrementalLogs|TestCheckinAccount_PostgresDisabledSitePersistsRuntimeHealthAndLog' \
+  -count=1
+```
+
+Before the fixes:
+
+- `POST /api/sites` returned `500 {"error":"Create site failed"}`.
+- `POST /api/accounts` returned `400 {"message":"site not found","success":false}` even after the site was created.
+- `POST /api/account-tokens` returned `500 {"message":"Token creation failed","success":false}` with a PostgreSQL syntax error near `,`.
+- `POST /api/downstream-keys` and downstream-key update/reset/delete paths could fail on PostgreSQL because the handler received a bare `*sqlx.DB` and sent `?` placeholders without rebinding.
+- `POST /api/routes` returned `500 {"message":"创建路由失败","success":false}`.
+- `POST /api/routes/{id}/channels` returned `200` with a `null` row body after the first placeholder fix, because pgx does not support `LastInsertId()` and the nullable-field fallback could miss the inserted row.
+- `GET /api/events?type=...&read=false` returned `500 {"error":"Failed to load events"}` with a PostgreSQL syntax error near `AND`.
+- `GET /api/stats/proxy-logs?search=...` could return matching `items` but report `total=0` and an empty summary, because only the item query was rebound.
+- OAuth account persistence failed while creating the provider site because `use_system_proxy` and `is_pinned` were written as integer literals into PostgreSQL boolean columns.
+- OAuth route-unit creation depended on `LastInsertId()` and transaction statements with `?` placeholders, which pgx does not support.
+- Usage aggregation used a raw `database/sql` transaction path, skipped transaction Exec errors, and used `DO NOTHING` for aggregate rows. PostgreSQL rejected the un-rebound `?` placeholders, and repeated projections for the same site/day/hour could fail to add later usage.
+- Check-in on a disabled site returned a skipped result but failed to persist `extra_config.runtimeHealth` and `checkin_logs` on PostgreSQL, because runtime-health and log writes used un-rebound `?` placeholders and ignored write errors.
+
+The PostgreSQL downstream-key, route, events, site-announcement, stats, OAuth account-persistence, OAuth route-unit, usage-aggregation, and check-in runtime-health tests pass after the rebind, boolean-literal, `RETURNING id`, additive-upsert, and persistence-error handling changes.
+
+## Remaining Risk
+
+This is not a whole-repository PostgreSQL compatibility pass yet. Several areas still pass bare `*sqlx.DB` or use `*sqlx.Tx` directly:
+
+- Other admin handlers that still accept bare `*sqlx.DB`.
+- Scheduler entrypoints that unwrap `store.DB` before calling service packages.
+- OAuth service paths outside account persistence and route units, including connection helpers.
+- Some account and account-token insert paths still use race-prone `LastInsertId()` fallbacks instead of `RETURNING id`.
+
+The next fix should move production code away from bare `*sqlx.DB` signatures. Preferred options:
+
+1. Route handlers and services accept `*store.DB` where they need dialect-aware helpers.
+2. Introduce a small project DB interface for `Get`, `Select`, `Queryx`, `Exec`, and transaction helpers.
+3. Add a static regression test that flags new production `*sqlx.DB` or `*sqlx.Tx` signatures outside `store` and tests unless each parameterized query explicitly calls `Rebind`.
+
+## External Guidance Checked
+
+The follow-up direction matches common Go data-access guidance:
+
+- `sqlx` exposes `Rebind`, but it does not make bare `database/sql` or every direct `sqlx` call dialect-safe by itself: https://pkg.go.dev/github.com/jmoiron/sqlx
+- Go's database documentation recommends parameterized queries and avoiding SQL string assembly from untrusted input: https://go.dev/doc/database/sql-injection
+- Repository and unit-of-work patterns keep transaction and database details out of handlers and service logic:
+  - https://rednafi.com/go/repo-txn-uow/
+  - https://threedots.tech/post/repository-pattern-in-go/
+  - https://threedots.tech/post/database-transactions-in-go/

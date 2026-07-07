@@ -2,7 +2,6 @@ package routing
 
 import (
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -368,7 +367,7 @@ func TestAllCandidatesCooldown(t *testing.T) {
 
 	gpt4 := "gpt-4"
 	recentFailTime := "2024-01-01T00:00:05.000Z" // 5 seconds ago
-	nowMs := int64(10_000)                         // 10 seconds after epoch
+	nowMs := int64(10_000)                       // 10 seconds after epoch
 
 	// All candidates have recent failures within the backoff window
 	candidates := []RouteChannelCandidate{
@@ -678,6 +677,11 @@ func TestChannelRuntimeLoadMultiplier(t *testing.T) {
 // and verifies they are consistent across test runs.
 func TestGoldenFile_Consistency(t *testing.T) {
 	ResetSiteRuntimeHealthState()
+	clearAllStableFirstCaches()
+	t.Cleanup(func() {
+		ResetSiteRuntimeHealthState()
+		clearAllStableFirstCaches()
+	})
 	candidates := setupTestCandidates()
 
 	goldenDir := filepath.Join("testdata")
@@ -705,11 +709,11 @@ func TestGoldenFile_Consistency(t *testing.T) {
 	}
 
 	weightedGoldenPath := filepath.Join(goldenDir, "algorithm_weighted_golden.txt")
-	os.MkdirAll(goldenDir, 0755)
-	os.WriteFile(weightedGoldenPath, []byte(sb.String()), 0644)
-	t.Logf("Weighted golden file written: %s", weightedGoldenPath)
+	weightedGolden := readOrUpdateGoldenFile(t, weightedGoldenPath, []byte(sb.String()))
+	t.Logf("Weighted golden file checked: %s (%d bytes)", weightedGoldenPath, len(weightedGolden))
 
 	// --- Stable first golden file ---
+	clearAllStableFirstCaches()
 	sb.Reset()
 	sb.WriteString("# Golden file: TS vs Go stable_first selection contributions\n")
 	sb.WriteString("# Generated: 2026-07-04\n")
@@ -741,8 +745,8 @@ func TestGoldenFile_Consistency(t *testing.T) {
 	}
 
 	stableFirstGoldenPath := filepath.Join(goldenDir, "algorithm_stable_first_golden.txt")
-	os.WriteFile(stableFirstGoldenPath, []byte(sb.String()), 0644)
-	t.Logf("Stable first golden file written: %s", stableFirstGoldenPath)
+	stableFirstGolden := readOrUpdateGoldenFile(t, stableFirstGoldenPath, []byte(sb.String()))
+	t.Logf("Stable first golden file checked: %s (%d bytes)", stableFirstGoldenPath, len(stableFirstGolden))
 
 	// --- Round-robin golden file ---
 	sb.Reset()
@@ -765,18 +769,8 @@ func TestGoldenFile_Consistency(t *testing.T) {
 	}
 
 	roundRobinGoldenPath := filepath.Join(goldenDir, "algorithm_round_robin_golden.txt")
-	os.WriteFile(roundRobinGoldenPath, []byte(sb.String()), 0644)
-	t.Logf("Round robin golden file written: %s", roundRobinGoldenPath)
-
-	// Verify golden files are non-empty
-	for _, path := range []string{weightedGoldenPath, stableFirstGoldenPath, roundRobinGoldenPath} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Errorf("failed to read golden file %s: %v", path, err)
-		} else if len(data) == 0 {
-			t.Errorf("golden file %s is empty", path)
-		}
-	}
+	roundRobinGolden := readOrUpdateGoldenFile(t, roundRobinGoldenPath, []byte(sb.String()))
+	t.Logf("Round robin golden file checked: %s (%d bytes)", roundRobinGoldenPath, len(roundRobinGolden))
 }
 
 // =============================================================================

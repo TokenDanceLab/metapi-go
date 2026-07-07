@@ -9,6 +9,7 @@ import {
   parseServerUtcDateTime,
 } from "./helpers/checkinLogTime.js";
 import { tr } from "../i18n.js";
+import { safeExternalHref } from "../shared/sitePrimaryUrl.js";
 
 type LogFilter = "all" | "success" | "failed" | "skipped";
 
@@ -378,7 +379,7 @@ export default function CheckinLog() {
                     value={
                       log.sites?.url ? (
                         <a
-                          href={log.sites.url}
+                          href={safeExternalHref(log.sites.url) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="badge-link"
@@ -473,7 +474,7 @@ export default function CheckinLog() {
                     <td>
                       {log.sites?.url ? (
                         <a
-                          href={log.sites.url}
+                          href={safeExternalHref(log.sites.url) || undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="badge-link"

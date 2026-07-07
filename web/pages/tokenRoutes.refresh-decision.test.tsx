@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
-import { ROUTE_DECISION_REFRESH_TASK_TYPE } from '../../shared/tokenRouteContract.js';
+import { ROUTE_DECISION_REFRESH_TASK_TYPE } from '../shared/tokenRouteContract.js';
 import TokenRoutes from './TokenRoutes.js';
 
 const { apiMock, getBrandMock } = vi.hoisted(() => ({

@@ -15,7 +15,7 @@ const checkinPollMs = int64(60_000) // 60 seconds between interval polls
 
 // intervalCandidate holds the fields needed for interval-based checkin filtering.
 type intervalCandidate struct {
-	id           int64
+	id            int64
 	lastCheckinAt *string
 }
 
@@ -24,19 +24,19 @@ type intervalCandidate struct {
 type CheckinScheduler struct {
 	cfg *config.Config
 
-	mu                      sync.Mutex
-	mode                    string
-	cronRunner              *cronRunner
-	intervalTimer           *time.Ticker
-	intervalStop            chan struct{}
-	attemptByAccount        map[int64]int64 // accountId -> last attempt timestamp (ms)
+	mu               sync.Mutex
+	mode             string
+	cronRunner       *cronRunner
+	intervalTimer    *time.Ticker
+	intervalStop     chan struct{}
+	attemptByAccount map[int64]int64 // accountId -> last attempt timestamp (ms)
 }
 
 // NewCheckinScheduler creates a new checkin scheduler.
 func NewCheckinScheduler(cfg *config.Config) *CheckinScheduler {
 	return &CheckinScheduler{
-		cfg:             cfg,
-		mode:            cfg.CheckinScheduleMode,
+		cfg:              cfg,
+		mode:             cfg.CheckinScheduleMode,
 		attemptByAccount: make(map[int64]int64),
 	}
 }
@@ -169,14 +169,16 @@ func (s *CheckinScheduler) ResetAttempts() {
 
 func (s *CheckinScheduler) runCronJob() {
 	slog.Info("checkin: cron job starting")
-	db := getSqlxDB()
-	if db == nil {
+	dbw := store.GetDB()
+	if dbw == nil {
 		slog.Error("checkin: database not available")
 		return
 	}
-	results := checkin.CheckinAll(s.cfg, db, nil, "cron")
-	ok, bad := countResults(results)
-	slog.Info("checkin: cron job done", "success", ok, "failed", bad)
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		results := checkin.CheckinAll(s.cfg, dbw.DB, nil, "cron")
+		ok, bad := countResults(results)
+		slog.Info("checkin: cron job done", "success", ok, "failed", bad)
+	})
 }
 
 func (s *CheckinScheduler) runIntervalPass() {
@@ -184,6 +186,12 @@ func (s *CheckinScheduler) runIntervalPass() {
 	if dbw == nil {
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runIntervalPassLocked(dbw)
+	})
+}
+
+func (s *CheckinScheduler) runIntervalPassLocked(dbw *store.DB) {
 	now := time.Now()
 
 	// Query all account+site pairs
@@ -215,11 +223,7 @@ func (s *CheckinScheduler) runIntervalPass() {
 		return
 	}
 
-	db := getSqlxDB()
-	if db == nil {
-		return
-	}
-	results := checkin.CheckinAll(s.cfg, db, dueIDs, "interval")
+	results := checkin.CheckinAll(s.cfg, dbw.DB, dueIDs, "interval")
 
 	nowMs := now.UnixMilli()
 	s.mu.Lock()

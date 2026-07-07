@@ -27,7 +27,11 @@ func (c *BarkChannel) Send(cfg *config.Config, title, message, level, timeFootno
 		url.QueryEscape(level),
 	)
 
-	resp, err := http.Get(reqURL)
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("bark request build failed: %w", err)
+	}
+	resp, err := doNotifyRequest(req)
 	if err != nil {
 		return fmt.Errorf("bark request failed: %w", err)
 	}

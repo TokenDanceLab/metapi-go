@@ -451,9 +451,9 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 
 		_, err := db.Exec(
 			`UPDATE accounts SET site_id = ?, username = ?, access_token = ?, api_token = NULL,
-			 checkin_enabled = 0, status = ?, oauth_provider = ?, oauth_account_key = ?,
+			 checkin_enabled = ?, status = ?, oauth_provider = ?, oauth_account_key = ?,
 			 oauth_project_id = ?, extra_config = ?, updated_at = ? WHERE id = ?`,
-			site.ID, username, input.Exchange.AccessToken, status,
+			site.ID, username, input.Exchange.AccessToken, false, status,
 			string(def.Metadata.Provider), accountKey, projectID,
 			extraConfigStr, now, existing.ID,
 		)
@@ -481,23 +481,17 @@ func activatePersistedOAuthAccount(ctx context.Context, input ActivateInput) (*P
 		_ = db.Get(&maxSortOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM accounts")
 		sortOrder := maxSortOrder + 1
 
-		result, err := db.Exec(
+		accountID, err = execStoreInsertID(db,
 			`INSERT INTO accounts (site_id, username, access_token, api_token, checkin_enabled,
 			 status, oauth_provider, oauth_account_key, oauth_project_id, extra_config,
 			 is_pinned, sort_order, balance, balance_used, quota, value_score, created_at, updated_at)
-			 VALUES (?, ?, ?, NULL, 0, ?, ?, ?, ?, ?, 0, ?, 0, 0, 0, 0, ?, ?)`,
-			site.ID, username, input.Exchange.AccessToken, status,
+			 VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0, ?, ?)`,
+			site.ID, username, input.Exchange.AccessToken, false, status,
 			string(def.Metadata.Provider), accountKey, projectID,
-			extraConfigStr, sortOrder, now, now,
+			extraConfigStr, false, sortOrder, now, now,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create oauth account: %w", err)
-		}
-		accountID, err = result.LastInsertId()
-		if err != nil {
-			// Fallback for Postgres which doesn't support LastInsertId.
-			_ = db.Get(&accountID, "SELECT id FROM accounts WHERE site_id = ? AND oauth_provider = ? AND oauth_account_key = ? ORDER BY id DESC LIMIT 1",
-				site.ID, string(def.Metadata.Provider), accountKey)
 		}
 	}
 
@@ -585,10 +579,10 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec(
+	_, err = tx.Exec(tx.Rebind(
 		`UPDATE accounts SET site_id = ?, username = ?, access_token = ?, api_token = ?,
 		 checkin_enabled = ?, status = ?, oauth_provider = ?, oauth_account_key = ?,
-		 oauth_project_id = ?, extra_config = ?, updated_at = ? WHERE id = ?`,
+		 oauth_project_id = ?, extra_config = ?, updated_at = ? WHERE id = ?`),
 		prev.SiteID, prev.Username, prev.AccessToken, prev.APIToken,
 		prev.CheckinEnabled, prev.Status, prev.OAuthProvider, prev.OAuthAccountKey,
 		prev.OAuthProjectID, prev.ExtraConfig, now, accountID,
@@ -598,7 +592,7 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 	}
 
 	// Restore model availability: delete current, re-insert previous.
-	_, err = tx.Exec("DELETE FROM model_availability WHERE account_id = ?", accountID)
+	_, err = tx.Exec(tx.Rebind("DELETE FROM model_availability WHERE account_id = ?"), accountID)
 	if err != nil {
 		return fmt.Errorf("rollback model_availability delete failed: %w", err)
 	}
@@ -616,7 +610,7 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 		if len(cols) > 0 {
 			query := fmt.Sprintf("INSERT INTO model_availability (%s) VALUES (%s)",
 				strings.Join(cols, ", "), strings.Join(placeholders, ", "))
-			_, err := tx.Exec(query, vals...)
+			_, err := tx.Exec(tx.Rebind(query), vals...)
 			if err != nil {
 				slog.Warn("rollback model_availability re-insert failed", "error", err)
 			}
@@ -642,10 +636,10 @@ func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store
 	sortOrder := maxSortOrder + 1
 	now := time.Now().Format(time.RFC3339)
 
-	result, err := db.Exec(
+	id, err := execStoreInsertID(db,
 		`INSERT INTO sites (name, url, platform, status, use_system_proxy, is_pinned, global_weight, sort_order, created_at, updated_at)
-		 VALUES (?, ?, ?, 'active', 0, 0, 1, ?, ?, ?)`,
-		def.Site.Name, def.Site.URL, def.Site.Platform, sortOrder, now, now,
+		 VALUES (?, ?, ?, 'active', ?, ?, 1, ?, ?, ?)`,
+		def.Site.Name, def.Site.URL, def.Site.Platform, false, false, sortOrder, now, now,
 	)
 	if err != nil {
 		// Try reading again in case of race.
@@ -658,18 +652,26 @@ func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store
 		return nil, fmt.Errorf("failed to create oauth provider site: %w", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres.
-		_ = db.Get(&id, "SELECT id FROM sites WHERE platform = ? AND url = ? LIMIT 1",
-			def.Site.Platform, def.Site.URL)
-	}
 	site.ID = id
 	site.Name = def.Site.Name
 	site.URL = def.Site.URL
 	site.Platform = def.Site.Platform
 	site.Status = "active"
 	return &site, nil
+}
+
+func execStoreInsertID(db *store.DB, query string, args ...any) (int64, error) {
+	if db.Dialect == store.DialectPostgres {
+		var id int64
+		err := db.QueryRowx(query+" RETURNING id", args...).Scan(&id)
+		return id, err
+	}
+
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 // findExistingOAuthAccount finds an existing OAuth account for dedup.

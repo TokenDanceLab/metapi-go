@@ -626,6 +626,41 @@ func TestConsumeManagedKeyRequest_AtomicIncrement(t *testing.T) {
 	}
 }
 
+func TestConsumeManagedKeyRequest_RespectsMaxRequests(t *testing.T) {
+	setupTestDB(t)
+	db := testDB(t)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := db.Exec(
+		`INSERT INTO downstream_api_keys
+		 (name, key, enabled, used_cost, max_requests, used_requests,
+		  supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		  created_at, updated_at)
+		 VALUES (?, ?, 1, 0, 1, 0, '[]', '[]', '{}', '[]', '[]', ?, ?)`,
+		"incr-limited", "sk-incr-limited", now, now,
+	)
+	if err != nil {
+		t.Fatalf("INSERT: %v", err)
+	}
+	id, _ := res.LastInsertId()
+
+	if !consumeManagedKeyRequest(id) {
+		t.Fatal("expected first request reservation to succeed")
+	}
+	if consumeManagedKeyRequest(id) {
+		t.Fatal("expected second request reservation to fail at max_requests=1")
+	}
+
+	var usedRequests int64
+	err = db.QueryRow(`SELECT used_requests FROM downstream_api_keys WHERE id = ?`, id).Scan(&usedRequests)
+	if err != nil {
+		t.Fatalf("SELECT used_requests: %v", err)
+	}
+	if usedRequests != 1 {
+		t.Errorf("expected used_requests to stay at max_requests=1, got %d", usedRequests)
+	}
+}
+
 func TestConsumeManagedKeyRequest_FromNull(t *testing.T) {
 	// used_requests starts as NULL from schema default — COALESCE should handle it
 	setupTestDB(t)

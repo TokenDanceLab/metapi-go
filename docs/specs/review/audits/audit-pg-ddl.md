@@ -1,7 +1,7 @@
 # PG vs SQLite DDL Parity Audit
 
 **Audit date:** 2026-07-05
-**Source file:** `D:/Code/TokenDance/metapi-go/store/migrate.go`
+**Source file:** `<repo>/store/migrate.go`
 **Audit scope:** 27-table `AutoMigrate()` DDL + 67 non-UNIQUE indexes
 **Verdict:** PASS -- No DDL parity defects found. Two code-quality observations noted.
 

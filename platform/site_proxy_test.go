@@ -3,7 +3,10 @@ package platform
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewSiteProxy(t *testing.T) {
@@ -94,6 +97,27 @@ func TestDoWithProxy_NoProxy(t *testing.T) {
 	}
 }
 
+func TestDoWithProxy_NoProxyIgnoresEnvironmentProxy(t *testing.T) {
+	proxyCalled := false
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxyCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(proxy.Close)
+	t.Setenv("HTTP_PROXY", proxy.URL)
+	t.Setenv("HTTPS_PROXY", proxy.URL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.invalid/metapi", nil)
+
+	_, _ = DoWithProxy(ctx, req, nil)
+
+	if proxyCalled {
+		t.Fatal("DoWithProxy without proxy config used HTTP_PROXY from environment")
+	}
+}
+
 func TestDoWithProxy_WithExplicitProxy(t *testing.T) {
 	ctx := context.Background()
 	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
@@ -104,6 +128,29 @@ func TestDoWithProxy_WithExplicitProxy(t *testing.T) {
 	_, err := DoWithProxy(ctx, req, proxyConfig)
 	if err == nil {
 		// Proxy unreachable should cause error
+	}
+}
+
+func TestDoWithProxy_WithCustomHeaders(t *testing.T) {
+	gotHeader := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader = r.Header.Get("X-Metapi-Test")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+
+	ctx := context.Background()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/test", nil)
+	resp, err := DoWithProxy(ctx, req, &ProxyConfig{
+		CustomHeaders: map[string]string{"X-Metapi-Test": "site-header"},
+	})
+	if err != nil {
+		t.Fatalf("DoWithProxy: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if gotHeader != "site-header" {
+		t.Fatalf("X-Metapi-Test = %q, want site-header", gotHeader)
 	}
 }
 
@@ -120,6 +167,22 @@ func TestDoWithProxy_InvalidProxyURL(t *testing.T) {
 	}
 }
 
+func TestDoWithProxy_RejectsUnsupportedProxyScheme(t *testing.T) {
+	ctx := context.Background()
+	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+
+	proxyConfig := &ProxyConfig{
+		ProxyURL: "ftp://proxy.example:21",
+	}
+	_, err := DoWithProxy(ctx, req, proxyConfig)
+	if err == nil {
+		t.Fatal("unsupported proxy scheme should return error")
+	}
+	if !strings.Contains(err.Error(), "unsupported proxy scheme") {
+		t.Fatalf("error = %v, want unsupported proxy scheme", err)
+	}
+}
+
 func TestDoWithProxy_InsecureSkipTLS(t *testing.T) {
 	ctx := context.Background()
 	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
@@ -131,6 +194,33 @@ func TestDoWithProxy_InsecureSkipTLS(t *testing.T) {
 	// Should fail on unreachable but not due to TLS
 	if err == nil {
 		// ok
+	}
+}
+
+func TestDoWithProxy_RejectsCrossOriginRedirect(t *testing.T) {
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	ctx := context.Background()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, source.URL+"/start", nil)
+	resp, err := DoWithProxy(ctx, req, nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("cross-origin redirect was allowed")
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called")
 	}
 }
 

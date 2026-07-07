@@ -3,18 +3,18 @@
 **S.U.P.E.R**: S (single responsibility) . P (port-first) . R (replaceable) | **Depends on**: P3 + P4 | **Size**: L
 
 ## Original TS Reference
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\providers.ts` -- provider registry
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\service.ts` -- flow orchestrator
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\codexProvider.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\claudeProvider.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\geminiCliProvider.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\antigravityProvider.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\sessionStore.ts` -- in-memory session + PKCE
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\localCallbackServer.ts` -- loopback HTTP
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\refreshSingleflight.ts` -- lazy refresh
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\routeUnitService.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\quota.ts`
-- `D:\Code\TokenDance\metapi\src\server\services\oauth\oauthAccount.ts`
+- `<metapi-ts>\src\server\services\oauth\providers.ts` -- provider registry
+- `<metapi-ts>\src\server\services\oauth\service.ts` -- flow orchestrator
+- `<metapi-ts>\src\server\services\oauth\codexProvider.ts`
+- `<metapi-ts>\src\server\services\oauth\claudeProvider.ts`
+- `<metapi-ts>\src\server\services\oauth\geminiCliProvider.ts`
+- `<metapi-ts>\src\server\services\oauth\antigravityProvider.ts`
+- `<metapi-ts>\src\server\services\oauth\sessionStore.ts` -- in-memory session + PKCE
+- `<metapi-ts>\src\server\services\oauth\localCallbackServer.ts` -- loopback HTTP
+- `<metapi-ts>\src\server\services\oauth\refreshSingleflight.ts` -- lazy refresh
+- `<metapi-ts>\src\server\services\oauth\routeUnitService.ts`
+- `<metapi-ts>\src\server\services\oauth\quota.ts`
+- `<metapi-ts>\src\server\services\oauth\oauthAccount.ts`
 
 ## Go Module Structure
 ```

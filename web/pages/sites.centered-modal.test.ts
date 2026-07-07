@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Sites centered modal adoption', () => {
   it('uses CenteredModal for add/edit site flows instead of inline form panels', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Sites.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Sites.tsx'), 'utf8');
 
     expect(source).toContain("import CenteredModal from '../components/CenteredModal.js'");
     expect(source).toContain('<CenteredModal');
@@ -12,7 +12,7 @@ describe('Sites centered modal adoption', () => {
   });
 
   it('uses API request wording for dedicated site endpoint copy', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Sites.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Sites.tsx'), 'utf8');
 
     expect(source).toContain('API 请求地址池');
     expect(source).toContain('+ 添加 API 地址');

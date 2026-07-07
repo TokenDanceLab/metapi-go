@@ -88,6 +88,13 @@ func CalculateWeightedSelection(
 	if len(candidates) == 0 {
 		return WeightedSelectionResult{}
 	}
+	if len(candidates) == 1 {
+		return WeightedSelectionResult{
+			Selected:        &candidates[0],
+			Details:         []WeightedDetail{{Candidate: candidates[0], Probability: 1}},
+			StableSiteCount: 1,
+		}
+	}
 
 	if modelResolver == nil {
 		modelResolver = func(c RouteChannelCandidate) string { return "" }
@@ -108,12 +115,13 @@ func CalculateWeightedSelection(
 	}
 
 	// Step 3: Channel load snapshots
-	channelLoadSnapshots := make([]ChannelLoadSnapshot, n)
+	var channelLoadSnapshots []ChannelLoadSnapshot
 	if channelLoadProvider != nil {
+		channelLoadSnapshots = make([]ChannelLoadSnapshot, n)
 		for i, c := range candidates {
 			channelLoadSnapshots[i] = channelLoadProvider.GetChannelLoadSnapshot(ChannelLoadParams{
-				ChannelID:           c.Channel.ID,
-				AccountExtraConfig:  c.Account.ExtraConfig,
+				ChannelID:            c.Channel.ID,
+				AccountExtraConfig:   c.Account.ExtraConfig,
 				AccountOAuthProvider: c.Account.OAuthProvider,
 			})
 		}
@@ -121,31 +129,33 @@ func CalculateWeightedSelection(
 
 	// Step 4: Value scores
 	valueScores := make([]float64, n)
+	maxVS := math.Inf(-1)
+	minVS := math.Inf(1)
 	for i, c := range candidates {
 		unitCost := effectiveCosts[i].UnitCost
 		balance := c.Account.Balance
 		totalUsed := float64(c.Channel.SuccessCount + c.Channel.FailCount)
 		recentUsage := math.Max(totalUsed, 1)
-		valueScores[i] = routingWeights.CostWeight*(1/unitCost) + routingWeights.BalanceWeight*balance + routingWeights.UsageWeight*(1/recentUsage)
+		valueScore := routingWeights.CostWeight*(1/unitCost) + routingWeights.BalanceWeight*balance + routingWeights.UsageWeight*(1/recentUsage)
+		valueScores[i] = valueScore
+		if valueScore > maxVS {
+			maxVS = valueScore
+		}
+		if valueScore < minVS {
+			minVS = valueScore
+		}
 	}
 
 	// Step 5: Min-max normalization
-	maxVS := maxFloatSlice(valueScores, 0.001)
-	minVS := minFloatSlice(valueScores, 0)
+	if maxVS < 0.001 {
+		maxVS = 0.001
+	}
+	if minVS > 0 {
+		minVS = 0
+	}
 	vsRange := maxVS - minVS
 	if vsRange == 0 {
 		vsRange = 1
-	}
-	normalizedVS := make([]float64, n)
-	for i := range valueScores {
-		normalizedVS[i] = (valueScores[i] - minVS) / vsRange
-	}
-
-	// Step 6: Base contributions
-	baseContributions := make([]float64, n)
-	for i, c := range candidates {
-		weight := float64(c.Channel.Weight)
-		baseContributions[i] = (weight + 10) * (routingWeights.BaseWeightFactor + normalizedVS[i]*routingWeights.ValueScoreFactor)
 	}
 
 	// Step 7: Site channel counts
@@ -160,7 +170,10 @@ func CalculateWeightedSelection(
 	for i, candidate := range candidates {
 		siteChannels := math.Max(1, float64(siteChannelCounts[candidate.Site.ID]))
 		runtimeMultiplier := runtimeHealthDetails[i].CombinedMultiplier
-		runtimeLoadMultiplier := ResolveChannelRuntimeLoadMultiplier(channelLoadSnapshots[i])
+		runtimeLoadMultiplier := 1.0
+		if channelLoadProvider != nil {
+			runtimeLoadMultiplier = ResolveChannelRuntimeLoadMultiplier(channelLoadSnapshots[i])
+		}
 
 		if mode == StableFirstMode {
 			recentSuccessRate := ResolveStableFirstSuccessRate(
@@ -174,7 +187,10 @@ func CalculateWeightedSelection(
 			continue
 		}
 
-		contribution := baseContributions[i] / siteChannels
+		normalizedVS := (valueScores[i] - minVS) / vsRange
+		baseContribution := (float64(candidate.Channel.Weight) + 10) *
+			(routingWeights.BaseWeightFactor + normalizedVS*routingWeights.ValueScoreFactor)
+		contribution := baseContribution / siteChannels
 
 		// Site weight
 		downstreamSiteMultiplier := 1.0
@@ -245,20 +261,11 @@ func CalculateWeightedSelection(
 
 	// Build stable site info
 	stableSiteLeaderIndices := getStableFirstSiteLeaderIndices(candidates, contributions, rankedIndices)
-	stableSiteIDs := make(map[int64]bool)
-	for _, idx := range stableSiteLeaderIndices {
-		stableSiteIDs[candidates[idx].Site.ID] = true
-	}
 
 	result := WeightedSelectionResult{
 		Selected:        selected,
-		StableSiteCount: len(stableSiteIDs),
-	}
-
-	// Build rank map
-	rankByIndex := make(map[int]int)
-	for rank, idx := range rankedIndices {
-		rankByIndex[idx] = rank + 1
+		StableSiteCount: countUniqueCandidateSites(candidates, stableSiteLeaderIndices),
+		Details:         make([]WeightedDetail, 0, n),
 	}
 
 	for i, candidate := range candidates {
@@ -275,6 +282,24 @@ func CalculateWeightedSelection(
 	}
 
 	return result
+}
+
+func countUniqueCandidateSites(candidates []RouteChannelCandidate, indices []int) int {
+	count := 0
+	for i, idx := range indices {
+		siteID := candidates[idx].Site.ID
+		seen := false
+		for _, prevIdx := range indices[:i] {
+			if candidates[prevIdx].Site.ID == siteID {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			count++
+		}
+	}
+	return count
 }
 
 // RoutingWeightsConfig mirrors config.RoutingWeights for the routing package.
@@ -326,21 +351,21 @@ func compareStableFirstCandidateOrder(left, right RouteChannelCandidate) int {
 }
 
 var (
-	stableFirstLastSelectedSiteByKey              = make(map[string]int64)
-	stableFirstObservationProgressByKey           = make(map[string]StableFirstObservationProgressState)
-	stableFirstObservationSiteCooldownByKey       = make(map[string]int64)
-	stableFirstStateMu                            sync_RWMutex
+	stableFirstLastSelectedSiteByKey        = make(map[string]int64)
+	stableFirstObservationProgressByKey     = make(map[string]StableFirstObservationProgressState)
+	stableFirstObservationSiteCooldownByKey = make(map[string]int64)
+	stableFirstStateMu                      sync_RWMutex
 )
 
 const (
-	MaxStableFirstRotationKeys               = 1024
-	MaxStableFirstObservationProgressKeys    = 1024
+	MaxStableFirstRotationKeys                = 1024
+	MaxStableFirstObservationProgressKeys     = 1024
 	MaxStableFirstObservationSiteCooldownKeys = 4096
 )
 
 // StableFirstObservationProgressState tracks observation gating progress.
 type StableFirstObservationProgressState struct {
-	RequestCount      int64
+	RequestCount        int64
 	LastObservationAtMs *int64
 }
 
@@ -574,7 +599,7 @@ func UpdateStableFirstObservationProgress(rotationKey string, usedObservation bo
 	}
 	if usedObservation {
 		rememberStableFirstObservationProgressForKey(rotationKey, StableFirstObservationProgressState{
-			RequestCount:      0,
+			RequestCount:        0,
 			LastObservationAtMs: &n,
 		})
 		if selectedSiteID > 0 {
@@ -583,7 +608,7 @@ func UpdateStableFirstObservationProgress(rotationKey string, usedObservation bo
 		return
 	}
 	rememberStableFirstObservationProgressForKey(rotationKey, StableFirstObservationProgressState{
-		RequestCount:      previous.RequestCount + 1,
+		RequestCount:        previous.RequestCount + 1,
 		LastObservationAtMs: previous.LastObservationAtMs,
 	})
 }

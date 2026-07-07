@@ -12,8 +12,8 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Single binary, no No
 </p>
 
 [![CI](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://go.dev/)
-[![Docker](https://img.shields.io/badge/ghcr-v0.4.0-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
+[![Go](https://img.shields.io/badge/Go-1.26.4-00ADD8?logo=go)](https://go.dev/)
+[![Docker](https://img.shields.io/badge/ghcr-v0.6.0-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
@@ -62,10 +62,33 @@ All env vars are identical to the TypeScript version.
 |----------|---------|
 | `AUTH_TOKEN` | `change-me-admin-token` |
 | `PROXY_TOKEN` | `change-me-proxy-sk-token` |
+| `PROXY_MAX_BUFFERED_RESPONSE_BYTES` | `20971520`; maximum buffered non-streaming upstream response size |
+| `METAPI_ENABLE_PROXY_STUB` | empty; test/demo-only local proxy stub. Keep empty in production so unconfigured upstream forwarding returns 503. |
 | `PORT` | `4000` |
-| `DB_TYPE` | `sqlite` |
+| `DB_TYPE` | `sqlite`; `postgres` is inferred when a PostgreSQL URL is provided |
+| `DATABASE_URL` / `DB_URL` | empty; PostgreSQL connection string or SQLite file path. `DB_URL` takes precedence. |
+| `DB_SSLMODE` | empty; PostgreSQL TLS mode. Supports `disable`, `allow`, `prefer`, `require`, `verify-ca`, and `verify-full`; non-empty values override `sslmode` in the connection string. |
+| `TRUSTED_PROXY_CIDRS` | empty; comma-separated reverse-proxy CIDRs allowed to supply `X-Forwarded-For` / `X-Real-IP`; forwarded headers are ignored by default |
+| `ADMIN_CORS_ALLOWED_ORIGINS` | empty; comma-separated exact `http(s)` admin browser origins allowed to call `/api/*`; `*` is rejected |
 
 Full list: [`.env.example`](.env.example).
+
+The runtime supports two database modes: single-process SQLite and PostgreSQL for production deployments. In PostgreSQL mode, side-effecting schedulers such as external requests, notifications, uploads, cleanup, and sync jobs use PG advisory locks so multiple replicas do not run the same job batch at the same time. Redis is not integrated yet: there is no `REDIS_URL` setting, Redis client, or distributed cache.
+
+Proxy forwarding returns HTTP 503 when routing and upstream dependencies are not configured. `METAPI_ENABLE_PROXY_STUB=1` is for tests and demos only.
+
+## Operations Health Checks
+
+- `GET /health` is liveness only.
+- `GET /ready` is readiness and returns HTTP 503 when the database is unavailable or the process is draining for shutdown.
+- Docker runs `metapi healthcheck`, which probes `http://127.0.0.1:${PORT}/ready` by default.
+- Override with `METAPI_HEALTHCHECK_URL` or `METAPI_HEALTHCHECK_PATH`.
+
+## CORS Policy
+
+Admin API CORS is closed by default for cross-origin browser requests. Set `ADMIN_CORS_ALLOWED_ORIGINS=https://admin.example.com` when the admin frontend is hosted on a different origin. Proxy and health endpoints keep wildcard CORS for client compatibility.
+
+Forwarded client IP headers are ignored unless `TRUSTED_PROXY_CIDRS` contains the direct reverse proxy address range. Set it only for proxies you control.
 
 ## Migration from TypeScript
 

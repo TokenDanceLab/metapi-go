@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 describe('Settings mobile layout', () => {
   it('collapses fixed form grids behind the shared mobile breakpoint', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/web/pages/Settings.tsx'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'pages/Settings.tsx'), 'utf8');
 
     expect(source).toContain("import { useIsMobile } from '../components/useIsMobile.js'");
     expect(source).toContain('const isMobile = useIsMobile()');

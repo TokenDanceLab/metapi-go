@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -56,12 +57,16 @@ func NormalizeCredentialMode(input string) AccountCredentialMode {
 
 // ResolveStoredCredentialMode resolves the effective credential mode from storage.
 // 1. Read extraConfig.credentialMode; if explicit and != "auto", return it
-// 2. If accessToken is non-empty, return "session"
-// 3. Otherwise return "apikey"
+// 2. Treat legacy mirrored accessToken/apiToken rows as "apikey"
+// 3. If accessToken is non-empty, return "session"
+// 4. Otherwise return "apikey"
 func ResolveStoredCredentialMode(account *store.Account) AccountCredentialMode {
 	fromConfig := GetCredentialModeFromExtraConfig(account.ExtraConfig)
 	if fromConfig != "" && fromConfig != CredentialModeAuto {
 		return fromConfig
+	}
+	if hasMirroredAPIKeyToken(account) {
+		return CredentialModeAPIKey
 	}
 	if strings.TrimSpace(account.AccessToken) != "" {
 		return CredentialModeSession
@@ -92,7 +97,16 @@ func IsAPIKeyConnection(account *store.Account) bool {
 	if explicit != "" && explicit != CredentialModeAuto {
 		return explicit == CredentialModeAPIKey
 	}
-	return strings.TrimSpace(account.AccessToken) == ""
+	return hasMirroredAPIKeyToken(account) || strings.TrimSpace(account.AccessToken) == ""
+}
+
+func hasMirroredAPIKeyToken(account *store.Account) bool {
+	if account == nil || account.APIToken == nil {
+		return false
+	}
+	accessToken := strings.TrimSpace(account.AccessToken)
+	apiToken := strings.TrimSpace(*account.APIToken)
+	return accessToken != "" && apiToken != "" && accessToken == apiToken
 }
 
 // BuildCapabilitiesForAccount returns the capabilities for an account.
@@ -162,6 +176,95 @@ func GetProxyURLFromExtraConfig(extraConfig *string) string {
 	return ""
 }
 
+// GetUseSystemProxyFromExtraConfig reads useSystemProxy from extraConfig.
+func GetUseSystemProxyFromExtraConfig(extraConfig *string) bool {
+	config := ParseExtraConfig(extraConfig)
+	if config == nil {
+		return false
+	}
+	if enabled, ok := config["useSystemProxy"].(bool); ok {
+		return enabled
+	}
+	return false
+}
+
+// BuildPlatformProxyConfig resolves account and site proxy settings for platform calls.
+func BuildPlatformProxyConfig(cfg *config.Config, account *store.Account, site *store.Site) *platform.ProxyConfig {
+	if account == nil && site == nil {
+		return nil
+	}
+
+	proxyCfg := &platform.ProxyConfig{}
+	if site != nil && site.CustomHeaders != nil && strings.TrimSpace(*site.CustomHeaders) != "" {
+		var headers map[string]string
+		if err := json.Unmarshal([]byte(*site.CustomHeaders), &headers); err == nil && len(headers) > 0 {
+			proxyCfg.CustomHeaders = filterPlatformCustomHeaders(headers)
+		}
+	}
+
+	if account != nil {
+		if accountProxyURL := strings.TrimSpace(GetProxyURLFromExtraConfig(account.ExtraConfig)); accountProxyURL != "" {
+			proxyCfg.ProxyURL = accountProxyURL
+			return normalizePlatformProxyConfig(proxyCfg)
+		}
+		if GetUseSystemProxyFromExtraConfig(account.ExtraConfig) && cfg != nil && strings.TrimSpace(cfg.SystemProxyUrl) != "" {
+			proxyCfg.ProxyURL = strings.TrimSpace(cfg.SystemProxyUrl)
+			proxyCfg.UseSystemProxy = true
+			return normalizePlatformProxyConfig(proxyCfg)
+		}
+	}
+
+	if site != nil {
+		if site.ProxyURL != nil && strings.TrimSpace(*site.ProxyURL) != "" {
+			proxyCfg.ProxyURL = strings.TrimSpace(*site.ProxyURL)
+			return normalizePlatformProxyConfig(proxyCfg)
+		}
+		if site.UseSystemProxy && cfg != nil && strings.TrimSpace(cfg.SystemProxyUrl) != "" {
+			proxyCfg.ProxyURL = strings.TrimSpace(cfg.SystemProxyUrl)
+			proxyCfg.UseSystemProxy = true
+			return normalizePlatformProxyConfig(proxyCfg)
+		}
+	}
+
+	return normalizePlatformProxyConfig(proxyCfg)
+}
+
+func normalizePlatformProxyConfig(proxyCfg *platform.ProxyConfig) *platform.ProxyConfig {
+	if proxyCfg == nil {
+		return nil
+	}
+	if proxyCfg.ProxyURL == "" && !proxyCfg.UseSystemProxy && len(proxyCfg.CustomHeaders) == 0 && !proxyCfg.InsecureSkipTLS {
+		return nil
+	}
+	return proxyCfg
+}
+
+func filterPlatformCustomHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	filtered := make(map[string]string, len(headers))
+	for k, v := range headers {
+		if isReservedPlatformCustomHeader(k) {
+			continue
+		}
+		filtered[k] = v
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
+}
+
+func isReservedPlatformCustomHeader(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "authorization", "cookie", "new-api-user", "content-type", "content-length", "host":
+		return true
+	default:
+		return false
+	}
+}
+
 // ResolvePlatformUserID resolves the platform user ID from extraConfig or username.
 func ResolvePlatformUserID(extraConfig *string, username *string) int64 {
 	config := ParseExtraConfig(extraConfig)
@@ -178,7 +281,7 @@ func ResolvePlatformUserID(extraConfig *string, username *string) int64 {
 // GetAccountByID fetches an account by its ID.
 func GetAccountByID(db *sqlx.DB, id int64) (*store.Account, error) {
 	var account store.Account
-	err := db.Get(&account, "SELECT * FROM accounts WHERE id = ?", id)
+	err := db.Get(&account, db.Rebind("SELECT * FROM accounts WHERE id = ?"), id)
 	if err != nil {
 		return nil, err
 	}
@@ -205,44 +308,49 @@ func GetAccountWithSiteByID(db *sqlx.DB, id int64) (*AccountWithSite, error) {
 		a.oauth_project_id AS "accounts.oauth_project_id", a.extra_config AS "accounts.extra_config",
 		a.created_at AS "accounts.created_at", a.updated_at AS "accounts.updated_at",
 		s.id AS "sites.id", s.name AS "sites.name", s.url AS "sites.url",
-		s.platform AS "sites.platform", s.status AS "sites.status"
+		s.platform AS "sites.platform", s.proxy_url AS "sites.proxy_url",
+		s.use_system_proxy AS "sites.use_system_proxy",
+		s.custom_headers AS "sites.custom_headers", s.status AS "sites.status"
 		FROM accounts a INNER JOIN sites s ON a.site_id = s.id WHERE a.id = ?`
 
 	var row struct {
 		Accounts struct {
-			ID               int64   `db:"id"`
-			SiteID           int64   `db:"site_id"`
-			Username         *string `db:"username"`
-			AccessToken      string  `db:"access_token"`
-			APIToken         *string `db:"api_token"`
-			Balance          float64 `db:"balance"`
-			BalanceUsed      float64 `db:"balance_used"`
-			Quota            float64 `db:"quota"`
-			UnitCost         *float64 `db:"unit_cost"`
-			ValueScore       float64 `db:"value_score"`
-			Status           string  `db:"status"`
-			IsPinned         bool    `db:"is_pinned"`
-			SortOrder        int64   `db:"sort_order"`
-			CheckinEnabled   bool    `db:"checkin_enabled"`
-			LastCheckinAt    *string `db:"last_checkin_at"`
-			LastBalanceRefresh *string `db:"last_balance_refresh"`
-			OAuthProvider    *string `db:"oauth_provider"`
-			OAuthAccountKey  *string `db:"oauth_account_key"`
-			OAuthProjectID   *string `db:"oauth_project_id"`
-			ExtraConfig      *string `db:"extra_config"`
-			CreatedAt        string  `db:"created_at"`
-			UpdatedAt        string  `db:"updated_at"`
+			ID                 int64    `db:"id"`
+			SiteID             int64    `db:"site_id"`
+			Username           *string  `db:"username"`
+			AccessToken        string   `db:"access_token"`
+			APIToken           *string  `db:"api_token"`
+			Balance            float64  `db:"balance"`
+			BalanceUsed        float64  `db:"balance_used"`
+			Quota              float64  `db:"quota"`
+			UnitCost           *float64 `db:"unit_cost"`
+			ValueScore         float64  `db:"value_score"`
+			Status             string   `db:"status"`
+			IsPinned           bool     `db:"is_pinned"`
+			SortOrder          int64    `db:"sort_order"`
+			CheckinEnabled     bool     `db:"checkin_enabled"`
+			LastCheckinAt      *string  `db:"last_checkin_at"`
+			LastBalanceRefresh *string  `db:"last_balance_refresh"`
+			OAuthProvider      *string  `db:"oauth_provider"`
+			OAuthAccountKey    *string  `db:"oauth_account_key"`
+			OAuthProjectID     *string  `db:"oauth_project_id"`
+			ExtraConfig        *string  `db:"extra_config"`
+			CreatedAt          string   `db:"created_at"`
+			UpdatedAt          string   `db:"updated_at"`
 		} `db:"accounts"`
 		Sites struct {
-			ID       int64  `db:"id"`
-			Name     string `db:"name"`
-			URL      string `db:"url"`
-			Platform string `db:"platform"`
-			Status   string `db:"status"`
+			ID             int64   `db:"id"`
+			Name           string  `db:"name"`
+			URL            string  `db:"url"`
+			Platform       string  `db:"platform"`
+			ProxyURL       *string `db:"proxy_url"`
+			UseSystemProxy bool    `db:"use_system_proxy"`
+			CustomHeaders  *string `db:"custom_headers"`
+			Status         string  `db:"status"`
 		} `db:"sites"`
 	}
 
-	if err := db.Get(&row, query, id); err != nil {
+	if err := db.Get(&row, db.Rebind(query), id); err != nil {
 		return nil, err
 	}
 	return &AccountWithSite{
@@ -262,21 +370,22 @@ func GetAccountWithSiteByID(db *sqlx.DB, id int64) (*AccountWithSite, error) {
 		Site: store.Site{
 			ID: row.Sites.ID, Name: row.Sites.Name,
 			URL: row.Sites.URL, Platform: row.Sites.Platform,
-			Status: row.Sites.Status,
+			ProxyURL: row.Sites.ProxyURL, UseSystemProxy: row.Sites.UseSystemProxy,
+			CustomHeaders: row.Sites.CustomHeaders, Status: row.Sites.Status,
 		},
 	}, nil
 }
 
 // DeleteAccount deletes an account by ID.
 func DeleteAccount(db *sqlx.DB, id int64) error {
-	_, err := db.Exec("DELETE FROM accounts WHERE id = ?", id)
+	_, err := db.Exec(db.Rebind("DELETE FROM accounts WHERE id = ?"), id)
 	return err
 }
 
 // GetNextAccountSortOrder returns the next sortOrder value for new accounts.
 func GetNextAccountSortOrder(db *sqlx.DB) (int64, error) {
 	var maxOrder int64
-	err := db.Get(&maxOrder, "SELECT COALESCE(MAX(sort_order), -1) FROM accounts")
+	err := db.Get(&maxOrder, db.Rebind("SELECT COALESCE(MAX(sort_order), -1) FROM accounts"))
 	if err != nil {
 		return 0, err
 	}
@@ -298,12 +407,14 @@ func InsertAccount(db *sqlx.DB, account map[string]any) (int64, error) {
 		}
 	}
 
-	result, err := db.Exec(
-		`INSERT INTO accounts (site_id, username, access_token, api_token, balance, balance_used, quota,
+	var id int64
+	err := db.QueryRowx(
+		db.Rebind(`INSERT INTO accounts (site_id, username, access_token, api_token, balance, balance_used, quota,
 		 unit_cost, value_score, status, is_pinned, sort_order, checkin_enabled,
 		 last_checkin_at, last_balance_refresh, oauth_provider, oauth_account_key,
 		 oauth_project_id, extra_config, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 RETURNING id`),
 		account["siteId"], account["username"], account["accessToken"],
 		account["apiToken"], account["balance"], account["balanceUsed"],
 		account["quota"], account["unitCost"], account["valueScore"],
@@ -311,16 +422,9 @@ func InsertAccount(db *sqlx.DB, account map[string]any) (int64, error) {
 		account["checkinEnabled"], account["lastCheckinAt"], account["lastBalanceRefresh"],
 		account["oauthProvider"], account["oauthAccountKey"], account["oauthProjectID"],
 		extraConfigStr, now, now,
-	)
+	).Scan(&id)
 	if err != nil {
 		return 0, err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		// Fallback for Postgres which doesn't support LastInsertId.
-		_ = db.Get(&id, "SELECT id FROM accounts WHERE site_id = ? AND username = ? ORDER BY id DESC LIMIT 1",
-			account["siteId"], account["username"])
 	}
 	return id, nil
 }
@@ -336,19 +440,20 @@ func UpdateAccountFields(db *sqlx.DB, accountID int64, updates map[string]any) e
 	var args []any
 
 	colMap := map[string]string{
-		"accessToken":    "access_token",
-		"apiToken":       "api_token",
-		"username":       "username",
-		"status":         "status",
-		"checkinEnabled": "checkin_enabled",
-		"unitCost":       "unit_cost",
-		"extraConfig":    "extra_config",
-		"isPinned":       "is_pinned",
-		"sortOrder":      "sort_order",
-		"balance":        "balance",
-		"balanceUsed":    "balance_used",
-		"quota":          "quota",
-		"valueScore":     "value_score",
+		"accessToken":        "access_token",
+		"apiToken":           "api_token",
+		"username":           "username",
+		"status":             "status",
+		"checkinEnabled":     "checkin_enabled",
+		"unitCost":           "unit_cost",
+		"extraConfig":        "extra_config",
+		"isPinned":           "is_pinned",
+		"sortOrder":          "sort_order",
+		"balance":            "balance",
+		"balanceUsed":        "balance_used",
+		"quota":              "quota",
+		"valueScore":         "value_score",
+		"lastBalanceRefresh": "last_balance_refresh",
 	}
 
 	for key, val := range updates {
@@ -367,7 +472,7 @@ func UpdateAccountFields(db *sqlx.DB, accountID int64, updates map[string]any) e
 	args = append(args, accountID)
 
 	query := fmt.Sprintf("UPDATE accounts SET %s WHERE id = ?", strings.Join(setClauses, ", "))
-	_, err := db.Exec(query, args...)
+	_, err := db.Exec(db.Rebind(query), args...)
 	return err
 }
 
@@ -421,9 +526,9 @@ func mapKeysToCamel(m map[string]any) map[string]any {
 func CreateEvent(db *sqlx.DB, eventType string, title string, message string, level string, relatedID int64, relatedType string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.Exec(
-		`INSERT INTO events (type, title, message, level, read, related_id, related_type, created_at)
-		 VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
-		eventType, title, message, level, relatedID, relatedType, now,
+		db.Rebind(`INSERT INTO events (type, title, message, level, read, related_id, related_type, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+		eventType, title, message, level, false, relatedID, relatedType, now,
 	)
 	return err
 }

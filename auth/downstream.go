@@ -23,13 +23,13 @@ import (
 // On failure (OK=false): StatusCode, Error, and Reason are populated.
 type DownstreamTokenAuthResult struct {
 	OK         bool
-	Source     string               // "managed" | "global" (when OK)
-	Token      string               // normalized token (when OK)
-	Key        *managedKeyView      // managed key view (when OK, source="managed")
+	Source     string                  // "managed" | "global" (when OK)
+	Token      string                  // normalized token (when OK)
+	Key        *managedKeyView         // managed key view (when OK, source="managed")
 	Policy     DownstreamRoutingPolicy // resolved policy (when OK)
-	StatusCode int                  // HTTP status (when !OK)
-	Error      string               // error message (when !OK)
-	Reason     string               // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"
+	StatusCode int                     // HTTP status (when !OK)
+	Error      string                  // error message (when !OK)
+	Reason     string                  // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"
 }
 
 // managedKeyView is an internal struct mirroring the downstream_api_keys row
@@ -44,10 +44,10 @@ type managedKeyView struct {
 	MaxRequests  *int64
 	UsedRequests int64
 	// Policy fields — parsed from JSON TEXT columns
-	SupportedModels       []string
-	AllowedRouteIDs       []int64
-	SiteWeightMultipliers map[int64]float64
-	ExcludedSiteIDs       []int64
+	SupportedModels        []string
+	AllowedRouteIDs        []int64
+	SiteWeightMultipliers  map[int64]float64
+	ExcludedSiteIDs        []int64
 	ExcludedCredentialRefs []ExcludedCredentialRef
 }
 
@@ -219,34 +219,45 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 // Usage consumption — atomic SQL increment (matches TS).
 // ---------------------------------------------------------------------------
 
-// consumeManagedKeyRequest atomically increments used_requests for a managed
-// key via SQL COALESCE to avoid lost updates under concurrency.
+// consumeManagedKeyRequest atomically reserves one request for a managed key.
+// It returns false when the key no longer exists or has reached max_requests.
 //
 // SQL:
-//   UPDATE downstream_api_keys
-//   SET used_requests = COALESCE(used_requests, 0) + 1,
-//       last_used_at = ?, updated_at = ?
-//   WHERE id = ?
-func consumeManagedKeyRequest(keyID int64) {
+//
+//	UPDATE downstream_api_keys
+//	SET used_requests = COALESCE(used_requests, 0) + 1,
+//	    last_used_at = ?, updated_at = ?
+//	WHERE id = ?
+//	  AND (max_requests IS NULL OR COALESCE(used_requests, 0) < max_requests)
+func consumeManagedKeyRequest(keyID int64) bool {
 	db := store.GetDB()
 	if db == nil {
 		slog.Warn("consumeManagedKeyRequest: database not initialized, skipping")
-		return
+		return false
 	}
 
 	nowISO := time.Now().UTC().Format(time.RFC3339)
-	_, err := db.Exec(
+	result, err := db.Exec(
 		`UPDATE downstream_api_keys
 		 SET used_requests = COALESCE(used_requests, 0) + 1,
 		     last_used_at = ?,
 		     updated_at = ?
-		 WHERE id = ?`,
+		 WHERE id = ?
+		   AND (max_requests IS NULL OR COALESCE(used_requests, 0) < max_requests)`,
 		nowISO, nowISO, keyID,
 	)
 	if err != nil {
 		slog.Warn("consumeManagedKeyRequest: failed to increment used_requests",
 			"keyID", keyID, "error", err)
+		return false
 	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		slog.Warn("consumeManagedKeyRequest: failed to read affected row count",
+			"keyID", keyID, "error", err)
+		return false
+	}
+	return rows > 0
 }
 
 // RecordManagedKeyCostUsage atomically increments used_cost for a managed key.

@@ -328,29 +328,30 @@ func TestExtractClientIP_RemoteAddr(t *testing.T) {
 	}
 }
 
-func TestExtractClientIP_XForwardedFor(t *testing.T) {
+func TestExtractClientIP_IgnoresXForwardedFor(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.Header.Set("X-Forwarded-For", "10.0.0.1")
 	req.RemoteAddr = "192.168.1.50:12345"
-	if got := extractClientIP(req); got != "10.0.0.1" {
-		t.Errorf("expected XFF value 10.0.0.1, got %q", got)
+	if got := extractClientIP(req); got != "192.168.1.50" {
+		t.Errorf("expected direct RemoteAddr 192.168.1.50, got %q", got)
 	}
 }
 
-func TestExtractClientIP_XForwardedForCommaSeparated(t *testing.T) {
-	// Proxy chain: multiple IPs, take the first one
+func TestExtractClientIP_IgnoresXForwardedForCommaSeparated(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.Header.Set("X-Forwarded-For", "10.0.0.1, 172.16.0.1, 192.168.1.1")
-	if got := extractClientIP(req); got != "10.0.0.1" {
-		t.Errorf("expected first IP 10.0.0.1, got %q", got)
+	req.RemoteAddr = "192.168.1.50:12345"
+	if got := extractClientIP(req); got != "192.168.1.50" {
+		t.Errorf("expected direct RemoteAddr 192.168.1.50, got %q", got)
 	}
 }
 
-func TestExtractClientIP_XForwardedForWithSpaces(t *testing.T) {
+func TestExtractClientIP_IgnoresXForwardedForWithSpaces(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.Header.Set("X-Forwarded-For", "  10.0.0.1 , 172.16.0.1")
-	if got := extractClientIP(req); got != "10.0.0.1" {
-		t.Errorf("expected trimmed IP 10.0.0.1, got %q", got)
+	req.RemoteAddr = "192.168.1.50:12345"
+	if got := extractClientIP(req); got != "192.168.1.50" {
+		t.Errorf("expected direct RemoteAddr 192.168.1.50, got %q", got)
 	}
 }
 
@@ -363,23 +364,22 @@ func TestExtractClientIP_XForwardedForEmpty(t *testing.T) {
 	}
 }
 
-func TestExtractClientIP_XForwardedForIPv4MappedIPv6(t *testing.T) {
+func TestExtractClientIP_IgnoresXForwardedForIPv4MappedIPv6(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
 	req.Header.Set("X-Forwarded-For", "::ffff:10.0.0.1")
-	if got := extractClientIP(req); got != "10.0.0.1" {
-		t.Errorf("expected normalized 10.0.0.1, got %q", got)
+	req.RemoteAddr = "192.168.1.50:12345"
+	if got := extractClientIP(req); got != "192.168.1.50" {
+		t.Errorf("expected direct RemoteAddr 192.168.1.50, got %q", got)
 	}
 }
 
-func TestExtractClientIP_XForwardedForMultiHeader(t *testing.T) {
-	// When X-Forwarded-For appears as multiple header lines (non-RFC but
-	// handled by TS via array iteration), iterate to find first non-empty.
+func TestExtractClientIP_IgnoresXForwardedForMultiHeader(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	// http.Request.Header.Add appends values; Get returns first, Values returns all
 	req.Header.Add("X-Forwarded-For", "")
 	req.Header.Add("X-Forwarded-For", "10.0.0.99")
-	if got := extractClientIP(req); got != "10.0.0.99" {
-		t.Errorf("expected 10.0.0.99 from second XFF header, got %q", got)
+	req.RemoteAddr = "192.168.1.50:12345"
+	if got := extractClientIP(req); got != "192.168.1.50" {
+		t.Errorf("expected direct RemoteAddr 192.168.1.50, got %q", got)
 	}
 }
 
@@ -591,13 +591,13 @@ func TestAdminAuth_IPAllowlistEmptySliceAllowsAll(t *testing.T) {
 	}
 }
 
-func TestAdminAuth_XForwardedForTakesPriority(t *testing.T) {
-	// X-Forwarded-For should be used instead of RemoteAddr
+func TestAdminAuth_IgnoresSpoofedXForwardedForForAllowlist(t *testing.T) {
+	// AdminAuth only trusts RemoteAddr. router.TrustedRealIP owns forwarded-header trust.
 	cfg := newTestConfig("my-secret-token", []string{"10.0.0.1"})
 	w := adminTestHelper(t, cfg, "GET", "/api/sites", "Bearer my-secret-token",
 		"192.168.1.1:12345", "10.0.0.1")
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 (XFF IP match), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 (spoofed XFF ignored), got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -634,7 +634,7 @@ func TestAdminAuth_IPv4MappedIPv6Normalization(t *testing.T) {
 	// ::ffff:10.0.0.1 should normalize to 10.0.0.1 and match CIDR 10.0.0.0/8
 	cfg := newTestConfig("my-secret-token", []string{"10.0.0.0/8"})
 	w := adminTestHelper(t, cfg, "GET", "/api/sites", "Bearer my-secret-token",
-		"", "::ffff:10.0.0.1")
+		"[::ffff:10.0.0.1]:12345", "")
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 (IPv4-mapped IPv6 normalization), got %d: %s", w.Code, w.Body.String())
 	}

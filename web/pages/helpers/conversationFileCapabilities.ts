@@ -2,7 +2,7 @@ import type { PlaygroundProtocol } from './modelTesterSession.js';
 import {
   buildConversationAcceptList,
   detectConversationFileKind,
-} from '../../../shared/conversationFileTypes.js';
+} from '../../shared/conversationFileTypes.js';
 
 export type ConversationFileTransportMode = 'native' | 'inline_only' | 'unsupported';
 

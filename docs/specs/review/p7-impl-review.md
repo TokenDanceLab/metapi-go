@@ -3,9 +3,9 @@
 **Date**: 2026-07-04
 **Review scope**: Cross-check Go implementation against TS reference and P7 spec for weight formula, Fibonacci backoff, and breaker state machine.
 **Sources**:
-- Spec: `D:/Code/TokenDance/metapi-go/docs/specs/p7-token-router.md`
-- TS: `D:/Code/TokenDance/metapi/src/server/services/tokenRouter.ts`
-- Go: `D:/Code/TokenDance/metapi-go/routing/*.go`
+- Spec: `<repo>/docs/specs/p7-token-router.md`
+- TS: `<metapi-ts>/src/server/services/tokenRouter.ts`
+- Go: `<repo>/routing/*.go`
 
 ---
 
@@ -74,7 +74,7 @@ Go `getStableFirstOrderedSiteLeaderIndices` (weights.go lines 411-424): Same. OK
 
 ### 1.5 CRITICAL DEFECT: Hardcoded Routing Weights
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/selector.go`, lines 673-717
+**File**: `<repo>/routing/selector.go`, lines 673-717
 
 The `weightedRandomSelect` and `stableFirstSelect` methods pass **hardcoded** routing weights:
 
@@ -239,7 +239,7 @@ Go `IsTransientSiteRuntimeFailure` (lines 287-310): Same exclusion logic, same f
 
 ### 3.9 MEDIUM DEFECT: Breaker Filter Per-Candidate Model Resolution
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/selector.go`, lines 277-278, 288, 345
+**File**: `<repo>/routing/selector.go`, lines 277-278, 288, 345
 
 In `selectFromMatch`, the breaker filter is called as:
 
@@ -268,7 +268,7 @@ In TS, `filterSiteRuntimeBrokenCandidatesByModel` accepts `string | ((candidate)
 
 ### 3.10 MEDIUM DEFECT: JSON Deserialization is Incomplete (Stub)
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/runtime_health.go`, lines 1357-1359
+**File**: `<repo>/routing/runtime_health.go`, lines 1357-1359
 
 ```go
 func readHealthState() *SiteRuntimeHealthState {
@@ -293,7 +293,7 @@ Additionally, `skipValue()` (line 1362-1369) breaks immediately without consumin
 
 ### 3.11 CRITICAL DEFECT: Stable-first Site Rotation Key Mismatch
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/selector.go`, lines 768-776 (in `finalizeDispatch`)
+**File**: `<repo>/routing/selector.go`, lines 768-776 (in `finalizeDispatch`)
 
 ```go
 // Go: always records under observationKey, conditionally under rotationKey
@@ -336,7 +336,7 @@ rememberStableFirstSiteSelectionForKey(targetKey, dispatchCandidate.Site.ID)
 
 ### 3.12 MEDIUM DEFECT: clearChannelFailureState Does Not Clear Runtime Health
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/router.go`, lines 744-763
+**File**: `<repo>/routing/router.go`, lines 744-763
 
 ```go
 runtimeHealthRows, _ := tr.db.LoadRuntimeHealthChannelRows(ctx, channelIDs)
@@ -362,7 +362,7 @@ The Go code loads the runtime health rows but **never clears them**. When a user
 
 ### 4.1 LOW: `getCandidateEligibilityReasonsExplain` Missing Token/OAuth/Downstream Checks
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/router.go`, lines 365-401
+**File**: `<repo>/routing/router.go`, lines 365-401
 
 The `getCandidateEligibilityReasonsExplain` function (used only for `ExplainSelection`) omits several eligibility checks present in the real `getCandidateEligibilityReasons` in `selector.go`:
 - Missing `IsExplicitTokenChannel` account status differentiation
@@ -374,7 +374,7 @@ The `getCandidateEligibilityReasonsExplain` function (used only for `ExplainSele
 
 ### 4.2 LOW: `buildVisibleEnabledRoutes` Incomplete for Groups
 
-**File**: `D:/Code/TokenDance/metapi-go/routing/router.go`, lines 178-182
+**File**: `<repo>/routing/router.go`, lines 178-182
 
 ```go
 if IsExplicitGroupRoute(cr.route.RouteMode) {

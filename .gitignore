@@ -1,6 +1,7 @@
 # Frontend source dependencies (not needed for Go build)
 web/node_modules/
-web/shared/
+web/build/
+web/docs/.vitepress/dist/
 
 # Binaries
 /bin/

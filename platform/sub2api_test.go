@@ -2,6 +2,9 @@ package platform
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,6 +37,44 @@ func TestSub2ApiAdapter_Detect_URLKeyword(t *testing.T) {
 		if ok != tt.matches {
 			t.Errorf("Detect(%q) = %v, want %v", tt.url, ok, tt.matches)
 		}
+	}
+}
+
+func TestSub2ApiAdapter_Detect_ErrorEnvelope(t *testing.T) {
+	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/auth/me" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":"UNAUTHORIZED","message":"authorization header is required"}`))
+	}))
+	defer server.Close()
+
+	ok, err := s.Detect(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+	if !ok {
+		t.Fatal("Detect should match a Sub2API authorization error envelope")
+	}
+}
+
+func TestSub2ApiAdapter_Detect_RejectsOversizedErrorEnvelope(t *testing.T) {
+	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":"UNAUTHORIZED","message":"` + strings.Repeat("x", platformJSONResponseBodyLimit) + `"}`))
+	}))
+	defer server.Close()
+
+	ok, err := s.Detect(context.Background(), server.URL)
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+	if ok {
+		t.Fatal("Detect should reject oversized Sub2API error envelopes")
 	}
 }
 

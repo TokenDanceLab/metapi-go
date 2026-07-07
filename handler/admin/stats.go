@@ -55,8 +55,8 @@ func (h *statsHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	h.db.Get(&accountCount, "SELECT COUNT(*) FROM accounts")
 
 	result := map[string]any{
-		"generatedAt": generatedAt,
-		"siteCount":   siteCount,
+		"generatedAt":  generatedAt,
+		"siteCount":    siteCount,
 		"accountCount": accountCount,
 	}
 
@@ -125,10 +125,10 @@ func (h *statsHandler) proxyLogs(w http.ResponseWriter, r *http.Request) {
 	metaPayload := map[string]any{
 		"clientOptions": []any{},
 		"summary": map[string]any{
-			"totalCount":    0,
-			"successCount":  0,
-			"failedCount":   0,
-			"totalCost":     0.0,
+			"totalCount":     0,
+			"successCount":   0,
+			"failedCount":    0,
+			"totalCost":      0.0,
 			"totalTokensAll": 0,
 		},
 		"sites": []any{},
@@ -148,7 +148,7 @@ func (h *statsHandler) proxyLogs(w http.ResponseWriter, r *http.Request) {
 
 		var total int
 		countQuery := "SELECT COUNT(*) FROM proxy_logs pl LEFT JOIN accounts a ON pl.account_id = a.id LEFT JOIN sites s ON a.site_id = s.id" + where
-		h.db.Get(&total, countQuery, args...)
+		h.db.Get(&total, rebindAdminQuery(h.db, countQuery), args...)
 		queryPayload["total"] = total
 	}
 
@@ -165,18 +165,18 @@ func (h *statsHandler) proxyLogs(w http.ResponseWriter, r *http.Request) {
 		copy(metaArgs, args)
 
 		var summary struct {
-			TotalCount    int     `db:"total_count"`
-			SuccessCount  int     `db:"success_count"`
-			FailedCount   int     `db:"failed_count"`
-			TotalCost     float64 `db:"total_cost"`
-			TotalTokensAll int64  `db:"total_tokens_all"`
+			TotalCount     int     `db:"total_count"`
+			SuccessCount   int     `db:"success_count"`
+			FailedCount    int     `db:"failed_count"`
+			TotalCost      float64 `db:"total_cost"`
+			TotalTokensAll int64   `db:"total_tokens_all"`
 		}
-		h.db.Get(&summary, summaryQuery, metaArgs...)
+		h.db.Get(&summary, rebindAdminQuery(h.db, summaryQuery), metaArgs...)
 		metaPayload["summary"] = map[string]any{
-			"totalCount":    summary.TotalCount,
-			"successCount":  summary.SuccessCount,
-			"failedCount":   summary.FailedCount,
-			"totalCost":     roundMicro(summary.TotalCost),
+			"totalCount":     summary.TotalCount,
+			"successCount":   summary.SuccessCount,
+			"failedCount":    summary.FailedCount,
+			"totalCost":      roundMicro(summary.TotalCost),
 			"totalTokensAll": summary.TotalTokensAll,
 		}
 
@@ -327,10 +327,10 @@ func (h *statsHandler) marketplace(w http.ResponseWriter, r *http.Request) {
 func (h *statsHandler) tokenCandidates(w http.ResponseWriter, r *http.Request) {
 	// Stub: token candidates not yet implemented
 	writeJSON(w, http.StatusOK, map[string]any{
-		"models":                    map[string]any{},
-		"modelsWithoutToken":        map[string]any{},
-		"modelsMissingTokenGroups":  map[string]any{},
-		"endpointTypesByModel":      map[string]any{},
+		"models":                   map[string]any{},
+		"modelsWithoutToken":       map[string]any{},
+		"modelsMissingTokenGroups": map[string]any{},
+		"endpointTypesByModel":     map[string]any{},
 	})
 }
 
@@ -370,7 +370,7 @@ func (h *statsHandler) modelProbe(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryRow(db *sqlx.DB, query string, args ...any) map[string]any {
-	rows, err := db.Queryx(query, args...)
+	rows, err := db.Queryx(rebindAdminQuery(db, query), args...)
 	if err != nil {
 		return nil
 	}

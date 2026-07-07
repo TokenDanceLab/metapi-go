@@ -30,6 +30,12 @@ Authorization: Bearer <AUTH_TOKEN>
 
 HTTP status codes: 200 (OK), 201 (Created), 202 (Accepted), 400 (Bad Request), 401 (Unauthorized), 404 (Not Found), 500 (Internal Server Error).
 
+## Request Body Rules
+
+Request bodies are capped at 20 MiB by the HTTP router. Admin JSON handlers also apply the same cap when decoding, so direct route handlers still read bounded input.
+
+Admin JSON requests must contain one JSON value. Duplicate object keys and trailing JSON values are rejected with `400`.
+
 ---
 
 ## Stats & Dashboard
@@ -330,19 +336,19 @@ Test system proxy connectivity.
 
 ### GET /api/settings/database/runtime
 
-Get current database configuration (dialect, connection info).
+Get database runtime state. `active` reports the database used by the current process, with PostgreSQL credentials masked. `saved` reports a restart-pending override from settings when one exists.
 
 ### PUT /api/settings/database/runtime
 
-Update database configuration.
+Save database configuration for the next restart. The response keeps `active` separate from `saved` so operators can see whether the process has switched yet.
 
 ### POST /api/settings/database/test-connection
 
-Test a database connection string.
+Test a SQLite or PostgreSQL connection string. Returns `400` when the dialect is unsupported or the connection cannot be opened. Error messages mask credentials.
 
 ### POST /api/settings/database/migrate
 
-Trigger cross-dialect data migration.
+Returns `501`. Runtime database migration is not wired into the admin API yet. Use `metapi-migrate` for SQLite to PostgreSQL migration.
 
 ---
 
@@ -354,23 +360,25 @@ Export all settings and data as JSON.
 
 ### POST /api/settings/backup/import
 
-Import settings and data from JSON.
+Import settings and data from JSON. Runtime-local settings such as `auth_token`, database connection settings, and WebDAV sync state are skipped.
 
 ### GET /api/settings/backup/webdav
 
-Get WebDAV backup configuration.
+Get WebDAV backup configuration and last sync state. Passwords are never returned; use `hasPassword` and `passwordMasked` to show saved credential status.
+
+The returned `state.lastSyncAt` is the last successful WebDAV import/export time. `state.lastAttemptAt` is the most recent attempt time, including failed attempts. `state.lastError` is set only when the latest attempt failed.
 
 ### PUT /api/settings/backup/webdav
 
-Update WebDAV backup configuration.
+Update WebDAV backup configuration. `fileUrl` must be an `http` or `https` URL without embedded userinfo. `exportType` supports `all`, `accounts`, or `preferences`.
 
 ### POST /api/settings/backup/webdav/export
 
-Trigger WebDAV backup export.
+Export a restorable backup payload to `fileUrl` with HTTP `PUT`. The payload uses the same `tables` structure as `GET /api/settings/backup/export`.
 
 ### POST /api/settings/backup/webdav/import
 
-Trigger WebDAV backup import.
+Download a backup payload from `fileUrl` with HTTP `GET` and import its `tables`. Runtime-local settings are skipped. The response includes imported row counts and updated sync state. The maximum downloaded backup size is 64 MiB.
 
 ---
 
@@ -494,8 +502,20 @@ Update authentication settings.
 
 ### GET /health
 
-Health check (no auth required). Returns `{"status":"ok"}`.
+Liveness check (no auth required). It does not touch dependencies and returns `{"status":"ok"}` when the HTTP process is alive.
+
+### GET /ready
+
+Readiness check (no auth required). It pings the active database and returns `200 {"status":"ok","database":"ok"}` when ready, `503 {"status":"degraded","database":"error"}` when the database is unavailable, or `503 {"status":"draining","database":"ok"}` while graceful shutdown is in progress.
 
 ### GET /api/desktop/health
 
 Desktop health check. Returns `{"status":"ok"}`.
+
+## Browser CORS
+
+Admin routes under `/api/*` are same-origin by default. Set `ADMIN_CORS_ALLOWED_ORIGINS` to a comma-separated list of exact trusted `http(s)` browser origins only when the admin UI is hosted separately. Wildcards, paths, query strings, and fragments are rejected. Proxy routes and health/metrics endpoints retain wildcard CORS.
+
+## Trusted Client IPs
+
+Forwarded client IP headers are ignored by default. Set `TRUSTED_PROXY_CIDRS` only for reverse-proxy source ranges you control; admin IP allowlists and rate limits otherwise use the direct peer IP.

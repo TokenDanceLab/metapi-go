@@ -80,7 +80,7 @@
 ### C10. AGENTS.md contains non-portable Windows absolute paths (HIGH)
 
 - **File**: `AGENTS.md:8,70,71,72`
-- **Current text**: `D:\Code\TokenDance\metapi\src\server\`, `D:\Code\TokenDance\tokendance-gateway`, `C:\Users\Ding\.claude\skills\metapi\SKILL.md`
+- **Current text**: `<metapi-ts>\src\server\`, `<tokendance-gateway>`, `<agent-skill-dir>\metapi\SKILL.md`
 - **Problem**: These are absolute Windows paths specific to one developer's machine. They will be dead references for anyone else cloning this repository. This breaks the "Related Repos" and "Golden Rules" sections.
 - **Fix**: Replace with relative paths from the repo root (e.g., `../metapi/src/server/`) or GitHub URLs.
 

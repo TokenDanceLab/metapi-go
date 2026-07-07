@@ -6,6 +6,7 @@ import (
 
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/service/balance"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // RouteRefresher rebuilds token routes after balance refresh.
@@ -79,14 +80,19 @@ func (s *BalanceScheduler) UpdateCron(cronExpr string) error {
 
 func (s *BalanceScheduler) runJob() {
 	slog.Info("balance: refreshing all balances")
-	db := getSqlxDB()
-	if db == nil {
+	dbw := store.GetDB()
+	if dbw == nil {
 		slog.Error("balance: database not available")
 		return
 	}
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runJobLocked(dbw)
+	})
+}
 
+func (s *BalanceScheduler) runJobLocked(dbw *store.DB) {
 	// Step 1: Refresh all balances
-	results := balance.RefreshAllBalances(s.cfg, db)
+	results := balance.RefreshAllBalances(s.cfg, dbw.DB)
 	slog.Info("balance: refresh complete", "accounts", len(results))
 
 	// Step 2: Rebuild routes (strict ordering)

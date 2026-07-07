@@ -40,11 +40,11 @@ type CodexHeaderDefaults struct {
 
 // RoutingWeights holds the weight factors for the routing algorithm.
 type RoutingWeights struct {
-	BaseWeightFactor  float64
-	ValueScoreFactor  float64
-	CostWeight        float64
-	BalanceWeight     float64
-	UsageWeight       float64
+	BaseWeightFactor float64
+	ValueScoreFactor float64
+	CostWeight       float64
+	BalanceWeight    float64
+	UsageWeight      float64
 }
 
 // Config holds ALL configuration fields for the MetAPI server.
@@ -52,11 +52,11 @@ type RoutingWeights struct {
 // as documented in docs/specs/p0-skeleton.md section 3.
 type Config struct {
 	// Auth (5 fields)
-	AuthToken              string
-	ProxyToken             string
-	DeployHelperToken      string
+	AuthToken               string
+	ProxyToken              string
+	DeployHelperToken       string
 	AccountCredentialSecret string
-	CodexClientId          string
+	CodexClientId           string
 
 	// OAuth Clients (4 fields)
 	ClaudeClientId        string
@@ -71,14 +71,15 @@ type Config struct {
 	DbType     string
 	DbUrl      string
 	DbSsl      bool
+	DbSslMode  string
 	Tz         string
 
 	// Cron (5 fields)
-	CheckinCron         string
-	CheckinScheduleMode string
+	CheckinCron          string
+	CheckinScheduleMode  string
 	CheckinIntervalHours int
-	BalanceRefreshCron  string
-	LogCleanupCron      string
+	BalanceRefreshCron   string
+	LogCleanupCron       string
 
 	// Log Cleanup (4 fields)
 	LogCleanupUsageLogsEnabled   bool
@@ -99,11 +100,11 @@ type Config struct {
 	ServerChanEnabled bool
 
 	// Notify: Telegram (6 fields)
-	TelegramEnabled        bool
-	TelegramApiBaseUrl     string
-	TelegramBotToken       string
-	TelegramChatId         string
-	TelegramUseSystemProxy bool
+	TelegramEnabled         bool
+	TelegramApiBaseUrl      string
+	TelegramBotToken        string
+	TelegramChatId          string
+	TelegramUseSystemProxy  bool
 	TelegramMessageThreadId string
 
 	// Notify: SMTP (8 fields)
@@ -120,22 +121,24 @@ type Config struct {
 	NotifyCooldownSec int
 	SystemProxyUrl    string
 
-	// Admin (1 field)
-	AdminIpAllowlist []string
+	// Admin (3 fields)
+	AdminIpAllowlist        []string
+	AdminCorsAllowedOrigins []string
+	TrustedProxyCidrs       []string
 
 	// Proxy: Core (2 fields)
-	RequestBodyLimit           int
-	RoutingFallbackUnitCost    float64
-	ProxyFirstByteTimeoutSec   int
+	RequestBodyLimit         int
+	RoutingFallbackUnitCost  float64
+	ProxyFirstByteTimeoutSec int
 
 	// Proxy: Token Router (2 fields)
 	TokenRouterFailureCooldownMaxSec int
 	TokenRouterCacheTtlMs            int
 
 	// Proxy: Channel (3 fields)
-	ProxyMaxChannelAttempts      int
-	ProxyStickySessionEnabled    bool
-	ProxyStickySessionTtlMs      int
+	ProxyMaxChannelAttempts   int
+	ProxyStickySessionEnabled bool
+	ProxyStickySessionTtlMs   int
 
 	// Proxy: Session (4 fields)
 	ProxySessionChannelConcurrencyLimit int
@@ -153,37 +156,37 @@ type Config struct {
 	GlobalAllowedModels                        []string
 
 	// Proxy: Debug (9 fields)
-	ProxyDebugTraceEnabled      bool
-	ProxyDebugCaptureHeaders    bool
-	ProxyDebugCaptureBodies     bool
+	ProxyDebugTraceEnabled        bool
+	ProxyDebugCaptureHeaders      bool
+	ProxyDebugCaptureBodies       bool
 	ProxyDebugCaptureStreamChunks bool
-	ProxyDebugTargetSessionId   string
-	ProxyDebugTargetClientKind  string
-	ProxyDebugTargetModel       string
-	ProxyDebugRetentionHours    int
-	ProxyDebugMaxBodyBytes      int
+	ProxyDebugTargetSessionId     string
+	ProxyDebugTargetClientKind    string
+	ProxyDebugTargetModel         string
+	ProxyDebugRetentionHours      int
+	ProxyDebugMaxBodyBytes        int
 
 	// Codex-specific (3 fields)
 	CodexResponsesWebsocketBeta string
 	CodexHeaderDefaults         CodexHeaderDefaults
 
 	// Model Probe (4 fields)
-	ModelAvailabilityProbeEnabled      bool
-	ModelAvailabilityProbeIntervalMs   int
-	ModelAvailabilityProbeTimeoutMs    int
-	ModelAvailabilityProbeConcurrency  int
+	ModelAvailabilityProbeEnabled     bool
+	ModelAvailabilityProbeIntervalMs  int
+	ModelAvailabilityProbeTimeoutMs   int
+	ModelAvailabilityProbeConcurrency int
 
 	// Retention (4 fields)
-	ProxyLogRetentionDays                 int
-	ProxyLogRetentionPruneIntervalMinutes int
-	ProxyFileRetentionDays                int
+	ProxyLogRetentionDays                  int
+	ProxyLogRetentionPruneIntervalMinutes  int
+	ProxyFileRetentionDays                 int
 	ProxyFileRetentionPruneIntervalMinutes int
 
 	// Routing Weights (5 fields)
 	RoutingWeights RoutingWeights
 
 	// Payload Rules (2 JSON fields)
-	PayloadRules          any
+	PayloadRules           any
 	OpenAiServiceTierRules any
 }
 
@@ -259,6 +262,42 @@ func parseDbType(value string) string {
 	default:
 		return "sqlite"
 	}
+}
+
+func inferDbType(value string, dbURL string) string {
+	if strings.TrimSpace(value) != "" {
+		return parseDbType(value)
+	}
+	normalizedURL := strings.ToLower(strings.TrimSpace(dbURL))
+	if strings.HasPrefix(normalizedURL, "postgres://") || strings.HasPrefix(normalizedURL, "postgresql://") {
+		return "postgres"
+	}
+	return "sqlite"
+}
+
+func normalizeDbSslMode(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func validDbSslMode(value string) bool {
+	switch normalizeDbSslMode(value) {
+	case "", "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+		return true
+	default:
+		return false
+	}
+}
+
+// PostgresSSLMode returns the explicit DB_SSLMODE setting, or the legacy
+// DB_SSL=true behavior mapped to sslmode=require.
+func (c *Config) PostgresSSLMode() string {
+	if mode := normalizeDbSslMode(c.DbSslMode); mode != "" {
+		return mode
+	}
+	if c.DbSsl {
+		return "require"
+	}
+	return ""
 }
 
 // §1.7 normalizeTokenRouterFailureCooldownMaxSec:
@@ -355,9 +394,10 @@ func Load(env map[string]string) *Config {
 	cfg.Port = int(math.Trunc(parseNumber(get("PORT"), DefaultPort)))
 	cfg.ListenHost = parseListenHost(env)
 	cfg.DataDir = firstNonEmpty(get("DATA_DIR"), DefaultDataDir)
-	cfg.DbType = parseDbType(get("DB_TYPE"))
-	cfg.DbUrl = strings.TrimSpace(get("DB_URL"))
+	cfg.DbUrl = strings.TrimSpace(firstNonEmpty(get("DB_URL"), get("DATABASE_URL")))
+	cfg.DbType = inferDbType(get("DB_TYPE"), cfg.DbUrl)
 	cfg.DbSsl = parseBoolean(get("DB_SSL"), false)
+	cfg.DbSslMode = normalizeDbSslMode(get("DB_SSLMODE"))
 	cfg.Tz = get("TZ")
 
 	// ---- §3.4 Cron ----
@@ -417,6 +457,8 @@ func Load(env map[string]string) *Config {
 
 	// ---- §3.12 Admin ----
 	cfg.AdminIpAllowlist = parseCsvList(get("ADMIN_IP_ALLOWLIST"))
+	cfg.AdminCorsAllowedOrigins = parseCsvList(get("ADMIN_CORS_ALLOWED_ORIGINS"))
+	cfg.TrustedProxyCidrs = parseCsvList(get("TRUSTED_PROXY_CIDRS"))
 
 	// ---- §3.13 Proxy: Core ----
 	cfg.RequestBodyLimit = DefaultRequestBodyLimit
@@ -490,11 +532,11 @@ func Load(env map[string]string) *Config {
 
 	// ---- §3.22 Routing Weights ----
 	cfg.RoutingWeights = RoutingWeights{
-		BaseWeightFactor:  parseNumber(get("BASE_WEIGHT_FACTOR"), 0.5),
-		ValueScoreFactor:  parseNumber(get("VALUE_SCORE_FACTOR"), 0.5),
-		CostWeight:        parseNumber(get("COST_WEIGHT"), 0.4),
-		BalanceWeight:     parseNumber(get("BALANCE_WEIGHT"), 0.3),
-		UsageWeight:       parseNumber(get("USAGE_WEIGHT"), 0.3),
+		BaseWeightFactor: parseNumber(get("BASE_WEIGHT_FACTOR"), 0.5),
+		ValueScoreFactor: parseNumber(get("VALUE_SCORE_FACTOR"), 0.5),
+		CostWeight:       parseNumber(get("COST_WEIGHT"), 0.4),
+		BalanceWeight:    parseNumber(get("BALANCE_WEIGHT"), 0.3),
+		UsageWeight:      parseNumber(get("USAGE_WEIGHT"), 0.3),
 	}
 
 	// ---- §3.23 Payload Rules + Service Tier ----

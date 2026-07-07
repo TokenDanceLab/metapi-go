@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,11 +26,11 @@ const (
 // site_day_usage, site_hour_usage, and model_day_usage tables.
 // Uses a database lease for multi-instance safety.
 type UsageAggregationScheduler struct {
-	cfg            *config.Config
-	ticker         *time.Ticker
-	stopCh         chan struct{}
-	running        bool
-	mu             sync.Mutex
+	cfg                *config.Config
+	ticker             *time.Ticker
+	stopCh             chan struct{}
+	running            bool
+	mu                 sync.Mutex
 	projectionInFlight bool
 }
 
@@ -220,11 +221,14 @@ type projectionCheckpoint struct {
 
 // projectionRow is a lightweight projection row from proxy_logs.
 type projectionRow struct {
-	id     int64
-	status *string
-	tokens *int64
-	cost   *float64
-	siteID *int64
+	id        int64
+	status    *string
+	tokens    *int64
+	cost      *float64
+	siteID    *int64
+	model     *string
+	latencyMs *int64
+	createdAt *string
 }
 
 func (s *UsageAggregationScheduler) buildLeaseOwner() string {
@@ -332,7 +336,8 @@ func (s *UsageAggregationScheduler) readCheckpoint(dbw *store.DB) projectionChec
 
 func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, limit int) ([]projectionRow, error) {
 	rows, err := dbw.Query(`
-		SELECT pl.id, pl.status, pl.total_tokens, pl.estimated_cost, s.id as site_id
+		SELECT pl.id, pl.status, pl.total_tokens, pl.estimated_cost, s.id as site_id,
+		       pl.model_actual, pl.latency_ms, pl.created_at
 		FROM proxy_logs pl
 		LEFT JOIN accounts a ON pl.account_id = a.id
 		LEFT JOIN sites s ON a.site_id = s.id
@@ -348,10 +353,13 @@ func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, lim
 	var result []projectionRow
 	for rows.Next() {
 		var r projectionRow
-		if err := rows.Scan(&r.id, &r.status, &r.tokens, &r.cost, &r.siteID); err != nil {
-			continue
+		if err := rows.Scan(&r.id, &r.status, &r.tokens, &r.cost, &r.siteID, &r.model, &r.latencyMs, &r.createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan projection row: %w", err)
 		}
 		result = append(result, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate projection rows: %w", err)
 	}
 	return result, nil
 }
@@ -376,15 +384,19 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 		if r.siteID == nil {
 			continue
 		}
-		// Simple aggregation - in full impl use localTimeService
-		day := time.Now().UTC().Format("2006-01-02")
-		hour := time.Now().UTC().Format("2006-01-02 15:04:05")
+		logTime := projectionTimestamp(r.createdAt)
+		day := logTime.Format("2006-01-02")
+		hour := logTime.Truncate(time.Hour).Format(time.RFC3339)
+		model := "unknown"
+		if r.model != nil && strings.TrimSpace(*r.model) != "" {
+			model = strings.TrimSpace(*r.model)
+		}
 
 		d := delta{
 			siteID: *r.siteID,
 			day:    day,
 			hour:   hour,
-			model:  "unknown",
+			model:  model,
 			calls:  1,
 		}
 		if r.status != nil && *r.status == "success" {
@@ -398,11 +410,14 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 		if r.cost != nil {
 			d.cost = *r.cost
 		}
+		if r.latencyMs != nil && *r.latencyMs > 0 {
+			d.latencyMs = *r.latencyMs
+		}
 		deltas = append(deltas, d)
 	}
 
 	// Apply to usage tables within a transaction for atomicity
-	tx, err := dbw.Begin()
+	tx, err := dbw.Beginx()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -411,43 +426,92 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Build dialect-aware INSERT queries once before loop.
-	var siteDaySQL, siteHourSQL string
-	switch dbw.Dialect {
-	case store.DialectPostgres:
-		siteDaySQL = `INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (local_day, site_id) DO NOTHING`
-		siteHourSQL = `INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT (bucket_start_utc, site_id) DO NOTHING`
-	default: // sqlite
-		siteDaySQL = `INSERT OR IGNORE INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		siteHourSQL = `INSERT OR IGNORE INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	}
+	siteDaySQL := `INSERT INTO site_day_usage (local_day, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (local_day, site_id) DO UPDATE SET
+			total_calls = site_day_usage.total_calls + excluded.total_calls,
+			success_calls = site_day_usage.success_calls + excluded.success_calls,
+			failed_calls = site_day_usage.failed_calls + excluded.failed_calls,
+			total_tokens = site_day_usage.total_tokens + excluded.total_tokens,
+			total_summary_spend = site_day_usage.total_summary_spend + excluded.total_summary_spend,
+			total_site_spend = site_day_usage.total_site_spend + excluded.total_site_spend,
+			total_latency_ms = site_day_usage.total_latency_ms + excluded.total_latency_ms,
+			latency_count = site_day_usage.latency_count + excluded.latency_count,
+			updated_at = excluded.updated_at`
+	siteHourSQL := `INSERT INTO site_hour_usage (bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (bucket_start_utc, site_id) DO UPDATE SET
+			total_calls = site_hour_usage.total_calls + excluded.total_calls,
+			success_calls = site_hour_usage.success_calls + excluded.success_calls,
+			failed_calls = site_hour_usage.failed_calls + excluded.failed_calls,
+			total_tokens = site_hour_usage.total_tokens + excluded.total_tokens,
+			total_summary_spend = site_hour_usage.total_summary_spend + excluded.total_summary_spend,
+			total_site_spend = site_hour_usage.total_site_spend + excluded.total_site_spend,
+			total_latency_ms = site_hour_usage.total_latency_ms + excluded.total_latency_ms,
+			latency_count = site_hour_usage.latency_count + excluded.latency_count,
+			updated_at = excluded.updated_at`
+	modelDaySQL := `INSERT INTO model_day_usage (local_day, site_id, model, total_calls, success_calls, failed_calls, total_tokens, total_spend, total_latency_ms, latency_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (local_day, site_id, model) DO UPDATE SET
+			total_calls = model_day_usage.total_calls + excluded.total_calls,
+			success_calls = model_day_usage.success_calls + excluded.success_calls,
+			failed_calls = model_day_usage.failed_calls + excluded.failed_calls,
+			total_tokens = model_day_usage.total_tokens + excluded.total_tokens,
+			total_spend = model_day_usage.total_spend + excluded.total_spend,
+			total_latency_ms = model_day_usage.total_latency_ms + excluded.total_latency_ms,
+			latency_count = model_day_usage.latency_count + excluded.latency_count,
+			updated_at = excluded.updated_at`
 
 	for _, d := range deltas {
+		latencyCount := 0
+		if d.latencyMs > 0 {
+			latencyCount = 1
+		}
+
 		// site_day_usage upsert
-		tx.Exec(siteDaySQL,
-			d.day, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
+		if _, err := tx.Exec(tx.Rebind(siteDaySQL),
+			d.day, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			return fmt.Errorf("failed to upsert site_day_usage: %w", err)
+		}
 
 		// site_hour_usage upsert
-		tx.Exec(siteHourSQL,
-			d.hour, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, 0, now, now)
+		if _, err := tx.Exec(tx.Rebind(siteHourSQL),
+			d.hour, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			return fmt.Errorf("failed to upsert site_hour_usage: %w", err)
+		}
+
+		// model_day_usage upsert
+		if _, err := tx.Exec(tx.Rebind(modelDaySQL),
+			d.day, d.siteID, d.model, d.calls, d.successes, d.failures, d.tokens, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			return fmt.Errorf("failed to upsert model_day_usage: %w", err)
+		}
 	}
 
 	// Write checkpoint
 	if len(rows) > 0 {
 		lastID := rows[len(rows)-1].id
 		lastCreatedAt := time.Now().UTC().Format(time.RFC3339)
-		tx.Exec(`UPDATE analytics_projection_checkpoints
+		if _, err := tx.Exec(tx.Rebind(`UPDATE analytics_projection_checkpoints
 			SET last_proxy_log_id = ?, watermark_created_at = ?, last_projected_at = ?, last_successful_at = ?, updated_at = ?
-			WHERE projector_key = ?`,
-			lastID, lastCreatedAt, now, now, now, usageProjectorKey)
+			WHERE projector_key = ?`),
+			lastID, lastCreatedAt, now, now, now, usageProjectorKey); err != nil {
+			return fmt.Errorf("failed to update projection checkpoint: %w", err)
+		}
 	}
 
 	return tx.Commit()
+}
+
+func projectionTimestamp(raw *string) time.Time {
+	if raw != nil {
+		value := strings.TrimSpace(*raw)
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05"} {
+			if parsed, err := time.Parse(layout, value); err == nil {
+				return parsed.UTC()
+			}
+		}
+	}
+	return time.Now().UTC()
 }
 
 func (s *UsageAggregationScheduler) applyRecompute(dbw *store.DB, cp projectionCheckpoint) (projectionCheckpoint, error) {
