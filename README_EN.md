@@ -13,7 +13,7 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Single binary, no No
 
 [![CI](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.26.4-00ADD8?logo=go)](https://go.dev/)
-[![Docker](https://img.shields.io/badge/ghcr-v0.6.0-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
+[![Docker](https://img.shields.io/badge/ghcr-v0.6.1-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>
@@ -50,7 +50,7 @@ Open `http://localhost:4000`.
 
 ```bash
 curl http://localhost:4000/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-token" \
+  -H "Authorization: Bearer proxy-token" \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hello"}]}'
 ```
 

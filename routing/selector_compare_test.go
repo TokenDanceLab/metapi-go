@@ -62,6 +62,7 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 	sb.WriteString("# Format: channelID,siteID,accountID,probability\n")
 
 	// Single deterministic run for detailed breakdown
+	clearAllStableFirstCaches()
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), routingWeights,
 		nil, nil, 0, WeightedMode, "", nil, 1.0,
