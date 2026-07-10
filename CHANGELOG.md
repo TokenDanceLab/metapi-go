@@ -5,11 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
-## [v0.6.4] — 2026-07-07
+## [v0.6.5] — 2026-07-10
+
+### Fixed
+- 修复 Content-Security-Policy 缺少 `frame-src` 导致 `check.linux.do` iframe 被拦截。
+
+## [v0.6.4] — 2026-07-10
 
 ### Fixed
 - 修复 Content-Security-Policy 过紧导致 dicebear 头像图片和 Cloudflare Insights 脚本被浏览器拦截。
-- 新增 `img-src 'self' https://api.dicebear.com` 和 `connect-src 'self'` 指令。
+- 新增 `img-src 'self' https://api.dicebear.com`、`connect-src 'self'` 和 `script-src https://static.cloudflareinsights.com` 指令。
 
 ## [v0.6.3] — 2026-07-07
 
