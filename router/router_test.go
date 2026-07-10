@@ -57,7 +57,7 @@ func assertSecurityHeaders(t *testing.T, rec *httptest.ResponseRecorder) {
 		"X-Frame-Options":         "DENY",
 		"Referrer-Policy":         "strict-origin-when-cross-origin",
 		"Permissions-Policy":      "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
-		"Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
+		"Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https://api.dicebear.com; connect-src 'self'; frame-ancestors 'none'",
 	}
 	for header, want := range expected {
 		if got := rec.Header().Get(header); got != want {
