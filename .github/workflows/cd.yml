@@ -116,8 +116,8 @@ jobs:
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=metapi-go
+          cache-to: type=gha,mode=max,scope=metapi-go
           platforms: linux/amd64
           load: true
       - name: Smoke Docker image
@@ -157,8 +157,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=metapi-go
+          cache-to: type=gha,mode=max,scope=metapi-go
           platforms: linux/amd64
           provenance: mode=max
           sbom: true
