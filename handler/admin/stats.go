@@ -23,6 +23,9 @@ func RegisterStatsRoutes(r chi.Router, db *sqlx.DB) {
 	r.Get("/api/stats/site-distribution", handler.siteDistribution)
 	r.Get("/api/stats/site-trend", handler.siteTrend)
 	r.Get("/api/stats/model-by-site", handler.modelBySite)
+	// Usage density heatmap + slow-request ranking (learn #121).
+	r.Get("/api/stats/usage-heatmap", handler.usageHeatmap)
+	r.Get("/api/stats/slow-requests", handler.slowRequests)
 	// Cross-site effective model price comparison (admin).
 	// Both paths are registered for discoverability; they share one handler.
 	r.Get("/api/stats/model-prices", handler.modelPriceCompare)
@@ -513,6 +516,202 @@ func (h *statsHandler) modelBySite(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+}
+
+// usageHeatmapCellLimit caps density rows returned to admin clients.
+// 31d * 24h * ~50 keys is more than enough for a dense operator view.
+const usageHeatmapCellLimit = 2000
+
+// ---- Usage Heatmap ----
+// GET /api/stats/usage-heatmap?days=7&dimension=site|model
+//
+// Returns bounded hour-bucket density cells for admin analytics (#121).
+// Site dimension prefers projected site_hour_usage; model dimension aggregates
+// proxy_logs with a hard LIMIT (no unbounded scans, no chat content).
+func (h *statsHandler) usageHeatmap(w http.ResponseWriter, r *http.Request) {
+	days := clampInt(getQueryInt(r, "days", 7), 1, 31)
+	dimension := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("dimension")))
+	if dimension != "model" {
+		dimension = "site"
+	}
+
+	since := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)
+	source := "proxy_logs"
+	var cells []map[string]any
+
+	if dimension == "site" {
+		// Prefer projected hour aggregates (cheap, already limited by projector).
+		rows := queryRows(h.db, `
+			SELECT
+				u.bucket_start_utc AS bucket,
+				CAST(u.site_id AS TEXT) AS key,
+				COALESCE(s.name, '') AS label,
+				COALESCE(u.total_calls, 0) AS calls,
+				COALESCE(u.total_tokens, 0) AS tokens,
+				COALESCE(u.total_summary_spend, 0) AS spend
+			FROM site_hour_usage u
+			LEFT JOIN sites s ON s.id = u.site_id
+			WHERE u.bucket_start_utc >= ?
+			ORDER BY u.bucket_start_utc ASC, u.total_calls DESC
+			LIMIT ?
+		`, since, usageHeatmapCellLimit)
+		if len(rows) > 0 {
+			source = "site_hour_usage"
+			cells = makeUsageHeatmapCells(rows)
+		} else {
+			// Fallback: bounded live aggregate from proxy_logs when projection is empty.
+			hourExpr := hourBucketSQLExpr(h.db, "pl.created_at")
+			rows = queryRows(h.db, `
+				SELECT
+					`+hourExpr+` AS bucket,
+					CAST(s.id AS TEXT) AS key,
+					COALESCE(s.name, '') AS label,
+					COUNT(*) AS calls,
+					COALESCE(SUM(`+effectiveProxyTokensSQL+`), 0) AS tokens,
+					COALESCE(SUM(COALESCE(pl.estimated_cost, 0)), 0) AS spend
+				FROM proxy_logs pl
+				INNER JOIN accounts a ON a.id = pl.account_id
+				INNER JOIN sites s ON s.id = a.site_id
+				WHERE pl.created_at >= ?
+				GROUP BY `+hourExpr+`, s.id, s.name
+				ORDER BY bucket ASC, calls DESC
+				LIMIT ?
+			`, since, usageHeatmapCellLimit)
+			cells = makeUsageHeatmapCells(rows)
+		}
+	} else {
+		// Model density: no model_hour_usage table; aggregate proxy_logs with LIMIT.
+		hourExpr := hourBucketSQLExpr(h.db, "pl.created_at")
+		modelExpr := `COALESCE(NULLIF(pl.model_actual, ''), NULLIF(pl.model_requested, ''), 'unknown')`
+		rows := queryRows(h.db, `
+			SELECT
+				`+hourExpr+` AS bucket,
+				`+modelExpr+` AS key,
+				`+modelExpr+` AS label,
+				COUNT(*) AS calls,
+				COALESCE(SUM(`+effectiveProxyTokensSQL+`), 0) AS tokens,
+				COALESCE(SUM(COALESCE(pl.estimated_cost, 0)), 0) AS spend
+			FROM proxy_logs pl
+			WHERE pl.created_at >= ?
+			GROUP BY `+hourExpr+`, `+modelExpr+`
+			ORDER BY bucket ASC, calls DESC
+			LIMIT ?
+		`, since, usageHeatmapCellLimit)
+		cells = makeUsageHeatmapCells(rows)
+	}
+
+	if cells == nil {
+		cells = []map[string]any{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"dimension": dimension,
+		"days":      days,
+		"since":     since,
+		"source":    source,
+		"cellLimit": usageHeatmapCellLimit,
+		"count":     len(cells),
+		"cells":     cells,
+	})
+}
+
+// ---- Slow Requests ----
+// GET /api/stats/slow-requests?limit=50&minLatencyMs=1000&hours=24
+//
+// Top proxy_logs by latency_ms within a bounded time window (#121).
+// Never returns request/response bodies or chat content.
+func (h *statsHandler) slowRequests(w http.ResponseWriter, r *http.Request) {
+	limit := clampInt(getQueryInt(r, "limit", 50), 1, 200)
+	minLatencyMs := clampInt(getQueryInt(r, "minLatencyMs", 1000), 0, 3_600_000)
+	hours := clampInt(getQueryInt(r, "hours", 24), 1, 168)
+	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339)
+
+	rows := queryRows(h.db, `
+		SELECT
+			pl.id AS id,
+			COALESCE(NULLIF(pl.model_actual, ''), NULLIF(pl.model_requested, ''), '') AS model,
+			COALESCE(pl.status, '') AS status,
+			COALESCE(pl.latency_ms, 0) AS latency_ms,
+			COALESCE(pl.first_byte_latency_ms, 0) AS first_byte_latency_ms,
+			COALESCE(pl.http_status, 0) AS http_status,
+			COALESCE(pl.request_id, '') AS request_id,
+			pl.account_id AS account_id,
+			s.id AS site_id,
+			COALESCE(s.name, '') AS site_name,
+			pl.created_at AS created_at
+		FROM proxy_logs pl
+		LEFT JOIN accounts a ON a.id = pl.account_id
+		LEFT JOIN sites s ON s.id = a.site_id
+		WHERE pl.created_at >= ?
+			AND COALESCE(pl.latency_ms, 0) >= ?
+		ORDER BY pl.latency_ms DESC, pl.created_at DESC
+		LIMIT ?
+	`, since, minLatencyMs, limit)
+
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, map[string]any{
+			"id":                 coerceInt64(row["id"]),
+			"model":              coerceString(row["model"]),
+			"status":             coerceString(row["status"]),
+			"latencyMs":          coerceInt64(row["latencyMs"]),
+			"firstByteLatencyMs": coerceInt64(row["firstByteLatencyMs"]),
+			"httpStatus":         coerceInt(row["httpStatus"]),
+			"requestId":          coerceString(row["requestId"]),
+			"accountId":          row["accountId"],
+			"siteId":             row["siteId"],
+			"siteName":           coerceString(row["siteName"]),
+			"createdAt":          coerceString(row["createdAt"]),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"hours":        hours,
+		"minLatencyMs": minLatencyMs,
+		"limit":        limit,
+		"since":        since,
+		"count":        len(items),
+		"items":        items,
+	})
+}
+
+// hourBucketSQLExpr returns a dual-dialect SQL expression that truncates a
+// TEXT RFC3339 timestamp column to an hour bucket string (…T%H:00:00Z).
+func hourBucketSQLExpr(db *sqlx.DB, column string) string {
+	driver := ""
+	if db != nil {
+		driver = strings.ToLower(strings.TrimSpace(db.DriverName()))
+	}
+	switch driver {
+	case "pgx", "postgres", "postgresql":
+		// created_at is stored as TEXT RFC3339; cast for date_trunc then re-format.
+		return `to_char(date_trunc('hour', (` + column + `)::timestamptz), 'YYYY-MM-DD"T"HH24:00:00"Z"')`
+	default:
+		// SQLite stores UTC RFC3339 without fractional seconds in our writers.
+		// substr keeps the query portable and avoids full-table function scans
+		// beyond the created_at range predicate + LIMIT.
+		return `substr(` + column + `, 1, 13) || ':00:00Z'`
+	}
+}
+
+func makeUsageHeatmapCells(rows []map[string]any) []map[string]any {
+	cells := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		bucket := coerceString(row["bucket"])
+		key := coerceString(row["key"])
+		if bucket == "" || key == "" {
+			continue
+		}
+		cells = append(cells, map[string]any{
+			"bucket": bucket,
+			"key":    key,
+			"label":  coerceString(row["label"]),
+			"calls":  coerceInt64(row["calls"]),
+			"tokens": coerceInt64(row["tokens"]),
+			"spend":  roundMicro(coerceFloat(row["spend"])),
+		})
+	}
+	return cells
 }
 
 // ---- Model Marketplace ----
