@@ -15,6 +15,10 @@ var AllowedGeminiKeys = map[string]bool{
 	"toolConfig": true, "labels": true, "model": true,
 }
 
+// DummyThoughtSignature is the base64 sentinel for "skip_thought_signature_validator".
+// Gemini accepts any non-empty base64 string when a real thought signature is unavailable.
+const DummyThoughtSignature = "c2tpcF90aG91Z2h0X3NpZ25hdHVyZV92YWxpZGF0b3I="
+
 // NormalizeRequest filters and normalizes an incoming Gemini request body.
 func NormalizeRequest(body map[string]any, modelName string) map[string]any {
 	next := map[string]any{}
@@ -68,6 +72,10 @@ func NormalizeRequest(body map[string]any, modelName string) map[string]any {
 		}
 		next[k] = cloneJSONValue(v)
 	}
+
+	// Official Gemini multi-turn tool history requires thoughtSignature on
+	// functionCall parts for Gemini 3.x (and thinking-enabled models).
+	injectThoughtSignaturesIntoContents(next, modelName)
 
 	return next
 }
@@ -125,10 +133,17 @@ func BuildOpenAiBodyFromGeminiRequest(body map[string]any, modelName string) map
 				if args == "" {
 					args = "{}"
 				}
-				toolCalls = append(toolCalls, map[string]any{
+				toolCall := map[string]any{
 					"id": id, "type": "function",
 					"function": map[string]any{"name": name, "arguments": args},
-				})
+				}
+				// Preserve thought_signature for OpenAI↔Gemini tool-history round-trips.
+				if sig := extractThoughtSignature(part); sig != "" {
+					toolCall["provider_specific_fields"] = map[string]any{
+						"thought_signature": sig,
+					}
+				}
+				toolCalls = append(toolCalls, toolCall)
 			} else if fr, ok := part["functionResponse"].(map[string]any); ok {
 				name := shared.AsTrimmedString(fr["name"])
 				id := shared.AsTrimmedString(fr["id"])
@@ -211,6 +226,51 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 	var systemInstruction map[string]any
 
 	msgs, _ := openaiBody["messages"].([]any)
+
+	// Map tool_call_id -> function name for functionResponse.name when tool messages omit name.
+	toolNameByID := map[string]string{}
+	// Map tool_call_id -> thought_signature from provider_specific_fields (or top-level aliases).
+	thoughtSignatureByID := map[string]string{}
+	for _, item := range msgs {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if strings.ToLower(shared.AsTrimmedString(m["role"])) != "assistant" {
+			continue
+		}
+		tcs, ok := m["tool_calls"].([]any)
+		if !ok {
+			continue
+		}
+		for _, tc := range tcs {
+			tcm, ok := tc.(map[string]any)
+			if !ok {
+				continue
+			}
+			id := shared.AsTrimmedString(tcm["id"])
+			fn, _ := tcm["function"].(map[string]any)
+			if fn == nil {
+				fn = map[string]any{}
+			}
+			name := shared.AsTrimmedString(fn["name"])
+			if id != "" && name != "" {
+				toolNameByID[id] = name
+			}
+			if id == "" {
+				continue
+			}
+			if sig := extractThoughtSignatureFromToolCall(tcm); sig != "" {
+				thoughtSignatureByID[id] = sig
+			}
+		}
+	}
+
+	hasThinkingEnabled := requestHasThinkingEnabled(modelName, openaiBody)
+	allowsDummy := isDummyThoughtSafeModel(modelName)
+	requiresSig := requiresFunctionCallThoughtSignature(modelName)
+	shouldDisableThinkingConfig := false
+
 	for _, item := range msgs {
 		m, ok := item.(map[string]any)
 		if !ok {
@@ -233,18 +293,19 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 			geminiRole = "model"
 		}
 
-		var parts []map[string]any
+		var textParts []map[string]any
+		var fcParts []map[string]any
 
 		// Reasoning content
 		if rc := shared.AsTrimmedString(m["reasoning_content"]); rc != "" {
-			parts = append(parts, map[string]any{"text": rc, "thought": true})
+			textParts = append(textParts, map[string]any{"text": rc, "thought": true})
 		}
 
 		// Content blocks
 		content := m["content"]
 		if s, ok := content.(string); ok {
 			if s != "" {
-				parts = append(parts, map[string]any{"text": s})
+				textParts = append(textParts, map[string]any{"text": s})
 			}
 		} else if arr, ok := content.([]any); ok {
 			for _, block := range arr {
@@ -255,15 +316,15 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 				bt := shared.AsTrimmedString(bm["type"])
 				if bt == "text" {
 					if t := shared.AsTrimmedString(bm["text"]); t != "" {
-						parts = append(parts, map[string]any{"text": t})
+						textParts = append(textParts, map[string]any{"text": t})
 					}
 				} else if bt == "image_url" {
 					if iu, ok := bm["image_url"].(map[string]any); ok {
 						url := shared.AsTrimmedString(iu["url"])
 						if inline := parseDataURLToGeminiInline(url); inline != nil {
-							parts = append(parts, inline)
+							textParts = append(textParts, inline)
 						} else if url != "" {
-							parts = append(parts, map[string]any{
+							textParts = append(textParts, map[string]any{
 								"fileData": map[string]any{"fileUri": url, "mimeType": inferMimeFromURL(url)},
 							})
 						}
@@ -272,7 +333,7 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 			}
 		}
 
-		// Tool calls
+		// Tool calls -> functionCall parts, with thoughtSignature when required/available.
 		if tcs, ok := m["tool_calls"].([]any); ok {
 			for _, tc := range tcs {
 				tcm, ok := tc.(map[string]any)
@@ -288,12 +349,31 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 					continue
 				}
 				args := shared.ParseJSONLike(shared.AsTrimmedString(fn["arguments"]))
-				parts = append(parts, map[string]any{
+				fcPart := map[string]any{
 					"functionCall": map[string]any{
 						"name": name,
 						"args": args,
 					},
-				})
+				}
+				id := shared.AsTrimmedString(tcm["id"])
+				if id != "" {
+					if fc, ok := fcPart["functionCall"].(map[string]any); ok {
+						fc["id"] = id
+					}
+				}
+				sig := thoughtSignatureByID[id]
+				if sig == "" {
+					sig = extractThoughtSignatureFromToolCall(tcm)
+				}
+				if sig != "" {
+					fcPart["thoughtSignature"] = sig
+				} else if (hasThinkingEnabled || requiresSig) && allowsDummy {
+					fcPart["thoughtSignature"] = DummyThoughtSignature
+				} else if hasThinkingEnabled {
+					// Non-Gemini thinking targets cannot safely receive dummy signatures.
+					shouldDisableThinkingConfig = true
+				}
+				fcParts = append(fcParts, fcPart)
 			}
 		}
 
@@ -301,20 +381,47 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 		if role == "tool" {
 			toolCallID := shared.AsTrimmedString(m["tool_call_id"])
 			name := shared.AsTrimmedString(m["name"])
+			if name == "" {
+				name = toolNameByID[toolCallID]
+			}
+			if name == "" {
+				name = "unknown"
+			}
 			response := m["content"]
-			parts = append(parts, map[string]any{
-				"functionResponse": map[string]any{
-					"name":     name,
-					"id":       toolCallID,
-					"response": response,
-				},
+			contents = append(contents, map[string]any{
+				"role": "user",
+				"parts": []map[string]any{{
+					"functionResponse": map[string]any{
+						"name":     name,
+						"id":       toolCallID,
+						"response": response,
+					},
+				}},
 			})
+			continue
 		}
 
-		if len(parts) > 0 {
+		// Official Gemini expects signed functionCall parts separated from sibling text parts.
+		hasSigned := false
+		for _, p := range fcParts {
+			if shared.AsTrimmedString(p["thoughtSignature"]) != "" {
+				hasSigned = true
+				break
+			}
+		}
+		if hasSigned && len(textParts) > 0 && len(fcParts) > 0 {
+			contents = append(contents,
+				map[string]any{"role": geminiRole, "parts": textParts},
+				map[string]any{"role": geminiRole, "parts": fcParts},
+			)
+			continue
+		}
+
+		allParts := append(append([]map[string]any{}, textParts...), fcParts...)
+		if len(allParts) > 0 {
 			contents = append(contents, map[string]any{
 				"role":  geminiRole,
-				"parts": parts,
+				"parts": allParts,
 			})
 		}
 	}
@@ -339,6 +446,10 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 	if mt, ok := openaiBody["max_tokens"].(float64); ok {
 		gc["maxOutputTokens"] = int(mt)
 	}
+	thinkingConfig := ResolveGeminiThinkingConfigFromRequest(modelName, openaiBody)
+	if thinkingConfig != nil && !shouldDisableThinkingConfig {
+		gc["thinkingConfig"] = thinkingConfig
+	}
 	if len(gc) > 0 {
 		body["generationConfig"] = gc
 	}
@@ -356,7 +467,216 @@ func BuildGeminiGenerateContentRequestFromOpenAi(openaiBody map[string]any, mode
 	return body
 }
 
-// --- Helpers ---
+// --- Thought signature helpers ---
+
+// isDummyThoughtSafeModel reports whether dummy thought signatures are safe for this model.
+// Only official Gemini model IDs accept the sentinel; third-party "Gemini-compatible" models may not.
+func isDummyThoughtSafeModel(modelName string) bool {
+	normalized := strings.ToLower(shared.AsTrimmedString(modelName))
+	return strings.HasPrefix(normalized, "gemini-") || strings.HasPrefix(normalized, "models/gemini-")
+}
+
+// requiresFunctionCallThoughtSignature reports models that reject tool history without thoughtSignature
+// even when the client did not enable thinking/reasoning explicitly (Gemini 3.x).
+func requiresFunctionCallThoughtSignature(modelName string) bool {
+	normalized := strings.ToLower(shared.AsTrimmedString(modelName))
+	normalized = strings.TrimPrefix(normalized, "models/")
+	// gemini-3, gemini-3.5-flash, gemini-3-pro-preview, etc.
+	return strings.HasPrefix(normalized, "gemini-3")
+}
+
+// requestHasThinkingEnabled detects thinking either via derived reasoning params or explicit thinkingConfig.
+func requestHasThinkingEnabled(modelName string, body map[string]any) bool {
+	if ResolveGeminiThinkingConfigFromRequest(modelName, body) != nil {
+		return true
+	}
+	if body == nil {
+		return false
+	}
+	if gc, ok := body["generationConfig"].(map[string]any); ok && gc != nil {
+		if tc := gc["thinkingConfig"]; tc != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func extractThoughtSignature(part map[string]any) string {
+	if part == nil {
+		return ""
+	}
+	if sig := shared.AsTrimmedString(part["thoughtSignature"]); sig != "" {
+		return sig
+	}
+	if sig := shared.AsTrimmedString(part["thought_signature"]); sig != "" {
+		return sig
+	}
+	return ""
+}
+
+func extractThoughtSignatureFromToolCall(toolCall map[string]any) string {
+	if toolCall == nil {
+		return ""
+	}
+	if sig := shared.AsTrimmedString(toolCall["thoughtSignature"]); sig != "" {
+		return sig
+	}
+	if sig := shared.AsTrimmedString(toolCall["thought_signature"]); sig != "" {
+		return sig
+	}
+	if psf, ok := toolCall["provider_specific_fields"].(map[string]any); ok && psf != nil {
+		if sig := shared.AsTrimmedString(psf["thought_signature"]); sig != "" {
+			return sig
+		}
+		if sig := shared.AsTrimmedString(psf["thoughtSignature"]); sig != "" {
+			return sig
+		}
+	}
+	return ""
+}
+
+// injectThoughtSignaturesIntoContents ensures native Gemini contents with functionCall parts
+// carry thoughtSignature when official Gemini would reject unsigned tool history.
+// Existing real signatures are preserved; dummy is only injected when missing.
+func injectThoughtSignaturesIntoContents(body map[string]any, modelName string) {
+	if body == nil {
+		return
+	}
+	allowsDummy := isDummyThoughtSafeModel(modelName)
+	requiresSig := requiresFunctionCallThoughtSignature(modelName)
+	hasThinking := requestHasThinkingEnabled(modelName, body)
+	if !allowsDummy || (!requiresSig && !hasThinking) {
+		return
+	}
+
+	// contents may be []any (from clone) or []map[string]any in tests.
+	switch contents := body["contents"].(type) {
+	case []any:
+		for _, item := range contents {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			injectThoughtSignaturesIntoParts(m)
+		}
+	case []map[string]any:
+		for _, m := range contents {
+			injectThoughtSignaturesIntoParts(m)
+		}
+	}
+}
+
+func injectThoughtSignaturesIntoParts(content map[string]any) {
+	if content == nil {
+		return
+	}
+	switch parts := content["parts"].(type) {
+	case []any:
+		for _, p := range parts {
+			pm, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			if _, hasFC := pm["functionCall"]; !hasFC {
+				continue
+			}
+			if extractThoughtSignature(pm) != "" {
+				continue
+			}
+			pm["thoughtSignature"] = DummyThoughtSignature
+		}
+	case []map[string]any:
+		for _, pm := range parts {
+			if pm == nil {
+				continue
+			}
+			if _, hasFC := pm["functionCall"]; !hasFC {
+				continue
+			}
+			if extractThoughtSignature(pm) != "" {
+				continue
+			}
+			pm["thoughtSignature"] = DummyThoughtSignature
+		}
+	}
+}
+
+// ApplyThoughtSignaturesToFunctionCallParts injects/preserves thought signatures on functionCall parts.
+// Prefer real signatures from priorAggregate or existing part fields; fall back to dummy when required.
+func ApplyThoughtSignaturesToFunctionCallParts(parts []map[string]any, modelName string, priorAggregate *GeminiAggregateState) []map[string]any {
+	if len(parts) == 0 {
+		return parts
+	}
+	allowsDummy := isDummyThoughtSafeModel(modelName)
+	requiresSig := requiresFunctionCallThoughtSignature(modelName)
+	// Without aggregate thinking flag, still inject for Gemini 3.x tool history.
+	shouldInject := allowsDummy && requiresSig
+	if !shouldInject && allowsDummy {
+		// Also inject when aggregate already collected signatures (multi-turn follow-up).
+		if priorAggregate != nil && len(priorAggregate.ThoughtSignatures) > 0 {
+			shouldInject = true
+		}
+	}
+	if !shouldInject && !allowsDummy {
+		return parts
+	}
+
+	aggIdx := 0
+	out := make([]map[string]any, 0, len(parts))
+	for _, part := range parts {
+		next := cloneMapSimple(part)
+		if _, hasFC := next["functionCall"]; hasFC {
+			if extractThoughtSignature(next) == "" {
+				var sig string
+				if priorAggregate != nil && aggIdx < len(priorAggregate.ThoughtSignatures) {
+					sig = priorAggregate.ThoughtSignatures[aggIdx]
+				}
+				if sig == "" && shouldInject {
+					sig = DummyThoughtSignature
+				}
+				if sig != "" {
+					next["thoughtSignature"] = sig
+				}
+			}
+			aggIdx++
+		}
+		out = append(out, next)
+	}
+	return out
+}
+
+// CollectThoughtSignaturesFromParts records unique thoughtSignature values from parts into state.
+func CollectThoughtSignaturesFromParts(state *GeminiAggregateState, parts []map[string]any) {
+	if state == nil {
+		return
+	}
+	for _, part := range parts {
+		sig := extractThoughtSignature(part)
+		if sig == "" {
+			continue
+		}
+		found := false
+		for _, existing := range state.ThoughtSignatures {
+			if existing == sig {
+				found = true
+				break
+			}
+		}
+		if !found {
+			state.ThoughtSignatures = append(state.ThoughtSignatures, sig)
+		}
+	}
+}
+
+// BuildSignedModelContentForToolHistory builds a model content entry for replaying tool calls
+// into the next Gemini request, attaching thought signatures from aggregate state when present.
+func BuildSignedModelContentForToolHistory(parts []map[string]any, modelName string, priorAggregate *GeminiAggregateState) map[string]any {
+	signed := ApplyThoughtSignaturesToFunctionCallParts(parts, modelName, priorAggregate)
+	return map[string]any{
+		"role":  "model",
+		"parts": signed,
+	}
+}
 
 func filterParts(parts []any) []map[string]any {
 	var out []map[string]any
@@ -812,11 +1132,15 @@ func (sb *StreamBridge) NormalizeEvent(payload any) shared.NormalizedStreamEvent
 				}
 				if cp, ok := c["content"].(map[string]any); ok {
 					if parts, ok := cp["parts"].([]any); ok {
+						var collected []map[string]any
 						for _, p := range parts {
 							if pm, ok := p.(map[string]any); ok {
 								sb.State.Parts = append(sb.State.Parts, pm)
+								collected = append(collected, pm)
 							}
 						}
+						// Stream collect thought signatures for next-turn tool-history injection.
+						CollectThoughtSignaturesFromParts(sb.State, collected)
 					}
 				}
 			}
