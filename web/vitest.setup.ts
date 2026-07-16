@@ -59,3 +59,15 @@ vi.mock('react-test-renderer', async (importOriginal) => {
 
   return patched;
 });
+
+
+// Dashboard charts pull @visactor/* ESM that breaks under vitest/jsdom.
+// Provide lightweight stubs so page tests can render without native chart deps.
+vi.mock('@visactor/react-vchart', () => ({
+  VChart: () => null,
+  default: () => null,
+}))
+vi.mock('@visactor/vchart', () => ({
+  default: class VChartStub {},
+  VChart: class VChartStub {},
+}))
