@@ -27,8 +27,9 @@ func TestSchemaMigrationsTableCreated(t *testing.T) {
 	}
 }
 
-// TestApplyAdditiveMigrationsEmptyRegistry is a no-op when no steps are registered.
-func TestApplyAdditiveMigrationsEmptyRegistry(t *testing.T) {
+// TestApplyAdditiveMigrationsRegistryAppliesSC2 verifies production SC2 steps
+// are recorded once via schema_migrations after AutoMigrate.
+func TestApplyAdditiveMigrationsRegistryAppliesSC2(t *testing.T) {
 	db, err := Open(DialectSQLite, ":memory:", false)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
@@ -39,20 +40,28 @@ func TestApplyAdditiveMigrationsEmptyRegistry(t *testing.T) {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
 
-	// Empty registry: still succeeds and leaves zero rows.
+	// Second Apply is a no-op (idempotent bookkeeping).
 	if err := ApplyAdditiveMigrations(db); err != nil {
-		t.Fatalf("ApplyAdditiveMigrations empty: %v", err)
+		t.Fatalf("ApplyAdditiveMigrations second: %v", err)
 	}
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != 0 {
-		t.Errorf("expected 0 applied migrations with empty registry, got %d", n)
+	if n != len(enterpriseAdditiveSteps) {
+		t.Errorf("expected %d applied migrations, got %d", len(enterpriseAdditiveSteps), n)
+	}
+	for _, step := range enterpriseAdditiveSteps {
+		var v string
+		err := db.QueryRow(`SELECT version FROM schema_migrations WHERE version = ?`, step.Version).Scan(&v)
+		if err != nil {
+			t.Fatalf("missing migration %s: %v", step.Version, err)
+		}
 	}
 }
 
-// TestEnsureColumnSQLite adds a column to an existing table and is idempotent.
+// TestEnsureColumnSQLite adds a probe column to an existing table and is idempotent.
+// Uses a non-production column name so SC2 registry columns do not pre-exist.
 func TestEnsureColumnSQLite(t *testing.T) {
 	db, err := Open(DialectSQLite, ":memory:", false)
 	if err != nil {
@@ -64,32 +73,30 @@ func TestEnsureColumnSQLite(t *testing.T) {
 		t.Fatalf("AutoMigrate failed: %v", err)
 	}
 
-	// Column must not exist yet.
-	exists, err := columnExists(db, "sites", "max_concurrency")
+	const col = "sc2_probe_col"
+	exists, err := columnExists(db, "sites", col)
 	if err != nil {
 		t.Fatalf("columnExists: %v", err)
 	}
 	if exists {
-		t.Fatal("expected sites.max_concurrency to be absent before EnsureColumn")
+		t.Fatalf("expected sites.%s to be absent before EnsureColumn", col)
 	}
 
-	if err := EnsureColumn(db, "sites", "max_concurrency", "INTEGER", "INTEGER", "DEFAULT 0"); err != nil {
+	if err := EnsureColumn(db, "sites", col, "INTEGER", "INTEGER", "DEFAULT 0"); err != nil {
 		t.Fatalf("EnsureColumn first: %v", err)
 	}
-	exists, err = columnExists(db, "sites", "max_concurrency")
+	exists, err = columnExists(db, "sites", col)
 	if err != nil {
 		t.Fatalf("columnExists after add: %v", err)
 	}
 	if !exists {
-		t.Fatal("expected sites.max_concurrency after EnsureColumn")
+		t.Fatalf("expected sites.%s after EnsureColumn", col)
 	}
 
-	// Second call must be a no-op (idempotent).
-	if err := EnsureColumn(db, "sites", "max_concurrency", "INTEGER", "INTEGER", "DEFAULT 0"); err != nil {
+	if err := EnsureColumn(db, "sites", col, "INTEGER", "INTEGER", "DEFAULT 0"); err != nil {
 		t.Fatalf("EnsureColumn second: %v", err)
 	}
 
-	// Existing rows get the default.
 	now := "2026-07-16T00:00:00.000Z"
 	_, err = db.Exec(`INSERT INTO sites (name, url, platform, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
 		"s1", "https://example.com", "openai", now, now)
@@ -97,8 +104,8 @@ func TestEnsureColumnSQLite(t *testing.T) {
 		t.Fatalf("insert site: %v", err)
 	}
 	var mc int
-	if err := db.QueryRow(`SELECT max_concurrency FROM sites WHERE name = ?`, "s1").Scan(&mc); err != nil {
-		t.Fatalf("select max_concurrency: %v", err)
+	if err := db.QueryRow(`SELECT `+col+` FROM sites WHERE name = ?`, "s1").Scan(&mc); err != nil {
+		t.Fatalf("select %s: %v", col, err)
 	}
 	if mc != 0 {
 		t.Errorf("expected default 0, got %d", mc)

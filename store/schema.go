@@ -15,6 +15,9 @@ type Site struct {
 	SortOrder                        int64   `db:"sort_order" json:"sortOrder"`
 	GlobalWeight                     float64 `db:"global_weight" json:"globalWeight"`
 	APIKey                           *string `db:"api_key" json:"apiKey"`
+	// MaxConcurrency caps concurrent upstream calls for this site.
+	// 0 (default) means unlimited — preserves pre-SC2 behavior.
+	MaxConcurrency                   int64   `db:"max_concurrency" json:"maxConcurrency"`
 	PostRefreshProbeEnabled          bool    `db:"post_refresh_probe_enabled" json:"postRefreshProbeEnabled"`
 	PostRefreshProbeModel            string  `db:"post_refresh_probe_model" json:"postRefreshProbeModel"`
 	PostRefreshProbeScope            string  `db:"post_refresh_probe_scope" json:"postRefreshProbeScope"`
@@ -129,6 +132,10 @@ type TokenRoute struct {
 	DecisionSnapshot    *string `db:"decision_snapshot" json:"decisionSnapshot"`
 	DecisionRefreshedAt *string `db:"decision_refreshed_at" json:"decisionRefreshedAt"`
 	RoutingStrategy     string  `db:"routing_strategy" json:"routingStrategy"`
+	// ContextLength is optional route-level context window metadata (tokens).
+	// NULL means unknown / no enforcement — preserves pre-SC2 behavior.
+	// No dedicated model_catalog table exists; token_routes is the SC0 Option A home.
+	ContextLength       *int64  `db:"context_length" json:"contextLength"`
 	Enabled             bool    `db:"enabled" json:"enabled"`
 	CreatedAt           string  `db:"created_at" json:"createdAt"`
 	UpdatedAt           string  `db:"updated_at" json:"updatedAt"`
@@ -423,6 +430,9 @@ type DownstreamAPIKey struct {
 	SiteWeightMultipliers   *string  `db:"site_weight_multipliers" json:"siteWeightMultipliers"`
 	ExcludedSiteIDs         *string  `db:"excluded_site_ids" json:"excludedSiteIds"`
 	ExcludedCredentialRefs  *string  `db:"excluded_credential_refs" json:"excludedCredentialRefs"`
+	// ProxyURL is an optional per-key egress proxy override.
+	// NULL falls back to site / system proxy — preserves pre-SC2 behavior.
+	ProxyURL                *string  `db:"proxy_url" json:"proxyUrl"`
 	LastUsedAt              *string  `db:"last_used_at" json:"lastUsedAt"`
 	CreatedAt               string   `db:"created_at" json:"createdAt"`
 	UpdatedAt               string   `db:"updated_at" json:"updatedAt"`

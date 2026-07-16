@@ -25,15 +25,35 @@ type AdditiveStep struct {
 }
 
 // enterpriseAdditiveSteps is the ordered registry of production additive
-// upgrades. SC1 ships the bookkeeping machinery only; SC2 registers the
-// enterprise columns documented in docs/analysis/schema-parity.md §5.
+// upgrades. SC2 registers the enterprise columns documented in
+// docs/analysis/schema-parity.md §5. Fresh installs also get these columns
+// from base CREATE TABLE builders; EnsureColumn keeps old installs converging.
 //
 // Keep this list append-only. Never edit or remove a shipped Version string.
 var enterpriseAdditiveSteps = []AdditiveStep{
-	// SC2 candidates (not registered until product code lands):
-	//   sc2_001_downstream_proxy_url  — downstream_api_keys.proxy_url TEXT NULL
-	//   sc2_002_site_max_concurrency  — sites.max_concurrency INTEGER NULL / DEFAULT 0
-	//   sc2_003_route_context_length  — token_routes.context_length INTEGER NULL
+	{
+		Version:     "sc2_001_downstream_proxy_url",
+		Description: "downstream_api_keys.proxy_url TEXT NULL — per-key egress proxy; NULL falls back to site/system",
+		Apply: func(db *DB) error {
+			return EnsureColumn(db, "downstream_api_keys", "proxy_url", "TEXT", "TEXT", "")
+		},
+	},
+	{
+		Version:     "sc2_002_site_max_concurrency",
+		Description: "sites.max_concurrency INTEGER DEFAULT 0 — 0 means unlimited (legacy behavior)",
+		Apply: func(db *DB) error {
+			return EnsureColumn(db, "sites", "max_concurrency", "INTEGER", "INTEGER", "DEFAULT 0")
+		},
+	},
+	{
+		// SC0 Option A: route-level context window metadata. No model_catalog
+		// table exists; token_routes is the clear column home until a catalog lands.
+		Version:     "sc2_003_route_context_length",
+		Description: "token_routes.context_length INTEGER NULL — unknown/no enforcement when NULL",
+		Apply: func(db *DB) error {
+			return EnsureColumn(db, "token_routes", "context_length", "INTEGER", "INTEGER", "")
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.
