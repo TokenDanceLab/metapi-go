@@ -308,3 +308,238 @@ func TestStats_SQLiteSiteTrendFromProjectedUsage(t *testing.T) {
 		t.Fatalf("spend = %v, want 1.25", site["spend"])
 	}
 }
+
+func TestStats_SQLiteUsageHeatmapFromSiteHourUsage(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	now := time.Now().UTC().Truncate(time.Hour)
+	nowStr := now.Format(time.RFC3339)
+	bucket := now.Format(time.RFC3339)
+	oldBucket := now.Add(-48 * time.Hour).Format(time.RFC3339)
+
+	_, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, ?)`, "heat-site", "https://heat.example.test", "openai", nowStr, nowStr)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	var siteID int64
+	if err := db.Get(&siteID, "SELECT id FROM sites WHERE name = ?", "heat-site"); err != nil {
+		t.Fatalf("site id: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO site_hour_usage
+		(bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		bucket, siteID, 7, 6, 1, 700, 0.7, 0.7, 1000, 1, nowStr, nowStr)
+	if err != nil {
+		t.Fatalf("insert recent hour usage: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO site_hour_usage
+		(bucket_start_utc, site_id, total_calls, success_calls, failed_calls, total_tokens, total_summary_spend, total_site_spend, total_latency_ms, latency_count, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		oldBucket, siteID, 99, 99, 0, 9900, 9.9, 9.9, 100, 1, nowStr, nowStr)
+	if err != nil {
+		t.Fatalf("insert old hour usage: %v", err)
+	}
+
+	resp := doGet(t, r, "/api/stats/usage-heatmap?days=1&dimension=site")
+	if resp.Code != 200 {
+		t.Fatalf("usage-heatmap returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body["dimension"] != "site" {
+		t.Fatalf("dimension = %v, want site", body["dimension"])
+	}
+	if body["source"] != "site_hour_usage" {
+		t.Fatalf("source = %v, want site_hour_usage", body["source"])
+	}
+	cells, ok := body["cells"].([]any)
+	if !ok || len(cells) != 1 {
+		t.Fatalf("cells = %#v, want one recent cell", body["cells"])
+	}
+	cell := cells[0].(map[string]any)
+	if cell["label"] != "heat-site" {
+		t.Fatalf("label = %v, want heat-site", cell["label"])
+	}
+	if int64(cell["calls"].(float64)) != 7 {
+		t.Fatalf("calls = %v, want 7", cell["calls"])
+	}
+	if int64(cell["tokens"].(float64)) != 700 {
+		t.Fatalf("tokens = %v, want 700", cell["tokens"])
+	}
+	if _, hasContent := cell["content"]; hasContent {
+		t.Fatalf("cells must not include chat content: %#v", cell)
+	}
+}
+
+func TestStats_SQLiteUsageHeatmapModelFromProxyLogs(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339)
+	oldStr := now.Add(-72 * time.Hour).Format(time.RFC3339)
+
+	_, err := db.Exec(`INSERT INTO proxy_logs (model_requested, model_actual, status, prompt_tokens, completion_tokens, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "gpt-hot", "gpt-hot", "success", 10, 20, 30, 0.03, 120, nowStr)
+	if err != nil {
+		t.Fatalf("insert recent model log: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO proxy_logs (model_requested, model_actual, status, prompt_tokens, completion_tokens, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "gpt-cold", "gpt-cold", "success", 1, 1, 2, 0.01, 50, oldStr)
+	if err != nil {
+		t.Fatalf("insert old model log: %v", err)
+	}
+
+	resp := doGet(t, r, "/api/stats/usage-heatmap?days=1&dimension=model")
+	if resp.Code != 200 {
+		t.Fatalf("usage-heatmap model returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body["dimension"] != "model" {
+		t.Fatalf("dimension = %v, want model", body["dimension"])
+	}
+	if body["source"] != "proxy_logs" {
+		t.Fatalf("source = %v, want proxy_logs", body["source"])
+	}
+	cells, ok := body["cells"].([]any)
+	if !ok || len(cells) != 1 {
+		t.Fatalf("cells = %#v, want only gpt-hot", body["cells"])
+	}
+	cell := cells[0].(map[string]any)
+	if cell["key"] != "gpt-hot" {
+		t.Fatalf("key = %v, want gpt-hot", cell["key"])
+	}
+	if int64(cell["calls"].(float64)) != 1 {
+		t.Fatalf("calls = %v, want 1", cell["calls"])
+	}
+	if int64(cell["tokens"].(float64)) != 30 {
+		t.Fatalf("tokens = %v, want 30", cell["tokens"])
+	}
+}
+
+func TestStats_SQLiteSlowRequestsRanking(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339)
+	oldStr := now.Add(-48 * time.Hour).Format(time.RFC3339)
+
+	_, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, ?)`, "slow-site", "https://slow.example.test", "openai", nowStr, nowStr)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	var siteID int64
+	if err := db.Get(&siteID, "SELECT id FROM sites WHERE name = ?", "slow-site"); err != nil {
+		t.Fatalf("site id: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO accounts (site_id, username, access_token, status, balance, checkin_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, 0, ?, ?)`, siteID, "slow-user", "sk-slow", 1.0, nowStr, nowStr)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	var accountID int64
+	if err := db.Get(&accountID, "SELECT id FROM accounts WHERE username = ?", "slow-user"); err != nil {
+		t.Fatalf("account id: %v", err)
+	}
+
+	// Fast request (below threshold) — must be excluded.
+	_, err = db.Exec(`INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, latency_ms, first_byte_latency_ms, http_status, request_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, accountID, "gpt-fast", "gpt-fast", "success", 200, 50, 200, "req-fast", nowStr)
+	if err != nil {
+		t.Fatalf("insert fast log: %v", err)
+	}
+	// Slow request (ranked).
+	_, err = db.Exec(`INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, latency_ms, first_byte_latency_ms, http_status, request_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, accountID, "gpt-slow", "gpt-slow", "success", 4500, 1200, 200, "req-slow", nowStr)
+	if err != nil {
+		t.Fatalf("insert slow log: %v", err)
+	}
+	// Even slower but outside hours window — excluded.
+	_, err = db.Exec(`INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, latency_ms, first_byte_latency_ms, http_status, request_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, accountID, "gpt-ancient", "gpt-ancient", "success", 9000, 3000, 200, "req-old", oldStr)
+	if err != nil {
+		t.Fatalf("insert old slow log: %v", err)
+	}
+
+	resp := doGet(t, r, "/api/stats/slow-requests?limit=10&minLatencyMs=1000&hours=24")
+	if resp.Code != 200 {
+		t.Fatalf("slow-requests returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if int(body["minLatencyMs"].(float64)) != 1000 {
+		t.Fatalf("minLatencyMs = %v, want 1000", body["minLatencyMs"])
+	}
+	items, ok := body["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items = %#v, want only in-window slow request", body["items"])
+	}
+	item := items[0].(map[string]any)
+	if item["model"] != "gpt-slow" {
+		t.Fatalf("model = %v, want gpt-slow", item["model"])
+	}
+	if int64(item["latencyMs"].(float64)) != 4500 {
+		t.Fatalf("latencyMs = %v, want 4500", item["latencyMs"])
+	}
+	if item["siteName"] != "slow-site" {
+		t.Fatalf("siteName = %v, want slow-site", item["siteName"])
+	}
+	if item["requestId"] != "req-slow" {
+		t.Fatalf("requestId = %v, want req-slow", item["requestId"])
+	}
+	// Privacy: never surface bodies / chat content.
+	for _, forbidden := range []string{"requestBody", "responseBody", "content", "messages", "prompt"} {
+		if _, ok := item[forbidden]; ok {
+			t.Fatalf("slow request item leaked %s: %#v", forbidden, item)
+		}
+	}
+}
+
+func TestStats_UsageHeatmapAndSlowRequestsClampParams(t *testing.T) {
+	_, r := setupStatsSQLiteTest(t)
+
+	resp := doGet(t, r, "/api/stats/usage-heatmap?days=999&dimension=weird")
+	if resp.Code != 200 {
+		t.Fatalf("usage-heatmap clamp returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var heat map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &heat); err != nil {
+		t.Fatalf("unmarshal heatmap: %v", err)
+	}
+	if int(heat["days"].(float64)) != 31 {
+		t.Fatalf("days clamp = %v, want 31", heat["days"])
+	}
+	if heat["dimension"] != "site" {
+		t.Fatalf("dimension fallback = %v, want site", heat["dimension"])
+	}
+	if int(heat["cellLimit"].(float64)) != usageHeatmapCellLimit {
+		t.Fatalf("cellLimit = %v, want %d", heat["cellLimit"], usageHeatmapCellLimit)
+	}
+
+	resp = doGet(t, r, "/api/stats/slow-requests?limit=9999&minLatencyMs=-5&hours=999")
+	if resp.Code != 200 {
+		t.Fatalf("slow-requests clamp returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var slow map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &slow); err != nil {
+		t.Fatalf("unmarshal slow: %v", err)
+	}
+	if int(slow["limit"].(float64)) != 200 {
+		t.Fatalf("limit clamp = %v, want 200", slow["limit"])
+	}
+	if int(slow["minLatencyMs"].(float64)) != 0 {
+		t.Fatalf("minLatencyMs clamp = %v, want 0", slow["minLatencyMs"])
+	}
+	if int(slow["hours"].(float64)) != 168 {
+		t.Fatalf("hours clamp = %v, want 168", slow["hours"])
+	}
+	if items, ok := slow["items"].([]any); !ok || len(items) != 0 {
+		t.Fatalf("empty fixtures should yield empty items, got %#v", slow["items"])
+	}
+}

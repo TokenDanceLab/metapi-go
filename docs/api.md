@@ -68,6 +68,22 @@ Usage trend data by site.
 
 Model usage breakdown by site.
 
+### GET /api/stats/usage-heatmap
+
+Hour × site/model usage density for admin analytics (learn #121).
+
+**Query params**: `days` (1–31, default 7), `dimension` (`site`|`model`, default `site`)
+
+**Response**: `{ dimension, days, since, source, cellLimit, count, cells:[{bucket,key,label,calls,tokens,spend}] }`. Bounded with hard `LIMIT` (2000). Prefers `site_hour_usage` for site dimension; model dimension aggregates `proxy_logs`. Never includes chat content.
+
+### GET /api/stats/slow-requests
+
+Top slow proxy requests by `latency_ms` within a time window (learn #121).
+
+**Query params**: `limit` (1–200, default 50), `minLatencyMs` (default 1000), `hours` (1–168, default 24)
+
+**Response**: `{ hours, minLatencyMs, limit, since, count, items:[{id,model,status,latencyMs,firstByteLatencyMs,httpStatus,requestId,accountId,siteId,siteName,createdAt}] }`. Metadata only — no request/response bodies.
+
 ---
 
 ## Models & Routes
