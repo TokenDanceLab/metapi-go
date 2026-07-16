@@ -229,9 +229,9 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		enabled = *body.Enabled
 	}
 
-	routingStrategy := "weighted"
+	routingStrategy := string(routing.StrategyWeighted)
 	if body.RoutingStrategy != nil {
-		routingStrategy = *body.RoutingStrategy
+		routingStrategy = string(routing.NormalizeRouteRoutingStrategy(*body.RoutingStrategy))
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -322,7 +322,8 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	}
 	if v, ok := body["routingStrategy"]; ok {
 		if s, ok2 := v.(string); ok2 {
-			h.db.Exec(h.db.Rebind("UPDATE token_routes SET routing_strategy = ?, updated_at = ? WHERE id = ?"), s, now, id)
+			normalized := string(routing.NormalizeRouteRoutingStrategy(s))
+			h.db.Exec(h.db.Rebind("UPDATE token_routes SET routing_strategy = ?, updated_at = ? WHERE id = ?"), normalized, now, id)
 		}
 	}
 	if v, ok := body["modelMapping"]; ok {

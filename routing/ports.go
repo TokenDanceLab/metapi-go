@@ -5,6 +5,7 @@ package routing
 
 import (
 	"context"
+	"strings"
 
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -125,21 +126,46 @@ type RouteDecisionCandidate struct {
 }
 
 // RouteRoutingStrategy is the strategy for a route.
+// Named strategies are operator-selectable per route (token_routes.routing_strategy).
+// Default remains weighted for parity with historical MetAPI behavior.
 type RouteRoutingStrategy string
 
 const (
-	StrategyWeighted     RouteRoutingStrategy = "weighted"
-	StrategyRoundRobin   RouteRoutingStrategy = "round_robin"
-	StrategyStableFirst  RouteRoutingStrategy = "stable_first"
+	StrategyWeighted       RouteRoutingStrategy = "weighted"
+	StrategyRoundRobin     RouteRoutingStrategy = "round_robin"
+	StrategyStableFirst    RouteRoutingStrategy = "stable_first"
+	StrategyLeastBusy      RouteRoutingStrategy = "least_busy"
+	StrategyLowestLatency  RouteRoutingStrategy = "lowest_latency"
+	StrategyLowestCost     RouteRoutingStrategy = "lowest_cost"
 )
 
+// KnownRouteRoutingStrategies lists accepted strategy names (excluding aliases).
+var KnownRouteRoutingStrategies = []RouteRoutingStrategy{
+	StrategyWeighted,
+	StrategyRoundRobin,
+	StrategyStableFirst,
+	StrategyLeastBusy,
+	StrategyLowestLatency,
+	StrategyLowestCost,
+}
+
 // NormalizeRouteRoutingStrategy normalizes a strategy string.
+// Unknown / empty values fall back to weighted (documented default).
+// Accepts hyphen aliases (least-busy, lowest-latency, lowest-cost) for operator convenience.
 func NormalizeRouteRoutingStrategy(value string) RouteRoutingStrategy {
-	switch value {
-	case "round_robin":
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "round_robin", "round-robin":
 		return StrategyRoundRobin
-	case "stable_first":
+	case "stable_first", "stable-first":
 		return StrategyStableFirst
+	case "least_busy", "least-busy":
+		return StrategyLeastBusy
+	case "lowest_latency", "lowest-latency", "latency":
+		return StrategyLowestLatency
+	case "lowest_cost", "lowest-cost", "cost":
+		return StrategyLowestCost
+	case "weighted", "":
+		return StrategyWeighted
 	default:
 		return StrategyWeighted
 	}
@@ -148,6 +174,27 @@ func NormalizeRouteRoutingStrategy(value string) RouteRoutingStrategy {
 // IsRoundRobinRouteRoutingStrategy checks if a strategy is round_robin.
 func IsRoundRobinRouteRoutingStrategy(value string) bool {
 	return NormalizeRouteRoutingStrategy(value) == StrategyRoundRobin
+}
+
+// IsPriorityLayerRoutingStrategy reports strategies that walk priority layers
+// (P is a hard gate) then pick inside the first non-empty layer.
+func IsPriorityLayerRoutingStrategy(strategy RouteRoutingStrategy) bool {
+	switch strategy {
+	case StrategyWeighted, StrategyLeastBusy, StrategyLowestLatency, StrategyLowestCost:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsDeterministicNamedStrategy reports pure argmin strategies (no random blend).
+func IsDeterministicNamedStrategy(strategy RouteRoutingStrategy) bool {
+	switch strategy {
+	case StrategyLeastBusy, StrategyLowestLatency, StrategyLowestCost:
+		return true
+	default:
+		return false
+	}
 }
 
 // RouteMatch holds a matched route with its resolved channels.

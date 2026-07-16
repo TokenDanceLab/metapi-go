@@ -331,38 +331,49 @@ func (s *ChannelSelector) selectFromMatch(
 			recordSelection, rotationKey, obsKey, shouldUseObservation, excludeChannelIDs, nowISO, nowMs)
 	}
 
-	// Weighted: priority layers
-	layers := make(map[int64][]RouteChannelCandidate)
-	for _, c := range available {
-		layers[c.Channel.Priority] = append(layers[c.Channel.Priority], c)
-	}
+	// Priority-layer strategies: weighted (default) + named pure strategies
+	// (least_busy / lowest_latency / lowest_cost). P is a hard gate; selection
+	// only happens inside the first priority layer that still has healthy candidates.
+	if IsPriorityLayerRoutingStrategy(strategy) {
+		layers := make(map[int64][]RouteChannelCandidate)
+		for _, c := range available {
+			layers[c.Channel.Priority] = append(layers[c.Channel.Priority], c)
+		}
 
-	var priorities []int64
-	for p := range layers {
-		priorities = append(priorities, p)
-	}
-	// Sort ascending
-	for i := 0; i < len(priorities); i++ {
-		for j := i + 1; j < len(priorities); j++ {
-			if priorities[j] < priorities[i] {
-				priorities[i], priorities[j] = priorities[j], priorities[i]
+		var priorities []int64
+		for p := range layers {
+			priorities = append(priorities, p)
+		}
+		// Sort ascending
+		for i := 0; i < len(priorities); i++ {
+			for j := i + 1; j < len(priorities); j++ {
+				if priorities[j] < priorities[i] {
+					priorities[i], priorities[j] = priorities[j], priorities[i]
+				}
 			}
 		}
-	}
 
-	for _, priority := range priorities {
-		rawLayer := layers[priority]
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(rawLayer, resolveModel)
-		filteredLayer := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
+		for _, priority := range priorities {
+			rawLayer := layers[priority]
+			breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(rawLayer, resolveModel)
+			filteredLayer := FilterRecentlyFailedCandidates(breakerHealthy,
+				func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+				nowMs, s.configuredMaxSec)
 
-		selected := s.weightedRandomSelect(filteredLayer, resolveModel, policy)
-		if selected == nil {
-			continue
+			var selected *RouteChannelCandidate
+			if IsDeterministicNamedStrategy(strategy) {
+				selected = s.namedStrategySelect(strategy, filteredLayer, resolveModel)
+			} else {
+				selected = s.weightedRandomSelect(filteredLayer, resolveModel, policy)
+			}
+			if selected == nil {
+				continue
+			}
+			return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
+				recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
 		}
-		return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
-			recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
+
+		return nil, nil
 	}
 
 	return nil, nil
@@ -694,6 +705,23 @@ func (s *ChannelSelector) weightedRandomSelect(
 		time.Now().UnixMilli(),
 		WeightedMode,
 		"",
+		s.pricingFn,
+		s.fallbackUnitCost,
+	)
+	return result.Selected
+}
+
+// namedStrategySelect runs least_busy / lowest_latency / lowest_cost inside a priority layer.
+func (s *ChannelSelector) namedStrategySelect(
+	strategy RouteRoutingStrategy,
+	candidates []RouteChannelCandidate,
+	modelResolver func(RouteChannelCandidate) string,
+) *RouteChannelCandidate {
+	result := SelectByNamedStrategy(
+		strategy,
+		candidates,
+		modelResolver,
+		s.channelLoadProvider,
 		s.pricingFn,
 		s.fallbackUnitCost,
 	)
