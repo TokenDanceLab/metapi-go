@@ -43,6 +43,9 @@ type managedKeyView struct {
 	UsedCost     float64
 	MaxRequests  *int64
 	UsedRequests int64
+	// ProxyURL is the optional per-key egress proxy (downstream_api_keys.proxy_url).
+	// nil/empty means inherit site/account/system proxy (FE-KEY-PROXY / #578).
+	ProxyURL *string
 	// Policy fields — parsed from JSON TEXT columns
 	SupportedModels        []string
 	AllowedRouteIDs        []int64
@@ -177,7 +180,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	row := db.QueryRowx(
 		`SELECT id, name, enabled, expires_at, max_cost, used_cost,
-		        max_requests, used_requests,
+		        max_requests, used_requests, proxy_url,
 		        supported_models, allowed_route_ids,
 		        site_weight_multipliers, excluded_site_ids,
 		        excluded_credential_refs
@@ -186,13 +189,14 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 	)
 
 	var v managedKeyView
+	var proxyURL *string
 	var supportedModelsJSON, allowedRouteIDsJSON *string
 	var siteWeightMultiJSON, excludedSiteIDsJSON *string
 	var excludedCredRefsJSON *string
 
 	err := row.Scan(
 		&v.ID, &v.Name, &v.Enabled, &v.ExpiresAt, &v.MaxCost, &v.UsedCost,
-		&v.MaxRequests, &v.UsedRequests,
+		&v.MaxRequests, &v.UsedRequests, &proxyURL,
 		&supportedModelsJSON, &allowedRouteIDsJSON,
 		&siteWeightMultiJSON, &excludedSiteIDsJSON,
 		&excludedCredRefsJSON,
@@ -203,6 +207,14 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("query downstream_api_keys: %w", err)
+	}
+
+	// Normalize proxy_url: whitespace-only → nil (inherit site/system).
+	if proxyURL != nil {
+		trimmed := strings.TrimSpace(*proxyURL)
+		if trimmed != "" {
+			v.ProxyURL = &trimmed
+		}
 	}
 
 	// Parse JSON columns into typed slices/maps

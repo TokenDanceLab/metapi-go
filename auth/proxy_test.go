@@ -613,3 +613,94 @@ func TestProxyAuthMiddleware_ResponseContentType(t *testing.T) {
 		t.Errorf("expected application/json Content-Type, got %q", ct)
 	}
 }
+
+func TestAuthorizeDownstreamToken_ManagedKeyProxyURL(t *testing.T) {
+	setupTestDB(t)
+	db := testDB(t)
+	now := "2026-07-04T00:00:00Z"
+	proxyURL := "http://key-proxy:9090"
+	_, err := db.Exec(
+		`INSERT INTO downstream_api_keys
+		 (name, key, enabled, expires_at, max_cost, used_cost, max_requests, used_requests, proxy_url,
+		  supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		  created_at, updated_at)
+		 VALUES (?, ?, 1, NULL, NULL, 0, NULL, 0, ?, '[]', '[]', '{}', '[]', '[]', ?, ?)`,
+		"proxy-key", "sk-with-proxy", proxyURL, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	result := AuthorizeDownstreamToken("sk-with-proxy", proxyCfg("global-secret"))
+	if !result.OK {
+		t.Fatalf("expected OK, got %s", result.Error)
+	}
+	if result.Key == nil || result.Key.ProxyURL == nil || *result.Key.ProxyURL != proxyURL {
+		t.Fatalf("Key.ProxyURL = %#v, want %q", result.Key, proxyURL)
+	}
+}
+
+func TestAuthorizeDownstreamToken_ManagedKeyProxyURLWhitespaceInherits(t *testing.T) {
+	setupTestDB(t)
+	db := testDB(t)
+	now := "2026-07-04T00:00:00Z"
+	_, err := db.Exec(
+		`INSERT INTO downstream_api_keys
+		 (name, key, enabled, expires_at, max_cost, used_cost, max_requests, used_requests, proxy_url,
+		  supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		  created_at, updated_at)
+		 VALUES (?, ?, 1, NULL, NULL, 0, NULL, 0, '   ', '[]', '[]', '{}', '[]', '[]', ?, ?)`,
+		"proxy-blank", "sk-blank-proxy", now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	result := AuthorizeDownstreamToken("sk-blank-proxy", proxyCfg("global-secret"))
+	if !result.OK {
+		t.Fatalf("expected OK, got %s", result.Error)
+	}
+	if result.Key == nil {
+		t.Fatal("expected key")
+	}
+	if result.Key.ProxyURL != nil {
+		t.Fatalf("whitespace proxy_url should inherit (nil), got %#v", *result.Key.ProxyURL)
+	}
+}
+
+func TestProxyAuthMiddleware_PropagatesKeyProxyURL(t *testing.T) {
+	setupTestDB(t)
+	db := testDB(t)
+	now := "2026-07-04T00:00:00Z"
+	proxyURL := "socks5://key-proxy:1080"
+	_, err := db.Exec(
+		`INSERT INTO downstream_api_keys
+		 (name, key, enabled, expires_at, max_cost, used_cost, max_requests, used_requests, proxy_url,
+		  supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		  created_at, updated_at)
+		 VALUES (?, ?, 1, NULL, NULL, 0, NULL, 0, ?, '[]', '[]', '{}', '[]', '[]', ?, ?)`,
+		"mw-proxy", "sk-mw-proxy", proxyURL, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	cfg := proxyCfg("global-secret")
+	middleware := ProxyAuth(cfg)
+	var captured *ProxyAuthContext
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = GetProxyAuth(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := newProxyRequest("POST", "/v1/chat/completions", map[string]string{
+		"Authorization": "Bearer sk-mw-proxy",
+	}, "")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	if captured == nil || captured.ProxyURL == nil || *captured.ProxyURL != proxyURL {
+		t.Fatalf("captured ProxyURL = %#v, want %q", captured, proxyURL)
+	}
+}

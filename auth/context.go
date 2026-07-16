@@ -28,6 +28,12 @@ type ProxyAuthContext struct {
 	KeyID   *int64                  // Managed key row ID; nil for global
 	KeyName string                  // Managed key name; "global" for global
 	Policy  DownstreamRoutingPolicy // Resolved routing policy
+	// ProxyURL is an optional per-key egress proxy override from
+	// downstream_api_keys.proxy_url (FE-KEY-PROXY / upstream #578).
+	// nil/empty means inherit account → site → system proxy.
+	// When set, it takes precedence over site/account proxy for that key's
+	// upstream requests (product intent: multi-tenant key isolation).
+	ProxyURL *string
 }
 
 // ---------------------------------------------------------------------------

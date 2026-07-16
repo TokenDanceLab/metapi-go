@@ -166,7 +166,12 @@ func dispatchSelectedUpstream(
 		upstreamModel = ctx.RequestedModel
 	}
 	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
+	// Proxy selection: key proxy > account > site > system > direct
+	// (FE-KEY-PROXY / upstream #578; see proxy.KeyProxyPrecedence).
 	proxyConfig := service.BuildPlatformProxyConfig(config.Get(), &selected.Account, &selected.Site)
+	if ctx != nil && ctx.Auth != nil {
+		proxyConfig = proxy.ApplyKeyProxyOverride(proxyConfig, ctx.Auth.ProxyURL)
+	}
 
 	// Step 8: Send upstream request
 	startedAt := time.Now()
