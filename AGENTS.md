@@ -84,7 +84,8 @@ golangci-lint run --timeout=3m        # Lint check
 - `docs/plan/` — dependency graph + milestones + fix plan
 - `docs/progress/MASTER.md` — current project status
 - `docs/analysis/` — S.U.P.E.R architecture assessment
-- `docs/architecture.md` — Go architecture overview
+- `docs/architecture.md` — as-built Go package map (proxy/transform/routing; not proxycore/protocol)
+- `docs/design/BACKEND.md` — backend design philosophy, dependency rules, forbidden imports (M-BACKEND / B0)
 - `docs/deployment.md` — deployment guide
 - `docs/api.md` — admin API reference
 - `docs/migration.md` — TS→Go migration

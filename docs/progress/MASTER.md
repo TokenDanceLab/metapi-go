@@ -24,12 +24,15 @@
 | **HARDEN** | Production hardening (18/23 findings) | ✅ Done |
 | **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | 🔄 In progress (Wave 1) |
 | **M-GAP** | Original metapi gap inventory (docs-only) | 🔄 In progress (Wave 1) |
+| **M-BACKEND** | Backend architecture clarity | 🔄 In progress (B0 docs #16) |
+| **M-UI** | UI/UX design system | 🔄 In progress (U0) |
+| **M-SCHEMA** | Schema compat + upgrade | 🔄 SC0 done |
+| **M-RELIABILITY** | Reliability and boundaries | 🔄 R0 in flight |
 
-> **Scope boundary (this round):** M-STACK and M-GAP **do not** implement original-gap product fixes.
-> Stack work modernizes frontend tooling only. Gap work is inventory + backlog issues only.
-> No product feature implementation ships under either milestone in this program.
+> **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
+> **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
 
-## Program map (#3–#11)
+## Program map (#3–#11 stack/gap)
 
 | Issue | Track | Title | Wave |
 |------:|:------|:------|:-----|
@@ -42,6 +45,15 @@
 | #9 | G2 | metapi-go capability gap matrix with code evidence | Wave 1 |
 | #10 | G3 | Publish [backlog] GitHub issues from gap matrix | Wave 2 |
 | #11 | G4 | Gap inventory acceptance (docs-only gate) | Wave 3 |
+
+### M-BACKEND notes
+
+| Item | Detail |
+|------|--------|
+| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/4 |
+| B0 (#16) | `docs/architecture.md` truth + `docs/design/BACKEND.md` principles (docs only) |
+| Next | B1 package boundaries · B2 CRITICAL concurrency · B3 unified errors |
+| Philosophy SSOT | `docs/design/BACKEND.md` |
 
 ## Hardening Results
 
