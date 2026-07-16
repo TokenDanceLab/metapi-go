@@ -539,3 +539,12 @@ Admin routes under `/api/*` are same-origin by default. Set `ADMIN_CORS_ALLOWED_
 ## Trusted Client IPs
 
 Forwarded client IP headers are ignored by default. Set `TRUSTED_PROXY_CIDRS` only for reverse-proxy source ranges you control; admin IP allowlists and rate limits otherwise use the direct peer IP.
+
+
+### GET /api/stats/usage-heatmap
+
+Admin usage density cells (, ). Hard limit 2000 cells. See .
+
+### GET /api/stats/slow-requests
+
+Admin slow-request ranking from  (, , ).

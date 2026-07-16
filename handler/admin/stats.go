@@ -23,6 +23,8 @@ func RegisterStatsRoutes(r chi.Router, db *sqlx.DB) {
 	r.Get("/api/stats/site-distribution", handler.siteDistribution)
 	r.Get("/api/stats/site-trend", handler.siteTrend)
 	r.Get("/api/stats/model-by-site", handler.modelBySite)
+	r.Get("/api/stats/usage-heatmap", handler.usageHeatmap)
+	r.Get("/api/stats/slow-requests", handler.slowRequests)
 	// Cross-site effective model price comparison (admin).
 	// Both paths are registered for discoverability; they share one handler.
 	r.Get("/api/stats/model-prices", handler.modelPriceCompare)
