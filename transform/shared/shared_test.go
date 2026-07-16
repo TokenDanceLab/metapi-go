@@ -41,6 +41,231 @@ func TestExtractInlineThinkTags_UnclosedTag(t *testing.T) {
 	}
 }
 
+func TestExtractInlineThinkTags_MiniMaxOrphanClose(t *testing.T) {
+	// Upstream #511 / MiniMax playground: open tag omitted, only close tag appears.
+	text := "友好的方式打招呼说\"你好哦\"。我应该以友好、热情的方式回应。\n" + thinkClose + "\n\n你好呀！很高兴见到你！"
+	result := ExtractInlineThinkTags(text)
+	if strings.Contains(result.Content, thinkClose) || strings.Contains(result.Content, thinkOpen) {
+		t.Errorf("content must not keep raw think tags, got %q", result.Content)
+	}
+	if !strings.Contains(result.Content, "你好呀") {
+		t.Errorf("expected assistant greeting in content, got %q", result.Content)
+	}
+	if !strings.Contains(result.Reasoning, "友好的方式打招呼") {
+		t.Errorf("expected thinking in reasoning, got %q", result.Reasoning)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MiniMax final + stream fixtures
+// ---------------------------------------------------------------------------
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxOrphanThink(t *testing.T) {
+	payload := map[string]any{
+		"id":      "chatcmpl-minimax-1",
+		"object":  "chat.completion",
+		"created": float64(1700000000),
+		"model":   "MiniMax-M2.7",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"message": map[string]any{
+					"role": "assistant",
+					"content": "友好的方式打招呼说\"你好哦\"。我应该以友好、热情的方式回应。\n" +
+						thinkClose + "\n\n你好呀！很高兴见到你！",
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.7", "")
+	if strings.Contains(result.Content, thinkClose) || strings.Contains(result.Content, thinkOpen) {
+		t.Fatalf("content kept raw think tags: %q", result.Content)
+	}
+	if !strings.Contains(result.Content, "你好呀") {
+		t.Fatalf("content = %q", result.Content)
+	}
+	if !strings.Contains(result.ReasoningContent, "友好的方式打招呼") {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxReasoningDetails(t *testing.T) {
+	payload := map[string]any{
+		"id":     "chatcmpl-minimax-2",
+		"object": "chat.completion",
+		"model":  "MiniMax-M2.7",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": "\n",
+					"reasoning_details": []any{
+						map[string]any{
+							"type":   "reasoning.text",
+							"id":     "reasoning-text-1",
+							"format": "MiniMax-response-v1",
+							"index":  float64(0),
+							"text":   "Let me think about this request.",
+						},
+					},
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.7", "")
+	if result.ReasoningContent != "Let me think about this request." {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+	if strings.Contains(result.Content, thinkOpen) || strings.Contains(result.Content, thinkClose) {
+		t.Fatalf("content kept tags: %q", result.Content)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxPairedThink(t *testing.T) {
+	payload := map[string]any{
+		"id":    "chatcmpl-minimax-3",
+		"model": "MiniMax-M2.5",
+		"choices": []any{
+			map[string]any{
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": thinkOpen + "internal plan" + thinkClose + "visible answer",
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.5", "")
+	if result.Content != "visible answer" {
+		t.Fatalf("content = %q", result.Content)
+	}
+	if result.ReasoningContent != "internal plan" {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_MiniMaxThinkStream(t *testing.T) {
+	ctx := CreateStreamTransformContext("MiniMax-M2.7")
+	var content, reasoning string
+
+	chunks := []map[string]any{
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index": float64(0),
+				"delta": map[string]any{"role": "assistant", "content": thinkOpen + "先考虑语气"},
+			}},
+		},
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index": float64(0),
+				"delta": map[string]any{"content": "再回复" + thinkClose + "\n你好"},
+			}},
+		},
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index":         float64(0),
+				"delta":         map[string]any{},
+				"finish_reason": "stop",
+			}},
+		},
+	}
+
+	for _, payload := range chunks {
+		ev := NormalizeUpstreamStreamEvent(payload, ctx, "MiniMax-M2.7")
+		content += ev.ContentDelta
+		reasoning += ev.ReasoningDelta
+	}
+
+	if strings.Contains(content, thinkClose) || strings.Contains(content, thinkOpen) {
+		t.Fatalf("stream content kept tags: %q", content)
+	}
+	if !strings.Contains(content, "你好") {
+		t.Fatalf("content = %q", content)
+	}
+	if !strings.Contains(reasoning, "先考虑语气") || !strings.Contains(reasoning, "再回复") {
+		t.Fatalf("reasoning = %q", reasoning)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_MiniMaxReasoningDetailsDelta(t *testing.T) {
+	ctx := CreateStreamTransformContext("MiniMax-M2.7")
+	payload := map[string]any{
+		"id": "chatcmpl-mm-s2", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+		"choices": []any{map[string]any{
+			"index": float64(0),
+			"delta": map[string]any{
+				"role": "assistant",
+				"reasoning_details": []any{
+					map[string]any{"type": "reasoning.text", "text": "split reasoning"},
+				},
+				"content": "answer",
+			},
+		}},
+	}
+	ev := NormalizeUpstreamStreamEvent(payload, ctx, "MiniMax-M2.7")
+	if ev.ReasoningDelta != "split reasoning" {
+		t.Fatalf("reasoning = %q", ev.ReasoningDelta)
+	}
+	if ev.ContentDelta != "answer" {
+		t.Fatalf("content = %q", ev.ContentDelta)
+	}
+}
+
+func TestSerializeFinalResponse_MiniMaxStrippedContent(t *testing.T) {
+	normalized := NormalizeUpstreamFinalResponse(map[string]any{
+		"id":    "chatcmpl-mm-ser",
+		"model": "MiniMax-M2.7",
+		"choices": []any{map[string]any{
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": "reason body" + thinkClose + "hello user",
+			},
+			"finish_reason": "stop",
+		}},
+	}, "MiniMax-M2.7", "")
+
+	out := SerializeFinalResponse(FormatOpenAI, normalized, struct {
+		PromptTokens, CompletionTokens, TotalTokens int
+	}{1, 2, 3})
+
+	var msg map[string]any
+	switch choices := out["choices"].(type) {
+	case []map[string]any:
+		if len(choices) == 0 {
+			t.Fatalf("no choices: %#v", out)
+		}
+		msg, _ = choices[0]["message"].(map[string]any)
+	case []any:
+		if len(choices) == 0 {
+			t.Fatalf("no choices: %#v", out)
+		}
+		choice, _ := choices[0].(map[string]any)
+		msg, _ = choice["message"].(map[string]any)
+	default:
+		t.Fatalf("unexpected choices type: %T", out["choices"])
+	}
+
+	content := AsTrimmedString(msg["content"])
+	reasoning := AsTrimmedString(msg["reasoning_content"])
+	if strings.Contains(content, thinkClose) {
+		t.Fatalf("serialized content kept close tag: %q", content)
+	}
+	if !strings.Contains(content, "hello user") {
+		t.Fatalf("content = %q", content)
+	}
+	if !strings.Contains(reasoning, "reason body") {
+		t.Fatalf("reasoning = %q", reasoning)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Stop reason normalization
 // ---------------------------------------------------------------------------
