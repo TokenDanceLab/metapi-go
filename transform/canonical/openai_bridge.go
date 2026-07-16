@@ -939,6 +939,14 @@ func canonicalToolChoiceToOpenAI(tc *CanonicalToolChoice) any {
 }
 
 // ApplyOpenAICompatibleContinuation writes continuation fields into the body/metadata.
+//
+// previous_response_id is a Responses-API field. Chat Completions (and other
+// non-Responses OpenAI-compatible surfaces built by CanonicalRequestToOpenAiChatBody)
+// must not receive it — many upstreams return HTTP 400
+// "Unsupported parameter: previous_response_id". Continuity is still preserved
+// on the canonical envelope (ReadOpenAICompatibleContinuation /
+// CanonicalContinuation.PreviousResponseID) and re-emitted only when building a
+// Responses body via ApplyOpenAIResponsesContinuation.
 func ApplyOpenAICompatibleContinuation(body map[string]any, cont *CanonicalContinuation, metadata map[string]any) {
 	if cont == nil {
 		return
@@ -946,14 +954,24 @@ func ApplyOpenAICompatibleContinuation(body map[string]any, cont *CanonicalConti
 	if cont.PromptCacheKey != "" {
 		body["prompt_cache_key"] = cont.PromptCacheKey
 	}
-	if cont.PreviousResponseID != "" {
-		body["previous_response_id"] = cont.PreviousResponseID
-	}
+	// Intentionally do NOT write previous_response_id onto chat-shaped bodies.
 	if cont.TurnState != "" {
 		if metadata == nil {
 			metadata = map[string]any{}
 		}
 		metadata["metapi_turn_state"] = cont.TurnState
+	}
+}
+
+// ApplyOpenAIResponsesContinuation writes Responses-protocol continuation
+// fields (including previous_response_id) into a Responses request body.
+func ApplyOpenAIResponsesContinuation(body map[string]any, cont *CanonicalContinuation, metadata map[string]any) {
+	if cont == nil {
+		return
+	}
+	ApplyOpenAICompatibleContinuation(body, cont, metadata)
+	if cont.PreviousResponseID != "" {
+		body["previous_response_id"] = cont.PreviousResponseID
 	}
 }
 

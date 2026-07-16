@@ -21,6 +21,7 @@ import (
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/service"
+	"github.com/tokendancelab/metapi-go/transform/openai/responses"
 )
 
 // UpstreamConfig holds the dependencies needed for upstream forwarding.
@@ -216,9 +217,15 @@ func dispatchSelectedUpstream(
 	var lastPending *pendingUpstreamFailure
 	for i, path := range candidatePaths {
 		isLast := i >= len(candidatePaths)-1
+		attemptBody, sanitizeErr := sanitizeUpstreamJSONBody(bodyBytes, selected.Site.Platform, path)
+		if sanitizeErr != nil {
+			// Clear client-facing continuity error (issue #54 / upstream #504).
+			writeJSONError(w, http.StatusBadRequest, sanitizeErr.Error(), "invalid_request_error")
+			return true, nil
+		}
 		finished, pending, cont := dispatchEndpointAttemptWithContinue(
 			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
-			path, contentType, bodyBytes, firstByteTimeoutMs,
+			path, contentType, attemptBody, firstByteTimeoutMs,
 			retry, maxRetries, isLast, disableCrossProtocolFallback,
 		)
 		if finished {
@@ -975,6 +982,52 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	}
 	w.WriteHeader(resp.StatusCode)
 	w.Write(bodyBytes)
+}
+
+// sanitizeUpstreamJSONBody applies Responses continuity/compact sanitization for one
+// upstream attempt. Chat/messages candidates strip previous_response_id; Responses
+// platforms forward or strip per SupportsResponsesPreviousResponseID.
+// See docs/analysis/previous-response-id.md (issue #54 / upstream #504).
+func sanitizeUpstreamJSONBody(bodyBytes []byte, sitePlatform, upstreamPath string) ([]byte, error) {
+	if len(bodyBytes) == 0 {
+		return bodyBytes, nil
+	}
+	// Cheap gate: only rewrite when continuity field or compact path is involved.
+	pathLower := strings.ToLower(upstreamPath)
+	needsCompact := strings.Contains(pathLower, "/responses/compact")
+	needsContinuity := bytes.Contains(bodyBytes, []byte(`"previous_response_id"`))
+	if !needsCompact && !needsContinuity {
+		return bodyBytes, nil
+	}
+	var body map[string]any
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return bodyBytes, nil
+	}
+	protocol := responses.ProtocolUnknown
+	switch ep, ok := proxy.EndpointFromPath(upstreamPath); {
+	case ok && ep == proxy.EndpointChat:
+		protocol = responses.ProtocolChat
+	case ok && ep == proxy.EndpointMessages:
+		protocol = responses.ProtocolMessages
+	case ok && ep == proxy.EndpointResponses:
+		protocol = responses.ProtocolResponses
+	case needsCompact || strings.Contains(pathLower, "/responses"):
+		protocol = responses.ProtocolResponses
+	}
+	next, _, err := responses.SanitizeResponsesRequestBody(body, responses.ContinuityPolicyInput{
+		SitePlatform:     sitePlatform,
+		Protocol:         protocol,
+		UpstreamPath:     upstreamPath,
+		IsCompactRequest: needsCompact,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out, marshalErr := json.Marshal(next)
+	if marshalErr != nil {
+		return bodyBytes, nil
+	}
+	return out, nil
 }
 
 // swapModelInJSON performs a shallow JSON re-encode to replace the "model" field.

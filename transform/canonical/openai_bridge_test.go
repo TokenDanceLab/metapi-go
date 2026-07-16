@@ -432,13 +432,24 @@ func TestOpenAIBody_Continuation_Roundtrip(t *testing.T) {
 		t.Errorf("expected previousResponseId resp_prev_1, got %q", env.Continuation.PreviousResponseID)
 	}
 
-	// Reconstruct
+	// Reconstruct chat body: prompt_cache_key is OpenAI-compatible; previous_response_id
+	// is Responses-only and must NOT be re-emitted onto chat (upstream #504 / #54).
 	reconstructed := CanonicalRequestToOpenAiChatBody(env)
 	if reconstructed["prompt_cache_key"] != "cache_key_1" {
 		t.Errorf("expected prompt_cache_key, got %v", reconstructed["prompt_cache_key"])
 	}
-	if reconstructed["previous_response_id"] != "resp_prev_1" {
-		t.Errorf("expected previous_response_id, got %v", reconstructed["previous_response_id"])
+	if _, ok := reconstructed["previous_response_id"]; ok {
+		t.Errorf("chat body must not include previous_response_id, got %v", reconstructed["previous_response_id"])
+	}
+
+	// Responses body re-emits previous_response_id via ApplyOpenAIResponsesContinuation.
+	responsesBody := map[string]any{"model": "gpt-4"}
+	ApplyOpenAIResponsesContinuation(responsesBody, env.Continuation, nil)
+	if responsesBody["previous_response_id"] != "resp_prev_1" {
+		t.Errorf("expected previous_response_id on responses body, got %v", responsesBody["previous_response_id"])
+	}
+	if responsesBody["prompt_cache_key"] != "cache_key_1" {
+		t.Errorf("expected prompt_cache_key on responses body, got %v", responsesBody["prompt_cache_key"])
 	}
 }
 

@@ -67,20 +67,20 @@ func TestSanitizeCompactResponsesRequestBody(t *testing.T) {
 		want         map[string]any
 	}{
 		{
-			name:         "codex strips stream, stream_options, store",
-			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true, "input": "hello"},
+			name:         "codex strips stream, stream_options, store, previous_response_id",
+			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true, "previous_response_id": "resp_1", "input": "hello"},
 			sitePlatform: "codex",
 			want:         map[string]any{"model": "gpt-4", "input": "hello"},
 		},
 		{
-			name:         "sub2api strips stream, stream_options, store",
-			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true},
+			name:         "sub2api strips stream, stream_options, store, previous_response_id",
+			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true, "previous_response_id": "resp_1"},
 			sitePlatform: "sub2api",
 			want:         map[string]any{"model": "gpt-4"},
 		},
 		{
-			name:         "openai strips only stream and stream_options",
-			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true},
+			name:         "openai strips stream, stream_options, previous_response_id; keeps store",
+			body:         map[string]any{"model": "gpt-4", "stream": true, "stream_options": map[string]any{}, "store": true, "previous_response_id": "resp_1"},
 			sitePlatform: "openai",
 			want:         map[string]any{"model": "gpt-4", "store": true},
 		},
