@@ -300,6 +300,14 @@ Usage overview for a specific key (24h, 7d, all-time).
 
 Usage trend data for a specific key.
 
+### GET /api/downstream-keys/:id/export
+
+Export client/tool config snippets for a downstream key (competitive learn #120).
+
+**Query params**: `profile` (`openai` | `cherry` | `generic`, omit for all), optional `baseUrl` (else `PUBLIC_BASE_URL` / settings `public_base_url` / request host).
+
+Response includes `formatVersion`, `baseUrl`, and `profiles[]` with structured `content` + copyable `snippet`. Secrets are limited to the key the admin can already read. See `docs/analysis/credential-export.md`.
+
 ### POST /api/downstream-keys
 
 Create a new downstream API key.

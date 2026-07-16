@@ -24,6 +24,7 @@ func RegisterDownstreamKeysRoutes(r chi.Router, db *sqlx.DB) {
 	r.Post("/api/downstream-keys/batch", handler.batchKeys)
 	r.Get("/api/downstream-keys/{id}/overview", handler.overview)
 	r.Get("/api/downstream-keys/{id}/trend", handler.trend)
+	r.Get("/api/downstream-keys/{id}/export", handler.exportKey)
 	r.Put("/api/downstream-keys/{id}", handler.updateKey)
 	r.Post("/api/downstream-keys/{id}/reset-usage", handler.resetUsage)
 	r.Delete("/api/downstream-keys/{id}", handler.deleteKey)

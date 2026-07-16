@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#119. Open P2 #120–#121 |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#120. Open P2 #121 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -75,7 +75,7 @@
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | In flight WFs | none — next P1 #118 Redis cooldown |
-| Next | M-COMPETE P1 residual: #118 Redis cooldown · P2 #120–#121 |
+| Next | M-COMPETE P2 residual: #121 heatmaps |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
@@ -84,7 +84,7 @@
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
 | Local clones | operator-only checkouts under competitors/ (not product SSOT) |
-| Scope | Docs-first competitive learning; matrix `docs/analysis/competitive/`; `[learn]` **#110–#121** (open) |
+| Scope | Docs-first competitive learning; matrix `docs/analysis/competitive/`; `[learn]` **#110–#121** (#120 export landed; #121 open) |
 | Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
 | Matrix / backlog | `docs/analysis/competitive/matrix.md` · issues **#110–#121** |
 | Inventory | `docs/analysis/competitive/` — [README](../analysis/competitive/README.md) · [sources](../analysis/competitive/sources.md) · [matrix](../analysis/competitive/matrix.md) |
