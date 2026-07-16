@@ -14,9 +14,11 @@ const (
 
 // ParsedUsage is a normalized token usage snapshot extracted from an upstream body/SSE.
 type ParsedUsage struct {
-	PromptTokens     int64
-	CompletionTokens int64
-	TotalTokens      int64
+	PromptTokens        int64
+	CompletionTokens    int64
+	TotalTokens         int64
+	CacheReadTokens     int64
+	CacheCreationTokens int64
 	// Source is "upstream" when any token field was present, otherwise "unknown".
 	Source string
 	Found  bool
@@ -166,15 +168,17 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		out.CompletionTokens = n
 		out.Found = true
 	}
-	// Optional Anthropic cache fields roll into prompt when present.
-	cacheRead, hasCacheRead := asInt64(usage["cache_read_input_tokens"])
-	cacheCreate, hasCacheCreate := asInt64(usage["cache_creation_input_tokens"])
-	if hasCacheRead || hasCacheCreate {
-		// Prefer explicit input_tokens when set; otherwise sum cache fields.
-		if out.PromptTokens == 0 {
-			out.PromptTokens = cacheRead + cacheCreate
-		}
+	// Optional Anthropic cache fields.
+	if cacheRead, ok := asInt64(usage["cache_read_input_tokens"]); ok {
+		out.CacheReadTokens = cacheRead
 		out.Found = true
+	}
+	if cacheCreate, ok := asInt64(usage["cache_creation_input_tokens"]); ok {
+		out.CacheCreationTokens = cacheCreate
+		out.Found = true
+	}
+	if out.PromptTokens == 0 && (out.CacheReadTokens > 0 || out.CacheCreationTokens > 0) {
+		out.PromptTokens = out.CacheReadTokens + out.CacheCreationTokens
 	}
 
 	// Gemini-style

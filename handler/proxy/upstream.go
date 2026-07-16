@@ -751,9 +751,12 @@ func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *r
 	if cfg == nil || cfg.Router == nil || selected == nil {
 		return
 	}
-	// Cost remains 0 here; pricing is a separate concern (#43). Token totals
-	// are persisted via writeSuccessProxyLog for aggregation.
-	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), 0, &modelName, nil); err != nil {
+	platformName := ""
+	if selected.Site.Platform != "" {
+		platformName = selected.Site.Platform
+	}
+	billing := EstimateBillingCostFromUsage(modelName, platformName, usage)
+	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), billing.EstimatedCost, &modelName, nil); err != nil {
 		slog.Warn("RecordSuccess failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
 	// Soft-feed first-byte EMA: until header timing is plumbed separately, use
@@ -762,7 +765,6 @@ func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *r
 	if siteID != 0 {
 		routing.RecordSiteRuntimeSuccess(siteID, float64(latencyMs), &modelName, float64(latencyMs))
 	}
-	_ = usage
 }
 
 func writeSuccessProxyLog(
@@ -817,6 +819,11 @@ func writeSuccessProxyLog(
 			source = usageSourceUnknown
 		}
 	}
+	platformName := ""
+	if selected.Site.Platform != "" {
+		platformName = selected.Site.Platform
+	}
+	billing := EstimateBillingCostFromUsage(upstreamModel, platformName, usage)
 	entry := proxy.ProxyLogEntry{
 		RouteID:            routeIDPtr,
 		ChannelID:          &channelID,
@@ -832,6 +839,8 @@ func writeSuccessProxyLog(
 		PromptTokens:       int64Ptr(usage.PromptTokens),
 		CompletionTokens:   int64Ptr(usage.CompletionTokens),
 		TotalTokens:        int64Ptr(usage.TotalTokens),
+		EstimatedCost:      billing.EstimatedCost,
+		BillingDetails:     billing.BillingDetails,
 		ClientFamily:       clientFamily,
 		ClientAppID:        clientAppID,
 		ClientAppName:      clientAppName,
