@@ -116,6 +116,7 @@ var usageLimitRateLimitPatterns = []*regexp.Regexp{
 type SiteRuntimeHealthState struct {
 	PenaltyScore             float64  `json:"penaltyScore"`
 	LatencyEMAMs             *float64 `json:"latencyEmaMs,omitempty"`
+	FirstByteEMAMs           *float64 `json:"firstByteEmaMs,omitempty"`
 	TransientFailureStreak   int64    `json:"transientFailureStreak"`
 	LastTransientFailureAtMs *int64   `json:"lastTransientFailureAtMs,omitempty"`
 	RecentSuccessCount       float64  `json:"recentSuccessCount"`
@@ -441,10 +442,17 @@ func GetRuntimeHealthMultiplier(state *SiteRuntimeHealthState) float64 {
 	penaltyScore := getDecayedSiteRuntimePenalty(state)
 	failurePenaltyFactor := 1.0 / (1.0 + penaltyScore)
 
+	// Prefer first-byte/TTFT EMA when available (#113); fall back to total latency EMA.
+	latencyMsForPenalty := 0.0
+	if state.FirstByteEMAMs != nil {
+		latencyMsForPenalty = *state.FirstByteEMAMs
+	} else if state.LatencyEMAMs != nil {
+		latencyMsForPenalty = *state.LatencyEMAMs
+	}
 	latencyPenaltyRatio := 0.0
-	if state.LatencyEMAMs != nil {
+	if latencyMsForPenalty > 0 {
 		latencyPenaltyRatio = ClampNumber(
-			(*state.LatencyEMAMs-SiteRuntimeLatencyBaselineMs)/SiteRuntimeLatencyWindowMs,
+			(latencyMsForPenalty-SiteRuntimeLatencyBaselineMs)/SiteRuntimeLatencyWindowMs,
 			0, 1,
 		)
 	}
@@ -706,7 +714,7 @@ func applyRuntimeHealthFailure(state *SiteRuntimeHealthState, ctx SiteRuntimeFai
 	state.LastFailureAtMs = &n
 }
 
-func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64) {
+func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64, firstByteMs ...float64) {
 	n := nowMs()
 	refreshRecentOutcomeWindow(state)
 	state.RecentSuccessCount += 1
@@ -722,6 +730,15 @@ func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64)
 	} else {
 		ema := (*state.LatencyEMAMs)*(1-SiteRuntimeLatencyEMAAlpha) + latencyMs*SiteRuntimeLatencyEMAAlpha
 		state.LatencyEMAMs = &ema
+	}
+	if len(firstByteMs) > 0 && firstByteMs[0] > 0 {
+		fb := firstByteMs[0]
+		if state.FirstByteEMAMs == nil {
+			state.FirstByteEMAMs = &fb
+		} else {
+			ema := (*state.FirstByteEMAMs)*(1-SiteRuntimeLatencyEMAAlpha) + fb*SiteRuntimeLatencyEMAAlpha
+			state.FirstByteEMAMs = &ema
+		}
 	}
 }
 
@@ -743,17 +760,17 @@ func RecordSiteRuntimeFailure(siteID int64, ctx SiteRuntimeFailureContext) {
 }
 
 // RecordSiteRuntimeSuccess records a success against a site and model.
-func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string) {
+func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string, firstByteMs ...float64) {
 	healthStateMu.Lock()
 	defer healthStateMu.Unlock()
 
 	globalState := getOrCreateSiteRuntimeHealthState(siteID)
-	applyRuntimeHealthSuccess(globalState, latencyMs)
+	applyRuntimeHealthSuccess(globalState, latencyMs, firstByteMs...)
 
 	if modelName != nil && *modelName != "" {
 		modelState := getOrCreateSiteModelRuntimeHealthState(siteID, *modelName)
 		if modelState != nil {
-			applyRuntimeHealthSuccess(modelState, latencyMs)
+			applyRuntimeHealthSuccess(modelState, latencyMs, firstByteMs...)
 		}
 	}
 	scheduleSiteRuntimeHealthPersistence()

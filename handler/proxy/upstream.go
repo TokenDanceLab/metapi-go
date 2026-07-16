@@ -721,6 +721,12 @@ func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *r
 	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), 0, &modelName, nil); err != nil {
 		slog.Warn("RecordSuccess failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
+	// Soft-feed first-byte EMA: until header timing is plumbed separately, use
+	// total latency as an upper bound so faster channels still score better (#113).
+	siteID := selected.Account.SiteID
+	if siteID != 0 {
+		routing.RecordSiteRuntimeSuccess(siteID, float64(latencyMs), &modelName, float64(latencyMs))
+	}
 	_ = usage
 }
 
