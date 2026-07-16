@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/auth"
@@ -153,6 +154,11 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 // finished=true means the response was written (success or terminal error).
 // finished=false means the caller should continue the retry loop (optionally
 // with nextPending as the last soft failure to surface if selection ends).
+//
+// Chat-family surfaces iterate multi-protocol endpoint candidates with observed
+// first-byte timeout (issue #38 / upstream #387). Failures that fall through to
+// the next protocol candidate do not record channel failure so healthy siblings
+// are not poisoned by a single protocol miss.
 func dispatchSelectedUpstream(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -163,43 +169,162 @@ func dispatchSelectedUpstream(
 	retry int,
 	maxRetries int,
 ) (finished bool, nextPending *pendingUpstreamFailure) {
-	// Step 7: Build upstream request
+	// Step 7: Build upstream request materials
 	upstreamModel := selected.ActualModel
 	if upstreamModel == "" {
 		upstreamModel = ctx.RequestedModel
 	}
-	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
+	runtimeCfg := config.Get()
 	// Proxy selection: key proxy > account > site > system > direct
 	// (FE-KEY-PROXY / upstream #578; see proxy.KeyProxyPrecedence).
-	proxyConfig := service.BuildPlatformProxyConfig(config.Get(), &selected.Account, &selected.Site)
+	proxyConfig := service.BuildPlatformProxyConfig(runtimeCfg, &selected.Account, &selected.Site)
 	if ctx != nil && ctx.Auth != nil {
 		proxyConfig = proxy.ApplyKeyProxyOverride(proxyConfig, ctx.Auth.ProxyURL)
 	}
+	firstByteTimeoutMs := int64(0)
+	disableCrossProtocolFallback := false
+	if runtimeCfg != nil {
+		firstByteTimeoutMs = proxy.FirstByteTimeoutMs(runtimeCfg.ProxyFirstByteTimeoutSec)
+		disableCrossProtocolFallback = runtimeCfg.DisableCrossProtocolFallback
+	}
 
-	// Step 8: Send upstream request
-	startedAt := time.Now()
 	contentType := "application/json"
-	var bodyReader io.Reader
+	var bodyBytes []byte
 	var err error
 	if ctx.Multipart {
+		// Multipart bodies are not multi-protocol rewritten; single-shot only.
+		var bodyReader io.Reader
 		bodyReader, contentType, err = CloneMultipartBody(r, map[string]string{"model": upstreamModel})
 		if err != nil {
-			slog.Warn("multipart upstream body construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
+			slog.Warn("multipart upstream body construction failed", "err", err, "path", upstreamPath, "model", upstreamModel)
 			writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
 			return true, nil
 		}
-	} else {
-		forwardBytes := swapModelInJSON(ctx.RawBody, upstreamModel)
-		bodyReader = bytesReader(forwardBytes)
+		if bodyReader != nil {
+			bodyBytes, err = io.ReadAll(bodyReader)
+			if err != nil {
+				slog.Warn("multipart upstream body read failed", "err", err, "path", upstreamPath)
+				writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
+				return true, nil
+			}
+		}
+		return dispatchEndpointAttempt(w, r, ctx, cfg, selected, upstreamModel, proxyConfig, upstreamPath, contentType, bodyBytes, firstByteTimeoutMs, retry, maxRetries, true)
 	}
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bodyReader)
+	bodyBytes = swapModelInJSON(ctx.RawBody, upstreamModel)
+
+	candidatePaths := resolveUpstreamCandidatePaths(upstreamPath, disableCrossProtocolFallback)
+	var lastPending *pendingUpstreamFailure
+	for i, path := range candidatePaths {
+		isLast := i >= len(candidatePaths)-1
+		finished, pending, cont := dispatchEndpointAttemptWithContinue(
+			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
+			path, contentType, bodyBytes, firstByteTimeoutMs,
+			retry, maxRetries, isLast, disableCrossProtocolFallback,
+		)
+		if finished {
+			return true, nil
+		}
+		if pending != nil {
+			lastPending = pending
+		}
+		if cont {
+			// Soft protocol/timeout miss: try next candidate without channel poison.
+			continue
+		}
+		// Channel-level retry or terminal pending for outer loop.
+		return false, lastPending
+	}
+	if lastPending != nil {
+		return false, lastPending
+	}
+	if retry < maxRetries {
+		return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
+	}
+	writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+	return true, nil
+}
+
+// resolveUpstreamCandidatePaths returns ordered upstream paths for one channel attempt.
+// Non chat-family paths yield the original path only.
+func resolveUpstreamCandidatePaths(upstreamPath string, disableCrossProtocolFallback bool) []string {
+	candidates := proxy.ResolveEndpointCandidates(upstreamPath, disableCrossProtocolFallback)
+	if len(candidates) == 0 {
+		return []string{upstreamPath}
+	}
+	paths := make([]string, 0, len(candidates))
+	for _, ep := range candidates {
+		if p := proxy.PathForEndpoint(ep); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return []string{upstreamPath}
+	}
+	return paths
+}
+
+// dispatchEndpointAttempt is the single-path entry used by multipart.
+func dispatchEndpointAttempt(
+	w http.ResponseWriter,
+	r *http.Request,
+	ctx *Ctx,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	upstreamModel string,
+	proxyConfig *platform.ProxyConfig,
+	upstreamPath string,
+	contentType string,
+	bodyBytes []byte,
+	firstByteTimeoutMs int64,
+	retry int,
+	maxRetries int,
+	recordFailure bool,
+) (finished bool, nextPending *pendingUpstreamFailure) {
+	finished, pending, _ := dispatchEndpointAttemptWithContinue(
+		w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
+		upstreamPath, contentType, bodyBytes, firstByteTimeoutMs,
+		retry, maxRetries, true, true,
+	)
+	if !recordFailure {
+		return finished, pending
+	}
+	return finished, pending
+}
+
+// dispatchEndpointAttemptWithContinue runs one endpoint path.
+// cont=true means the caller should try the next protocol candidate without
+// recording channel failure / without writing a terminal response.
+func dispatchEndpointAttemptWithContinue(
+	w http.ResponseWriter,
+	r *http.Request,
+	ctx *Ctx,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	upstreamModel string,
+	proxyConfig *platform.ProxyConfig,
+	upstreamPath string,
+	contentType string,
+	bodyBytes []byte,
+	firstByteTimeoutMs int64,
+	retry int,
+	maxRetries int,
+	isLastEndpoint bool,
+	disableCrossProtocolFallback bool,
+) (finished bool, nextPending *pendingUpstreamFailure, cont bool) {
+	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
+	startedAt := time.Now()
+
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytesReader(bodyBytes))
 	if err != nil {
 		slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
+		if !isLastEndpoint && !disableCrossProtocolFallback {
+			return false, nil, true
+		}
 		if retry < maxRetries {
-			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
 		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
-		return true, nil
+		return true, nil, false
 	}
 	req.Header.Set("Content-Type", contentType)
 	if selected.TokenValue != "" {
@@ -207,41 +332,70 @@ func dispatchSelectedUpstream(
 	}
 	applyProxyCustomHeaders(req, proxyConfig)
 
-	var resp *http.Response
-	resp, err = sendUpstreamRequest(cfg, req, proxyConfig)
+	resp, err := sendUpstreamRequest(cfg, req, proxyConfig, firstByteTimeoutMs)
 	latencyMs := time.Since(startedAt).Milliseconds()
 
 	if err != nil {
+		// First-byte timeout: continue to next protocol when allowed; do not poison.
+		if proxy.IsObservedFirstByteTimeoutError(err) {
+			slog.Info("upstream first-byte timeout",
+				"url", upstreamURL,
+				"model", upstreamModel,
+				"channel_id", selected.Channel.ID,
+				"first_byte_timeout_ms", firstByteTimeoutMs,
+				"is_last_endpoint", isLastEndpoint,
+			)
+			if !isLastEndpoint && !disableCrossProtocolFallback {
+				return false, nil, true
+			}
+			// Terminal for this channel attempt.
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
+			if retry < maxRetries && proxy.ShouldRetryProxyRequest(408, err.Error()) {
+				return false, jsonPendingUpstreamFailure(http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error"), false
+			}
+			writeJSONError(w, http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error")
+			return true, nil, false
+		}
 		slog.Warn("upstream request failed", "err", err, "url", upstreamURL, "model", upstreamModel, "channel_id", selected.Channel.ID)
+		if !isLastEndpoint && !disableCrossProtocolFallback {
+			// Network error may still be protocol-local; allow next endpoint without poison.
+			return false, nil, true
+		}
 		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
 		if retry < maxRetries {
-			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
 		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
-		return true, nil
+		return true, nil, false
 	}
 
 	// Step 9: Handle response
 	if ctx.IsStream {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+			respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 			resp.Body.Close()
 			if readErr != nil {
 				slog.Warn("failed to read upstream stream error response", "err", readErr, "latency_ms", latencyMs, "status", resp.StatusCode)
+				if !isLastEndpoint && !disableCrossProtocolFallback {
+					return false, nil, true
+				}
 				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
 				if retry < maxRetries {
-					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
+					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 				}
 				writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-				return true, nil
+				return true, nil, false
 			}
-			rawErrText := string(bodyBytes)
+			rawErrText := string(respBody)
+			if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
+				return false, nil, true
+			}
 			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
 			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-				return false, bufferedPendingUpstreamFailure(resp, bodyBytes)
+				return false, bufferedPendingUpstreamFailure(resp, respBody), false
 			}
-			relayBufferedUpstreamErrorResponse(w, resp, bodyBytes)
-			return true, nil
+			relayBufferedUpstreamErrorResponse(w, resp, respBody)
+			return true, nil, false
 		}
 		// Always close the upstream body, including early client disconnects.
 		var streamUsage ParsedUsage
@@ -249,31 +403,39 @@ func dispatchSelectedUpstream(
 			defer resp.Body.Close()
 			streamUsage = handleStreamUpstream(w, r, resp, latencyMs)
 		}()
-		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
-		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
-	} else {
-		bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
+			writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
+			return true, nil, false
+		}
+
+		respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 		resp.Body.Close()
 		if readErr != nil {
 			slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
+			if !isLastEndpoint && !disableCrossProtocolFallback {
+				return false, nil, true
+			}
 			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
 			if retry < maxRetries {
-				return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
+				return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 			}
 			writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-			return true, nil
+			return true, nil, false
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			rawErrText := string(bodyBytes)
+			rawErrText := string(respBody)
+			if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
+				return false, nil, true
+			}
 			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
 			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-				return false, bufferedPendingUpstreamFailure(resp, bodyBytes)
+				return false, bufferedPendingUpstreamFailure(resp, respBody), false
 			}
-			relayBufferedUpstreamResponse(w, resp, bodyBytes)
-			return true, nil
+			relayBufferedUpstreamResponse(w, resp, respBody)
+			return true, nil, false
 		}
-		usage := ParseUsageFromBody(bodyBytes)
-		failure := proxy.DetectProxyFailure(string(bodyBytes), usage.ToUsageSummary())
+		usage := ParseUsageFromBody(respBody)
+		failure := proxy.DetectProxyFailure(string(respBody), usage.ToUsageSummary())
 		if failure != nil {
 			slog.Warn("content-based failure detected",
 				"reason", failure.Reason,
@@ -282,18 +444,37 @@ func dispatchSelectedUpstream(
 				"channel_id", selected.Channel.ID,
 				"latency_ms", latencyMs,
 			)
+			if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
+				return false, nil, true
+			}
 			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
 			if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
-				return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error")
+				return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
 			}
 			writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
-			return true, nil
+			return true, nil, false
 		}
 		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
 		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry)
-		relayBufferedUpstreamResponse(w, resp, bodyBytes)
+		relayBufferedUpstreamResponse(w, resp, respBody)
+		return true, nil, false
 	}
-	return true, nil
+
+func shouldContinueEndpointFallback(status int, rawErrText string, isLastEndpoint bool, disableCrossProtocolFallback bool) bool {
+	if isLastEndpoint || disableCrossProtocolFallback {
+		return false
+	}
+	if proxy.ShouldAbortSameSiteEndpointFallback(status, rawErrText) {
+		return false
+	}
+	if proxy.ShouldDowngradeToNextEndpoint(status, rawErrText) {
+		return true
+	}
+	// First-byte style status=0 should already be handled by error path; treat as continue.
+	if status == 0 {
+		return true
+	}
+	return false
 }
 
 type pendingUpstreamFailure struct {
@@ -349,14 +530,67 @@ func applyProxyCustomHeaders(req *http.Request, proxyConfig *platform.ProxyConfi
 	}
 }
 
-func sendUpstreamRequest(cfg *UpstreamConfig, req *http.Request, proxyConfig *platform.ProxyConfig) (*http.Response, error) {
+// sendUpstreamRequest dispatches an upstream HTTP request with optional observed
+// first-byte timeout. firstByteTimeoutMs is milliseconds (0 disables observation).
+// Config PROXY_FIRST_BYTE_TIMEOUT_SEC is seconds; convert via proxy.FirstByteTimeoutMs.
+func sendUpstreamRequest(cfg *UpstreamConfig, req *http.Request, proxyConfig *platform.ProxyConfig, firstByteTimeoutMs int64) (*http.Response, error) {
+	// Executor path: DoWithObservedFirstByte owns the first-byte deadline and
+	// does not cancel the body after headers arrive.
+	if (proxyConfig == nil || (proxyConfig.ProxyURL == "" && !proxyConfig.InsecureSkipTLS)) && cfg != nil && cfg.Executor != nil {
+		return cfg.Executor.DoWithObservedFirstByte(req.Context(), req, firstByteTimeoutMs)
+	}
+
+	if firstByteTimeoutMs <= 0 {
+		if proxyConfig != nil && (proxyConfig.ProxyURL != "" || proxyConfig.InsecureSkipTLS) {
+			return platform.DoWithProxy(req.Context(), req, proxyConfig)
+		}
+		return defaultUpstreamClient.Do(req)
+	}
+
+	// Proxy / fallback client: mirror DoWithObservedFirstByte timer semantics.
+	parent := req.Context()
+	reqCtx, cancelReq := context.WithCancel(parent)
+	req = req.WithContext(reqCtx)
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(time.Duration(firstByteTimeoutMs)*time.Millisecond, func() {
+		timedOut.Store(true)
+		cancelReq()
+	})
+
+	var (
+		resp *http.Response
+		err  error
+	)
 	if proxyConfig != nil && (proxyConfig.ProxyURL != "" || proxyConfig.InsecureSkipTLS) {
-		return platform.DoWithProxy(req.Context(), req, proxyConfig)
+		resp, err = platform.DoWithProxy(reqCtx, req, proxyConfig)
+	} else {
+		resp, err = defaultUpstreamClient.Do(req)
 	}
-	if cfg.Executor != nil {
-		return cfg.Executor.Do(req)
+	if err != nil {
+		_ = timer.Stop()
+		cancelReq()
+		if timedOut.Load() && parent.Err() == nil {
+			return nil, proxy.ErrObservedFirstByteTimeout
+		}
+		return nil, err
 	}
-	return defaultUpstreamClient.Do(req)
+	_ = timer.Stop()
+	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancelReq}
+	return resp, nil
+}
+
+// cancelOnCloseBody cancels the request context when the response body is closed.
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	if b.cancel != nil {
+		b.cancel()
+	}
+	return err
 }
 
 func recordUpstreamFailure(ctx context.Context, cfg *UpstreamConfig, selected *routing.SelectedChannel, modelName string, status int, rawErrText string) {

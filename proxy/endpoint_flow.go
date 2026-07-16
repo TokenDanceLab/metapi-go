@@ -14,6 +14,110 @@ const (
 	EndpointResponses UpstreamEndpoint = "responses" // /v1/responses (Codex)
 )
 
+// PathForEndpoint returns the canonical upstream path for a known endpoint type.
+// Unknown endpoints return "".
+func PathForEndpoint(endpoint UpstreamEndpoint) string {
+	switch endpoint {
+	case EndpointChat:
+		return "/v1/chat/completions"
+	case EndpointMessages:
+		return "/v1/messages"
+	case EndpointResponses:
+		return "/v1/responses"
+	default:
+		return ""
+	}
+}
+
+// EndpointFromPath maps a downstream/upstream path to a known chat-family endpoint.
+// Non chat-family paths return ("", false).
+func EndpointFromPath(path string) (UpstreamEndpoint, bool) {
+	path = strings.TrimSpace(path)
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	path = strings.TrimRight(path, "/")
+	switch {
+	case strings.HasSuffix(path, "/v1/chat/completions") || path == "/chat/completions" || path == "/v1/chat/completions":
+		return EndpointChat, true
+	case strings.HasSuffix(path, "/v1/messages") || path == "/messages" || path == "/v1/messages" ||
+		strings.HasSuffix(path, "/anthropic/v1/messages"):
+		return EndpointMessages, true
+	case strings.HasSuffix(path, "/v1/responses") || path == "/responses" || path == "/v1/responses":
+		return EndpointResponses, true
+	default:
+		return "", false
+	}
+}
+
+// ResolveEndpointCandidates builds the ordered multi-protocol candidate list for a
+// downstream path. Primary endpoint is first. When disableCrossProtocolFallback is
+// true, only the primary is returned. Non chat-family paths yield a single synthetic
+// candidate list of length 1 using the original path via PathForEndpoint fallbacks.
+//
+// Product policy (upstream #387 / issue #38):
+// - first-byte timeout or protocol-mismatch may continue to remaining candidates
+// - DISABLE_CROSS_PROTOCOL_FALLBACK stops after the primary attempt
+func ResolveEndpointCandidates(downstreamPath string, disableCrossProtocolFallback bool) []UpstreamEndpoint {
+	primary, ok := EndpointFromPath(downstreamPath)
+	if !ok {
+		// Non chat-family: no multi-protocol list. Caller should use the original path.
+		return nil
+	}
+	if disableCrossProtocolFallback {
+		return []UpstreamEndpoint{primary}
+	}
+	// Primary first, then remaining chat-family protocols in stable order.
+	order := []UpstreamEndpoint{EndpointChat, EndpointMessages, EndpointResponses}
+	// Prefer responses→chat→messages when primary is responses (common Codex downgrade).
+	switch primary {
+	case EndpointResponses:
+		order = []UpstreamEndpoint{EndpointResponses, EndpointChat, EndpointMessages}
+	case EndpointMessages:
+		order = []UpstreamEndpoint{EndpointMessages, EndpointChat, EndpointResponses}
+	case EndpointChat:
+		order = []UpstreamEndpoint{EndpointChat, EndpointMessages, EndpointResponses}
+	}
+	out := make([]UpstreamEndpoint, 0, len(order))
+	seen := map[UpstreamEndpoint]bool{}
+	for _, ep := range order {
+		if seen[ep] {
+			continue
+		}
+		seen[ep] = true
+		out = append(out, ep)
+	}
+	return out
+}
+
+// ShouldDowngradeToNextEndpoint reports whether an upstream error indicates the
+// current protocol/path is wrong and a different endpoint candidate should be tried.
+func ShouldDowngradeToNextEndpoint(status int, rawErrText string) bool {
+	if status <= 0 {
+		return false
+	}
+	text := strings.ToLower(strings.TrimSpace(rawErrText))
+	if text == "" {
+		return false
+	}
+	// Protocol redirect hints from upstream (also in retry_policy patterns).
+	if strings.Contains(text, "please use /v1/chat/completions") ||
+		strings.Contains(text, "please use /v1/messages") ||
+		strings.Contains(text, "please use /v1/responses") ||
+		strings.Contains(text, "unsupported endpoint") ||
+		strings.Contains(text, "unsupported path") ||
+		strings.Contains(text, "unknown endpoint") ||
+		strings.Contains(text, "unrecognized request url") ||
+		strings.Contains(text, "unsupported legacy protocol") {
+		return true
+	}
+	// 404 on a protocol path is a common wrong-endpoint signal.
+	if status == 404 {
+		return true
+	}
+	return false
+}
+
 // BuiltEndpointRequest is a built upstream request for a specific endpoint.
 type BuiltEndpointRequest struct {
 	Endpoint UpstreamEndpoint

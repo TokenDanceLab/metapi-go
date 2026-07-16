@@ -127,8 +127,12 @@ type Config struct {
 	TrustedProxyCidrs       []string
 
 	// Proxy: Core (2 fields)
-	RequestBodyLimit         int
-	RoutingFallbackUnitCost  float64
+	RequestBodyLimit int
+	RoutingFallbackUnitCost float64
+	// ProxyFirstByteTimeoutSec is the operator-facing first-byte / first-token
+	// timeout in SECONDS (env PROXY_FIRST_BYTE_TIMEOUT_SEC). Internal dispatch
+	// converts to milliseconds via proxy.FirstByteTimeoutMs (sec * 1000).
+	// 0 disables observed first-byte timeout.
 	ProxyFirstByteTimeoutSec int
 
 	// Proxy: Token Router (2 fields)
@@ -463,6 +467,7 @@ func Load(env map[string]string) *Config {
 	// ---- §3.13 Proxy: Core ----
 	cfg.RequestBodyLimit = DefaultRequestBodyLimit
 	cfg.RoutingFallbackUnitCost = math.Max(1e-6, parseNumber(get("ROUTING_FALLBACK_UNIT_COST"), 1))
+	// Seconds; internal first-byte observation uses ms = sec * 1000.
 	cfg.ProxyFirstByteTimeoutSec = maxInt(0, int(math.Trunc(parseNumber(get("PROXY_FIRST_BYTE_TIMEOUT_SEC"), 0))))
 
 	// ---- §3.14 Proxy: Token Router ----

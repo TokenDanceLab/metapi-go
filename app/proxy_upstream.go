@@ -25,9 +25,19 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 		return fmt.Errorf("proxy upstream: database is not initialized")
 	}
 	coord := proxy.NewProxyChannelCoordinator(cfg)
-	requestTimeout := time.Duration(cfg.ProxyFirstByteTimeoutSec) * time.Second
-	if requestTimeout <= 0 {
-		requestTimeout = 90 * time.Second
+	// Overall HTTP client timeout is a safety ceiling for full request lifetime.
+	// Observed first-byte timeout is separate: PROXY_FIRST_BYTE_TIMEOUT_SEC
+	// (seconds) is converted to milliseconds via proxy.FirstByteTimeoutMs and
+	// applied per attempt in handler/proxy sendUpstreamRequest.
+	// Keep client timeout at least as large as the first-byte window so the
+	// client does not pre-empt first-byte observation.
+	requestTimeout := 90 * time.Second
+	if firstByteMs := proxy.FirstByteTimeoutMs(cfg.ProxyFirstByteTimeoutSec); firstByteMs > 0 {
+		fb := time.Duration(firstByteMs) * time.Millisecond
+		// Ceiling: max(90s, first-byte*2) so multi-endpoint fallback can still complete.
+		if doubled := fb * 2; doubled > requestTimeout {
+			requestTimeout = doubled
+		}
 	}
 	router := routing.NewTokenRouter(newProxyRoutingStore(db), cfg, nil, proxyLoadProvider{coord: coord})
 	proxyhandler.SetUpstreamConfig(&proxyhandler.UpstreamConfig{
