@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#117 + #119. Open #118/#120–#121 |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#119. Open P2 #120–#121 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
