@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | Competitive fleet: allapihub/axonhub/new-api/litellm (fable+sonnet) |
-| Next | Harvest M-COMPETE learn matrix + [learn] issues; no product code until scheduled |
+| In flight WFs | Competitive docs PR + residual frontend teardown flake fix |
+| Next | Schedule M-COMPETE [learn] #98–#109 (TTFT routing, traces, cost headers, virtual keys, …); product only after backlog-only removed |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
@@ -84,8 +84,9 @@
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
 | Local clones | `D:/Code/TokenDance/competitors/{all-api-hub,axonhub,new-api,litellm}` |
-| Scope | Docs-first competitive learning; `[learn]` backlog only |
+| Scope | Docs-first competitive learning; `[learn]` backlog **#98–#109** filed; matrix in `docs/analysis/competitive/` |
 | Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
+| Matrix | `docs/analysis/competitive/matrix.md` · issues **#98–#109** |
 
 
 ## Hardening Results
