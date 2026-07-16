@@ -196,6 +196,20 @@ func TestResolveGroupFetchErrorMessage(t *testing.T) {
 	if msg4 != "failed to fetch groups" {
 		t.Errorf("empty: %q", msg4)
 	}
+
+	// Non-auth messages must not be rewritten as session-expired UX (R0).
+	msg5 := resolveGroupFetchErrorMessage(map[string]interface{}{
+		"message": "No payment method. Add a payment method here: https://example.com/billing",
+	})
+	if msg5 != "No payment method. Add a payment method here: https://example.com/billing" {
+		t.Errorf("billing should not rewrite to session-expired: %q", msg5)
+	}
+	msg6 := resolveGroupFetchErrorMessage(map[string]interface{}{
+		"message": "Model foo is not supported for format openai",
+	})
+	if msg6 != "Model foo is not supported for format openai" {
+		t.Errorf("model unsupported should not rewrite to session-expired: %q", msg6)
+	}
 }
 
 func TestExtractGroupKeys(t *testing.T) {

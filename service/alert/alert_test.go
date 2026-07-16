@@ -146,11 +146,29 @@ func TestIsTokenExpiredError_ExcludesNonAuthUpstreamFailures(t *testing.T) {
 			httpStatus: 0,
 			message:    "HTTP 401 - Model gemini-3.1-pro-preview is not supported",
 		},
+		{
+			name:       "insufficient_quota is billing not expired",
+			httpStatus: 429,
+			message:    "You exceeded your current quota, please check your plan and billing details.",
+		},
+		{
+			name:       "rate limit is not expired",
+			httpStatus: 429,
+			message:    "rate limit exceeded",
+		},
+		{
+			name:       "opaque 401 without auth signal is not expired",
+			httpStatus: 401,
+			message:    "upstream rejected the request",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if IsTokenExpiredError(tc.httpStatus, tc.message) {
 				t.Fatalf("IsTokenExpiredError(%d, %q) = true, want false", tc.httpStatus, tc.message)
+			}
+			if ShouldMarkAccountExpired(tc.httpStatus, tc.message) {
+				t.Fatalf("ShouldMarkAccountExpired(%d, %q) = true, want false", tc.httpStatus, tc.message)
 			}
 		})
 	}
@@ -178,20 +196,6 @@ func TestIsTokenExpiredError_Negative(t *testing.T) {
 				t.Errorf("expected false for: %q", msg)
 			}
 		})
-	}
-}
-
-// ---- containsHTTPStatus Tests ----
-
-func TestContainsHTTPStatus(t *testing.T) {
-	if !containsHTTPStatus("HTTP 401 Unauthorized", 401) {
-		t.Error("expected true for HTTP 401 in message")
-	}
-	if containsHTTPStatus("HTTP 200 OK", 401) {
-		t.Error("expected false for HTTP 200")
-	}
-	if !containsHTTPStatus("401 error", 401) {
-		t.Error("expected true for bare 401")
 	}
 }
 
