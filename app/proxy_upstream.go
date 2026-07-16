@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
@@ -39,6 +40,8 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 			requestTimeout = doubled
 		}
 	}
+	auth.ConfigureSharedAdmissionFromRedisURL(cfg.RedisURL)
+
 	router := routing.NewTokenRouter(newProxyRoutingStore(db), cfg, nil, proxyLoadProvider{coord: coord})
 	proxyhandler.SetUpstreamConfig(&proxyhandler.UpstreamConfig{
 		Router:      router,
