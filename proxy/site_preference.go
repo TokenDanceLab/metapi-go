@@ -66,11 +66,9 @@ func ResolveEndpointCandidatesWithOptions(downstreamPath string, opts EndpointCa
 	pref := opts.Preference
 	// Codex client profile on responses path reinforces prefer-responses, but does
 	// not by itself force responses-only (that is a site property).
-	if opts.DownstreamClient != nil && opts.DownstreamClient.ID == types.ProfileCodex {
-		if !pref.PreferResponses && !pref.ResponsesOnly {
-			// no-op; site preference is authoritative for responses-only.
-		}
-	}
+	// Codex client profile is informational only; site preference remains authoritative
+	// for responses-only. DownstreamClient is accepted for future scoring hooks.
+	_ = opts.DownstreamClient
 
 	if pref.ResponsesOnly {
 		return []UpstreamEndpoint{EndpointResponses}
