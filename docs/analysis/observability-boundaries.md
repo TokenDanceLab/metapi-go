@@ -34,8 +34,10 @@ Define the public semantics of liveness/readiness/metrics endpoints, document wh
 | `metapi_active_channels` | gauge | Optional setter (`SetActiveChannels`) |
 | `metapi_db_connections_open` | gauge | Refreshed from `sql.DB.Stats().OpenConnections` on scrape when DB is initialized |
 | `metapi_route_rebuild_total{result="completed"}` | counter | Successful `POST /api/routes/rebuild` cache invalidate |
+| `metapi_proxy_outcomes_total{endpoint,status,stream}` | counter | Terminal proxy outcomes (bounded labels; see `observability-export.md` #117) |
+| `metapi_proxy_request_duration_seconds` | histogram | Proxy terminal latency by endpoint/status |
 
-**Non-goals (R2):** histograms/P99, request-id propagation (separate), OpenTelemetry, auth on `/metrics`, lease gauges wired from coordinator.
+**R2 baseline non-goals (partially superseded by #117):** request-id propagation (landed #110), full OpenTelemetry SDK, auth on `/metrics`, lease gauges. Histograms + optional Observer export: `docs/analysis/observability-export.md`.
 
 ## Proxy hot-path recording
 

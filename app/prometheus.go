@@ -3,6 +3,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/store"
@@ -28,6 +29,22 @@ func SetDBConnections(n int64) { shared.SetDBConnections(n) }
 
 // RecordRouteRebuildCompleted increments successful route rebuild/cache-invalidate counter.
 func RecordRouteRebuildCompleted() { shared.RecordRouteRebuildCompleted() }
+
+// ObserveProxyOutcome records labeled outcomes, latency histograms, and the optional Observer hook.
+func ObserveProxyOutcome(obs shared.ProxyObservation) { shared.ObserveProxyOutcome(obs) }
+
+// SetMetricsObserver registers an optional OTEL/Langfuse-style export sink (nil = no-op).
+func SetMetricsObserver(o shared.Observer) { shared.SetObserver(o) }
+
+// ObserveProxySuccess is a convenience for success-path latency observation.
+func ObserveProxySuccess(endpoint string, stream bool, latency time.Duration) {
+	shared.ObserveProxyOutcome(shared.ProxyObservation{
+		Endpoint: endpoint,
+		Status:   shared.OutcomeSuccess,
+		Stream:   stream,
+		Latency:  latency,
+	})
+}
 
 func refreshRuntimeGauges() {
 	if db := store.GetDB(); db != nil && db.DB != nil && db.DB.DB != nil {

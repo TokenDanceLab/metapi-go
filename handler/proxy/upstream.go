@@ -67,6 +67,7 @@ func getUpstreamConfig() *UpstreamConfig {
 // Implements the spec's 10-step Handler pattern.
 func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 	shared.RecordProxyRequest()
+	startedAt := time.Now()
 	// Parent request/trace id is stable across channel retries and endpoint fallbacks.
 	reqCtx, requestID := proxy.EnsureRequestID(r.Context(), "")
 	if requestID != "" && r.Context() != reqCtx {
@@ -81,8 +82,8 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		unconfiguredUpstreamLogOnce.Do(func() {
 			slog.Error("proxy upstream dependencies are not configured", "request_id", requestID)
 		})
-		shared.RecordProxyError()
 		writeJSONErrorWithRequest(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error", requestID)
+		observeProxyTerminal(ctx, shared.OutcomeUnavailable, ctx != nil && ctx.IsStream, time.Since(startedAt))
 		return
 	}
 
@@ -118,9 +119,11 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 			)
 			if pendingFailure != nil {
 				pendingFailure.write(w, requestID)
+				observeProxyTerminal(ctx, pendingFailure.outcomeStatus(), ctx != nil && ctx.IsStream, time.Since(startedAt))
 				return
 			}
 			writeJSONErrorWithRequest(w, 503, "No available channels", "server_error", requestID)
+			observeProxyTerminal(ctx, shared.OutcomeUnavailable, ctx != nil && ctx.IsStream, time.Since(startedAt))
 			return
 		}
 		excludeChannelIDs = append(excludeChannelIDs, selected.Channel.ID)
@@ -161,6 +164,22 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 	}
 
 	writeJSONErrorWithRequest(w, 503, "All channels exhausted", "server_error", requestID)
+	observeProxyTerminal(ctx, shared.OutcomeUnavailable, ctx != nil && ctx.IsStream, time.Since(startedAt))
+}
+
+// observeProxyTerminal records labeled counters, latency histogram, and optional export hook.
+// Labels are privacy-safe (endpoint family + outcome); never model/key/body.
+func observeProxyTerminal(ctx *Ctx, status string, stream bool, latency time.Duration) {
+	endpoint := shared.EndpointOther
+	if ctx != nil && ctx.DownstreamPath != "" {
+		endpoint = shared.EndpointLabelFromPath(ctx.DownstreamPath)
+	}
+	shared.ObserveProxyOutcome(shared.ProxyObservation{
+		Endpoint: endpoint,
+		Status:   status,
+		Stream:   stream,
+		Latency:  latency,
+	})
 }
 
 // dispatchSelectedUpstream runs steps 7-9 for one selected channel.
@@ -216,6 +235,7 @@ func dispatchSelectedUpstream(
 			slog.Warn("multipart upstream body construction failed",
 				"err", err, "path", upstreamPath, "model", upstreamModel, "request_id", requestID, "retry", retry)
 			writeJSONErrorWithRequest(w, 400, "Invalid multipart request body", "invalid_request_error", requestID)
+			observeProxyTerminal(ctx, shared.OutcomeClientError, false, 0)
 			return true, nil
 		}
 		if bodyReader != nil {
@@ -224,6 +244,7 @@ func dispatchSelectedUpstream(
 				slog.Warn("multipart upstream body read failed",
 					"err", err, "path", upstreamPath, "request_id", requestID, "retry", retry)
 				writeJSONErrorWithRequest(w, 400, "Invalid multipart request body", "invalid_request_error", requestID)
+				observeProxyTerminal(ctx, shared.OutcomeClientError, false, 0)
 				return true, nil
 			}
 		}
@@ -240,6 +261,7 @@ func dispatchSelectedUpstream(
 	if errMsg := responsesOnlyClientError(upstreamPath, bodyBytes, sitePref); errMsg != "" {
 		// Clear failure for chat/messages clients when site cannot serve without transform.
 		writeJSONErrorWithRequest(w, http.StatusBadRequest, errMsg, "invalid_request_error", requestID)
+		observeProxyTerminal(ctx, shared.OutcomeClientError, false, 0)
 		return true, nil
 	}
 
@@ -251,6 +273,7 @@ func dispatchSelectedUpstream(
 		if sanitizeErr != nil {
 			// Clear client-facing continuity error (issue #54 / upstream #504).
 			writeJSONErrorWithRequest(w, http.StatusBadRequest, sanitizeErr.Error(), "invalid_request_error", requestID)
+			observeProxyTerminal(ctx, shared.OutcomeClientError, false, 0)
 			return true, nil
 		}
 		// Force stream=true for responses-only / stream-preferring sites (and codex/sub2api).
@@ -281,6 +304,7 @@ func dispatchSelectedUpstream(
 		return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
 	}
 	writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
+	observeProxyTerminal(ctx, shared.OutcomeUpstreamError, false, 0)
 	return true, nil
 }
 
@@ -448,6 +472,7 @@ func dispatchEndpointAttemptWithContinue(
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
 		writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
+		observeProxyTerminal(ctx, shared.OutcomeUpstreamError, effectiveStream, time.Since(startedAt))
 		return true, nil, false
 	}
 	req.Header.Set("Content-Type", contentType)
@@ -480,6 +505,7 @@ func dispatchEndpointAttemptWithContinue(
 				return false, jsonPendingUpstreamFailure(http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error"), false
 			}
 			writeJSONErrorWithRequest(w, http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error", requestID)
+			observeProxyTerminal(ctx, shared.OutcomeTimeout, effectiveStream, time.Since(startedAt))
 			return true, nil, false
 		}
 		slog.Warn("upstream request failed",
@@ -494,6 +520,7 @@ func dispatchEndpointAttemptWithContinue(
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
 		writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
+		observeProxyTerminal(ctx, shared.OutcomeUpstreamError, effectiveStream, time.Since(startedAt))
 		return true, nil, false
 	}
 
@@ -514,6 +541,7 @@ func dispatchEndpointAttemptWithContinue(
 					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 				}
 				writeJSONErrorWithRequest(w, 502, "Failed to read upstream response", "upstream_error", requestID)
+				observeProxyTerminal(ctx, shared.OutcomeUpstreamError, true, time.Duration(latencyMs)*time.Millisecond)
 				return true, nil, false
 			}
 			rawErrText := string(respBody)
@@ -525,6 +553,7 @@ func dispatchEndpointAttemptWithContinue(
 				return false, bufferedPendingUpstreamFailure(resp, respBody), false
 			}
 			relayBufferedUpstreamErrorResponse(w, resp, respBody)
+			observeProxyTerminal(ctx, shared.StatusFromHTTP(resp.StatusCode), true, time.Duration(latencyMs)*time.Millisecond)
 			return true, nil, false
 		}
 		// Always close the upstream body, including early client disconnects.
@@ -535,6 +564,7 @@ func dispatchEndpointAttemptWithContinue(
 		}()
 		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
 		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry, requestID)
+		observeProxyTerminal(ctx, shared.OutcomeSuccess, true, time.Duration(latencyMs)*time.Millisecond)
 		return true, nil, false
 	}
 
@@ -552,6 +582,7 @@ func dispatchEndpointAttemptWithContinue(
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 		}
 		writeJSONErrorWithRequest(w, 502, "Failed to read upstream response", "upstream_error", requestID)
+		observeProxyTerminal(ctx, shared.OutcomeUpstreamError, false, time.Duration(latencyMs)*time.Millisecond)
 		return true, nil, false
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -564,6 +595,7 @@ func dispatchEndpointAttemptWithContinue(
 			return false, bufferedPendingUpstreamFailure(resp, respBody), false
 		}
 		relayBufferedUpstreamResponse(w, resp, respBody)
+		observeProxyTerminal(ctx, shared.StatusFromHTTP(resp.StatusCode), false, time.Duration(latencyMs)*time.Millisecond)
 		return true, nil, false
 	}
 	usage := ParseUsageFromBody(respBody)
@@ -586,11 +618,13 @@ func dispatchEndpointAttemptWithContinue(
 			return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
 		}
 		writeJSONErrorWithRequest(w, failure.Status, "Upstream returned an error response", "upstream_error", requestID)
+		observeProxyTerminal(ctx, shared.StatusFromHTTP(failure.Status), false, time.Duration(latencyMs)*time.Millisecond)
 		return true, nil, false
 	}
 	recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
 	writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry, requestID)
 	relayBufferedUpstreamResponse(w, resp, respBody)
+	observeProxyTerminal(ctx, shared.OutcomeSuccess, false, time.Duration(latencyMs)*time.Millisecond)
 	return true, nil, false
 }
 
@@ -629,6 +663,16 @@ func jsonPendingUpstreamFailure(status int, message, typ string) *pendingUpstrea
 		jsonMessage: message,
 		jsonType:    typ,
 	}
+}
+
+func (p *pendingUpstreamFailure) outcomeStatus() string {
+	if p == nil {
+		return shared.OutcomeUnavailable
+	}
+	if p.resp != nil {
+		return shared.StatusFromHTTP(p.resp.StatusCode)
+	}
+	return shared.StatusFromHTTP(p.jsonStatus)
 }
 
 func (p *pendingUpstreamFailure) write(w http.ResponseWriter, requestID string) {
