@@ -1,72 +1,7 @@
 @import "tailwindcss";
 
-/* ===== Design Tokens ===== */
-:root {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
-  --color-bg: #f5f5f5;
-  --color-bg-card: #ffffff;
-  --color-bg-sidebar: #ffffff;
-  --color-bg-topbar: #ffffff;
-  --color-border: #e8e8e8;
-  --color-border-light: #f0f0f0;
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-muted: #999999;
-  --color-primary: #4f46e5;
-  --color-primary-light: #eef2ff;
-  --color-primary-hover: #4338ca;
-  --color-success: #16a34a;
-  --color-success-soft: #dcfce7;
-  --color-warning: #d97706;
-  --color-warning-soft: #fef3c7;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-info: #2563eb;
-  --color-info-soft: #dbeafe;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04);
-  --topbar-height: 56px;
-  --sidebar-width: 220px;
-  --sidebar-collapsed-width: 64px;
-  --z-topbar: 100;
-  --z-mobile-batch-bar: 210;
-  --z-overlay: 320;
-  --z-drawer: 340;
-}
-
-[data-theme="dark"] {
-  --color-bg: #0f0f0f;
-  --color-bg-card: #1a1a1a;
-  --color-bg-sidebar: #141414;
-  --color-bg-topbar: #141414;
-  --color-border: #2a2a2a;
-  --color-border-light: #222222;
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-muted: #666666;
-  --color-primary: #6366f1;
-  --color-primary-light: #1e1b4b;
-  --color-primary-hover: #818cf8;
-  --color-success: #4ade80;
-  --color-success-soft: #052e16;
-  --color-warning: #fbbf24;
-  --color-warning-soft: #451a03;
-  --color-danger: #f87171;
-  --color-danger-soft: #450a0a;
-  --color-info: #60a5fa;
-  --color-info-soft: #172554;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
+/* Design tokens SSOT - see docs/design/DESIGN.md (U0 / #12) */
+@import "./styles/tokens.css";
 
 /* ===== Base ===== */
 * {

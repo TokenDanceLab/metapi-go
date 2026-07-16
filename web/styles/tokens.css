@@ -1,0 +1,223 @@
+/*
+ * MetAPI design tokens — SSOT for CSS custom properties.
+ * Spec: docs/design/DESIGN.md (U0 / issue #12)
+ *
+ * Import order: web/index.css imports this after Tailwind.
+ * Do not put component rules here — tokens only.
+ */
+
+/* ===== Light (default) ===== */
+:root {
+  /* Typography families */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* Type scale */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Surfaces */
+  --color-bg: #f5f5f5;
+  --color-bg-secondary: #eeeeee;
+  --color-bg-card: #ffffff;
+  --color-bg-sidebar: #ffffff;
+  --color-bg-topbar: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-hover: rgba(0, 0, 0, 0.04);
+  --color-bg-active: rgba(0, 0, 0, 0.06);
+
+  /* Borders */
+  --color-border: #e8e8e8;
+  --color-border-light: #f0f0f0;
+  --color-border-strong: #d4d4d4;
+
+  /* Text */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #8a8a8a;
+  --color-text-muted: #999999;
+  --color-text-inverse: #ffffff;
+  --color-text-link: var(--color-primary);
+
+  /* Brand */
+  --color-primary: #4f46e5;
+  --color-primary-light: #eef2ff;
+  --color-primary-hover: #4338ca;
+  --color-accent: #06b6d4;
+  --color-accent-soft: #ecfeff;
+  --color-brand-gradient: linear-gradient(135deg, #4f46e5, #06b6d4);
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-success-soft: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-info: #2563eb;
+  --color-info-soft: #dbeafe;
+
+  /* Chart categorical series (shared across themes) */
+  --color-chart-1: #4f46e5;
+  --color-chart-2: #06b6d4;
+  --color-chart-3: #10b981;
+  --color-chart-4: #f59e0b;
+  --color-chart-5: #ef4444;
+  --color-chart-6: #8b5cf6;
+  --color-chart-7: #ec4899;
+  --color-chart-8: #14b8a6;
+
+  /* Stat icon chips */
+  --color-stat-blue: #dbeafe;
+  --color-stat-blue-ink: #2563eb;
+  --color-stat-green: #dcfce7;
+  --color-stat-green-ink: #16a34a;
+  --color-stat-yellow: #fef3c7;
+  --color-stat-yellow-ink: #d97706;
+  --color-stat-pink: #fce7f3;
+  --color-stat-pink-ink: #db2777;
+  --color-stat-red: #fee2e2;
+  --color-stat-red-ink: #dc2626;
+  --color-stat-orange: #ffedd5;
+  --color-stat-orange-ink: #ea580c;
+  --color-stat-purple: #ede9fe;
+  --color-stat-purple-ink: #7c3aed;
+  --color-stat-cyan: #cffafe;
+  --color-stat-cyan-ink: #0891b2;
+
+  /* Focus / overlay */
+  --color-focus-ring: rgba(79, 70, 229, 0.45);
+  --color-overlay: rgba(15, 15, 15, 0.45);
+  --color-scrollbar: #cfcfcf;
+
+  /* Spacing scale (4px base) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-main: 24px;
+  --gap-tight: 4px;
+  --gap-default: 8px;
+  --gap-section: 16px;
+
+  /* Radius ladder */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04);
+
+  /* Motion */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-moderate: 300ms;
+  --duration-slow: 450ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-linear: linear;
+
+  /* Layout chrome */
+  --topbar-height: 56px;
+  --sidebar-width: 220px;
+  --sidebar-collapsed-width: 64px;
+
+  /* Z-index ladder */
+  --z-topbar: 100;
+  --z-mobile-batch-bar: 210;
+  --z-overlay: 320;
+  --z-drawer: 340;
+  --z-toast: 360;
+  --z-tooltip: 380;
+}
+
+/* ===== Dark ===== */
+[data-theme="dark"] {
+  --color-bg: #0f0f0f;
+  --color-bg-secondary: #161616;
+  --color-bg-card: #1a1a1a;
+  --color-bg-sidebar: #141414;
+  --color-bg-topbar: #141414;
+  --color-bg-elevated: #222222;
+  --color-bg-hover: rgba(255, 255, 255, 0.05);
+  --color-bg-active: rgba(255, 255, 255, 0.08);
+
+  --color-border: #2a2a2a;
+  --color-border-light: #222222;
+  --color-border-strong: #3a3a3a;
+
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-tertiary: #7a7a7a;
+  --color-text-muted: #666666;
+  --color-text-inverse: #0f0f0f;
+  --color-text-link: var(--color-primary);
+
+  --color-primary: #6366f1;
+  --color-primary-light: #1e1b4b;
+  --color-primary-hover: #818cf8;
+  --color-accent: #22d3ee;
+  --color-accent-soft: #083344;
+  --color-brand-gradient: linear-gradient(135deg, #6366f1, #22d3ee);
+
+  --color-success: #4ade80;
+  --color-success-soft: #052e16;
+  --color-warning: #fbbf24;
+  --color-warning-soft: #451a03;
+  --color-danger: #f87171;
+  --color-danger-soft: #450a0a;
+  --color-info: #60a5fa;
+  --color-info-soft: #172554;
+
+  /* Chart series intentionally unchanged for operator continuity */
+
+  --color-stat-blue: #172554;
+  --color-stat-blue-ink: #60a5fa;
+  --color-stat-green: #052e16;
+  --color-stat-green-ink: #4ade80;
+  --color-stat-yellow: #451a03;
+  --color-stat-yellow-ink: #fbbf24;
+  --color-stat-pink: #500724;
+  --color-stat-pink-ink: #f472b6;
+  --color-stat-red: #450a0a;
+  --color-stat-red-ink: #f87171;
+  --color-stat-orange: #431407;
+  --color-stat-orange-ink: #fb923c;
+  --color-stat-purple: #2e1065;
+  --color-stat-purple-ink: #a78bfa;
+  --color-stat-cyan: #083344;
+  --color-stat-cyan-ink: #22d3ee;
+
+  --color-focus-ring: rgba(99, 102, 241, 0.55);
+  --color-overlay: rgba(0, 0, 0, 0.65);
+  --color-scrollbar: #3a3a3a;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
