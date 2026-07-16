@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strconv"
 	"regexp"
 	"strings"
 
@@ -53,6 +54,21 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 			if result.Source == "managed" && result.Key != nil {
 				if !consumeManagedKeyRequest(result.Key.ID) {
 					writeJSON(w, http.StatusForbidden, jsonError("API key has exceeded max requests"))
+					return
+				}
+				// Soft RPM/TPM admission (learn #116). Fail closed with 429 + Retry-After.
+				adm := GlobalKeyAdmission.Allow(result.Key.ID, result.Key.MaxRPM, result.Key.MaxTPM, 0)
+				if !adm.Allowed {
+					msg := "API key rate limit exceeded"
+					if adm.Reason == "over_tpm" {
+						msg = "API key token-per-minute limit exceeded"
+					}
+					sec := int(adm.RetryAfter.Seconds())
+					if sec < 1 {
+						sec = 1
+					}
+					w.Header().Set("Retry-After", strconv.Itoa(sec))
+					writeJSON(w, http.StatusTooManyRequests, jsonError(msg))
 					return
 				}
 			}

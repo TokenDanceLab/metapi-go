@@ -66,6 +66,18 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 				`CREATE INDEX IF NOT EXISTS proxy_logs_request_id_created_at_idx ON proxy_logs (request_id, created_at)`)
 		},
 	},
+	{
+		// Learn #116: downstream-key RPM/TPM soft admission fields.
+		Version:     "sc2_005_downstream_key_rate_limits",
+		Description: "downstream_api_keys.max_rpm / max_tpm INTEGER NULL — optional per-key rate windows; NULL means unlimited",
+		Apply: func(db *DB) error {
+			if err := EnsureColumn(db, "downstream_api_keys", "max_rpm", "INTEGER", "INTEGER", ""); err != nil {
+				return err
+			}
+			return EnsureColumn(db, "downstream_api_keys", "max_tpm", "INTEGER", "INTEGER", "")
+		},
+	},
+
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.

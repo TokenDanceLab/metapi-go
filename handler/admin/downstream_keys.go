@@ -80,6 +80,7 @@ func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) 
 		// Enrich with masked key and usage data
 		key, _ := row["key"].(string)
 		row["keyMasked"] = maskKey(key)
+		enrichKeyRateWindow(row)
 		items = append(items, row)
 	}
 
@@ -102,6 +103,7 @@ func (h *downstreamKeysHandler) listKeys(w http.ResponseWriter, r *http.Request)
 		if key, ok := row["key"].(string); ok {
 			row["keyMasked"] = maskKey(key)
 		}
+		enrichKeyRateWindow(row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -123,6 +125,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		ExpiresAt              *string  `json:"expiresAt"`
 		MaxCost                any      `json:"maxCost"`
 		MaxRequests            any      `json:"maxRequests"`
+		MaxRpm                 any      `json:"maxRpm"`
+		MaxTpm                 any      `json:"maxTpm"`
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
@@ -168,6 +172,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	normalizedCredRefs := normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
 	maxCost := normalizeQuotaFloatOrNull(body.MaxCost)
 	maxRequests := normalizeQuotaIntOrNull(body.MaxRequests)
+	maxRpm := normalizeQuotaIntOrNull(body.MaxRpm)
+	maxTpm := normalizeQuotaIntOrNull(body.MaxTpm)
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
@@ -207,12 +213,12 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
 		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
-		 proxy_url, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 proxy_url, max_rpm, max_tpm, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
 		maxCost, maxRequests,
 		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
-		proxyURL, now, now,
+		proxyURL, maxRpm, maxTpm, now, now,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -311,6 +317,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	if _, ok := rawBody["maxRequests"]; ok {
 		hasField["maxRequests"] = true
 	}
+	if _, ok := rawBody["maxRpm"]; ok {
+		hasField["maxRpm"] = true
+	}
+	if _, ok := rawBody["maxTpm"]; ok {
+		hasField["maxTpm"] = true
+	}
 	if _, ok := rawBody["supportedModels"]; ok {
 		hasField["supportedModels"] = true
 	}
@@ -380,8 +392,16 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 
 	maxRequests := existingInt64Ptr(existing, "max_requests")
+	maxRpm := existingInt64Ptr(existing, "max_rpm")
+	maxTpm := existingInt64Ptr(existing, "max_tpm")
 	if hasField["maxRequests"] {
 		maxRequests = normalizeQuotaIntOrNull(rawBody["maxRequests"])
+	}
+	if hasField["maxRpm"] {
+		maxRpm = normalizeQuotaIntOrNull(rawBody["maxRpm"])
+	}
+	if hasField["maxTpm"] {
+		maxTpm = normalizeQuotaIntOrNull(rawBody["maxTpm"])
 	}
 
 	existingSupportedModels := parseStringArrayFromDB(existing, "supported_models")
@@ -467,12 +487,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		rebindAdminQuery(h.db,
 			`UPDATE downstream_api_keys SET
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
-			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?,
+			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?, max_rpm = ?, max_tpm = ?,
 			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
 			excluded_site_ids = ?, excluded_credential_refs = ?, proxy_url = ?, updated_at = ?
 		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
-		enabled, expiresAt, maxCost, maxRequests,
+		enabled, expiresAt, maxCost, maxRequests, maxRpm, maxTpm,
 		modelsJSON, routeIdsJSON, swmJSON,
 		excludedSitesJSON, credRefsJSON, proxyURL, now, id,
 	)
@@ -1462,4 +1482,27 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 func mustRowValue(row map[string]any, key string) any {
 	v, _ := rowValue(row, key)
 	return v
+}
+
+
+// enrichKeyRateWindow attaches process-local RPM/TPM window usage for admin display (#116).
+func enrichKeyRateWindow(row map[string]any) {
+	idVal, ok := row["id"]
+	if !ok || idVal == nil {
+		return
+	}
+	var id int64
+	switch v := idVal.(type) {
+	case int64:
+		id = v
+	case int:
+		id = int64(v)
+	case float64:
+		id = int64(v)
+	default:
+		return
+	}
+	usedRPM, usedTPM := keyAdmissionSnapshot(id)
+	row["windowUsedRpm"] = usedRPM
+	row["windowUsedTpm"] = usedTPM
 }

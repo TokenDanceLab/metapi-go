@@ -427,6 +427,9 @@ type DownstreamAPIKey struct {
 	UsedCost                float64  `db:"used_cost" json:"usedCost"`
 	MaxRequests             *int64   `db:"max_requests" json:"maxRequests"`
 	UsedRequests            int64    `db:"used_requests" json:"usedRequests"`
+	// MaxRPM / MaxTPM optional soft rate windows (learn #116). nil = unlimited.
+	MaxRPM                  *int64   `db:"max_rpm" json:"maxRpm"`
+	MaxTPM                  *int64   `db:"max_tpm" json:"maxTpm"`
 	SupportedModels         *string  `db:"supported_models" json:"supportedModels"`
 	AllowedRouteIDs         *string  `db:"allowed_route_ids" json:"allowedRouteIds"`
 	SiteWeightMultipliers   *string  `db:"site_weight_multipliers" json:"siteWeightMultipliers"`

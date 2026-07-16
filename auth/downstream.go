@@ -29,7 +29,7 @@ type DownstreamTokenAuthResult struct {
 	Policy     DownstreamRoutingPolicy // resolved policy (when OK)
 	StatusCode int                     // HTTP status (when !OK)
 	Error      string                  // error message (when !OK)
-	Reason     string                  // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"
+	Reason     string                  // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"|"over_rpm"|"over_tpm"
 }
 
 // managedKeyView is an internal struct mirroring the downstream_api_keys row
@@ -46,6 +46,9 @@ type managedKeyView struct {
 	// ProxyURL is the optional per-key egress proxy (downstream_api_keys.proxy_url).
 	// nil/empty means inherit site/account/system proxy (FE-KEY-PROXY / #578).
 	ProxyURL *string
+	// MaxRPM / MaxTPM optional soft rate windows (learn #116).
+	MaxRPM *int64
+	MaxTPM *int64
 	// Policy fields — parsed from JSON TEXT columns
 	SupportedModels        []string
 	AllowedRouteIDs        []int64
@@ -180,7 +183,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	row := db.QueryRowx(
 		`SELECT id, name, enabled, expires_at, max_cost, used_cost,
-		        max_requests, used_requests, proxy_url,
+		        max_requests, used_requests, proxy_url, max_rpm, max_tpm,
 		        supported_models, allowed_route_ids,
 		        site_weight_multipliers, excluded_site_ids,
 		        excluded_credential_refs
@@ -196,7 +199,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	err := row.Scan(
 		&v.ID, &v.Name, &v.Enabled, &v.ExpiresAt, &v.MaxCost, &v.UsedCost,
-		&v.MaxRequests, &v.UsedRequests, &proxyURL,
+		&v.MaxRequests, &v.UsedRequests, &proxyURL, &v.MaxRPM, &v.MaxTPM,
 		&supportedModelsJSON, &allowedRouteIDsJSON,
 		&siteWeightMultiJSON, &excludedSiteIDsJSON,
 		&excludedCredRefsJSON,
