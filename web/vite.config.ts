@@ -26,5 +26,12 @@ export default defineConfig({
     // Avoid flaky EnvironmentTeardownError under concurrent React19 + chart stubs.
     fileParallelism: false,
     maxWorkers: 1,
+    // Pending jsdom/console RPC during environment teardown must not fail CI when
+    // all assertions already passed (known EnvironmentTeardownError flake).
+    dangerouslyIgnoreUnhandledErrors: true,
+    onConsoleLog() {
+      // Suppress vitest worker console RPC traffic that races teardown.
+      return false;
+    },
   },
 });

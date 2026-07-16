@@ -55,7 +55,7 @@ export default function ConversationComposer({
           background: 'var(--color-bg-subtle)',
         }}>
           <input
-            ref={conversationFileInputRef}
+            ref={conversationFileInputRef as React.Ref<HTMLInputElement>}
             type="file"
             multiple
             accept={conversationFileAccept}
