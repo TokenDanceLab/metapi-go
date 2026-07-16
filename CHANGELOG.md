@@ -5,6 +5,31 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.0] — 2026-07-17
+
+### Added
+- Competitive learn program (M-COMPETE) fully implemented for [learn] issues #110–#121:
+  - Request trace IDs across retries/failovers (#110)
+  - Per-request cost attribution + cache token types (#111)
+  - TTFT/first-byte signals in routing health (#113)
+  - Cross-site model price comparison APIs (#112)
+  - Background channel health probing (#114)
+  - Pluggable routing strategies: least_busy / lowest_latency / lowest_cost (#115)
+  - Downstream-key RPM/TPM soft admission + Retry-After (#116)
+  - Richer Prometheus histograms/labels + MetricsObserver export hook (#117)
+  - Optional Redis-backed shared RPM admission (fail-open, zero third-party dep) (#118)
+  - Admin forced-channel test harness (#119)
+  - Client credential export adapters (openai/cherry/generic) (#120)
+  - Usage heatmaps + slow-request ranking stats (#121)
+- Enterprise ops residual milestone opened for remaining admin/proxy stubs (#154–#158).
+
+### Changed
+- MASTER progress: M-COMPETE learn #110–#121 marked complete; stack remains TS 7.0.2 + React 19.2.7 + Vite 8.1.5 + Go 1.26.4.
+
+### Notes
+- `vulncheck` may still fail on Go 1.26.4 stdlib advisory GO-2026-5856; CI continues with continue-on-error until a Go patch is available.
+- Residual operator stubs (site probe-now stream, /v1/files 501, marketplace/token-candidates, notify/LDOH/tasks) tracked under milestone Enterprise ops residual + v0.8.0.
+
 ## [v0.7.0] — 2026-07-17
 
 ### Added
