@@ -278,8 +278,15 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	if strategy == StrategyRoundRobin {
+		// Align with weighted/stable_first: avoid recently-failed channels when healthy
+		// alternatives remain. Without this filter, RR only hard-excludes cooldownUntil
+		// (which starts after RoundRobinFailureThreshold consecutive fails), so a single
+		// failure can be reselected immediately and starve sibling healthy channels.
 		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		selected := SelectRoundRobinCandidate(breakerHealthy)
+		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
+			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+			nowMs, s.configuredMaxSec)
+		selected := SelectRoundRobinCandidate(filteredCandidates)
 		if selected == nil {
 			return nil, nil
 		}
