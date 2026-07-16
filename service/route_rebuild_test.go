@@ -376,3 +376,51 @@ func TestPopulateRouteChannelsByModelPattern_InsertOnly(t *testing.T) {
 		t.Fatalf("populate must not remove manual channels")
 	}
 }
+
+
+func TestRebuildTokenRoutesFromAvailability_PreservesManualPriorityWeight(t *testing.T) {
+	// #46: rebuild must keep operator-tuned priority/weight on manual channels
+	// even when the source model is no longer in availability.
+	db := setupRouteRebuildDB(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, accountID, tokenID := seedSiteAccountToken(t, db, "prio")
+
+	res, err := db.Exec(
+		`INSERT INTO token_routes (model_pattern, route_mode, routing_strategy, enabled, created_at, updated_at)
+		 VALUES ('gpt-*', 'pattern', 'weighted', 1, ?, ?)`, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert route: %v", err)
+	}
+	routeID, _ := res.LastInsertId()
+
+	if _, err := db.Exec(
+		`INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override)
+		 VALUES (?, ?, ?, 'manual-tuned', 11, 22, 1, 1)`, routeID, accountID, tokenID); err != nil {
+		t.Fatalf("manual channel: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO token_model_availability (token_id, model_name, available, checked_at)
+		 VALUES (?, 'gpt-4o', 1, ?)`, tokenID, now); err != nil {
+		t.Fatalf("avail: %v", err)
+	}
+
+	if _, err := RebuildTokenRoutesFromAvailability(context.Background(), db.DB); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+
+	var priority, weight int64
+	var manual int
+	if err := db.QueryRow(
+		`SELECT priority, weight, manual_override FROM route_channels
+		 WHERE route_id = ? AND source_model = 'manual-tuned'`, routeID,
+	).Scan(&priority, &weight, &manual); err != nil {
+		t.Fatalf("load manual: %v", err)
+	}
+	if manual != 1 {
+		t.Fatalf("manual_override lost")
+	}
+	if priority != 11 || weight != 22 {
+		t.Fatalf("priority/weight reset: got %d/%d want 11/22", priority, weight)
+	}
+}

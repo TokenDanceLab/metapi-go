@@ -289,3 +289,227 @@ func TestRouteChannelsBatchAllowsSameCredentialForDifferentSourceModels(t *testi
 		t.Fatalf("route channel count = %d, want 2; body=%s", count, resp.Body.String())
 	}
 }
+
+
+
+func isTruthyJSON(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case float64:
+		return t != 0
+	case int:
+		return t != 0
+	case int64:
+		return t != 0
+	default:
+		return false
+	}
+}
+
+// TestTokenRoutes_ManualChannelSurvivesRebuild covers upstream #409 / backlog #46:
+// operator-added in-route models must keep manual_override and survive rebuild.
+func TestTokenRoutes_ManualChannelSurvivesRebuild(t *testing.T) {
+	db, r := setupTokenRoutesTest(t)
+	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Availability for a different model so rebuild still has auto work to do.
+	if _, err := db.Exec(
+		`INSERT INTO token_model_availability (token_id, model_name, available, checked_at)
+		 VALUES (?, 'gpt-4o', 1, ?)`, tokenID, now); err != nil {
+		t.Fatalf("seed availability: %v", err)
+	}
+
+	// Operator manually attaches a non-discovered model to the route.
+	addResp := doPostJSON(t, r, "/api/routes/"+itoa(routeID)+"/channels", map[string]any{
+		"accountId":   accountID,
+		"tokenId":     tokenID,
+		"sourceModel": "Qwen/Qwen3-Embedding-8B",
+		"priority":    7,
+		"weight":      3,
+	})
+	if addResp.Code != http.StatusOK {
+		t.Fatalf("add manual channel: %d %s", addResp.Code, addResp.Body.String())
+	}
+	var added map[string]any
+	if err := json.Unmarshal(addResp.Body.Bytes(), &added); err != nil {
+		t.Fatalf("decode add response: %v", err)
+	}
+	if !isTruthyJSON(added["manualOverride"]) {
+		t.Fatalf("manualOverride = %v, want true for operator-added channel; body=%s", added["manualOverride"], addResp.Body.String())
+	}
+	channelID := int64(added["id"].(float64))
+
+	// Rebuild must not delete the intentional channel.
+	rebuildResp := doPostJSON(t, r, "/api/routes/rebuild", map[string]any{})
+	if rebuildResp.Code != http.StatusOK {
+		t.Fatalf("rebuild: %d %s", rebuildResp.Code, rebuildResp.Body.String())
+	}
+
+	var manualCount int
+	if err := db.Get(&manualCount,
+		`SELECT COUNT(*) FROM route_channels
+		 WHERE id = ? AND source_model = 'Qwen/Qwen3-Embedding-8B' AND manual_override = 1
+		   AND priority = 7 AND weight = 3`, channelID); err != nil {
+		t.Fatalf("count manual: %v", err)
+	}
+	if manualCount != 1 {
+		t.Fatalf("manual in-route model wiped or reset by rebuild")
+	}
+
+	// Auto channel for gpt-4o should also exist alongside the manual one.
+	var autoCount int
+	if err := db.Get(&autoCount,
+		`SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND source_model = 'gpt-4o'`, routeID); err != nil {
+		t.Fatalf("count auto: %v", err)
+	}
+	if autoCount != 1 {
+		t.Fatalf("auto channel missing after rebuild, count=%d", autoCount)
+	}
+}
+
+// TestTokenRoutes_PartialUpdatePreservesModelMapping covers intentional modelMapping
+// updates and ensures unrelated partial updates do not clear mapping or channels.
+func TestTokenRoutes_PartialUpdatePreservesModelMapping(t *testing.T) {
+	db, r := setupTokenRoutesTest(t)
+	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)
+
+	// Seed an intentional mapping + a manual channel.
+	mapping := map[string]any{"gpt-*": "gpt-4o"}
+	createMapping := doPutJSON(t, r, "/api/routes/"+itoa(routeID), map[string]any{
+		"modelMapping": mapping,
+	})
+	if createMapping.Code != http.StatusOK {
+		t.Fatalf("set modelMapping: %d %s", createMapping.Code, createMapping.Body.String())
+	}
+
+	addResp := doPostJSON(t, r, "/api/routes/"+itoa(routeID)+"/channels", map[string]any{
+		"accountId":   accountID,
+		"tokenId":     tokenID,
+		"sourceModel": "manual-model-x",
+		"priority":    5,
+	})
+	if addResp.Code != http.StatusOK {
+		t.Fatalf("add channel: %d %s", addResp.Code, addResp.Body.String())
+	}
+
+	// Unrelated partial update: only displayName.
+	partial := doPutJSON(t, r, "/api/routes/"+itoa(routeID), map[string]any{
+		"displayName": "renamed-route",
+	})
+	if partial.Code != http.StatusOK {
+		t.Fatalf("partial update: %d %s", partial.Code, partial.Body.String())
+	}
+	var updated map[string]any
+	if err := json.Unmarshal(partial.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode partial: %v", err)
+	}
+	if updated["displayName"] != "renamed-route" {
+		t.Fatalf("displayName = %v, want renamed-route", updated["displayName"])
+	}
+
+	// modelMapping must still be present (not clobbered by omit).
+	var rawMapping *string
+	if err := db.Get(&rawMapping, `SELECT model_mapping FROM token_routes WHERE id = ?`, routeID); err != nil {
+		t.Fatalf("load model_mapping: %v", err)
+	}
+	if rawMapping == nil || *rawMapping == "" {
+		t.Fatalf("model_mapping cleared by partial update")
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(*rawMapping), &parsed); err != nil {
+		t.Fatalf("parse model_mapping: %v raw=%s", err, *rawMapping)
+	}
+	if parsed["gpt-*"] != "gpt-4o" {
+		t.Fatalf("model_mapping content reset: %v", parsed)
+	}
+
+	// Manual channel still present.
+	var manualCount int
+	if err := db.Get(&manualCount,
+		`SELECT COUNT(*) FROM route_channels WHERE route_id = ? AND source_model = 'manual-model-x' AND manual_override = 1`,
+		routeID); err != nil {
+		t.Fatalf("count manual: %v", err)
+	}
+	if manualCount != 1 {
+		t.Fatalf("manual channel lost after partial route update")
+	}
+
+	// Intentional mapping change.
+	next := doPutJSON(t, r, "/api/routes/"+itoa(routeID), map[string]any{
+		"modelMapping": map[string]any{"gpt-*": "gpt-4o-mini"},
+	})
+	if next.Code != http.StatusOK {
+		t.Fatalf("intentional mapping update: %d %s", next.Code, next.Body.String())
+	}
+	if err := db.Get(&rawMapping, `SELECT model_mapping FROM token_routes WHERE id = ?`, routeID); err != nil {
+		t.Fatalf("reload mapping: %v", err)
+	}
+	if err := json.Unmarshal([]byte(*rawMapping), &parsed); err != nil {
+		t.Fatalf("parse next mapping: %v", err)
+	}
+	if parsed["gpt-*"] != "gpt-4o-mini" {
+		t.Fatalf("intentional mapping update not applied: %v", parsed)
+	}
+}
+
+// TestTokenRoutes_ChannelUpdatePreservesIntentionalConfig ensures channel edits set
+// manual_override and that rebuild keeps the operator-tuned sourceModel/priority.
+func TestTokenRoutes_ChannelUpdatePreservesIntentionalConfig(t *testing.T) {
+	db, r := setupTokenRoutesTest(t)
+	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Start as an auto-looking channel (simulate insert without override), then edit.
+	res, err := db.Exec(
+		`INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override)
+		 VALUES (?, ?, ?, 'gpt-4o', 0, 10, 1, 0)`, routeID, accountID, tokenID)
+	if err != nil {
+		t.Fatalf("seed auto channel: %v", err)
+	}
+	channelID, _ := res.LastInsertId()
+
+	// Intentional edit of source model + priority.
+	upd := doPutJSON(t, r, "/api/channels/"+itoa(channelID), map[string]any{
+		"sourceModel": "MiMo-V2-Flash-Free",
+		"priority":    9,
+		"weight":      4,
+	})
+	if upd.Code != http.StatusOK {
+		t.Fatalf("update channel: %d %s", upd.Code, upd.Body.String())
+	}
+	var updated map[string]any
+	if err := json.Unmarshal(upd.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update: %v", err)
+	}
+	if !isTruthyJSON(updated["manualOverride"]) {
+		t.Fatalf("manualOverride = %v after intentional edit, want true", updated["manualOverride"])
+	}
+	if updated["sourceModel"] != "MiMo-V2-Flash-Free" {
+		t.Fatalf("sourceModel = %v, want MiMo-V2-Flash-Free", updated["sourceModel"])
+	}
+
+	// Availability for gpt-4o (original auto model) - rebuild would prefer this if override ignored.
+	if _, err := db.Exec(
+		`INSERT INTO token_model_availability (token_id, model_name, available, checked_at)
+		 VALUES (?, 'gpt-4o', 1, ?)`, tokenID, now); err != nil {
+		t.Fatalf("seed avail: %v", err)
+	}
+
+	rebuild := doPostJSON(t, r, "/api/routes/rebuild", map[string]any{})
+	if rebuild.Code != http.StatusOK {
+		t.Fatalf("rebuild: %d %s", rebuild.Code, rebuild.Body.String())
+	}
+
+	var kept int
+	if err := db.Get(&kept,
+		`SELECT COUNT(*) FROM route_channels
+		 WHERE id = ? AND source_model = 'MiMo-V2-Flash-Free' AND manual_override = 1
+		   AND priority = 9 AND weight = 4`, channelID); err != nil {
+		t.Fatalf("count kept: %v", err)
+	}
+	if kept != 1 {
+		t.Fatalf("intentional channel config reset by rebuild")
+	}
+}
