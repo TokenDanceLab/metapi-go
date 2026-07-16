@@ -925,7 +925,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           <>
             <button onClick={closeEditPanel} className="btn btn-ghost">取消</button>
             <button onClick={saveEditPanel} disabled={savingEdit || editingTokenValueLoading} className="btn btn-primary">
-              {savingEdit ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存修改'}
+              {savingEdit ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存修改'}
             </button>
           </>
         )}
@@ -1165,7 +1165,7 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
             disabled={saving || !form.accountId}
             className="btn btn-primary"
           >
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 创建中...</> : '创建并同步令牌'}
+            {saving ? <><span className="spinner spinner-sm" /> 创建中...</> : '创建并同步令牌'}
           </button>
         </div>
       </CenteredModal>

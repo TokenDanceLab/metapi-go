@@ -56,7 +56,7 @@ export default function FactoryResetModal({
           <button onClick={onClose} disabled={factoryResetting} className="btn btn-ghost">取消</button>
           <button onClick={onConfirm} disabled={factoryResetting || factoryResetSecondsLeft > 0} className="btn btn-danger">
             {factoryResetting
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> {confirmLabel}</>
+              ? <><span className="spinner spinner-sm" /> {confirmLabel}</>
               : confirmLabel}
           </button>
         </div>

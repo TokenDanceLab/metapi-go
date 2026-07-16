@@ -359,10 +359,7 @@ export default function ManualRoutePanel({
       >
         {saving ? (
           <>
-            <span
-              className="spinner spinner-sm"
-              style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }}
-            />{' '}
+            <span className="spinner spinner-sm" />{' '}
             {tr('保存中...')}
           </>
         ) : (
@@ -818,7 +815,7 @@ export default function ManualRoutePanel({
                           style={{
                             fontSize: 8,
                             background: hashColor(siteName),
-                            color: 'white',
+                            color: 'var(--color-on-primary)',
                             borderRadius: 3,
                             padding: '1px 2px',
                             lineHeight: 1,

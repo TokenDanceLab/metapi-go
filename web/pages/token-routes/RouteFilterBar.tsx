@@ -237,7 +237,7 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
                           style={{
                             fontSize: 8,
                             background: hashColor(siteName),
-                            color: 'white',
+                            color: 'var(--color-on-primary)',
                             borderRadius: 3,
                             padding: '1px 2px',
                             lineHeight: 1,

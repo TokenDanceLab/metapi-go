@@ -93,7 +93,7 @@ export default function ModelAvailabilityProbeConfirmModal({
           <button onClick={handleRequestClose} disabled={saving} className="btn btn-ghost">取消</button>
           <button onClick={onConfirm} disabled={saving || !canConfirm} className="btn btn-danger">
             {saving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 确认开启中...</>
+              ? <><span className="spinner spinner-sm" /> 确认开启中...</>
               : '确认开启批量测活'}
           </button>
         </div>

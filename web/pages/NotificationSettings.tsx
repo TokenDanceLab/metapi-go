@@ -182,10 +182,10 @@ export default function NotificationSettings() {
                 <h2 className="page-title">{tr('通知设置')}</h2>
                 <div className="page-actions">
                     <button onClick={testNotify} disabled={testingNotify} className="btn btn-success">
-                        {testingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 发送中...</> : '发送测试通知'}
+                        {testingNotify ? <><span className="spinner spinner-sm" /> 发送中...</> : '发送测试通知'}
                     </button>
                     <button onClick={saveNotify} disabled={savingNotify} className="btn btn-primary">
-                        {savingNotify ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存通知设置'}
+                        {savingNotify ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存通知设置'}
                     </button>
                 </div>
             </div>

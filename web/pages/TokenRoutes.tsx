@@ -1047,9 +1047,9 @@ export default function TokenRoutes() {
       const dontAskAgain = { checked: false };
       const confirmed = await new Promise<boolean>((resolve) => {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+        overlay.style.cssText = 'position:fixed;inset:0;background:var(--color-overlay);z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center';
         const dialog = document.createElement('div');
-        dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+        dialog.style.cssText = 'background:var(--color-bg-card);border-radius:var(--radius-md);padding:24px;max-width:420px;width:90%;box-shadow:var(--shadow-lg)';
         dialog.innerHTML = `
           <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认移除通道</div>
           <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
@@ -1222,9 +1222,9 @@ export default function TokenRoutes() {
     const siteName = channel.site.name || '未知站点';
     const confirmed = await new Promise<boolean>((resolve) => {
       const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+      overlay.style.cssText = 'position:fixed;inset:0;background:var(--color-overlay);z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center';
       const dialog = document.createElement('div');
-      dialog.style.cssText = 'background:var(--color-bg-card,#fff);border-radius:12px;padding:24px;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2)';
+      dialog.style.cssText = 'background:var(--color-bg-card);border-radius:var(--radius-md);padding:24px;max-width:420px;width:90%;box-shadow:var(--shadow-lg)';
       dialog.innerHTML = `
         <div style="font-weight:600;font-size:15px;margin-bottom:12px">确认站点屏蔽</div>
         <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6;margin-bottom:16px">
@@ -1770,7 +1770,7 @@ export default function TokenRoutes() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleRouteSelection(route.id)}
-                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
                           />
                           <span>{tr('选择')}</span>
                         </label>
@@ -1958,7 +1958,7 @@ export default function TokenRoutes() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       width: 36, minHeight: '100%', cursor: 'pointer',
                       borderRadius: '8px 0 0 8px',
-                      background: isSelected ? 'var(--color-primary, #4f46e5)' : 'var(--color-bg-card, #fff)',
+                      background: isSelected ? 'var(--color-primary)' : 'var(--color-bg-card)',
                       border: '1px solid var(--color-border)',
                       borderRight: 'none',
                       transition: 'background 0.15s',
@@ -1971,7 +1971,7 @@ export default function TokenRoutes() {
                       checked={isSelected}
                       onChange={() => toggleRouteSelection(route.id)}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary, #4f46e5)' }}
+                      style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
                     />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>

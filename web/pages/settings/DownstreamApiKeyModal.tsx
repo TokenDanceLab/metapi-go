@@ -128,7 +128,7 @@ export default function DownstreamApiKeyModal({
           <button onClick={onClose} className="btn btn-ghost">取消</button>
           <button onClick={() => void onSave()} disabled={downstreamSaving} className="btn btn-primary">
             {downstreamSaving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
+              ? <><span className="spinner spinner-sm" /> 保存中...</>
               : (editingDownstreamId ? '更新 API Key' : '新增 API Key')}
           </button>
         </div>
