@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ F1 P0 closed (#38–#46,#48). ✅ P1 protocol pack #47/#52/#53/#54 merged (PRs #74–#89). Remaining backlog #49–#51,#55–#56 |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Closed backlog #38–#56 (PRs #74–#94). Competitive learn milestone M-COMPETE open (allapihub/axonhub/new-api/litellm) |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -73,10 +73,20 @@
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
-| Closed F1+P1 | #38–#48 P0 + #47/#52/#53/#54 protocol (PRs #74–#89) |
-| In flight WFs | none — harvest next remaining P1 #49–#51/#55–#56 |
-| Next | Remaining protocol/oauth: #49 Codex gpt-5.5 · #50 multi-turn reasoning · #51 skill-call · #55 discovery timeout · #56 responses-only streaming |
+| Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
+| In flight WFs | Competitive fleet: allapihub/axonhub/new-api/litellm (fable+sonnet) |
+| Next | Harvest M-COMPETE learn matrix + [learn] issues; no product code until scheduled |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
+
+### M-COMPETE notes (active)
+
+| Item | Detail |
+|------|--------|
+| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
+| Local clones | `D:/Code/TokenDance/competitors/{all-api-hub,axonhub,new-api,litellm}` |
+| Scope | Docs-first competitive learning; `[learn]` backlog only |
+| Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
+
 
 ## Hardening Results
 
