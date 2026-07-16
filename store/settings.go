@@ -183,9 +183,19 @@ func ApplyRuntimeSettings(cfg *config.Config, settingsMap map[string]string) {
 
 		// Generic JSON settings
 		case "global_blocked_brands":
-			_ = json.Unmarshal([]byte(value), &cfg.GlobalBlockedBrands)
+			if list, ok := parseStringListSetting(value); ok {
+				cfg.GlobalBlockedBrands = list
+			} else {
+				slog.Warn("settings: ignoring invalid global_blocked_brands value")
+			}
 		case "global_allowed_models":
-			_ = json.Unmarshal([]byte(value), &cfg.GlobalAllowedModels)
+			// Non-destructive: invalid / unparseable values must not wipe a
+			// previously configured allowlist (upstream #515 / backlog #45).
+			if list, ok := parseStringListSetting(value); ok {
+				cfg.GlobalAllowedModels = list
+			} else {
+				slog.Warn("settings: ignoring invalid global_allowed_models value")
+			}
 		case "payload_rules":
 			cfg.PayloadRules = config.ParseJsonValue(value)
 		case "openai_service_tier_rules":
@@ -196,6 +206,101 @@ func ApplyRuntimeSettings(cfg *config.Config, settingsMap map[string]string) {
 			// Future: system_proxy_url, routing weights, admin_ip_allowlist, etc.
 		}
 	}
+}
+
+// parseStringListSetting decodes a settings-table value into a trimmed,
+// de-duplicated string list. It accepts:
+//   - JSON arrays: ["a","b"]
+//   - JSON null → empty list
+//   - legacy double-encoded JSON arrays: "[\"a\",\"b\"]"
+//   - comma-separated plain strings: "a, b"
+//
+// ok=false means the value is present but unusable; callers must not overwrite
+// the in-memory setting with an empty default in that case.
+func parseStringListSetting(raw string) ([]string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, false
+	}
+
+	var decoded any
+	if err := json.Unmarshal([]byte(raw), &decoded); err != nil {
+		// Non-JSON legacy plain string (comma-separated).
+		return normalizeStringList(raw), true
+	}
+
+	switch v := decoded.(type) {
+	case nil:
+		return []string{}, true
+	case []any:
+		return normalizeStringListAny(v), true
+	case []string:
+		return normalizeStringList(v...), true
+	case string:
+		// Double-encoded JSON array/string, or comma-separated plain string.
+		inner := strings.TrimSpace(v)
+		if inner == "" {
+			return []string{}, true
+		}
+		var nested any
+		if err := json.Unmarshal([]byte(inner), &nested); err == nil {
+			switch nv := nested.(type) {
+			case nil:
+				return []string{}, true
+			case []any:
+				return normalizeStringListAny(nv), true
+			case []string:
+				return normalizeStringList(nv...), true
+			case string:
+				return normalizeStringList(nv), true
+			default:
+				return nil, false
+			}
+		}
+		return normalizeStringList(inner), true
+	default:
+		return nil, false
+	}
+}
+
+func normalizeStringListAny(items []any) []string {
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		s, ok := item.(string)
+		if !ok {
+			continue
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out
+}
+
+func normalizeStringList(parts ...string) []string {
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		for _, item := range strings.Split(part, ",") {
+			s := strings.TrimSpace(item)
+			if s == "" {
+				continue
+			}
+			if _, exists := seen[s]; exists {
+				continue
+			}
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // parseBoolSetting parses a boolean setting value.
