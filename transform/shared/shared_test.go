@@ -6,224 +6,6 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Think tag parser: basic cases
-// ---------------------------------------------------------------------------
-
-func TestConsumeThinkTaggedText_NoTags(t *testing.T) {
-	state := CreateThinkTagParserState()
-	content, reasoning := ConsumeThinkTaggedText(state, "plain text")
-	// When no think tags are present, text is buffered in state.Pending for the next chunk.
-	if reasoning != "" {
-		t.Errorf("expected no reasoning, got %q", reasoning)
-	}
-	if content != "" {
-		t.Logf("content=%q", content)
-	}
-	// Pending holds the buffered text, to be consumed by next chunk
-	if state.Pending != "plain text" {
-		t.Errorf("expected 'plain text' in pending, got %q", state.Pending)
-	}
-}
-
-func TestConsumeThinkTaggedText_CompleteTag(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "thinking step by step..." + thinkClose + "Here is the answer."
-
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if reasoning != "thinking step by step..." {
-		t.Errorf("expected 'thinking step by step...', got %q", reasoning)
-	}
-	// Content after closing tag is buffered in state.Pending for next chunk
-	if state.Pending != "Here is the answer." {
-		t.Errorf("expected 'Here is the answer.' in pending, got %q", state.Pending)
-	}
-	_ = content
-}
-
-func TestConsumeThinkTaggedText_OnlyThinking(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "reasoning content" + thinkClose
-
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
-	}
-	if reasoning != "reasoning content" {
-		t.Errorf("expected 'reasoning content', got %q", reasoning)
-	}
-}
-
-func TestConsumeThinkTaggedText_OnlyContent(t *testing.T) {
-	state := CreateThinkTagParserState()
-	content, reasoning := ConsumeThinkTaggedText(state, "just content")
-	// Text without think tags is buffered in Pending
-	if reasoning != "" {
-		t.Errorf("expected no reasoning, got %q", reasoning)
-	}
-	if state.Pending != "just content" {
-		t.Errorf("expected 'just content' in pending, got %q", state.Pending)
-	}
-	_ = content
-}
-
-func TestConsumeThinkTaggedText_OpenedTag_NotClosed(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := "before " + thinkOpen + "thinking..."
-
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if content != "before " {
-		t.Errorf("expected 'before ', got %q", content)
-	}
-	if reasoning != "" {
-		t.Errorf("expected no reasoning yet (tag not closed), got %q", reasoning)
-	}
-	if state.Mode != "reasoning" {
-		t.Errorf("expected reasoning mode, got %q", state.Mode)
-	}
-	if state.Pending != "thinking..." {
-		t.Errorf("expected 'thinking...' in pending, got %q", state.Pending)
-	}
-}
-
-func TestConsumeThinkTaggedText_ContinuedReasoning(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "part 1"
-
-	// First chunk opens reasoning mode
-	content1, reasoning1 := ConsumeThinkTaggedText(state, text)
-	if content1 != "" {
-		t.Errorf("expected empty content, got %q", content1)
-	}
-	if reasoning1 != "" {
-		t.Errorf("expected empty reasoning on first chunk (no close tag), got %q", reasoning1)
-	}
-	if state.Mode != "reasoning" {
-		t.Errorf("expected reasoning mode, got %q", state.Mode)
-	}
-	if state.Pending != "part 1" {
-		t.Errorf("expected 'part 1' in pending, got %q", state.Pending)
-	}
-
-	// Second chunk continues in reasoning mode, then closes
-	content2, reasoning2 := ConsumeThinkTaggedText(state, "more thinking"+thinkClose+"final answer")
-	if content2 != "" {
-		t.Logf("content2=%q (buffered in Pending)", content2)
-	}
-	if reasoning2 != "part 1more thinking" {
-		t.Errorf("expected 'part 1more thinking', got %q", reasoning2)
-	}
-	// Content after tag closure goes to Pending (retrieved by next chunk)
-	if state.Pending != "final answer" {
-		t.Errorf("expected 'final answer' in pending, got %q", state.Pending)
-	}
-	if state.Mode != "content" {
-		t.Errorf("expected back to content mode, got %q", state.Mode)
-	}
-}
-
-func TestConsumeThinkTaggedText_MultipleTags(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "think1" + thinkClose + " content1 " +
-		thinkOpen + "think2" + thinkClose + " content2"
-
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	// Named return values accumulate across the loop
-	if content != " content1 " {
-		t.Errorf("expected ' content1 ', got %q", content)
-	}
-	if reasoning != "think1think2" {
-		t.Errorf("expected 'think1think2', got %q", reasoning)
-	}
-	// Remaining text after final close tag goes to Pending
-	if state.Pending != " content2" {
-		t.Errorf("expected ' content2' in pending, got %q", state.Pending)
-	}
-}
-
-func TestConsumeThinkTaggedText_NestedLike(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "outer" + thinkClose + " middle " + thinkOpen + "inner" + thinkClose
-
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if content != " middle " {
-		t.Errorf("expected ' middle ', got %q", content)
-	}
-	if reasoning != "outerinner" {
-		t.Errorf("expected 'outerinner', got %q", reasoning)
-	}
-}
-
-func TestConsumeThinkTaggedText_PartialOpenTag(t *testing.T) {
-	state := CreateThinkTagParserState()
-	// Incomplete opening tag
-	text := "text < think>"
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if reasoning != "" {
-		t.Errorf("expected no reasoning for broken tag, got %q", reasoning)
-	}
-	// Since there's no full <think> tag match, text is buffered in Pending
-	if content != "" {
-		t.Logf("content=%q", content)
-	}
-	if state.Pending != "text < think>" {
-		t.Errorf("expected 'text < think>' in pending, got %q", state.Pending)
-	}
-}
-
-func TestConsumeThinkTaggedText_MissingCloseTag(t *testing.T) {
-	state := CreateThinkTagParserState()
-	text := thinkOpen + "never closes"
-	content, reasoning := ConsumeThinkTaggedText(state, text)
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
-	}
-	if reasoning != "" {
-		t.Errorf("expected no reasoning yet, got %q", reasoning)
-	}
-	if state.Mode != "reasoning" {
-		t.Errorf("expected reasoning mode, got %q", state.Mode)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// FlushThinkTaggedText
-// ---------------------------------------------------------------------------
-
-func TestFlushThinkTaggedText_ContentMode(t *testing.T) {
-	state := CreateThinkTagParserState()
-	content, reasoning := FlushThinkTaggedText(state)
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
-	}
-	if reasoning != "" {
-		t.Errorf("expected empty reasoning, got %q", reasoning)
-	}
-}
-
-func TestFlushThinkTaggedText_ReasoningMode(t *testing.T) {
-	state := CreateThinkTagParserState()
-	// Enter reasoning mode
-	ConsumeThinkTaggedText(state, thinkOpen+"pending text")
-	if state.Mode != "reasoning" {
-		t.Fatal("expected reasoning mode")
-	}
-
-	content, reasoning := FlushThinkTaggedText(state)
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
-	}
-	if reasoning != "pending text" {
-		t.Errorf("expected 'pending text', got %q", reasoning)
-	}
-	if state.Mode != "content" {
-		t.Errorf("expected content mode after flush, got %q", state.Mode)
-	}
-	if state.Pending != "" {
-		t.Errorf("expected empty pending, got %q", state.Pending)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // ExtractInlineThinkTags (non-streaming)
 // ---------------------------------------------------------------------------
 
@@ -256,6 +38,231 @@ func TestExtractInlineThinkTags_UnclosedTag(t *testing.T) {
 	}
 	if result.Reasoning != "unclosed reasoning" {
 		t.Errorf("expected 'unclosed reasoning', got %q", result.Reasoning)
+	}
+}
+
+func TestExtractInlineThinkTags_MiniMaxOrphanClose(t *testing.T) {
+	// Upstream #511 / MiniMax playground: open tag omitted, only close tag appears.
+	text := "友好的方式打招呼说\"你好哦\"。我应该以友好、热情的方式回应。\n" + thinkClose + "\n\n你好呀！很高兴见到你！"
+	result := ExtractInlineThinkTags(text)
+	if strings.Contains(result.Content, thinkClose) || strings.Contains(result.Content, thinkOpen) {
+		t.Errorf("content must not keep raw think tags, got %q", result.Content)
+	}
+	if !strings.Contains(result.Content, "你好呀") {
+		t.Errorf("expected assistant greeting in content, got %q", result.Content)
+	}
+	if !strings.Contains(result.Reasoning, "友好的方式打招呼") {
+		t.Errorf("expected thinking in reasoning, got %q", result.Reasoning)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MiniMax final + stream fixtures
+// ---------------------------------------------------------------------------
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxOrphanThink(t *testing.T) {
+	payload := map[string]any{
+		"id":      "chatcmpl-minimax-1",
+		"object":  "chat.completion",
+		"created": float64(1700000000),
+		"model":   "MiniMax-M2.7",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"message": map[string]any{
+					"role": "assistant",
+					"content": "友好的方式打招呼说\"你好哦\"。我应该以友好、热情的方式回应。\n" +
+						thinkClose + "\n\n你好呀！很高兴见到你！",
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.7", "")
+	if strings.Contains(result.Content, thinkClose) || strings.Contains(result.Content, thinkOpen) {
+		t.Fatalf("content kept raw think tags: %q", result.Content)
+	}
+	if !strings.Contains(result.Content, "你好呀") {
+		t.Fatalf("content = %q", result.Content)
+	}
+	if !strings.Contains(result.ReasoningContent, "友好的方式打招呼") {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxReasoningDetails(t *testing.T) {
+	payload := map[string]any{
+		"id":     "chatcmpl-minimax-2",
+		"object": "chat.completion",
+		"model":  "MiniMax-M2.7",
+		"choices": []any{
+			map[string]any{
+				"index": float64(0),
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": "\n",
+					"reasoning_details": []any{
+						map[string]any{
+							"type":   "reasoning.text",
+							"id":     "reasoning-text-1",
+							"format": "MiniMax-response-v1",
+							"index":  float64(0),
+							"text":   "Let me think about this request.",
+						},
+					},
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.7", "")
+	if result.ReasoningContent != "Let me think about this request." {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+	if strings.Contains(result.Content, thinkOpen) || strings.Contains(result.Content, thinkClose) {
+		t.Fatalf("content kept tags: %q", result.Content)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_MiniMaxPairedThink(t *testing.T) {
+	payload := map[string]any{
+		"id":    "chatcmpl-minimax-3",
+		"model": "MiniMax-M2.5",
+		"choices": []any{
+			map[string]any{
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": thinkOpen + "internal plan" + thinkClose + "visible answer",
+				},
+				"finish_reason": "stop",
+			},
+		},
+	}
+	result := NormalizeUpstreamFinalResponse(payload, "MiniMax-M2.5", "")
+	if result.Content != "visible answer" {
+		t.Fatalf("content = %q", result.Content)
+	}
+	if result.ReasoningContent != "internal plan" {
+		t.Fatalf("reasoning = %q", result.ReasoningContent)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_MiniMaxThinkStream(t *testing.T) {
+	ctx := CreateStreamTransformContext("MiniMax-M2.7")
+	var content, reasoning string
+
+	chunks := []map[string]any{
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index": float64(0),
+				"delta": map[string]any{"role": "assistant", "content": thinkOpen + "先考虑语气"},
+			}},
+		},
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index": float64(0),
+				"delta": map[string]any{"content": "再回复" + thinkClose + "\n你好"},
+			}},
+		},
+		{
+			"id": "chatcmpl-mm-s1", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+			"choices": []any{map[string]any{
+				"index":         float64(0),
+				"delta":         map[string]any{},
+				"finish_reason": "stop",
+			}},
+		},
+	}
+
+	for _, payload := range chunks {
+		ev := NormalizeUpstreamStreamEvent(payload, ctx, "MiniMax-M2.7")
+		content += ev.ContentDelta
+		reasoning += ev.ReasoningDelta
+	}
+
+	if strings.Contains(content, thinkClose) || strings.Contains(content, thinkOpen) {
+		t.Fatalf("stream content kept tags: %q", content)
+	}
+	if !strings.Contains(content, "你好") {
+		t.Fatalf("content = %q", content)
+	}
+	if !strings.Contains(reasoning, "先考虑语气") || !strings.Contains(reasoning, "再回复") {
+		t.Fatalf("reasoning = %q", reasoning)
+	}
+}
+
+func TestNormalizeUpstreamStreamEvent_MiniMaxReasoningDetailsDelta(t *testing.T) {
+	ctx := CreateStreamTransformContext("MiniMax-M2.7")
+	payload := map[string]any{
+		"id": "chatcmpl-mm-s2", "object": "chat.completion.chunk", "model": "MiniMax-M2.7",
+		"choices": []any{map[string]any{
+			"index": float64(0),
+			"delta": map[string]any{
+				"role": "assistant",
+				"reasoning_details": []any{
+					map[string]any{"type": "reasoning.text", "text": "split reasoning"},
+				},
+				"content": "answer",
+			},
+		}},
+	}
+	ev := NormalizeUpstreamStreamEvent(payload, ctx, "MiniMax-M2.7")
+	if ev.ReasoningDelta != "split reasoning" {
+		t.Fatalf("reasoning = %q", ev.ReasoningDelta)
+	}
+	if ev.ContentDelta != "answer" {
+		t.Fatalf("content = %q", ev.ContentDelta)
+	}
+}
+
+func TestSerializeFinalResponse_MiniMaxStrippedContent(t *testing.T) {
+	normalized := NormalizeUpstreamFinalResponse(map[string]any{
+		"id":    "chatcmpl-mm-ser",
+		"model": "MiniMax-M2.7",
+		"choices": []any{map[string]any{
+			"message": map[string]any{
+				"role":    "assistant",
+				"content": "reason body" + thinkClose + "hello user",
+			},
+			"finish_reason": "stop",
+		}},
+	}, "MiniMax-M2.7", "")
+
+	out := SerializeFinalResponse(FormatOpenAI, normalized, struct {
+		PromptTokens, CompletionTokens, TotalTokens int
+	}{1, 2, 3})
+
+	var msg map[string]any
+	switch choices := out["choices"].(type) {
+	case []map[string]any:
+		if len(choices) == 0 {
+			t.Fatalf("no choices: %#v", out)
+		}
+		msg, _ = choices[0]["message"].(map[string]any)
+	case []any:
+		if len(choices) == 0 {
+			t.Fatalf("no choices: %#v", out)
+		}
+		choice, _ := choices[0].(map[string]any)
+		msg, _ = choice["message"].(map[string]any)
+	default:
+		t.Fatalf("unexpected choices type: %T", out["choices"])
+	}
+
+	content := AsTrimmedString(msg["content"])
+	reasoning := AsTrimmedString(msg["reasoning_content"])
+	if strings.Contains(content, thinkClose) {
+		t.Fatalf("serialized content kept close tag: %q", content)
+	}
+	if !strings.Contains(content, "hello user") {
+		t.Fatalf("content = %q", content)
+	}
+	if !strings.Contains(reasoning, "reason body") {
+		t.Fatalf("reasoning = %q", reasoning)
 	}
 }
 

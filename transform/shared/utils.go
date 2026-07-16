@@ -265,10 +265,45 @@ func SerializeSSE(event string, data any) string {
 
 // THINK_OPEN and THINK_CLOSE are the literal strings that must appear verbatim
 // in the source but cannot be written in raw text because the model processes them.
+// MiniMax (and several other thinking models) embed reasoning inside content as
+// <think>...</think>. Some MiniMax responses omit the open tag and only emit the
+// close tag; ExtractInlineThinkTags / ConsumeThinkTaggedText treat that orphan
+// close form as "reasoning before close, content after".
 var (
-	thinkOpen  = string([]byte{0x3c, 0x74, 0x68, 0x69, 0x6e, 0x6b, 0x3e})  // <think>
+	thinkOpen  = string([]byte{0x3c, 0x74, 0x68, 0x69, 0x6e, 0x6b, 0x3e})        // <think>
 	thinkClose = string([]byte{0x3c, 0x2f, 0x74, 0x68, 0x69, 0x6e, 0x6b, 0x3e}) // </think>
 )
+
+// partialTagSuffixLen returns the length of the longest suffix of text that is a
+// proper prefix of tag. Used so stream parsers only buffer incomplete tags and
+// release confirmed content/reasoning immediately.
+func partialTagSuffixLen(text, tag string) int {
+	max := len(tag) - 1
+	if max > len(text) {
+		max = len(text)
+	}
+	for n := max; n > 0; n-- {
+		if strings.HasPrefix(tag, text[len(text)-n:]) {
+			return n
+		}
+	}
+	return 0
+}
+
+// releaseSafePrefix emits all of text except a possible partial tag suffix of
+// either open or close tags (or only close tags when onlyClose is true).
+func releaseSafePrefix(text string, onlyClose bool) (emitted, pending string) {
+	n := partialTagSuffixLen(text, thinkClose)
+	if !onlyClose {
+		if o := partialTagSuffixLen(text, thinkOpen); o > n {
+			n = o
+		}
+	}
+	if n == 0 {
+		return text, ""
+	}
+	return text[:len(text)-n], text[len(text)-n:]
+}
 
 func ConsumeThinkTaggedText(state *ThinkTagParserState, chunk string) (content, reasoning string) {
 	text := state.Pending + chunk
@@ -277,8 +312,11 @@ func ConsumeThinkTaggedText(state *ThinkTagParserState, chunk string) (content, 
 	if state.Mode == "reasoning" {
 		endIdx := strings.Index(text, thinkClose)
 		if endIdx < 0 {
-			reasoning = text
-			return
+			// Still inside an open think block: emit safe reasoning, keep partial close.
+			emitted, pending := releaseSafePrefix(text, true)
+			state.Mode = "reasoning"
+			state.Pending = pending
+			return "", emitted
 		}
 		reasoning = text[:endIdx]
 		state.Mode = "content"
@@ -287,17 +325,33 @@ func ConsumeThinkTaggedText(state *ThinkTagParserState, chunk string) (content, 
 
 	for {
 		startIdx := strings.Index(text, thinkOpen)
+		closeIdx := strings.Index(text, thinkClose)
+
+		// MiniMax orphan close: reasoning streamed without a visible open tag.
+		if startIdx < 0 && closeIdx >= 0 {
+			reasoning += text[:closeIdx]
+			text = text[closeIdx+len(thinkClose):]
+			continue
+		}
 		if startIdx < 0 {
-			state.Pending = text
+			// No complete open/close tags: emit confirmed content, buffer partial tag.
+			emitted, pending := releaseSafePrefix(text, false)
+			content += emitted
+			state.Pending = pending
 			return
 		}
+
+		// Open tag wins over a later close; content before open is visible text.
 		content += text[:startIdx]
 		text = text[startIdx+len(thinkOpen):]
 
 		endIdx := strings.Index(text, thinkClose)
 		if endIdx < 0 {
+			// Opened think without close yet — buffer remaining as reasoning mode.
+			emitted, pending := releaseSafePrefix(text, true)
+			reasoning += emitted
 			state.Mode = "reasoning"
-			state.Pending = text
+			state.Pending = pending
 			return
 		}
 		reasoning += text[:endIdx]
@@ -306,24 +360,37 @@ func ConsumeThinkTaggedText(state *ThinkTagParserState, chunk string) (content, 
 }
 
 func FlushThinkTaggedText(state *ThinkTagParserState) (content, reasoning string) {
+	if state == nil {
+		return "", ""
+	}
+	pending := state.Pending
+	state.Pending = ""
 	if state.Mode == "reasoning" {
 		state.Mode = "content"
-		c := state.Pending
-		state.Pending = ""
-		return "", c
+		// Unclosed think block: remaining buffer is reasoning, not client content.
+		return "", pending
 	}
-	state.Pending = ""
-	return "", ""
+	// Content mode: release any buffered content so stream finish does not drop it.
+	return pending, ""
 }
 
 func ExtractInlineThinkTags(text string) TextReasoning {
 	var content, reasoning string
 	for {
 		start := strings.Index(text, thinkOpen)
+		closeIdx := strings.Index(text, thinkClose)
+
+		// Orphan </think> (MiniMax often omits the open tag in final content).
+		if start < 0 && closeIdx >= 0 {
+			reasoning += text[:closeIdx]
+			text = text[closeIdx+len(thinkClose):]
+			continue
+		}
 		if start < 0 {
 			content += text
 			return TextReasoning{Content: content, Reasoning: reasoning}
 		}
+
 		content += text[:start]
 		text = text[start+len(thinkOpen):]
 
@@ -334,6 +401,41 @@ func ExtractInlineThinkTags(text string) TextReasoning {
 		}
 		reasoning += text[:end]
 		text = text[end+len(thinkClose):]
+	}
+}
+
+// ExtractReasoningDetailsText pulls MiniMax-style reasoning_details[].text
+// (and similar nested text fields) into a single reasoning string.
+func ExtractReasoningDetailsText(raw any) string {
+	switch v := raw.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case []any:
+		var parts []string
+		for _, item := range v {
+			if s := ExtractReasoningDetailsText(item); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return JoinNonEmpty(parts)
+	case map[string]any:
+		if s := AsTrimmedString(v["text"]); s != "" {
+			return s
+		}
+		if s := AsTrimmedString(v["content"]); s != "" {
+			return s
+		}
+		if s := AsTrimmedString(v["reasoning"]); s != "" {
+			return s
+		}
+		if nested, ok := v["reasoning_details"]; ok {
+			return ExtractReasoningDetailsText(nested)
+		}
+		return ""
+	default:
+		return ""
 	}
 }
 
