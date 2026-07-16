@@ -251,7 +251,8 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 		t.Fatalf("GET /v1/models: failed to parse response: %v", err)
 	}
 
-	// Verify OpenAI models format.
+	// Verify OpenAI models format (id/object/created/owned_by; optional context_length).
+	// See docs/analysis/models-response-shape.md (#53 / upstream #507).
 	if obj, _ := modelsResp["object"].(string); obj != "list" {
 		t.Errorf("GET /v1/models: expected object='list', got %q", obj)
 	}
@@ -265,11 +266,21 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 				t.Errorf("GET /v1/models: data[%d] is not an object", i)
 				continue
 			}
-			if _, hasID := modelEntry["id"]; !hasID {
-				t.Errorf("GET /v1/models: data[%d] missing 'id' field", i)
+			if id, _ := modelEntry["id"].(string); id == "" {
+				t.Errorf("GET /v1/models: data[%d] missing non-empty 'id' field", i)
 			}
 			if obj, _ := modelEntry["object"].(string); obj != "model" {
 				t.Errorf("GET /v1/models: data[%d] expected object='model', got %q", i, obj)
+			}
+			if ownedBy, _ := modelEntry["owned_by"].(string); ownedBy != "metapi" {
+				t.Errorf("GET /v1/models: data[%d] expected owned_by='metapi', got %q", i, ownedBy)
+			}
+			if _, hasCreated := modelEntry["created"]; !hasCreated {
+				t.Errorf("GET /v1/models: data[%d] missing 'created' field", i)
+			}
+			// Owned catalog models should advertise context_length for Hermes-class clients.
+			if _, hasCtx := modelEntry["context_length"]; !hasCtx {
+				t.Errorf("GET /v1/models: data[%d] missing 'context_length' for owned catalog model %v", i, modelEntry["id"])
 			}
 		}
 		t.Logf("GET /v1/models: returned %d models", len(data))
