@@ -9,6 +9,9 @@ import (
 
 // APIError represents a structured JSON error response.
 // Message is safe for public consumption; Internal is logged but never sent.
+// JSON field names are camelCase-compatible public keys used by the admin UI:
+//   - error  (string message)
+//   - detail (optional classifier / subtype)
 type APIError struct {
 	Code     int    `json:"-"`
 	Message  string `json:"error"`
@@ -18,6 +21,9 @@ type APIError struct {
 
 // Error implements the error interface.
 func (e *APIError) Error() string {
+	if e == nil {
+		return ""
+	}
 	if e.Internal != nil {
 		return e.Message + ": " + e.Internal.Error()
 	}
@@ -26,16 +32,36 @@ func (e *APIError) Error() string {
 
 // WriteError writes a structured JSON error response to the client.
 // It sets Content-Type: application/json and the given HTTP status code.
+// Callers must use a non-2xx status for failures — never HTTP 200 with an error body.
 func WriteError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(APIError{Code: code, Message: message})
+	WriteAPIError(w, &APIError{Code: code, Message: message})
 }
 
 // WriteErrorDetail writes a structured JSON error response with
 // additional detail field (e.g., "invalid_request" error type).
 func WriteErrorDetail(w http.ResponseWriter, code int, message, detail string) {
+	WriteAPIError(w, &APIError{Code: code, Message: message, Detail: detail})
+}
+
+// WriteAPIError writes the public fields of APIError with the given status.
+// Status defaults to Code when Code > 0; otherwise 500.
+func WriteAPIError(w http.ResponseWriter, err *APIError) {
+	if err == nil {
+		err = &APIError{Code: http.StatusInternalServerError, Message: "internal error"}
+	}
+	code := err.Code
+	if code < 400 {
+		// Guard against accidental silent success statuses for error bodies.
+		if code == 0 {
+			code = http.StatusInternalServerError
+		} else {
+			code = http.StatusBadRequest
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(APIError{Code: code, Message: message, Detail: detail})
+	_ = json.NewEncoder(w).Encode(APIError{
+		Message: err.Message,
+		Detail:  err.Detail,
+	})
 }

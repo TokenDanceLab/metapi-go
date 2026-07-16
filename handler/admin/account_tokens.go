@@ -50,7 +50,7 @@ func (h *accountTokensHandler) listTokens(w http.ResponseWriter, r *http.Request
 	tokens, err := service.ListTokensWithRelations(h.db, accountID)
 	if err != nil {
 		slog.Error("Failed to load tokens", "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load tokens"})
+		writeError(w, http.StatusInternalServerError, "Failed to load tokens")
 		return
 	}
 
@@ -65,24 +65,24 @@ func (h *accountTokensHandler) listTokens(w http.ResponseWriter, r *http.Request
 func (h *accountTokensHandler) createToken(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenCreatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account token payload."})
+		writeError(w, http.StatusBadRequest, "Invalid account token payload.")
 		return
 	}
 
 	if body.AccountID <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid accountId. Expected positive number."})
+		writeError(w, http.StatusBadRequest, "Invalid accountId. Expected positive number.")
 		return
 	}
 
 	// Get account with site
 	row, err := service.GetAccountWithSiteByID(h.db, int64(body.AccountID))
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 
 	if service.IsAPIKeyConnection(&row.Account) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持创建账号令牌"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持创建账号令牌")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (h *accountTokensHandler) createToken(w http.ResponseWriter, r *http.Reques
 		result, err := h.createLocalToken(body, row, tokenValue)
 		if err != nil {
 			slog.Error("Token creation failed", "err", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Token creation failed"})
+			writeError(w, http.StatusInternalServerError, "Token creation failed")
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
@@ -105,16 +105,16 @@ func (h *accountTokensHandler) createToken(w http.ResponseWriter, r *http.Reques
 
 	// Upstream path: create token on the target site
 	if row.Site.Status == "disabled" || strings.TrimSpace(row.Site.Status) == "disabled" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "站点已禁用，无法创建令牌"})
+		writeError(w, http.StatusBadRequest, "站点已禁用，无法创建令牌")
 		return
 	}
 	if strings.TrimSpace(row.Account.AccessToken) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "账号缺少访问令牌，无法创建站点令牌"})
+		writeError(w, http.StatusBadRequest, "账号缺少访问令牌，无法创建站点令牌")
 		return
 	}
 
 	// Stub: P4 adapter.createApiToken()
-	writeJSON(w, http.StatusBadGateway, map[string]any{"success": false, "message": "站点创建令牌失败（上游适配器未实现）"})
+	writeError(w, http.StatusBadGateway, "站点创建令牌失败（上游适配器未实现）")
 }
 
 func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreatePayload, row *service.AccountWithSite, tokenValue string) (map[string]any, error) {
@@ -216,19 +216,19 @@ func (h *accountTokensHandler) createLocalToken(body payloads.AccountTokenCreate
 func (h *accountTokensHandler) batchTokens(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenBatchPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account token batch payload."})
+		writeError(w, http.StatusBadRequest, "Invalid account token batch payload.")
 		return
 	}
 
 	if len(body.IDs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ids is required"})
+		writeError(w, http.StatusBadRequest, "ids is required")
 		return
 	}
 
 	action := strings.TrimSpace(body.Action)
 	validActions := map[string]bool{"enable": true, "disable": true, "delete": true}
 	if !validActions[action] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid action"})
+		writeError(w, http.StatusBadRequest, "Invalid action")
 		return
 	}
 
@@ -301,33 +301,33 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	tokenID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "令牌 ID 无效"})
+		writeError(w, http.StatusBadRequest, "令牌 ID 无效")
 		return
 	}
 
 	var body payloads.AccountTokenUpdatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account token payload."})
+		writeError(w, http.StatusBadRequest, "Invalid account token payload.")
 		return
 	}
 
 	existing, err := service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 
 	owner, err := service.GetAccountByID(h.db, existing.AccountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 	if owner == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 	if service.IsAPIKeyConnection(owner) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持管理账号令牌"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持管理账号令牌")
 		return
 	}
 
@@ -341,7 +341,7 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 	if body.Token != nil {
 		tv := strings.TrimSpace(*body.Token)
 		if tv == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "令牌不能为空"})
+			writeError(w, http.StatusBadRequest, "令牌不能为空")
 			return
 		}
 		updates["token"] = tv
@@ -372,52 +372,52 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := service.UpdateTokenFields(h.db, tokenID, updates); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		writeError(w, http.StatusInternalServerError, "更新失败")
 		return
 	}
 
 	// Refresh and handle default logic
 	latest, err := service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		writeError(w, http.StatusInternalServerError, "更新失败")
 		return
 	}
 	if latest == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		writeError(w, http.StatusInternalServerError, "更新失败")
 		return
 	}
 
 	if body.IsDefault != nil && *body.IsDefault && service.IsUsableAccountToken(latest) {
 		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+			writeError(w, http.StatusInternalServerError, "设置默认令牌失败")
 			return
 		} else if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "令牌不能设为默认"})
+			writeError(w, http.StatusBadRequest, "令牌不能设为默认")
 			return
 		}
 	} else if latest.IsDefault && service.IsUsableAccountToken(latest) {
 		if ok, err := service.SetDefaultToken(h.db, tokenID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+			writeError(w, http.StatusInternalServerError, "设置默认令牌失败")
 			return
 		} else if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "令牌不能设为默认"})
+			writeError(w, http.StatusBadRequest, "令牌不能设为默认")
 			return
 		}
 	} else if existing.IsDefault && !service.IsUsableAccountToken(latest) {
 		if _, err := service.RepairDefaultToken(h.db, existing.AccountID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "修复默认令牌失败"})
+			writeError(w, http.StatusInternalServerError, "修复默认令牌失败")
 			return
 		}
 	} else if body.IsDefault != nil && !(*body.IsDefault) && existing.IsDefault {
 		if _, err := service.RepairDefaultToken(h.db, existing.AccountID); err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "修复默认令牌失败"})
+			writeError(w, http.StatusInternalServerError, "修复默认令牌失败")
 			return
 		}
 	}
 
 	latest, err = service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取令牌失败"})
+		writeError(w, http.StatusInternalServerError, "读取令牌失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -432,41 +432,41 @@ func (h *accountTokensHandler) setDefault(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	tokenID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "令牌 ID 无效"})
+		writeError(w, http.StatusBadRequest, "令牌 ID 无效")
 		return
 	}
 
 	token, err := service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 
 	owner, err := service.GetAccountByID(h.db, token.AccountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 	if owner == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 	if service.IsAPIKeyConnection(owner) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持管理账号令牌"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持管理账号令牌")
 		return
 	}
 	if service.IsMaskedPendingAccountToken(token) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "待补全令牌不能设为默认，请先补全明文 token"})
+		writeError(w, http.StatusBadRequest, "待补全令牌不能设为默认，请先补全明文 token")
 		return
 	}
 
 	ok, err := service.SetDefaultToken(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "设置默认令牌失败"})
+		writeError(w, http.StatusInternalServerError, "设置默认令牌失败")
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -478,35 +478,32 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 	idStr := chi.URLParam(r, "id")
 	tokenID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "令牌 ID 无效"})
+		writeError(w, http.StatusBadRequest, "令牌 ID 无效")
 		return
 	}
 
 	token, err := service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 
 	owner, err := service.GetAccountByID(h.db, token.AccountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 	if owner == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 	if service.IsAPIKeyConnection(owner) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持管理账号令牌"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持管理账号令牌")
 		return
 	}
 
 	if service.IsMaskedPendingAccountToken(token) || IsMaskedTokenValue(token.Token) {
-		writeJSON(w, http.StatusConflict, map[string]any{
-			"success": false,
-			"message": "当前仅保存了脱敏令牌，无法展开/复制。请在站点重新生成并同步，或手动更新为完整令牌。",
-		})
+		writeError(w, http.StatusConflict, "当前仅保存了脱敏令牌，无法展开/复制。请在站点重新生成并同步，或手动更新为完整令牌。")
 		return
 	}
 
@@ -514,11 +511,11 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 	var site store.Site
 	var account store.Account
 	if err := h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), token.AccountID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取账号失败"})
+		writeError(w, http.StatusInternalServerError, "读取账号失败")
 		return
 	}
 	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取站点失败"})
+		writeError(w, http.StatusInternalServerError, "读取站点失败")
 		return
 	}
 
@@ -538,34 +535,34 @@ func (h *accountTokensHandler) deleteToken(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	tokenID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "令牌 ID 无效"})
+		writeError(w, http.StatusBadRequest, "令牌 ID 无效")
 		return
 	}
 
 	token, err := service.GetTokenByID(h.db, tokenID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 
 	owner, err := service.GetAccountByID(h.db, token.AccountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 	if owner == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "令牌不存在"})
+		writeError(w, http.StatusNotFound, "令牌不存在")
 		return
 	}
 	if service.IsAPIKeyConnection(owner) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持管理账号令牌"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持管理账号令牌")
 		return
 	}
 
 	// Stub: upstream-first delete - just local delete for now
 	if err := service.DeleteTokenByID(h.db, tokenID); err != nil {
 		slog.Error("Token deletion failed", "err", err)
-		writeJSON(w, http.StatusBadGateway, map[string]any{"success": false, "message": "Token deletion failed"})
+		writeError(w, http.StatusBadGateway, "Token deletion failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -577,13 +574,13 @@ func (h *accountTokensHandler) syncAccount(w http.ResponseWriter, r *http.Reques
 	accountIDStr := chi.URLParam(r, "accountId")
 	accountID, err := strconv.ParseInt(accountIDStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "账号 ID 无效"})
+		writeError(w, http.StatusBadRequest, "账号 ID 无效")
 		return
 	}
 
 	row, err := service.GetAccountWithSiteByID(h.db, accountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 
@@ -607,7 +604,7 @@ func (h *accountTokensHandler) syncAccount(w http.ResponseWriter, r *http.Reques
 func (h *accountTokensHandler) syncAll(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountTokenSyncAllPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -641,25 +638,25 @@ func (h *accountTokensHandler) getGroups(w http.ResponseWriter, r *http.Request)
 	accountIDStr := chi.URLParam(r, "accountId")
 	accountID, err := strconv.ParseInt(accountIDStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "账号 ID 无效"})
+		writeError(w, http.StatusBadRequest, "账号 ID 无效")
 		return
 	}
 
 	row, err := service.GetAccountWithSiteByID(h.db, accountID)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
+		writeError(w, http.StatusNotFound, "账号不存在")
 		return
 	}
 
 	if service.IsAPIKeyConnection(&row.Account) {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "API Key 连接不支持拉取账号令牌分组"})
+		writeError(w, http.StatusBadRequest, "API Key 连接不支持拉取账号令牌分组")
 		return
 	}
 
 	groups, err := service.GetTokenGroups(h.db, accountID)
 	if err != nil {
 		slog.Error("Failed to load token groups", "err", err, "account_id", accountID)
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load token groups"})
+		writeError(w, http.StatusInternalServerError, "Failed to load token groups")
 		return
 	}
 
@@ -675,7 +672,7 @@ func (h *accountTokensHandler) getAccountDefault(w http.ResponseWriter, r *http.
 	accountIDStr := chi.URLParam(r, "accountId")
 	accountID, err := strconv.ParseInt(accountIDStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "账号 ID 无效"})
+		writeError(w, http.StatusBadRequest, "账号 ID 无效")
 		return
 	}
 
@@ -698,7 +695,7 @@ func (h *accountTokensHandler) getAccountDefault(w http.ResponseWriter, r *http.
 
 	var site store.Site
 	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "读取站点失败"})
+		writeError(w, http.StatusInternalServerError, "读取站点失败")
 		return
 	}
 

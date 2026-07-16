@@ -455,8 +455,8 @@ func TestSites_Detect_Unknown(t *testing.T) {
 	_, r := setupSitesTest(t)
 	body := map[string]string{"url": "https://unknown.example.com"}
 	resp := doPostJSON(t, r, "/api/sites/detect", body)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.Code)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)

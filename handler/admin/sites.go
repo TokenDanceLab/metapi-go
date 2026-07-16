@@ -47,7 +47,7 @@ func (h *sitesHandler) listSites(w http.ResponseWriter, r *http.Request) {
 	sites, err := service.ListSites(h.db)
 	if err != nil {
 		slog.Error("Failed to load sites", "err", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load sites"})
+		writeError(w, http.StatusInternalServerError, "Failed to load sites")
 		return
 	}
 	writeJSON(w, http.StatusOK, sites)
@@ -58,58 +58,58 @@ func (h *sitesHandler) listSites(w http.ResponseWriter, r *http.Request) {
 func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteCreatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid site payload."})
+		writeError(w, http.StatusBadRequest, "Invalid site payload.")
 		return
 	}
 
 	// Validate name and url
 	if strings.TrimSpace(body.Name) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid name. Expected non-empty string."})
+		writeError(w, http.StatusBadRequest, "Invalid name. Expected non-empty string.")
 		return
 	}
 	if strings.TrimSpace(body.URL) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid url. Expected non-empty string."})
+		writeError(w, http.StatusBadRequest, "Invalid url. Expected non-empty string.")
 		return
 	}
 
 	// Normalize values
 	normalizedStatus := normalizeSiteStatusString(body.Status)
 	if body.Status != nil && normalizedStatus == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site status. Expected active or disabled."})
+		writeError(w, http.StatusBadRequest, "Invalid site status. Expected active or disabled.")
 		return
 	}
 	if body.UseSystemProxy != nil {
 		if !boolPtrValid(body.UseSystemProxy) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid useSystemProxy value. Expected boolean."})
+			writeError(w, http.StatusBadRequest, "Invalid useSystemProxy value. Expected boolean.")
 			return
 		}
 	}
 	if body.ProxyURL != nil && *body.ProxyURL != "" && !service.IsValidProxyURL(*body.ProxyURL) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid proxyUrl. Expected a valid http(s)/socks proxy URL."})
+		writeError(w, http.StatusBadRequest, "Invalid proxyUrl. Expected a valid http(s)/socks proxy URL.")
 		return
 	}
 	if body.ExternalCheckinURL != nil && *body.ExternalCheckinURL != "" && !service.IsValidHTTPURL(*body.ExternalCheckinURL) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid externalCheckinUrl. Expected a valid http(s) URL."})
+		writeError(w, http.StatusBadRequest, "Invalid externalCheckinUrl. Expected a valid http(s) URL.")
 		return
 	}
 	normalizedPinned := body.IsPinned
 	if body.IsPinned != nil && !boolPtrValid(body.IsPinned) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid isPinned value. Expected boolean."})
+		writeError(w, http.StatusBadRequest, "Invalid isPinned value. Expected boolean.")
 		return
 	}
 	normalizedSortOrder := service.NormalizeSortOrder(body.SortOrder)
 	if body.SortOrder != nil && normalizedSortOrder == nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid sortOrder value. Expected non-negative integer."})
+		writeError(w, http.StatusBadRequest, "Invalid sortOrder value. Expected non-negative integer.")
 		return
 	}
 	normalizedWeight := service.NormalizeGlobalWeight(body.GlobalWeight)
 	if body.GlobalWeight != nil && normalizedWeight == nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid globalWeight value. Expected a positive number."})
+		writeError(w, http.StatusBadRequest, "Invalid globalWeight value. Expected a positive number.")
 		return
 	}
 	if body.CustomHeaders != nil && *body.CustomHeaders != "" {
 		if !json.Valid([]byte(*body.CustomHeaders)) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid customHeaders."})
+			writeError(w, http.StatusBadRequest, "Invalid customHeaders.")
 			return
 		}
 	}
@@ -117,7 +117,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	// Normalize API endpoints
 	eps, err := normalizeAPIEndpointsInput(body.APIEndpoints)
 	if err != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err})
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if platform == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Could not detect platform. Please specify manually."})
+		writeError(w, http.StatusBadRequest, "Could not detect platform. Please specify manually.")
 		return
 	}
 
@@ -148,9 +148,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	var existingCount int
 	h.db.Get(&existingCount, h.db.Rebind("SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ?"), platform, canonicalURL)
 	if existingCount > 0 {
-		writeJSON(w, http.StatusConflict, map[string]string{
-			"error": fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL),
-		})
+		writeError(w, http.StatusConflict, fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL))
 		return
 	}
 
@@ -202,18 +200,16 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	if createErr != nil {
 		// Check for unique constraint violation
 		if isUniqueConstraintError(createErr) {
-			writeJSON(w, http.StatusConflict, map[string]string{
-				"error": fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL),
-			})
+			writeError(w, http.StatusConflict, fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Create site failed"})
+		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
 	}
 
 	result, _ := service.LoadSiteWithEndpoints(h.db, createdID)
 	if result == nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Create site failed"})
+		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
 	}
 	routing.InvalidateCache()
@@ -226,24 +222,24 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 
 	var existing store.Site
 	err = h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id)
 	if err == sql.ErrNoRows {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
+		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	} else if err != nil {
 		slog.Error("Failed to load site for update", "err", err, "site_id", id)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load site"})
+		writeError(w, http.StatusInternalServerError, "Failed to load site")
 		return
 	}
 
 	var body payloads.SiteUpdatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site payload."})
+		writeError(w, http.StatusBadRequest, "Invalid site payload.")
 		return
 	}
 
@@ -252,14 +248,14 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	// Validate each field
 	if body.Name != nil {
 		if strings.TrimSpace(*body.Name) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid name. Expected non-empty string."})
+			writeError(w, http.StatusBadRequest, "Invalid name. Expected non-empty string.")
 			return
 		}
 		updates["name"] = *body.Name
 	}
 	if body.URL != nil {
 		if strings.TrimSpace(*body.URL) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid url. Expected non-empty string."})
+			writeError(w, http.StatusBadRequest, "Invalid url. Expected non-empty string.")
 			return
 		}
 		updates["url"] = service.CanonicalizeSiteURL(*body.URL)
@@ -267,14 +263,14 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	if body.Platform != nil {
 		p := strings.TrimSpace(strings.ToLower(*body.Platform))
 		if p == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid platform. Expected non-empty string."})
+			writeError(w, http.StatusBadRequest, "Invalid platform. Expected non-empty string.")
 			return
 		}
 		updates["platform"] = p
 	}
 	if body.ProxyURL != nil {
 		if *body.ProxyURL != "" && !service.IsValidProxyURL(*body.ProxyURL) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid proxyUrl. Expected a valid http(s)/socks proxy URL."})
+			writeError(w, http.StatusBadRequest, "Invalid proxyUrl. Expected a valid http(s)/socks proxy URL.")
 			return
 		}
 		updates["proxyUrl"] = service.NormalizeNullable(body.ProxyURL)
@@ -287,7 +283,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.ExternalCheckinURL != nil {
 		if *body.ExternalCheckinURL != "" && !service.IsValidHTTPURL(*body.ExternalCheckinURL) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid externalCheckinUrl. Expected a valid http(s) URL."})
+			writeError(w, http.StatusBadRequest, "Invalid externalCheckinUrl. Expected a valid http(s) URL.")
 			return
 		}
 		updates["externalCheckinUrl"] = service.NormalizeNullable(body.ExternalCheckinURL)
@@ -295,7 +291,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	if body.Status != nil {
 		ns := normalizeSiteStatusString(body.Status)
 		if ns == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site status. Expected active or disabled."})
+			writeError(w, http.StatusBadRequest, "Invalid site status. Expected active or disabled.")
 			return
 		}
 		updates["status"] = ns
@@ -306,7 +302,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	if body.SortOrder != nil {
 		so := service.NormalizeSortOrder(body.SortOrder)
 		if so == nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid sortOrder value. Expected non-negative integer."})
+			writeError(w, http.StatusBadRequest, "Invalid sortOrder value. Expected non-negative integer.")
 			return
 		}
 		updates["sortOrder"] = int64(*so)
@@ -314,7 +310,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	if body.GlobalWeight != nil {
 		gw := service.NormalizeGlobalWeight(body.GlobalWeight)
 		if gw == nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid globalWeight value. Expected a positive number."})
+			writeError(w, http.StatusBadRequest, "Invalid globalWeight value. Expected a positive number.")
 			return
 		}
 		updates["globalWeight"] = *gw
@@ -344,7 +340,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	if body.APIEndpoints != nil {
 		eps, errMsg := normalizeAPIEndpointsInput(body.APIEndpoints)
 		if errMsg != "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": errMsg})
+			writeError(w, http.StatusBadRequest, errMsg)
 			return
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
@@ -371,22 +367,18 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 		var conflictCount int
 		h.db.Get(&conflictCount, h.db.Rebind("SELECT COUNT(*) FROM sites WHERE platform = ? AND url = ? AND id != ?"), nextPlatform, nextURL, id)
 		if conflictCount > 0 {
-			writeJSON(w, http.StatusConflict, map[string]string{
-				"error": fmt.Sprintf("A %s site with URL %s already exists.", nextPlatform, nextURL),
-			})
+			writeError(w, http.StatusConflict, fmt.Sprintf("A %s site with URL %s already exists.", nextPlatform, nextURL))
 			return
 		}
 	}
 
 	if err := service.UpdateSite(h.db, id, updates); err != nil {
 		if isUniqueConstraintError(err) {
-			writeJSON(w, http.StatusConflict, map[string]string{
-				"error": fmt.Sprintf("A %s site with URL %s already exists.", nextPlatform, nextURL),
-			})
+			writeError(w, http.StatusConflict, fmt.Sprintf("A %s site with URL %s already exists.", nextPlatform, nextURL))
 			return
 		}
 		slog.Error("Failed to update site", "err", err, "site_id", id)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to update site"})
+		writeError(w, http.StatusInternalServerError, "Failed to update site")
 		return
 	}
 
@@ -407,12 +399,12 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 	if err := service.DeleteSite(h.db, id); err != nil {
 		slog.Error("Failed to delete site", "err", err, "site_id", id)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to delete site"})
+		writeError(w, http.StatusInternalServerError, "Failed to delete site")
 		return
 	}
 	service.InvalidateSiteCaches()
@@ -425,12 +417,12 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteBatchPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site payload."})
+		writeError(w, http.StatusBadRequest, "Invalid site payload.")
 		return
 	}
 
 	if len(body.IDs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids is required"})
+		writeError(w, http.StatusBadRequest, "ids is required")
 		return
 	}
 
@@ -440,7 +432,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 		"enableSystemProxy": true, "disableSystemProxy": true,
 	}
 	if !validActions[action] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid action"})
+		writeError(w, http.StatusBadRequest, "Invalid action")
 		return
 	}
 
@@ -493,20 +485,21 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 func (h *sitesHandler) detectSite(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteDetectPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid url. Expected non-empty string."})
+		writeError(w, http.StatusBadRequest, "Invalid url. Expected non-empty string.")
 		return
 	}
 	if strings.TrimSpace(body.URL) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid url. Expected non-empty string."})
+		writeError(w, http.StatusBadRequest, "Invalid url. Expected non-empty string.")
 		return
 	}
 
 	result := service.DetectSite(body.URL)
 	if result != nil {
 		writeJSON(w, http.StatusOK, result)
-	} else {
-		writeJSON(w, http.StatusOK, map[string]string{"error": "Could not detect platform"})
+		return
 	}
+	// Failure must not use HTTP 200 with an error body (B3).
+	writeError(w, http.StatusBadRequest, "Could not detect platform")
 }
 
 // ---- Disabled Models ----
@@ -515,13 +508,13 @@ func (h *sitesHandler) getDisabledModels(w http.ResponseWriter, r *http.Request)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 
 	var existing store.Site
 	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
+		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
@@ -537,20 +530,20 @@ func (h *sitesHandler) getDisabledModels(w http.ResponseWriter, r *http.Request)
 func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Request) {
 	var body payloads.SiteDisabledModelsPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid models. Expected string[]."})
+		writeError(w, http.StatusBadRequest, "Invalid models. Expected string[].")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 
 	var existing store.Site
 	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
+		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
@@ -586,13 +579,13 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 
 	var existing store.Site
 	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Site not found"})
+		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
@@ -639,13 +632,13 @@ func (h *sitesHandler) probeNow(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 
 	var body payloads.ProbeNowBody
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -666,7 +659,7 @@ func (h *sitesHandler) probeStream(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid site id"})
+		writeError(w, http.StatusBadRequest, "Invalid site id")
 		return
 	}
 

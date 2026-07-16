@@ -690,15 +690,18 @@ func TestAccounts_Login_InvalidCredentialsDoNotCreateAccount(t *testing.T) {
 		"username": "baduser",
 		"password": "badpass",
 	})
-	if resp.Code != http.StatusOK {
+	if resp.Code == http.StatusOK {
+		t.Fatalf("login failure must not return HTTP 200, body=%s", resp.Body.String())
+	}
+	if resp.Code < 400 {
 		t.Fatalf("login failure response status = %d body=%s", resp.Code, resp.Body.String())
 	}
 	var result map[string]any
 	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result["success"] != false {
-		t.Fatalf("success = %v, want false", result["success"])
+	if result["error"] == nil || result["error"] == "" {
+		t.Fatalf("expected error field, got %#v", result)
 	}
 	if loginCalls != 1 {
 		t.Fatalf("loginCalls = %d, want 1", loginCalls)
@@ -798,13 +801,13 @@ func TestAccounts_VerifyToken_EmptyToken(t *testing.T) {
 
 	body := map[string]any{"siteId": siteID, "accessToken": ""}
 	resp := doPostJSON(t, r, "/api/accounts/verify-token", body)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.Code)
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)
-	if result["success"] != false {
-		t.Error("expected success=false for empty token")
+	if result["error"] == nil || result["error"] == "" {
+		t.Errorf("expected error field for empty token, got %#v", result)
 	}
 }
 
@@ -1605,13 +1608,13 @@ func TestAccounts_Login_SiteNotFound(t *testing.T) {
 	_, r, _ := setupAccountsTest(t)
 	body := map[string]any{"siteId": 99999, "username": "u", "password": "p"}
 	resp := doPostJSON(t, r, "/api/accounts/login", body)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.Code)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)
-	if result["success"] != false {
-		t.Error("expected success=false for missing site")
+	if result["error"] == nil || result["error"] == "" {
+		t.Errorf("expected error field for missing site, got %#v", result)
 	}
 }
 
@@ -1675,16 +1678,14 @@ func TestAccounts_VerifyToken_SiteNotFound(t *testing.T) {
 	_, r, _ := setupAccountsTest(t)
 	body := map[string]any{"siteId": 99999, "accessToken": "missing-site-token"}
 	resp := doPostJSON(t, r, "/api/accounts/verify-token", body)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.Code)
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.Code, resp.Body.String())
 	}
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)
-	if result["success"] != false {
-		t.Error("expected success=false for missing site")
-	}
-	if !strings.Contains(result["message"].(string), "site not found") {
-		t.Errorf("expected 'site not found', got %v", result["message"])
+	errMsg, _ := result["error"].(string)
+	if !strings.Contains(errMsg, "site not found") {
+		t.Errorf("expected 'site not found', got %#v", result)
 	}
 }
 
