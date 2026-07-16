@@ -224,6 +224,8 @@ store → config
 config, web, handler/shared → leaves
 ```
 
+**B1 ownership inventory:** as-built public entrypoints, import edges, approved exceptions, and recommended cleanups live in [`docs/analysis/package-boundaries.md`](analysis/package-boundaries.md). Prefer that file when deciding where new code belongs or whether an import edge is intentional.
+
 ## S.U.P.E.R. Compliance
 
 - **S** (small): packages own one layer (HTTP, orchestration, routing, persistence, …)
@@ -235,6 +237,7 @@ config, web, handler/shared → leaves
 ## Related docs
 
 - [`docs/design/BACKEND.md`](design/BACKEND.md) — backend design philosophy, dependency rules, forbidden imports
+- [`docs/analysis/package-boundaries.md`](analysis/package-boundaries.md) — B1 package ownership inventory, public entrypoints, import exceptions
 - [`docs/api.md`](api.md) — admin API reference
 - [`docs/deployment.md`](deployment.md) — deploy guide
 - [`docs/migration.md`](migration.md) — TS → Go migration notes
