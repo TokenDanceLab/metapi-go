@@ -2,6 +2,7 @@
 package messages
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 
@@ -103,6 +104,12 @@ func SanitizeAnthropicMessagesBody(body map[string]any, autoOptimizeCacheControl
 // --- OpenAI body -> Anthropic body ---
 
 // ConvertOpenAiBodyToAnthropicMessagesBody converts an OpenAI chat body to Anthropic format.
+//
+// Skill-call multi-turn history depends on preserving:
+//   - assistant tool_calls[].id / function.name / function.arguments → tool_use
+//   - role=tool tool_call_id + content → tool_result (optionally coalesced with the next user turn)
+// Empty object arguments ({}) are kept as empty maps so Claude Code can still see the tool_use
+// block even when an upstream model omitted required Skill.input fields (client residual limit).
 func ConvertOpenAiBodyToAnthropicMessagesBody(openaiBody map[string]any, modelName string, stream bool) (map[string]any, error) {
 	rawMsgs, _ := openaiBody["messages"].([]any)
 	var systemContents []string
@@ -112,7 +119,8 @@ func ConvertOpenAiBodyToAnthropicMessagesBody(openaiBody map[string]any, modelNa
 	}
 	var msgs []claudeMsg
 
-	for _, item := range rawMsgs {
+	for messageIndex := 0; messageIndex < len(rawMsgs); messageIndex++ {
+		item := rawMsgs[messageIndex]
 		m, ok := item.(map[string]any)
 		if !ok {
 			continue
@@ -135,6 +143,62 @@ func ConvertOpenAiBodyToAnthropicMessagesBody(openaiBody map[string]any, modelNa
 			if t := strings.Join(texts, "\n\n"); t != "" {
 				systemContents = append(systemContents, t)
 			}
+			continue
+		}
+
+		// OpenAI role=tool rows become Anthropic user tool_result blocks.
+		// Consecutive tool messages are coalesced; if the next message is user text,
+		// it is appended so Claude Code multi-turn Skill history stays contiguous.
+		if role == "tool" {
+			var toolResultBlocks []map[string]any
+			cursor := messageIndex
+			for cursor < len(rawMsgs) {
+				candidate, ok := rawMsgs[cursor].(map[string]any)
+				if !ok {
+					break
+				}
+				if strings.ToLower(shared.AsTrimmedString(candidate["role"])) != "tool" {
+					break
+				}
+				toolUseID := shared.AsTrimmedString(candidate["tool_call_id"])
+				if toolUseID == "" {
+					toolUseID = shared.AsTrimmedString(candidate["id"])
+				}
+				toolResultContent := normalizeToolMessageContent(candidate["content"])
+				hasContent := toolResultContentHasPayload(toolResultContent)
+				if toolUseID != "" && hasContent {
+					block := map[string]any{
+						"type":        "tool_result",
+						"tool_use_id": toolUseID,
+						"content":     toolResultContent,
+					}
+					if candidate["is_error"] == true {
+						block["is_error"] = true
+					}
+					toolResultBlocks = append(toolResultBlocks, block)
+				}
+				cursor++
+			}
+
+			if len(toolResultBlocks) > 0 && cursor < len(rawMsgs) {
+				if nextItem, ok := rawMsgs[cursor].(map[string]any); ok {
+					if strings.ToLower(shared.AsTrimmedString(nextItem["role"])) == "user" {
+						userBlocks := convertOpenAIContentToAnthropicBlocks(nextItem["content"])
+						toolResultBlocks = append(toolResultBlocks, userBlocks...)
+						cursor++
+					}
+				}
+			}
+
+			if len(toolResultBlocks) > 0 {
+				// convert to []any for consistent message content shape
+				content := make([]any, 0, len(toolResultBlocks))
+				for _, b := range toolResultBlocks {
+					content = append(content, b)
+				}
+				msgs = append(msgs, claudeMsg{Role: "user", Content: content})
+			}
+			messageIndex = cursor - 1
 			continue
 		}
 
@@ -172,7 +236,13 @@ func ConvertOpenAiBodyToAnthropicMessagesBody(openaiBody map[string]any, modelNa
 					if name == "" {
 						name = "tool_" + itoa(int64(i))
 					}
-					input := normalizeAnthropicToolInput(fn["arguments"])
+					// Prefer function.arguments; fall back to top-level arguments for
+					// non-standard OpenAI-compatible providers (Skill-call edge cases).
+					rawArgs := fn["arguments"]
+					if rawArgs == nil {
+						rawArgs = tcm["arguments"]
+					}
+					input := normalizeAnthropicToolInput(rawArgs)
 					cbs = append(cbs, map[string]any{"type": "tool_use", "id": id, "name": name, "input": input})
 				}
 			}
@@ -397,13 +467,17 @@ func sanitizeAnthropicContentBlock(item map[string]any) map[string]any {
 			return nil
 		}
 		next := map[string]any{"type": "tool_result", "tool_use_id": toolUseID, "content": content}
+		if item["is_error"] == true {
+			next["is_error"] = true
+		}
 		if cc, ok := item["cache_control"].(map[string]any); ok && shared.AsTrimmedString(cc["type"]) == "ephemeral" {
 			next["cache_control"] = map[string]any{"type": "ephemeral"}
 		}
 		return next
 	}
 
-	if t == "tool_use" {
+	// tool_use is the Claude Code Skill path; server_tool_use is Anthropic server tools.
+	if t == "tool_use" || t == "server_tool_use" {
 		id := shared.AsTrimmedString(item["id"])
 		name := shared.AsTrimmedString(item["name"])
 		if name == "" {
@@ -419,7 +493,7 @@ func sanitizeAnthropicContentBlock(item map[string]any) map[string]any {
 		if input == nil {
 			input = normalizeAnthropicToolInput(item["argumentsText"])
 		}
-		next := map[string]any{"type": "tool_use", "id": id, "name": name, "input": input}
+		next := map[string]any{"type": t, "id": id, "name": name, "input": input}
 		if cc, ok := item["cache_control"].(map[string]any); ok && shared.AsTrimmedString(cc["type"]) == "ephemeral" {
 			next["cache_control"] = map[string]any{"type": "ephemeral"}
 		}
@@ -564,6 +638,22 @@ func normalizeAnthropicToolInput(raw any) any {
 		return raw
 	}
 	return map[string]any{}
+}
+
+
+func toolResultContentHasPayload(content any) bool {
+	switch c := content.(type) {
+	case string:
+		return strings.TrimSpace(c) != ""
+	case []any:
+		return len(c) > 0
+	case []map[string]any:
+		return len(c) > 0
+	default:
+		// normalizeToolMessageContent returns concrete string/slice values.
+		s := shared.StringifyUnknownValue(content)
+		return strings.TrimSpace(s) != "" && s != "{}" && s != "null"
+	}
 }
 
 func normalizeToolMessageContent(raw any) any {
@@ -875,18 +965,27 @@ func convertOpenAiToolsToAnthropic(raw any) any {
 				if d := shared.AsTrimmedString(fn["description"]); d != "" {
 					mapped["description"] = d
 				}
+				// Preserve full parameters (incl. required / properties) so Skill and
+				// other Claude Code tools keep schema semantics across OpenAI bridges.
 				if fn["parameters"] != nil {
-					mapped["input_schema"] = fn["parameters"]
+					mapped["input_schema"] = deepCloneJSON(fn["parameters"])
+				} else {
+					mapped["input_schema"] = map[string]any{"type": "object", "properties": map[string]any{}}
 				}
 				if cc := m["cache_control"]; cc != nil {
-					mapped["cache_control"] = cc
+					mapped["cache_control"] = deepCloneJSON(cc)
 				}
 				out = append(out, mapped)
 			}
 			continue
 		}
 		if shared.AsTrimmedString(m["name"]) != "" && m["input_schema"] != nil {
-			out = append(out, item)
+			// Already Anthropic-shaped; deep-clone so callers cannot mutate shared maps.
+			if cloned := deepCloneJSON(item); cloned != nil {
+				out = append(out, cloned)
+			} else {
+				out = append(out, item)
+			}
 			continue
 		}
 	}
@@ -1268,6 +1367,22 @@ func toFloat(v any) (float64, bool) {
 		return float64(n), true
 	}
 	return 0, false
+}
+
+
+func deepCloneJSON(v any) any {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	var dst any
+	if err := json.Unmarshal(b, &dst); err != nil {
+		return nil
+	}
+	return dst
 }
 
 func cloneMap(src map[string]any) map[string]any {

@@ -287,11 +287,13 @@ func buildCanonicalMessages(body map[string]any) []CanonicalMessage {
 			if name == "" {
 				continue
 			}
-			argsJSON := ""
-			if s, ok := fn["arguments"].(string); ok {
-				argsJSON = s
-			} else {
-				argsJSON = safeJSONString(fn["arguments"])
+			// Skill-call and ordinary tools: preserve string or object arguments.
+			argsJSON := coerceCanonicalToolArgumentsJSON(fn["arguments"])
+			if argsJSON == "" {
+				argsJSON = coerceCanonicalToolArgumentsJSON(tcm["arguments"])
+			}
+			if argsJSON == "" {
+				argsJSON = "{}"
 			}
 			if id == "" {
 				id = "tool_" + itoa(len(parts))
@@ -494,8 +496,11 @@ func parseCanonicalTools(raw any) []CanonicalToolItem {
 			if strict, ok := fn["strict"].(bool); ok {
 				t.FnStrict = strict
 			}
+			// Clone full schema so required/properties survive Skill bridges.
 			if params, ok := fn["parameters"].(map[string]any); ok {
 				t.FnInputSchema = cloneJSONValue(params).(map[string]any)
+			} else {
+				t.FnInputSchema = map[string]any{"type": "object", "properties": map[string]any{}}
 			}
 			tools = append(tools, t)
 			continue
@@ -972,6 +977,25 @@ func ApplyOpenAIResponsesContinuation(body map[string]any, cont *CanonicalContin
 	ApplyOpenAICompatibleContinuation(body, cont, metadata)
 	if cont.PreviousResponseID != "" {
 		body["previous_response_id"] = cont.PreviousResponseID
+	}
+}
+
+
+// coerceCanonicalToolArgumentsJSON normalizes OpenAI tool arguments to a JSON string.
+// Skill tool calls may arrive with object arguments rather than a JSON string.
+func coerceCanonicalToolArgumentsJSON(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return v
+	default:
+		s := safeJSONString(v)
+		if s == "" || s == "null" {
+			return ""
+		}
+		return s
 	}
 }
 

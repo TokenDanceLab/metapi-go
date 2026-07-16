@@ -912,3 +912,179 @@ func BenchmarkOpenAIBody_Roundtrip_WithImages(b *testing.B) {
 		_ = CanonicalRequestToOpenAiChatBody(env)
 	}
 }
+
+
+// ---------------------------------------------------------------------------
+// Skill-call multi-turn fixtures (GitHub #51 / upstream #531)
+// ---------------------------------------------------------------------------
+
+func TestOpenAIBodySkillCall_Roundtrip(t *testing.T) {
+	body := map[string]any{
+		"model": "gpt-4.1",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "Use the superpowers skill"},
+			map[string]any{
+				"role":    "assistant",
+				"content": "",
+				"tool_calls": []any{
+					map[string]any{
+						"id":   "call_skill_01",
+						"type": "function",
+						"function": map[string]any{
+							"name":      "Skill",
+							"arguments": `{"skill":"superpowers:using-superpowers"}`,
+						},
+					},
+				},
+			},
+			map[string]any{
+				"role":         "tool",
+				"tool_call_id": "call_skill_01",
+				"content":      "Skill loaded",
+			},
+			map[string]any{"role": "user", "content": "Continue"},
+		},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "Skill",
+					"description": "Load a Claude Code skill",
+					"parameters": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"skill": map[string]any{"type": "string"},
+						},
+						"required": []any{"skill"},
+					},
+				},
+			},
+		},
+	}
+
+	env, err := CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+		Body:       body,
+		Surface:    SurfaceOpenAIChat,
+		CliProfile: ProfileClaudeCode,
+		Operation:  OpGenerate,
+	})
+	if err != nil {
+		t.Fatalf("to canonical: %v", err)
+	}
+
+	// Assistant tool_call preserved
+	var skillCall CanonicalContentPart
+	var foundSkill bool
+	for _, msg := range env.Messages {
+		for _, part := range msg.Parts {
+			if part.Type == PartToolCall && part.Name == "Skill" {
+				skillCall = part
+				foundSkill = true
+			}
+			if part.Type == PartToolResult && part.ToolCallID == "call_skill_01" {
+				if part.ResultText != "Skill loaded" && part.ResultContent == nil {
+					t.Errorf("tool_result content lost: %#v", part)
+				}
+			}
+		}
+	}
+	if !foundSkill {
+		t.Fatal("expected Skill tool_call in canonical envelope")
+	}
+	if skillCall.ID != "call_skill_01" {
+		t.Errorf("expected id call_skill_01, got %q", skillCall.ID)
+	}
+	if !strings.Contains(skillCall.ArgumentsJSON, "superpowers:using-superpowers") {
+		t.Errorf("skill arguments lost: %q", skillCall.ArgumentsJSON)
+	}
+	if len(env.Tools) != 1 || env.Tools[0].FnName != "Skill" {
+		t.Fatalf("expected Skill tool schema, got %#v", env.Tools)
+	}
+	required, _ := env.Tools[0].FnInputSchema["required"].([]any)
+	if len(required) == 0 || required[0] != "skill" {
+		t.Errorf("required skill lost: %#v", env.Tools[0].FnInputSchema)
+	}
+
+	// Round-trip back to OpenAI body
+	reconstructed := CanonicalRequestToOpenAiChatBody(env)
+	msgs, ok := reconstructed["messages"].([]map[string]any)
+	if !ok {
+		t.Fatalf("messages missing: %#v", reconstructed["messages"])
+	}
+	var foundToolCall, foundToolMsg bool
+	for _, msg := range msgs {
+		if tcs, ok := msg["tool_calls"].([]any); ok {
+			for _, raw := range tcs {
+				tc, _ := raw.(map[string]any)
+				fn, _ := tc["function"].(map[string]any)
+				if fn != nil && fn["name"] == "Skill" {
+					foundToolCall = true
+					if tc["id"] != "call_skill_01" {
+						t.Errorf("id lost on reconstruct: %#v", tc["id"])
+					}
+					if !strings.Contains(asTrimmedString(fn["arguments"]), "superpowers:using-superpowers") {
+						t.Errorf("arguments lost on reconstruct: %#v", fn["arguments"])
+					}
+				}
+			}
+		}
+		if msg["role"] == "tool" {
+			foundToolMsg = true
+			if msg["tool_call_id"] != "call_skill_01" {
+				t.Errorf("tool_call_id lost: %#v", msg["tool_call_id"])
+			}
+		}
+	}
+	if !foundToolCall {
+		t.Fatal("expected Skill tool_calls after reconstruct")
+	}
+	if !foundToolMsg {
+		t.Fatal("expected tool role message after reconstruct")
+	}
+}
+
+func TestOpenAIBodySkillCall_ObjectArguments(t *testing.T) {
+	body := map[string]any{
+		"model": "gpt-4.1",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "skill"},
+			map[string]any{
+				"role": "assistant",
+				"tool_calls": []any{
+					map[string]any{
+						"id":   "call_obj",
+						"type": "function",
+						"function": map[string]any{
+							"name": "Skill",
+							"arguments": map[string]any{
+								"skill": "docs:writing-docs",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	env, err := CanonicalRequestFromOpenAiBody(CanonicalRequestFromOpenAiBodyInput{
+		Body:    body,
+		Surface: SurfaceOpenAIChat,
+	})
+	if err != nil {
+		t.Fatalf("to canonical: %v", err)
+	}
+	found := false
+	for _, msg := range env.Messages {
+		for _, part := range msg.Parts {
+			if part.Type == PartToolCall && part.Name == "Skill" {
+				found = true
+				if !strings.Contains(part.ArgumentsJSON, "docs:writing-docs") {
+					t.Errorf("object arguments not preserved: %q", part.ArgumentsJSON)
+				}
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected Skill tool_call from object arguments")
+	}
+}
+
