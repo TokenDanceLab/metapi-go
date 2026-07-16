@@ -13,6 +13,7 @@ import (
 	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -40,6 +41,7 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 		}
 	}
 	router := routing.NewTokenRouter(newProxyRoutingStore(db), cfg, nil, proxyLoadProvider{coord: coord})
+	scheduler.SetGlobalModelProbeRecorder(router)
 	proxyhandler.SetUpstreamConfig(&proxyhandler.UpstreamConfig{
 		Router:      router,
 		Coordinator: coord,

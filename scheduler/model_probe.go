@@ -20,6 +20,7 @@ type ModelProbeScheduler struct {
 	running       bool
 	mu            sync.Mutex
 	accountLeases map[int64]bool
+	probeRecorder ProbeRecorder
 }
 
 // NewModelProbeScheduler creates a new model availability probe scheduler.
@@ -154,11 +155,23 @@ func (s *ModelProbeScheduler) runProbeLocked(dbw *store.DB) {
 		return
 	}
 
-	// TODO: Wire actual probe execution via background task system
-	// For now, probe is a stub that releases leases immediately
+	// Proactive health probing (#114): for each leased account, sample an
+	// enabled route channel + available model and feed outcomes into routing
+	// health via ProbeRecorder (TokenRouter). Network probe is optional; when
+	// no HTTP probe is wired we still refresh health from last known
+	// model_availability + synthetic latency so cool-downs can clear.
+	outcomes := s.collectProbeOutcomes(dbw, available)
+	s.mu.Lock()
+	recorder := s.probeRecorder
+	s.mu.Unlock()
+	if recorder == nil {
+		recorder = globalModelProbeRecorder()
+	}
+	for _, outcome := range outcomes {
+		ApplyProbeOutcome(context.Background(), dbw, recorder, outcome)
+	}
 	for _, id := range available {
 		s.ReleaseAccountLease(id)
 	}
-
-	slog.Info("model-probe: probe complete", "accounts", len(available))
+	slog.Info("model-probe: probe complete", "accounts", len(available), "outcomes", len(outcomes))
 }
