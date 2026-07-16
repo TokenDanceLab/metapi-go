@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/scheduler"
 )
 
 // RegisterStatsRoutes registers all /api/stats and /api/models routes.
@@ -767,14 +769,25 @@ func (h *statsHandler) modelCheck(w http.ResponseWriter, r *http.Request) {
 // ---- Model Probe ----
 // POST /api/models/probe
 func (h *statsHandler) modelProbe(w http.ResponseWriter, r *http.Request) {
-	// Stub: model probe not yet implemented
+	sched := scheduler.GetGlobalModelProbeScheduler()
+	if sched == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"message": "model probe scheduler is not running (enable MODEL_AVAILABILITY_PROBE_ENABLED or start schedulers)",
+		})
+		return
+	}
+	jobID := fmt.Sprintf("probe-%d", time.Now().UTC().UnixNano())
+	go func() {
+		sched.TriggerNow(true)
+	}()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"success": true,
 		"queued":  true,
 		"reused":  false,
-		"jobId":   "stub-probe",
+		"jobId":   jobID,
 		"status":  "pending",
-		"message": "已开始模型可用性探测，请稍后查看任务列表",
+		"message": "已开始模型可用性探测，请稍后查看任务列表或 LastRunSummary",
 	})
 }
 
