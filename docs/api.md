@@ -164,6 +164,18 @@ Trigger decision snapshot refresh.
 
 Available models by site.
 
+### GET /api/models/price-compare
+
+Cross-site effective model price comparison for operators.
+
+Query: `model` (optional name/substring), `days` (default 30), `limit` (default 50), `topModels` (default 12 when model empty).
+
+Returns `{ model, days, limit, sampleUsage, items: [{ siteId, siteName, platform, model, accountId, username, inputPerMillion, outputPerMillion, source, ratesSource, estimatedCostSample, observedSamples, configuredUnitCost, missingPrice }], meta }`.
+
+`source` is one of `billing_details` | `observed` | `configured` | `fallback`. Fallback is always labeled; `missingPrice=true` when no catalog/observed/configured signal exists.
+
+Alias: `GET /api/stats/model-prices` (same handler).
+
 ### GET /api/models/token-candidates
 
 Available token candidates for route configuration.

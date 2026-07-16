@@ -1459,6 +1459,23 @@ export const api = {
       timeoutMs: options?.refresh ? 45_000 : 15_000,
     });
   },
+  /** Cross-site effective model price comparison (#112). */
+  getModelPriceCompare: (options?: {
+    model?: string;
+    days?: number;
+    limit?: number;
+    topModels?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.model) params.set("model", options.model);
+    if (options?.days != null) params.set("days", String(options.days));
+    if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.topModels != null) params.set("topModels", String(options.topModels));
+    const query = params.toString();
+    return request(`/api/models/price-compare${query ? `?${query}` : ""}`, {
+      timeoutMs: 20_000,
+    });
+  },
   getModelTokenCandidates: () => request("/api/models/token-candidates"),
 
   // Simple chat test from admin panel
