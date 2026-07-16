@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/service"
 )
 
 // RegisterTokenRoutes registers all /api/routes and /api/channels routes.
@@ -252,6 +253,13 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Pattern routes: auto-populate channels from exact-model routes + model availability.
+	if routeMode != "explicit_group" && modelPattern != "" {
+		if _, err := service.PopulateRouteChannelsByModelPattern(r.Context(), h.db, id, modelPattern); err != nil {
+			slog.Warn("route create: channel auto-populate failed", "routeId", id, "error", err)
+		}
+	}
+
 	created := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
 	if created == nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建路由失败"})
@@ -327,6 +335,18 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	// Pattern change: recompose automatic channels while preserving manual overrides.
+	if v, ok := body["modelPattern"]; ok {
+		if _, ok2 := v.(string); ok2 {
+			mode, _ := existing["routeMode"].(string)
+			if !routing.IsExplicitGroupRoute(mode) {
+				if _, err := service.RebuildTokenRoutesFromAvailability(r.Context(), h.db); err != nil {
+					slog.Warn("route update: rebuild after modelPattern change failed", "routeId", id, "error", err)
+				}
+			}
+		}
+	}
+
 	updated := queryRow(h.db, "SELECT * FROM token_routes WHERE id = ?", id)
 	var srcIDs []int64
 	h.db.Select(&srcIDs, h.db.Rebind("SELECT source_route_id FROM route_group_sources WHERE group_route_id = ?"), id)
@@ -396,21 +416,44 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 
 // ---- Rebuild Routes ----
 // POST /api/routes/rebuild
-// Currently only invalidates the in-process route cache. Response must stay
-// truthful: do not claim a background job was queued.
+// Synchronously recomposes pattern-route channels from model availability and
+// invalidates the in-process route cache. Response must stay truthful: do not
+// claim a background job was queued.
 func (h *tokenRoutesHandler) rebuildRoutes(w http.ResponseWriter, r *http.Request) {
-	routing.InvalidateCache()
+	stats, err := service.RebuildTokenRoutesFromAvailability(r.Context(), h.db)
+	if err != nil {
+		slog.Error("routes rebuild failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"success": false,
+			"queued":  false,
+			"reused":  false,
+			"status":  "failed",
+			"message": "路由重建失败",
+		})
+		return
+	}
 	shared.RecordRouteRebuildCompleted()
-	slog.Info("routes rebuild: route cache invalidated",
+	slog.Info("routes rebuild completed",
 		"queued", false,
 		"status", "completed",
+		"routesConsidered", stats.RoutesConsidered,
+		"patternRoutes", stats.PatternRoutes,
+		"groupRoutes", stats.GroupRoutes,
+		"channelsInserted", stats.ChannelsInserted,
+		"channelsRemoved", stats.ChannelsRemoved,
 	)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"queued":  false,
-		"reused":  false,
-		"status":  "completed",
-		"message": "路由缓存已刷新",
+		"success":          true,
+		"queued":           false,
+		"reused":           false,
+		"status":           "completed",
+		"message":          "路由通道已重建并刷新缓存",
+		"routesConsidered": stats.RoutesConsidered,
+		"patternRoutes":    stats.PatternRoutes,
+		"groupRoutes":      stats.GroupRoutes,
+		"channelsInserted": stats.ChannelsInserted,
+		"channelsRemoved":  stats.ChannelsRemoved,
+		"channelsKept":     stats.ChannelsKept,
 	})
 }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -374,9 +375,9 @@ func InvalidateSiteProxyCache() {
 }
 
 // InvalidateTokenRouterCache signals that cached token-router state should be invalidated.
-// TODO(P7): integrate with the token router cache when implemented.
+// Implemented in route_rebuild.go (delegates to routing.InvalidateCache).
 func InvalidateTokenRouterCache() {
-	// Stub: P7 token router cache invalidation
+	routing.InvalidateCache()
 }
 
 // InvalidateSiteCaches invalidates both site proxy and token router caches.
@@ -385,11 +386,7 @@ func InvalidateSiteCaches() {
 	InvalidateTokenRouterCache()
 }
 
-// RebuildRoutesBestEffort triggers a best-effort route rebuild after account/token mutations.
-// TODO(P4): integrate with the route-building pipeline when implemented.
-func RebuildRoutesBestEffort() {
-	// Stub: P4 route rebuild — the actual rebuild will be queued in a future phase.
-}
+// RebuildRoutesBestEffort is implemented in route_rebuild.go.
 
 // ApplySiteStatusSideEffects handles status change side effects for sites.
 func ApplySiteStatusSideEffects(db *sqlx.DB, siteID int64, siteName string, newStatus string) error {

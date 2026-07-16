@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -830,21 +831,23 @@ func TestEdge_RouteCacheConcurrentReadWrite(t *testing.T) {
 	}
 }
 
-// TestEdge_RebuildRoutesStub verifies that RebuildRoutesBestEffort is a stub
-// that does not cause races when called concurrently.
+// TestEdge_RebuildRoutesConcurrent verifies concurrent rebuild calls do not panic.
+// RebuildRoutesBestEffort now performs real channel recompose under a process mutex.
 func TestEdge_RebuildRoutesConcurrent(t *testing.T) {
-	// Call the stub concurrently -- should not panic
+	db, _, _ := setupEdgeTest(t)
+	service.SetRouteRebuildDB(db.DB)
+	t.Cleanup(func() { service.SetRouteRebuildDB(nil) })
+
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// RebuildRoutesBestEffort is not directly importable; structural test
-			// The stub writes nothing, so no race.
+			service.RebuildRoutesBestEffort()
 		}()
 	}
 	wg.Wait()
-	t.Log("RebuildRoutesBestEffort is a stub: no concurrent mutation risk")
+	t.Log("RebuildRoutesBestEffort concurrent: no panics")
 }
 
 // =============================================================================
