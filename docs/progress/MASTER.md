@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#119. Open P2 #120–#121 |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#121 complete |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none — next P2 learn #120 credential export · #121 heatmaps |
-| Next | M-COMPETE P2: #120 client/tool credential export · #121 usage heatmaps/slow-request ranking |
+| In flight WFs | none — M-COMPETE learn #110–#121 complete |
+| Next | Optional: v0.8.0 tag; Go 1.26.5 when available for vulncheck; original gap product backlog as needed |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
