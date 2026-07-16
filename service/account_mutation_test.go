@@ -58,11 +58,16 @@ func createTestAccount(t *testing.T, db *store.DB, siteID int64, username *strin
 
 func createTestAccountToken(t *testing.T, db *store.DB, accountID int64, name, token string, isDefault bool) int64 {
 	t.Helper()
+	return createTestAccountTokenWithEnabled(t, db, accountID, name, token, true, isDefault)
+}
+
+func createTestAccountTokenWithEnabled(t *testing.T, db *store.DB, accountID int64, name, token string, enabled, isDefault bool) int64 {
+	t.Helper()
 	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	res, err := db.Exec(
 		`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
-		 VALUES (?, ?, ?, 'ready', 'manual', 1, ?, ?, ?)`,
-		accountID, name, token, isDefault, now, now,
+		 VALUES (?, ?, ?, 'ready', 'manual', ?, ?, ?, ?)`,
+		accountID, name, token, enabled, isDefault, now, now,
 	)
 	if err != nil {
 		t.Fatalf("INSERT account token failed: %v", err)
@@ -167,6 +172,110 @@ func TestEnsureDefaultTokenForAccountRollsBackWhenAccountUpdateFails(t *testing.
 	}
 	if count != 0 {
 		t.Fatalf("account token rows = %d, want rollback to leave none", count)
+	}
+}
+
+// Upstream #565 / backlog #40: account refresh calls ensureDefault with name="default"
+// and must not rename an existing operator-named default key.
+func TestEnsureDefaultTokenForAccountPreservesNameAndEnabledOnRefresh(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "PreserveNameSite", "https://preserve-name.example.com", "sub2api")
+	accountID := createTestAccount(t, db, siteID, strPtr("preserve-user"), "session-token")
+	tokenID := createTestAccountTokenWithEnabled(t, db, accountID, "prod-key", "sk-existing-key", false, true)
+
+	id, err := EnsureDefaultTokenForAccount(db.DB, accountID, "sk-existing-key", "default", "manual", "default", true)
+	if err != nil {
+		t.Fatalf("EnsureDefaultTokenForAccount: %v", err)
+	}
+	if id != tokenID {
+		t.Fatalf("token id = %d, want existing %d", id, tokenID)
+	}
+
+	var name string
+	var enabled, isDefault bool
+	if err := db.QueryRow(
+		"SELECT name, enabled, is_default FROM account_tokens WHERE id = ?", tokenID,
+	).Scan(&name, &enabled, &isDefault); err != nil {
+		t.Fatalf("read token: %v", err)
+	}
+	if name != "prod-key" {
+		t.Fatalf("name = %q, want preserved prod-key (not forced to default)", name)
+	}
+	if enabled {
+		t.Fatal("enabled = true, want preserved false")
+	}
+	if !isDefault {
+		t.Fatal("is_default = false, want true after ensure-default")
+	}
+}
+
+// Upstream #565 / backlog #40: sync must not re-enable operator-disabled keys when key is unchanged.
+func TestSyncTokensFromUpstreamPreservesEnabledAndName(t *testing.T) {
+	db := openTestDB(t)
+	siteID := createTestSite(t, db, "PreserveSyncSite", "https://preserve-sync.example.com", "new-api")
+	accountID := createTestAccount(t, db, siteID, strPtr("sync-user"), "session-token")
+	disabledID := createTestAccountTokenWithEnabled(t, db, accountID, "ops-disabled", "sk-disabled-key", false, false)
+	defaultID := createTestAccountTokenWithEnabled(t, db, accountID, "ops-default", "sk-default-key", true, true)
+
+	syncResult, err := SyncTokensFromUpstream(db.DB, accountID, []UpstreamAPIToken{
+		{Name: "upstream-renamed-disabled", Key: "sk-disabled-key", Enabled: true, TokenGroup: "default"},
+		{Name: "upstream-renamed-default", Key: "sk-default-key", Enabled: true, TokenGroup: "default"},
+		{Name: "brand-new", Key: "sk-new-key", Enabled: true, TokenGroup: "default"},
+	})
+	if err != nil {
+		t.Fatalf("SyncTokensFromUpstream: %v", err)
+	}
+	if syncResult == nil {
+		t.Fatal("sync result is nil")
+	}
+	if syncResult.Updated != 2 {
+		t.Fatalf("updated = %d, want 2", syncResult.Updated)
+	}
+	if syncResult.Created != 1 {
+		t.Fatalf("created = %d, want 1", syncResult.Created)
+	}
+
+	var disabledName string
+	var disabledEnabled bool
+	if err := db.QueryRow(
+		"SELECT name, enabled FROM account_tokens WHERE id = ?", disabledID,
+	).Scan(&disabledName, &disabledEnabled); err != nil {
+		t.Fatalf("read disabled token: %v", err)
+	}
+	if disabledName != "ops-disabled" {
+		t.Fatalf("disabled name = %q, want ops-disabled", disabledName)
+	}
+	if disabledEnabled {
+		t.Fatal("disabled token was re-enabled by sync; local enable must be preserved")
+	}
+
+	var defaultName string
+	var defaultEnabled bool
+	if err := db.QueryRow(
+		"SELECT name, enabled FROM account_tokens WHERE id = ?", defaultID,
+	).Scan(&defaultName, &defaultEnabled); err != nil {
+		t.Fatalf("read default token: %v", err)
+	}
+	if defaultName != "ops-default" {
+		t.Fatalf("default name = %q, want ops-default", defaultName)
+	}
+	if !defaultEnabled {
+		t.Fatal("default token enabled flipped off unexpectedly")
+	}
+
+	var newEnabled bool
+	var newName string
+	if err := db.QueryRow(
+		"SELECT name, enabled FROM account_tokens WHERE account_id = ? AND token = ?",
+		accountID, "sk-new-key",
+	).Scan(&newName, &newEnabled); err != nil {
+		t.Fatalf("read new token: %v", err)
+	}
+	if newName != "brand-new" {
+		t.Fatalf("new token name = %q, want brand-new", newName)
+	}
+	if !newEnabled {
+		t.Fatal("new upstream-enabled token should start enabled")
 	}
 }
 
