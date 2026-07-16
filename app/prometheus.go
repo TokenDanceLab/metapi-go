@@ -1,73 +1,46 @@
 package app
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
-	"sync"
-	"sync/atomic"
-	"time"
+
+	"github.com/tokendancelab/metapi-go/handler/shared"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
-// MetricsCollector is a zero-dependency Prometheus metrics collector.
-// It tracks proxy request counts and latency using atomic counters.
-type MetricsCollector struct {
-	proxyRequestsTotal atomic.Int64
-	proxyErrorsTotal   atomic.Int64
-	proxyStreamsActive atomic.Int64
-	activeChannels     atomic.Int64
-	dbConnectionsOpen  atomic.Int64
-	startTime          time.Time
-	mu                 sync.RWMutex
-}
-
-var globalMetrics = &MetricsCollector{startTime: time.Now()}
-
 // RecordProxyRequest increments the proxy request counter.
-func RecordProxyRequest() { globalMetrics.proxyRequestsTotal.Add(1) }
+func RecordProxyRequest() { shared.RecordProxyRequest() }
 
 // RecordProxyError increments the proxy error counter.
-func RecordProxyError() { globalMetrics.proxyErrorsTotal.Add(1) }
+func RecordProxyError() { shared.RecordProxyError() }
 
 // RecordStreamStart increments active SSE stream count.
-func RecordStreamStart() { globalMetrics.proxyStreamsActive.Add(1) }
+func RecordStreamStart() { shared.RecordStreamStart() }
 
 // RecordStreamEnd decrements active SSE stream count.
-func RecordStreamEnd() { globalMetrics.proxyStreamsActive.Add(-1) }
+func RecordStreamEnd() { shared.RecordStreamEnd() }
 
 // SetActiveChannels sets the active channel gauge.
-func SetActiveChannels(n int64) { globalMetrics.activeChannels.Store(n) }
+func SetActiveChannels(n int64) { shared.SetActiveChannels(n) }
 
 // SetDBConnections sets the DB connection gauge.
-func SetDBConnections(n int64) { globalMetrics.dbConnectionsOpen.Store(n) }
+func SetDBConnections(n int64) { shared.SetDBConnections(n) }
+
+// RecordRouteRebuildCompleted increments successful route rebuild/cache-invalidate counter.
+func RecordRouteRebuildCompleted() { shared.RecordRouteRebuildCompleted() }
+
+func refreshRuntimeGauges() {
+	if db := store.GetDB(); db != nil && db.DB != nil && db.DB.DB != nil {
+		stats := db.DB.DB.Stats()
+		shared.SetDBConnections(int64(stats.OpenConnections))
+	}
+}
 
 // PrometheusHandler serves Prometheus text-format metrics at GET /metrics.
 // Zero external dependencies — emits only the exposition format directly.
 func PrometheusHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	m := globalMetrics
-	uptime := time.Since(m.startTime).Seconds()
-
-	fmt.Fprintf(w, "# HELP metapi_uptime_seconds Process uptime in seconds\n")
-	fmt.Fprintf(w, "# TYPE metapi_uptime_seconds gauge\n")
-	fmt.Fprintf(w, "metapi_uptime_seconds %.0f\n", uptime)
-
-	fmt.Fprintf(w, "# HELP metapi_proxy_requests_total Total proxy requests served\n")
-	fmt.Fprintf(w, "# TYPE metapi_proxy_requests_total counter\n")
-	fmt.Fprintf(w, "metapi_proxy_requests_total %d\n", m.proxyRequestsTotal.Load())
-
-	fmt.Fprintf(w, "# HELP metapi_proxy_errors_total Total proxy upstream errors\n")
-	fmt.Fprintf(w, "# TYPE metapi_proxy_errors_total counter\n")
-	fmt.Fprintf(w, "metapi_proxy_errors_total %d\n", m.proxyErrorsTotal.Load())
-
-	fmt.Fprintf(w, "# HELP metapi_proxy_streams_active Active SSE proxy streams\n")
-	fmt.Fprintf(w, "# TYPE metapi_proxy_streams_active gauge\n")
-	fmt.Fprintf(w, "metapi_proxy_streams_active %d\n", m.proxyStreamsActive.Load())
-
-	fmt.Fprintf(w, "# HELP metapi_active_channels Active proxy channels\n")
-	fmt.Fprintf(w, "# TYPE metapi_active_channels gauge\n")
-	fmt.Fprintf(w, "metapi_active_channels %d\n", m.activeChannels.Load())
-
-	fmt.Fprintf(w, "# HELP metapi_db_connections_open Open database connections\n")
-	fmt.Fprintf(w, "# TYPE metapi_db_connections_open gauge\n")
-	fmt.Fprintf(w, "metapi_db_connections_open %d\n", m.dbConnectionsOpen.Load())
+	refreshRuntimeGauges()
+	if err := shared.WritePrometheusMetrics(w); err != nil {
+		slog.Warn("metrics: failed to write prometheus exposition", "error", err)
+	}
 }

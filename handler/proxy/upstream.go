@@ -15,6 +15,7 @@ import (
 
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
@@ -60,6 +61,7 @@ func getUpstreamConfig() *UpstreamConfig {
 // dispatchUpstream forwards a proxy request to the selected upstream channel.
 // Implements the spec's 10-step Handler pattern.
 func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
+	shared.RecordProxyRequest()
 	cfg := getUpstreamConfig()
 	if cfg == nil {
 		if isProxyStubEnabled() {
@@ -69,7 +71,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		unconfiguredUpstreamLogOnce.Do(func() {
 			slog.Error("proxy upstream dependencies are not configured")
 		})
-		writeJSONError(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error")
+		shared.RecordProxyError(); writeJSONError(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error")
 		return
 	}
 

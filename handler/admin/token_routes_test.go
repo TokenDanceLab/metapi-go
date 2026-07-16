@@ -80,6 +80,30 @@ func seedRouteChannelRefs(t *testing.T, db *store.DB) (routeID, accountID, token
 	return routeID, accountID, tokenID
 }
 
+func TestTokenRoutes_Rebuild_InvalidatesCacheTruthfully(t *testing.T) {
+	_, r := setupTokenRoutesTest(t)
+	resp := doPostJSON(t, r, "/api/routes/rebuild", map[string]any{})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("rebuild status = %d, want 200 body=%s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode rebuild response: %v", err)
+	}
+	if result["success"] != true {
+		t.Fatalf("success = %v, want true", result["success"])
+	}
+	if result["queued"] != false {
+		t.Fatalf("queued = %v, want false (cache invalidate is synchronous)", result["queued"])
+	}
+	if result["status"] != "completed" {
+		t.Fatalf("status = %v, want completed", result["status"])
+	}
+	if _, ok := result["jobId"]; ok {
+		t.Fatalf("unexpected fake jobId in truthful rebuild response: %v", result["jobId"])
+	}
+}
+
 func TestRouteChannelsAllowSameCredentialForDifferentSourceModels(t *testing.T) {
 	db, r := setupTokenRoutesTest(t)
 	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)

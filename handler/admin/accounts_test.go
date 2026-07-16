@@ -809,6 +809,9 @@ func TestAccounts_VerifyToken_EmptyToken(t *testing.T) {
 	if result["error"] == nil || result["error"] == "" {
 		t.Errorf("expected error field for empty token, got %#v", result)
 	}
+	if errMsg, _ := result["error"].(string); !strings.Contains(errMsg, "Token") {
+		t.Fatalf("error = %v, want Token empty message", result["error"])
+	}
 }
 
 // ---- Rebind Session ----
@@ -1613,8 +1616,14 @@ func TestAccounts_Login_SiteNotFound(t *testing.T) {
 	}
 	var result map[string]any
 	json.Unmarshal(resp.Body.Bytes(), &result)
-	if result["error"] == nil || result["error"] == "" {
+	errField, _ := result["error"].(string)
+	msgField, _ := result["message"].(string)
+	if errField == "" && msgField == "" {
 		t.Errorf("expected error field for missing site, got %#v", result)
+	}
+	combined := errField + msgField
+	if !strings.Contains(combined, "site not found") {
+		t.Errorf("expected 'site not found', got %#v", result)
 	}
 }
 
