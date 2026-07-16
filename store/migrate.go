@@ -9,7 +9,8 @@ import (
 
 // AutoMigrate creates all 27 tables with indexes, unique constraints, foreign keys,
 // and check constraints. Uses CREATE TABLE IF NOT EXISTS for idempotency.
-// Run on startup after Open().
+// After the base bootstrap it runs ApplyAdditiveMigrations (schema_migrations
+// bookkeeping + ordered enterprise steps). Run on startup after Open().
 func AutoMigrate(db *DB) error {
 	dialect := db.Dialect
 	slog.Info("store: running auto-migration", "dialect", dialect)
@@ -83,6 +84,12 @@ func AutoMigrate(db *DB) error {
 		if _, err := db.Exec(m.sql); err != nil {
 			return fmt.Errorf("store: migrate %s: %w", m.name, err)
 		}
+	}
+
+	// Additive upgrades for existing installs (ALTER TABLE ADD COLUMN, etc.).
+	// CREATE TABLE IF NOT EXISTS alone never mutates an already-created table.
+	if err := ApplyAdditiveMigrations(db); err != nil {
+		return err
 	}
 
 	slog.Info("store: auto-migration complete", "dialect", dialect)
@@ -1243,9 +1250,10 @@ func buildIndexes() []struct {
 }
 
 // Migrate is a backward-compatible entry point for the P0 stub API.
-// It runs additional runtime schema migrations beyond the core CREATE TABLE
-// statements. AutoMigrate (called from EnsureRuntimeDatabase) already handles
-// the 27-table bootstrap. This function handles incremental compat checks.
+// AutoMigrate (called from EnsureRuntimeDatabase) already runs the 27-table
+// bootstrap plus ApplyAdditiveMigrations. This entry point re-runs additive
+// steps only — useful when GetDB() is already open and callers want an
+// explicit compatibility pass without re-executing full CREATE TABLE DDL.
 func Migrate(cfg *config.Config) error {
 	db := GetDB()
 	if db == nil {
@@ -1253,14 +1261,12 @@ func Migrate(cfg *config.Config) error {
 		return nil
 	}
 
+	_ = cfg // reserved for future config-gated migration features
 	slog.Info("migrate: running runtime schema compatibility checks", "dialect", db.Dialect)
 
-	// P1: Core tables already created by AutoMigrate.
-	// Future P2+ work will add incremental schema checks here:
-	//   - ensure columns exist, add missing via ALTER TABLE ADD COLUMN
-	//   - ensure indexes exist, add missing via CREATE INDEX IF NOT EXISTS
-	//   - deduplicate stale sites before creating unique index
-	// These map to the TS compatibility functions in index.ts.
+	if err := ApplyAdditiveMigrations(db); err != nil {
+		return err
+	}
 
 	slog.Info("migrate: runtime schema compatibility complete")
 	return nil
