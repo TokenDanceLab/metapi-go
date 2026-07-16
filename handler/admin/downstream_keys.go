@@ -111,6 +111,8 @@ func (h *downstreamKeysHandler) listKeys(w http.ResponseWriter, r *http.Request)
 
 // POST /api/downstream-keys
 func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request) {
+	// maxCost/maxRequests use any so clients can send number|string|null (TS parity).
+	// Explicit null/0/"" clears to unlimited (NULL); omitted also stores NULL on create.
 	var body struct {
 		Name                   string   `json:"name"`
 		Key                    string   `json:"key"`
@@ -119,8 +121,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		Tags                   []string `json:"tags"`
 		Enabled                *bool    `json:"enabled"`
 		ExpiresAt              *string  `json:"expiresAt"`
-		MaxCost                *float64 `json:"maxCost"`
-		MaxRequests            *int64   `json:"maxRequests"`
+		MaxCost                any      `json:"maxCost"`
+		MaxRequests            any      `json:"maxRequests"`
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
@@ -164,6 +166,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	normalizedSWM := normalizeSiteWeightMultipliersInput(body.SiteWeightMultipliers)
 	normalizedExcludedSites := normalizeInt64Set(body.ExcludedSiteIds)
 	normalizedCredRefs := normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
+	maxCost := normalizeQuotaFloatOrNull(body.MaxCost)
+	maxRequests := normalizeQuotaIntOrNull(body.MaxRequests)
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
@@ -206,7 +210,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		 proxy_url, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
-		body.MaxCost, body.MaxRequests,
+		maxCost, maxRequests,
 		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
 		proxyURL, now, now,
 	)
@@ -247,7 +251,8 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 
 	// Parse body into typed struct with pointers to detect field presence.
-	// nil pointer = field not present in JSON body.
+	// nil pointer = field not present in JSON body for most fields.
+	// maxCost/maxRequests are decoded from the raw map so number|string|null all work.
 	var body struct {
 		Name                   *string  `json:"name"`
 		Key                    *string  `json:"key"`
@@ -256,8 +261,6 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		Tags                   []string `json:"tags"`
 		Enabled                *bool    `json:"enabled"`
 		ExpiresAt              *string  `json:"expiresAt"`
-		MaxCost                *float64 `json:"maxCost"`
-		MaxRequests            *int64   `json:"maxRequests"`
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
@@ -273,6 +276,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 
 	// First unmarshal into map to detect which fields were present in JSON.
+	// Omitted maxCost/maxRequests keep existing values; present null/0/"" clear to NULL.
 	rawBody := map[string]any{}
 	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -371,12 +375,13 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 
 	maxCost := existingFloat64Ptr(existing, "max_cost")
 	if hasField["maxCost"] {
-		maxCost = normalizePositiveFloatOrNull(body.MaxCost)
+		// Explicit clear (null/0/"") → NULL unlimited; positive → set.
+		maxCost = normalizeQuotaFloatOrNull(rawBody["maxCost"])
 	}
 
 	maxRequests := existingInt64Ptr(existing, "max_requests")
 	if hasField["maxRequests"] {
-		maxRequests = normalizePositiveIntOrNull(body.MaxRequests)
+		maxRequests = normalizeQuotaIntOrNull(rawBody["maxRequests"])
 	}
 
 	existingSupportedModels := parseStringArrayFromDB(existing, "supported_models")
@@ -1144,6 +1149,8 @@ func normalizeExpiresAt(input *string) *string {
 	return &iso
 }
 
+// normalizePositiveFloatOrNull keeps positive values; nil/negative/NaN/Inf become NULL.
+// Prefer normalizeQuotaFloatOrNull for maxCost (null/0 clear contract).
 func normalizePositiveFloatOrNull(input *float64) *float64 {
 	if input == nil {
 		return nil
@@ -1154,6 +1161,8 @@ func normalizePositiveFloatOrNull(input *float64) *float64 {
 	return input
 }
 
+// normalizePositiveIntOrNull keeps non-negative values; nil/negative become NULL.
+// Prefer normalizeQuotaIntOrNull for maxRequests (null/0 clear contract).
 func normalizePositiveIntOrNull(input *int64) *int64 {
 	if input == nil {
 		return nil
@@ -1162,6 +1171,143 @@ func normalizePositiveIntOrNull(input *int64) *int64 {
 		return nil
 	}
 	return input
+}
+
+// normalizeQuotaFloatOrNull implements maxCost clear/set semantics for create/update.
+// Contract (FE-KEYS-CORR / #405 / #41):
+//   - omitted on update → caller keeps existing (do not call this)
+//   - null / "" / missing any → NULL (unlimited)
+//   - 0 / negative / NaN / Inf → NULL (clear)
+//   - positive number or numeric string → stored value
+func normalizeQuotaFloatOrNull(input any) *float64 {
+	if input == nil {
+		return nil
+	}
+	switch v := input.(type) {
+	case float64:
+		if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil
+		}
+		return &v
+	case float32:
+		f := float64(v)
+		if f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		return &f
+	case int:
+		if v <= 0 {
+			return nil
+		}
+		f := float64(v)
+		return &f
+	case int64:
+		if v <= 0 {
+			return nil
+		}
+		f := float64(v)
+		return &f
+	case json.Number:
+		f, err := v.Float64()
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		return &f
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		return &f
+	case *float64:
+		return normalizeQuotaFloatOrNull(derefAnyFloat(v))
+	default:
+		return nil
+	}
+}
+
+// normalizeQuotaIntOrNull implements maxRequests clear/set semantics for create/update.
+// Same contract as normalizeQuotaFloatOrNull: null/0/"" clear to unlimited.
+func normalizeQuotaIntOrNull(input any) *int64 {
+	if input == nil {
+		return nil
+	}
+	switch v := input.(type) {
+	case float64:
+		if v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil
+		}
+		i := int64(v)
+		return &i
+	case float32:
+		f := float64(v)
+		if f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		i := int64(f)
+		return &i
+	case int:
+		if v <= 0 {
+			return nil
+		}
+		i := int64(v)
+		return &i
+	case int64:
+		if v <= 0 {
+			return nil
+		}
+		return &v
+	case json.Number:
+		i, err := v.Int64()
+		if err != nil {
+			f, ferr := v.Float64()
+			if ferr != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil
+			}
+			n := int64(f)
+			return &n
+		}
+		if i <= 0 {
+			return nil
+		}
+		return &i
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			f, ferr := strconv.ParseFloat(s, 64)
+			if ferr != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+				return nil
+			}
+			n := int64(f)
+			return &n
+		}
+		if i <= 0 {
+			return nil
+		}
+		return &i
+	case *int64:
+		if v == nil {
+			return nil
+		}
+		return normalizeQuotaIntOrNull(*v)
+	default:
+		return nil
+	}
+}
+
+func derefAnyFloat(v *float64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
 }
 
 func toPersistenceJSON(v any) interface{} {
