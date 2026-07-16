@@ -527,7 +527,9 @@ func (tr *TokenRouter) RecordSuccess(ctx context.Context, channelID int64, laten
 	return nil
 }
 
-// RecordProbeSuccess clears cooldown for all credential-scoped channels.
+// RecordProbeSuccess records a successful background health probe.
+// It clears cooldown for credential-scoped channels, feeds runtime health
+// success, and stamps last probe status. It never marks credentials expired.
 func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, latencyMs float64, modelName *string, actualAccountID *int64) error {
 	if err := EnsureSiteRuntimeHealthStateLoaded(); err != nil {
 		return err
@@ -541,6 +543,7 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 	ch := row.Channel
 	account := row.Account
 	nowISO := time.Now().UTC().Format(time.RFC3339)
+	channelIDCopy := channelID
 
 	if ch.OAuthRouteUnitID != nil && *ch.OAuthRouteUnitID > 0 {
 		targetAccountID := account.ID
@@ -551,22 +554,24 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 		memberRow, err := tr.db.LoadRouteUnitMemberWithAccount(ctx, *ch.OAuthRouteUnitID, targetAccountID)
 		if err == nil && memberRow != nil {
 			_ = tr.db.UpdateRouteUnitMemberCooldownFields(ctx, memberRow.Member.ID, map[string]interface{}{
-				"cooldownUntil":  nil,
-				"lastFailAt":     nil,
+				"cooldownUntil":        nil,
+				"lastFailAt":           nil,
 				"consecutiveFailCount": int64(0),
-				"cooldownLevel":  int64(0),
-				"updatedAt":      nowISO,
+				"cooldownLevel":        int64(0),
+				"updatedAt":            nowISO,
 			})
 			RecordSiteRuntimeSuccess(memberRow.Account.SiteID, latencyMs, modelName)
+			RecordSiteProbeOutcome(memberRow.Account.SiteID, "success", latencyMs, modelName, &channelIDCopy, nil)
 		} else {
 			RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+			RecordSiteProbeOutcome(account.SiteID, "success", latencyMs, modelName, &channelIDCopy, nil)
 		}
 
 		_ = tr.db.UpdateChannelCooldownFields(ctx, []int64{channelID}, map[string]interface{}{
-			"cooldownUntil":  nil,
-			"lastFailAt":     nil,
+			"cooldownUntil":        nil,
+			"lastFailAt":           nil,
 			"consecutiveFailCount": int64(0),
-			"cooldownLevel":  int64(0),
+			"cooldownLevel":        int64(0),
 		})
 		tr.cache.PatchCachedChannel(channelID, func(ch *store.RouteChannel) {
 			ch.CooldownUntil = nil
@@ -586,10 +591,10 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 	needsReset := ch.CooldownUntil != nil || ch.LastFailAt != nil || ch.ConsecutiveFailCount > 0 || ch.CooldownLevel > 0
 	if needsReset {
 		_ = tr.db.UpdateChannelCooldownFields(ctx, affectedChannelIDs, map[string]interface{}{
-			"cooldownUntil":  nil,
-			"lastFailAt":     nil,
+			"cooldownUntil":        nil,
+			"lastFailAt":           nil,
 			"consecutiveFailCount": int64(0),
-			"cooldownLevel":  int64(0),
+			"cooldownLevel":        int64(0),
 		})
 		for _, id := range affectedChannelIDs {
 			tr.cache.PatchCachedChannel(id, func(ch *store.RouteChannel) {
@@ -602,6 +607,130 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 	}
 
 	RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+	RecordSiteProbeOutcome(account.SiteID, "success", latencyMs, modelName, &channelIDCopy, nil)
+	return nil
+}
+
+// RecordProbeFailure records a failed background health probe.
+//
+// Unlike RecordFailure (user traffic path), probe failures:
+//   - update site/model runtime health + breaker streak (so routing can avoid dead channels)
+//   - apply a short channel cooldown only for the probed channel (no credential cascade)
+//   - never mark accounts/keys expired
+//   - never treat auth-looking probe errors as credential expiry
+func (tr *TokenRouter) RecordProbeFailure(ctx context.Context, channelID int64, failureCtx SiteRuntimeFailureContext, actualAccountID *int64) error {
+	if err := EnsureSiteRuntimeHealthStateLoaded(); err != nil {
+		return err
+	}
+
+	row, err := tr.db.LoadChannelWithAccountAndRoute(ctx, channelID)
+	if err != nil || row == nil {
+		return err
+	}
+
+	ch := row.Channel
+	account := row.Account
+	route := row.Route
+	nowMs := time.Now().UnixMilli()
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	channelIDCopy := channelID
+
+	// Normalize model onto failure context for runtime health model-level state.
+	if failureCtx.ModelName == nil || *failureCtx.ModelName == "" {
+		if ch.SourceModel != nil && *ch.SourceModel != "" {
+			failureCtx.ModelName = ch.SourceModel
+		}
+	}
+
+	// OAuth unit: update member cooldown only; outer channel fields stay clean.
+	if ch.OAuthRouteUnitID != nil && *ch.OAuthRouteUnitID > 0 {
+		targetAccountID := account.ID
+		if actualAccountID != nil && *actualAccountID > 0 {
+			targetAccountID = *actualAccountID
+		}
+
+		memberRow, err := tr.db.LoadRouteUnitMemberWithAccount(ctx, *ch.OAuthRouteUnitID, targetAccountID)
+		if err == nil && memberRow != nil {
+			// Probe path intentionally ignores usage-limit credential cascade and
+			// never zeros failCount for short-window limits: probes are synthetic.
+			failCount := max64(0, memberRow.Member.FailCount) + 1
+			routeUnitStrategy := memberRow.Unit.Strategy
+			if routeUnitStrategy == "" {
+				routeUnitStrategy = "round_robin"
+			}
+
+			var cooldownUntil *string
+			consecutiveFailCount := max64(0, memberRow.Member.ConsecutiveFailCount) + 1
+			cooldownLevel := max64(0, memberRow.Member.CooldownLevel)
+
+			if routeUnitStrategy == "round_robin" {
+				nextCF, nextCL, cu := ApplyRoundRobinCooldown(consecutiveFailCount, cooldownLevel, nowMs, tr.configuredMaxSec)
+				consecutiveFailCount = nextCF
+				cooldownLevel = nextCL
+				cooldownUntil = cu
+			} else {
+				cu := ApplyFibonacciCooldown(failCount, nowMs, tr.configuredMaxSec)
+				consecutiveFailCount = 0
+				cooldownLevel = 0
+				cooldownUntil = cu
+			}
+
+			_ = tr.db.UpdateRouteUnitMemberCooldownFields(ctx, memberRow.Member.ID, map[string]interface{}{
+				"failCount":            failCount,
+				"lastFailAt":           nowISO,
+				"consecutiveFailCount": consecutiveFailCount,
+				"cooldownLevel":        cooldownLevel,
+				"cooldownUntil":        cooldownUntil,
+				"updatedAt":            nowISO,
+			})
+			RecordSiteRuntimeFailure(memberRow.Account.SiteID, failureCtx)
+			RecordSiteProbeOutcome(memberRow.Account.SiteID, "failure", 0, failureCtx.ModelName, &channelIDCopy, failureCtx.ErrorText)
+			tr.cache.InvalidateRouteScopedCache(route.ID)
+		}
+		return nil
+	}
+
+	// Regular channel: probe failure cools only the probed channel (no credential cascade).
+	failCount := max64(0, ch.FailCount) + 1
+	routeStrategy := NormalizeRouteRoutingStrategy(route.RoutingStrategy)
+	affectedChannelIDs := []int64{channelID}
+
+	var cooldownUntil *string
+	consecutiveFailCount := max64(0, ch.ConsecutiveFailCount) + 1
+	cooldownLevel := max64(0, ch.CooldownLevel)
+
+	if routeStrategy == StrategyRoundRobin {
+		nextCF, nextCL, cu := ApplyRoundRobinCooldown(consecutiveFailCount, cooldownLevel, nowMs, tr.configuredMaxSec)
+		consecutiveFailCount = nextCF
+		cooldownLevel = nextCL
+		cooldownUntil = cu
+	} else {
+		cu := ApplyFibonacciCooldown(failCount, nowMs, tr.configuredMaxSec)
+		consecutiveFailCount = 0
+		cooldownLevel = 0
+		cooldownUntil = cu
+	}
+
+	_ = tr.db.UpdateChannelCooldownFields(ctx, affectedChannelIDs, map[string]interface{}{
+		"failCount":            failCount,
+		"lastFailAt":           nowISO,
+		"consecutiveFailCount": consecutiveFailCount,
+		"cooldownLevel":        cooldownLevel,
+		"cooldownUntil":        cooldownUntil,
+	})
+
+	for _, id := range affectedChannelIDs {
+		tr.cache.PatchCachedChannel(id, func(ch *store.RouteChannel) {
+			ch.FailCount = failCount
+			ch.LastFailAt = &nowISO
+			ch.ConsecutiveFailCount = consecutiveFailCount
+			ch.CooldownLevel = cooldownLevel
+			ch.CooldownUntil = cooldownUntil
+		})
+	}
+
+	RecordSiteRuntimeFailure(account.SiteID, failureCtx)
+	RecordSiteProbeOutcome(account.SiteID, "failure", 0, failureCtx.ModelName, &channelIDCopy, failureCtx.ErrorText)
 	return nil
 }
 

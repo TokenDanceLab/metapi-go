@@ -181,11 +181,16 @@ func (db *isolationDB) UpdateChannelCooldownFields(ctx context.Context, channelI
 		if v, ok := updates["failCount"].(int64); ok {
 			row.Channel.FailCount = v
 		}
-		if v, ok := updates["lastFailAt"].(*string); ok {
-			row.Channel.LastFailAt = v
-		} else if v, ok := updates["lastFailAt"].(string); ok {
-			s := v
-			row.Channel.LastFailAt = &s
+		if raw, exists := updates["lastFailAt"]; exists {
+			switch v := raw.(type) {
+			case nil:
+				row.Channel.LastFailAt = nil
+			case *string:
+				row.Channel.LastFailAt = v
+			case string:
+				s := v
+				row.Channel.LastFailAt = &s
+			}
 		}
 		if v, ok := updates["consecutiveFailCount"].(int64); ok {
 			row.Channel.ConsecutiveFailCount = v
@@ -193,11 +198,16 @@ func (db *isolationDB) UpdateChannelCooldownFields(ctx context.Context, channelI
 		if v, ok := updates["cooldownLevel"].(int64); ok {
 			row.Channel.CooldownLevel = v
 		}
-		if v, ok := updates["cooldownUntil"].(*string); ok {
-			row.Channel.CooldownUntil = v
-		} else if v, ok := updates["cooldownUntil"].(string); ok {
-			s := v
-			row.Channel.CooldownUntil = &s
+		if raw, exists := updates["cooldownUntil"]; exists {
+			switch v := raw.(type) {
+			case nil:
+				row.Channel.CooldownUntil = nil
+			case *string:
+				row.Channel.CooldownUntil = v
+			case string:
+				s := v
+				row.Channel.CooldownUntil = &s
+			}
 		}
 	}
 	return nil
