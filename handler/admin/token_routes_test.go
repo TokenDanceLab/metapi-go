@@ -81,7 +81,18 @@ func seedRouteChannelRefs(t *testing.T, db *store.DB) (routeID, accountID, token
 }
 
 func TestTokenRoutes_Rebuild_InvalidatesCacheTruthfully(t *testing.T) {
-	_, r := setupTokenRoutesTest(t)
+	db, r := setupTokenRoutesTest(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)
+	if _, err := db.Exec(
+		`INSERT INTO token_model_availability (token_id, model_name, available, checked_at)
+		 VALUES (?, 'gpt-4o', 1, ?)`, tokenID, now); err != nil {
+		t.Fatalf("seed availability: %v", err)
+	}
+	// Ensure pattern route exists (seed creates gpt-*)
+	_ = routeID
+	_ = accountID
+
 	resp := doPostJSON(t, r, "/api/routes/rebuild", map[string]any{})
 	if resp.Code != http.StatusOK {
 		t.Fatalf("rebuild status = %d, want 200 body=%s", resp.Code, resp.Body.String())
@@ -94,13 +105,28 @@ func TestTokenRoutes_Rebuild_InvalidatesCacheTruthfully(t *testing.T) {
 		t.Fatalf("success = %v, want true", result["success"])
 	}
 	if result["queued"] != false {
-		t.Fatalf("queued = %v, want false (cache invalidate is synchronous)", result["queued"])
+		t.Fatalf("queued = %v, want false (rebuild is synchronous)", result["queued"])
 	}
 	if result["status"] != "completed" {
 		t.Fatalf("status = %v, want completed", result["status"])
 	}
 	if _, ok := result["jobId"]; ok {
 		t.Fatalf("unexpected fake jobId in truthful rebuild response: %v", result["jobId"])
+	}
+	// Stats surface must be present for operators (not a silent cache-only no-op).
+	if _, ok := result["channelsInserted"]; !ok {
+		t.Fatalf("missing channelsInserted in rebuild response: %v", result)
+	}
+	if _, ok := result["patternRoutes"]; !ok {
+		t.Fatalf("missing patternRoutes in rebuild response: %v", result)
+	}
+
+	var chCount int
+	if err := db.Get(&chCount, `SELECT COUNT(*) FROM route_channels WHERE route_id = ?`, routeID); err != nil {
+		t.Fatalf("count channels: %v", err)
+	}
+	if chCount < 1 {
+		t.Fatalf("rebuild did not materialize matching channels, count=%d", chCount)
 	}
 }
 

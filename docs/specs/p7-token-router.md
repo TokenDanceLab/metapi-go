@@ -844,6 +844,13 @@ are hidden from `getAvailableModels()` output.
 
 Delegates to `modelService.rebuildTokenRoutesFromAvailability()`. The actual rebuild logic is in `modelService` (not in the token router files). The Go port should implement equivalent logic.
 
+**Go implementation (FE-GROUP-REBUILD / upstream #588/#526/#559):**
+- `service.RebuildTokenRoutesFromAvailability` recomposes **pattern/exact** route channels from dual sources (exact-model route channels + `token_model_availability` / `model_availability`).
+- `manual_override = true` channels are never deleted.
+- `explicit_group` routes are **not** materialised into `route_channels`; they expand `route_group_sources` at select time (`ChannelSelector.loadRouteMatch`). After rebuild, new matching accounts attach to **source** exact routes and therefore become visible through groups.
+- `POST /api/routes/rebuild` runs the same path **synchronously** and returns truthful `{ queued: false, status: "completed", channelsInserted, ... }` (no fake jobId).
+- `service.RebuildRoutesBestEffort` is no longer a no-op stub; account delete/batch hooks call it after mutations.
+
 ### 12.2 `refreshModelsAndRebuildRoutes()`
 
 1. Refresh models for all active accounts concurrently
