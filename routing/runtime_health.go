@@ -127,6 +127,13 @@ type SiteRuntimeHealthState struct {
 	LastUpdatedAtMs          int64    `json:"lastUpdatedAtMs"`
 	LastFailureAtMs          *int64   `json:"lastFailureAtMs,omitempty"`
 	LastSuccessAtMs          *int64   `json:"lastSuccessAtMs,omitempty"`
+	// Background probe status (issue #114). Soft operator signal; never marks keys expired.
+	LastProbeAtMs     *int64   `json:"lastProbeAtMs,omitempty"`
+	LastProbeStatus   string   `json:"lastProbeStatus,omitempty"` // success | failure | inconclusive
+	LastProbeLatencyMs *float64 `json:"lastProbeLatencyMs,omitempty"`
+	LastProbeError    *string  `json:"lastProbeError,omitempty"`
+	LastProbeModel    string   `json:"lastProbeModel,omitempty"`
+	LastProbeChannelID *int64  `json:"lastProbeChannelId,omitempty"`
 }
 
 // SiteRuntimeHealthDetails is the resolved health for selection.
@@ -776,6 +783,119 @@ func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string
 	scheduleSiteRuntimeHealthPersistence()
 }
 
+// ProbeStatus is the operator-visible background probe outcome for a site.
+type ProbeStatus struct {
+	Status     string   // success | failure | inconclusive | ""
+	AtMs       int64
+	LatencyMs  *float64
+	ErrorText  *string
+	ModelName  string
+	ChannelID  *int64
+	BreakerOpen bool
+	Multiplier float64
+}
+
+// RecordSiteProbeOutcome stamps the last background probe result on site health
+// without treating the event as user traffic. Success/failure still go through
+// the normal runtime health counters via RecordSiteRuntime* helpers.
+func RecordSiteProbeOutcome(siteID int64, status string, latencyMs float64, modelName *string, channelID *int64, errText *string) {
+	if siteID <= 0 {
+		return
+	}
+	healthStateMu.Lock()
+	defer healthStateMu.Unlock()
+
+	n := nowMs()
+	state := getOrCreateSiteRuntimeHealthState(siteID)
+	state.LastProbeAtMs = &n
+	state.LastProbeStatus = status
+	state.LastUpdatedAtMs = n
+	if latencyMs > 0 {
+		v := latencyMs
+		state.LastProbeLatencyMs = &v
+	} else {
+		state.LastProbeLatencyMs = nil
+	}
+	if errText != nil && *errText != "" {
+		e := *errText
+		state.LastProbeError = &e
+	} else {
+		state.LastProbeError = nil
+	}
+	if modelName != nil {
+		state.LastProbeModel = *modelName
+	} else {
+		state.LastProbeModel = ""
+	}
+	if channelID != nil && *channelID > 0 {
+		id := *channelID
+		state.LastProbeChannelID = &id
+	} else {
+		state.LastProbeChannelID = nil
+	}
+
+	if modelName != nil && *modelName != "" {
+		if modelState := getOrCreateSiteModelRuntimeHealthState(siteID, *modelName); modelState != nil {
+			modelState.LastProbeAtMs = &n
+			modelState.LastProbeStatus = status
+			modelState.LastUpdatedAtMs = n
+			if latencyMs > 0 {
+				v := latencyMs
+				modelState.LastProbeLatencyMs = &v
+			} else {
+				modelState.LastProbeLatencyMs = nil
+			}
+			if errText != nil && *errText != "" {
+				e := *errText
+				modelState.LastProbeError = &e
+			} else {
+				modelState.LastProbeError = nil
+			}
+			modelState.LastProbeModel = *modelName
+			if channelID != nil && *channelID > 0 {
+				id := *channelID
+				modelState.LastProbeChannelID = &id
+			} else {
+				modelState.LastProbeChannelID = nil
+			}
+		}
+	}
+	scheduleSiteRuntimeHealthPersistence()
+}
+
+// GetSiteProbeStatus returns the last background probe stamp for a site.
+func GetSiteProbeStatus(siteID int64) ProbeStatus {
+	healthStateMu.RLock()
+	defer healthStateMu.RUnlock()
+
+	state := siteRuntimeHealthStates[siteID]
+	if state == nil {
+		return ProbeStatus{Multiplier: 1}
+	}
+	out := ProbeStatus{
+		Status:      state.LastProbeStatus,
+		ModelName:   state.LastProbeModel,
+		BreakerOpen: isRuntimeHealthBreakerOpen(state),
+		Multiplier:  GetRuntimeHealthMultiplier(state),
+	}
+	if state.LastProbeAtMs != nil {
+		out.AtMs = *state.LastProbeAtMs
+	}
+	if state.LastProbeLatencyMs != nil {
+		v := *state.LastProbeLatencyMs
+		out.LatencyMs = &v
+	}
+	if state.LastProbeError != nil {
+		e := *state.LastProbeError
+		out.ErrorText = &e
+	}
+	if state.LastProbeChannelID != nil {
+		id := *state.LastProbeChannelID
+		out.ChannelID = &id
+	}
+	return out
+}
+
 // ---- Breaker filter helpers ----
 
 // GetBreakerFilteredCandidatesByModel is public for use by selector.
@@ -909,10 +1029,16 @@ func cloneSiteRuntimeHealthState(state *SiteRuntimeHealthState) *SiteRuntimeHeal
 		RecentWindowUpdatedAtMs: state.RecentWindowUpdatedAtMs,
 		BreakerLevel:            state.BreakerLevel,
 		LastUpdatedAtMs:         state.LastUpdatedAtMs,
+		LastProbeStatus:         state.LastProbeStatus,
+		LastProbeModel:          state.LastProbeModel,
 	}
 	if state.LatencyEMAMs != nil {
 		v := *state.LatencyEMAMs
 		clone.LatencyEMAMs = &v
+	}
+	if state.FirstByteEMAMs != nil {
+		v := *state.FirstByteEMAMs
+		clone.FirstByteEMAMs = &v
 	}
 	if state.LastTransientFailureAtMs != nil {
 		v := *state.LastTransientFailureAtMs
@@ -929,6 +1055,22 @@ func cloneSiteRuntimeHealthState(state *SiteRuntimeHealthState) *SiteRuntimeHeal
 	if state.LastSuccessAtMs != nil {
 		v := *state.LastSuccessAtMs
 		clone.LastSuccessAtMs = &v
+	}
+	if state.LastProbeAtMs != nil {
+		v := *state.LastProbeAtMs
+		clone.LastProbeAtMs = &v
+	}
+	if state.LastProbeLatencyMs != nil {
+		v := *state.LastProbeLatencyMs
+		clone.LastProbeLatencyMs = &v
+	}
+	if state.LastProbeError != nil {
+		v := *state.LastProbeError
+		clone.LastProbeError = &v
+	}
+	if state.LastProbeChannelID != nil {
+		v := *state.LastProbeChannelID
+		clone.LastProbeChannelID = &v
 	}
 	return clone
 }
