@@ -1,6 +1,7 @@
 package proxyhandler
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,20 +16,36 @@ import (
 )
 
 func TestResolveUpstreamCandidatePaths(t *testing.T) {
-	paths := resolveUpstreamCandidatePaths("/v1/chat/completions", false)
+	paths := resolveUpstreamCandidatePaths("/v1/chat/completions", false, proxy.SiteProtocolPreference{})
 	if len(paths) < 2 {
 		t.Fatalf("expected multi-protocol candidates, got %v", paths)
 	}
 	if paths[0] != "/v1/chat/completions" {
 		t.Fatalf("primary path = %q", paths[0])
 	}
-	disabled := resolveUpstreamCandidatePaths("/v1/chat/completions", true)
+	disabled := resolveUpstreamCandidatePaths("/v1/chat/completions", true, proxy.SiteProtocolPreference{})
 	if len(disabled) != 1 || disabled[0] != "/v1/chat/completions" {
 		t.Fatalf("disabled fallback paths = %v", disabled)
 	}
-	nonChat := resolveUpstreamCandidatePaths("/v1/embeddings", false)
+	nonChat := resolveUpstreamCandidatePaths("/v1/embeddings", false, proxy.SiteProtocolPreference{})
 	if len(nonChat) != 1 || nonChat[0] != "/v1/embeddings" {
 		t.Fatalf("non-chat paths = %v", nonChat)
+	}
+	// Responses-only site: chat client rewrites candidate list to responses only.
+	only := resolveUpstreamCandidatePaths("/v1/chat/completions", false, proxy.SiteProtocolPreference{
+		ResponsesOnly:   true,
+		PreferResponses: true,
+		PreferStream:    true,
+	})
+	if len(only) != 1 || only[0] != "/v1/responses" {
+		t.Fatalf("responses-only paths = %v, want [/v1/responses]", only)
+	}
+	// Prefer-responses (not only): responses first with fallbacks.
+	prefer := resolveUpstreamCandidatePaths("/v1/chat/completions", false, proxy.SiteProtocolPreference{
+		PreferResponses: true,
+	})
+	if len(prefer) < 2 || prefer[0] != "/v1/responses" {
+		t.Fatalf("prefer-responses paths = %v, want responses first", prefer)
 	}
 }
 
@@ -200,5 +217,91 @@ func TestDispatchFirstByteTimeoutFallsBackToNextEndpointWithoutPoison(t *testing
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "chatcmpl_fast") {
 		t.Fatalf("body = %q, want fast fallback response", body)
+	}
+}
+
+
+func TestDispatchResponsesOnlySiteRoutesToResponsesAndForcesStream(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		paths    []string
+		streamed bool
+	)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if r.URL.Path != "/v1/responses" {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not responses"}`))
+			return
+		}
+		if v, ok := body["stream"].(bool); ok && v {
+			streamed = true
+		}
+		// SSE-ish response for forced stream path.
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"id\":\"resp_ok\",\"type\":\"response.completed\"}\n\n"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	customHeaders := `{"x-metapi-responses-only":"true"}`
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active", Platform: "openai", CustomHeaders: &customHeaders},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{Router: router})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	// Chat path + responses-shaped body (input, no messages) should rewrite to /v1/responses.
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","input":"hello"}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s paths=%v", rec.Code, rec.Body.String(), paths)
+	}
+	mu.Lock()
+	gotPaths := append([]string(nil), paths...)
+	mu.Unlock()
+	if len(gotPaths) != 1 || gotPaths[0] != "/v1/responses" {
+		t.Fatalf("paths = %v, want only /v1/responses", gotPaths)
+	}
+	if !streamed {
+		t.Fatal("expected stream=true forced for responses-only site")
+	}
+}
+
+func TestDispatchResponsesOnlySiteRejectsChatShapedBody(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("upstream should not be called; got %s", r.URL.Path)
+	}))
+	t.Cleanup(upstream.Close)
+
+	customHeaders := `{"x-metapi-responses-only":"1"}`
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active", Platform: "openai", CustomHeaders: &customHeaders},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{Router: router})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "responses-only") {
+		t.Fatalf("body = %q, want clear responses-only error", body)
 	}
 }

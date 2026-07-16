@@ -213,7 +213,19 @@ func dispatchSelectedUpstream(
 	}
 	bodyBytes = swapModelInJSON(ctx.RawBody, upstreamModel)
 
-	candidatePaths := resolveUpstreamCandidatePaths(upstreamPath, disableCrossProtocolFallback)
+	// Site protocol preference (#56 / upstream #340): responses-only + stream.
+	sitePref := proxy.DetectSiteProtocolPreferenceFromSite(
+		selected.Site.Platform,
+		selected.Site.URL,
+		selected.Site.CustomHeaders,
+	)
+	if errMsg := responsesOnlyClientError(upstreamPath, bodyBytes, sitePref); errMsg != "" {
+		// Clear failure for chat/messages clients when site cannot serve without transform.
+		writeJSONError(w, http.StatusBadRequest, errMsg, "invalid_request_error")
+		return true, nil
+	}
+
+	candidatePaths := resolveUpstreamCandidatePaths(upstreamPath, disableCrossProtocolFallback, sitePref)
 	var lastPending *pendingUpstreamFailure
 	for i, path := range candidatePaths {
 		isLast := i >= len(candidatePaths)-1
@@ -223,10 +235,13 @@ func dispatchSelectedUpstream(
 			writeJSONError(w, http.StatusBadRequest, sanitizeErr.Error(), "invalid_request_error")
 			return true, nil
 		}
+		// Force stream=true for responses-only / stream-preferring sites (and codex/sub2api).
+		attemptBody, forcedStream := applyUpstreamStreamPreference(attemptBody, selected.Site.Platform, path, sitePref)
+		effectiveStream := ctx.IsStream || forcedStream
 		finished, pending, cont := dispatchEndpointAttemptWithContinue(
 			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 			path, contentType, attemptBody, firstByteTimeoutMs,
-			retry, maxRetries, isLast, disableCrossProtocolFallback,
+			retry, maxRetries, isLast, disableCrossProtocolFallback, effectiveStream,
 		)
 		if finished {
 			return true, nil
@@ -253,8 +268,12 @@ func dispatchSelectedUpstream(
 
 // resolveUpstreamCandidatePaths returns ordered upstream paths for one channel attempt.
 // Non chat-family paths yield the original path only.
-func resolveUpstreamCandidatePaths(upstreamPath string, disableCrossProtocolFallback bool) []string {
-	candidates := proxy.ResolveEndpointCandidates(upstreamPath, disableCrossProtocolFallback)
+// sitePref controls responses-only / prefer-responses ordering (#56).
+func resolveUpstreamCandidatePaths(upstreamPath string, disableCrossProtocolFallback bool, sitePref proxy.SiteProtocolPreference) []string {
+	candidates := proxy.ResolveEndpointCandidatesWithOptions(upstreamPath, proxy.EndpointCandidateOptions{
+		DisableCrossProtocolFallback: disableCrossProtocolFallback,
+		Preference:                   sitePref,
+	})
 	if len(candidates) == 0 {
 		return []string{upstreamPath}
 	}
@@ -268,6 +287,78 @@ func resolveUpstreamCandidatePaths(upstreamPath string, disableCrossProtocolFall
 		return []string{upstreamPath}
 	}
 	return paths
+}
+
+// responsesOnlyClientError returns a clear client message when a chat/messages
+// shaped request hits a responses-only site (no heavy protocol transform in this wave).
+func responsesOnlyClientError(downstreamPath string, bodyBytes []byte, pref proxy.SiteProtocolPreference) string {
+	if !pref.ResponsesOnly {
+		return ""
+	}
+	ep, ok := proxy.EndpointFromPath(downstreamPath)
+	if !ok || ep == proxy.EndpointResponses {
+		return ""
+	}
+	// If body already looks responses-shaped (has input, no messages), allow path rewrite.
+	if bodyLooksResponsesShaped(bodyBytes) {
+		return ""
+	}
+	return proxy.ResponsesOnlyChatUnsupportedMessage(downstreamPath)
+}
+
+func bodyLooksResponsesShaped(bodyBytes []byte) bool {
+	if len(bodyBytes) == 0 {
+		return false
+	}
+	var body map[string]any
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return false
+	}
+	if _, hasMessages := body["messages"]; hasMessages {
+		return false
+	}
+	if _, hasInput := body["input"]; hasInput {
+		return true
+	}
+	return false
+}
+
+// applyUpstreamStreamPreference forces stream=true when site/platform requires it.
+func applyUpstreamStreamPreference(bodyBytes []byte, sitePlatform, upstreamPath string, pref proxy.SiteProtocolPreference) ([]byte, bool) {
+	pathLower := strings.ToLower(upstreamPath)
+	isCompact := strings.Contains(pathLower, "/responses/compact")
+	// Platform helper (codex/sub2api) OR site preference.
+	force := responses.ShouldForceResponsesUpstreamStream(sitePlatform, isCompact) ||
+		proxy.ShouldForceUpstreamStream(pref, upstreamPath, isCompact)
+	if !force {
+		return bodyBytes, false
+	}
+	if len(bodyBytes) == 0 {
+		return []byte(`{"stream":true}`), true
+	}
+	var body map[string]any
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return bodyBytes, false
+	}
+	// Already streaming?
+	if v, ok := body["stream"]; ok {
+		if b, ok := v.(bool); ok && b {
+			return bodyBytes, false
+		}
+		if s, ok := v.(string); ok && (s == "true" || s == "1") {
+			return bodyBytes, false
+		}
+	}
+	next := make(map[string]any, len(body)+1)
+	for k, v := range body {
+		next[k] = v
+	}
+	next["stream"] = true
+	out, err := json.Marshal(next)
+	if err != nil {
+		return bodyBytes, false
+	}
+	return out, true
 }
 
 // dispatchEndpointAttempt is the single-path entry used by multipart.
@@ -290,7 +381,7 @@ func dispatchEndpointAttempt(
 	finished, pending, _ := dispatchEndpointAttemptWithContinue(
 		w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 		upstreamPath, contentType, bodyBytes, firstByteTimeoutMs,
-		retry, maxRetries, true, true,
+		retry, maxRetries, true, true, ctx != nil && ctx.IsStream,
 	)
 	if !recordFailure {
 		return finished, pending
@@ -317,6 +408,7 @@ func dispatchEndpointAttemptWithContinue(
 	maxRetries int,
 	isLastEndpoint bool,
 	disableCrossProtocolFallback bool,
+	effectiveStream bool,
 ) (finished bool, nextPending *pendingUpstreamFailure, cont bool) {
 	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
 	startedAt := time.Now()
@@ -377,7 +469,7 @@ func dispatchEndpointAttemptWithContinue(
 	}
 
 	// Step 9: Handle response
-	if ctx.IsStream {
+	if effectiveStream {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 			resp.Body.Close()
@@ -533,6 +625,10 @@ func applyProxyCustomHeaders(req *http.Request, proxyConfig *platform.ProxyConfi
 		return
 	}
 	for k, v := range proxyConfig.CustomHeaders {
+		// Preference control headers are site marks only — never forward upstream.
+		if proxy.IsMetapiControlHeader(k) {
+			continue
+		}
 		req.Header.Set(k, v)
 	}
 }
