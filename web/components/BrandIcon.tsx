@@ -89,7 +89,7 @@ export function BrandGlyph({ brand, model, icon, alt, size = 16, fallbackText, s
         height: size,
         borderRadius: Math.max(4, Math.round(size * 0.33)),
         background: hashColor(fallback),
-        color: 'white',
+        color: 'var(--color-on-primary)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -157,7 +157,7 @@ export function ModelBadge({ model, style }: { model: string; style?: CSSPropert
   const brandName = brand?.name || '';
   const colors = badgeColors[brandName] || {
     bg: 'var(--color-primary-light)',
-    border: 'rgba(79,70,229,0.15)',
+    border: 'color-mix(in srgb, var(--color-primary) 15%, transparent)',
     text: 'var(--color-primary)',
   };
 

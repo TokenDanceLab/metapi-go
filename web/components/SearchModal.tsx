@@ -139,8 +139,8 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
   return (
     <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
-      <div className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} style={{ maxWidth: 560, padding: 0 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--color-border-light)' }}>
+      <div className={`modal-content search-modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={e => e.stopPropagation()}>
+        <div className="search-modal-header">
           <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="var(--color-text-muted)">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -149,22 +149,22 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
             value={query}
             onChange={e => handleInput(e.target.value)}
             placeholder={t('搜索站点、账号、模型、日志...')}
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, background: 'transparent', color: 'var(--color-text-primary)' }}
+            className="search-modal-input"
           />
           {loading && <span className="spinner spinner-sm" />}
-          <kbd style={{ fontSize: 11, padding: '2px 6px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 4, color: 'var(--color-text-muted)' }}>ESC</kbd>
+          <kbd className="search-modal-kbd">ESC</kbd>
         </div>
 
-        <div style={{ maxHeight: 400, overflow: 'auto', padding: '8px 0' }}>
+        <div className="search-modal-body">
           {query && !loading && !hasResults && (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
+            <div className="search-modal-empty">
               {t('没有找到匹配结果')}
             </div>
           )}
 
           {results?.models.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('模型广场')}</div>
+              <div className="search-modal-section-title">{t('模型广场')}</div>
               {results.models.map((m) => (
                 <button key={m.name} className="search-result-item" onClick={() => goTo(`/models?q=${encodeURIComponent(m.name)}`)}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -172,7 +172,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                   </svg>
                   <div>
                     <div style={{ fontWeight: 500 }}>{m.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div className="search-result-meta">
                       {m.accountCount} {t('个账号')} · {m.tokenCount} {t('个令牌')} · {m.siteCount} {t('个站点')}
                     </div>
                   </div>
@@ -183,7 +183,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
           {results?.sites.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('站点')}</div>
+              <div className="search-modal-section-title">{t('站点')}</div>
               {results.sites.map((s) => (
                 <button key={s.id} className="search-result-item" onClick={() => goTo(buildSiteFocusPath(s.id))}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -191,7 +191,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                   </svg>
                   <div>
                     <div style={{ fontWeight: 500 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{s.url}</div>
+                    <div className="search-result-meta">{s.url}</div>
                   </div>
                 </button>
               ))}
@@ -200,7 +200,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
           {results?.accounts.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('账号')}</div>
+              <div className="search-modal-section-title">{t('账号')}</div>
               {results.accounts.map((a) => (
                 <button
                   key={a.id}
@@ -217,7 +217,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                     <div style={{ fontWeight: 500 }}>
                       {a.username?.trim() || (a.segment === 'apikey' ? t('API Key 连接') : `ID:${a.id}`)}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div className="search-result-meta">
                       {a.site?.name || t('未关联站点')}
                       {a.segment === 'apikey' ? ` · ${t('API Key 连接')}` : ''}
                       {' · '}
@@ -231,7 +231,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
           {results?.accountTokens.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('账号令牌')}</div>
+              <div className="search-modal-section-title">{t('账号令牌')}</div>
               {results.accountTokens.map((token) => (
                 <button
                   key={token.id}
@@ -243,7 +243,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                   </svg>
                   <div>
                     <div style={{ fontWeight: 500 }}>{token.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div className="search-result-meta">
                       {(token.account?.username?.trim() || (token.account?.segment === 'apikey' ? t('API Key 连接') : t('未命名')))}
                       {' · '}
                       {token.site?.name || t('未关联站点')}
@@ -257,7 +257,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
           {results?.checkinLogs.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('签到记录')}</div>
+              <div className="search-modal-section-title">{t('签到记录')}</div>
               {results.checkinLogs.map((l) => (
                 <button key={l.id} className="search-result-item" onClick={() => goTo('/checkin')}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -265,7 +265,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                   </svg>
                   <div>
                     <div style={{ fontWeight: 500 }}>{l.account?.username || `ID:${l.accountId}`}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div className="search-result-meta">
                       {l.message || '-'} · {formatDateLocal(l.createdAt)}
                     </div>
                   </div>
@@ -276,7 +276,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
 
           {results?.proxyLogs.length ? (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '8px 16px 4px', textTransform: 'uppercase' }}>{t('使用日志')}</div>
+              <div className="search-modal-section-title">{t('使用日志')}</div>
               {results.proxyLogs.map((l) => (
                 <button key={l.id} className="search-result-item" onClick={() => goTo('/logs')}>
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -284,7 +284,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
                   </svg>
                   <div>
                     <div style={{ fontWeight: 500 }}>{l.modelRequested || '-'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <div className="search-result-meta">
                       {l.status || '-'} · {l.latencyMs || 0}ms · {formatDateTimeMinuteLocal(l.createdAt)}
                     </div>
                   </div>

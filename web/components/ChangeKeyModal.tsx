@@ -60,46 +60,40 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
 
   if (!presence.shouldRender) return null;
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)', fontSize: 13, outline: 'none',
-    background: 'var(--color-bg)', color: 'var(--color-text-primary)',
-  };
-
   const modal = (
     <div className={`modal-backdrop ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={onClose}>
       <div className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()} onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
         <div className="modal-header">修改管理员 Token</div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="modal-body form-stack">
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>旧 Token</label>
+            <label className="form-label">旧 Token</label>
             <input
               type="password"
               value={oldToken}
               onChange={e => { setOldToken(e.target.value); setError(''); }}
               placeholder="输入当前 Token"
-              style={inputStyle}
+              className="form-input"
             />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>新 Token</label>
+            <label className="form-label">新 Token</label>
             <input
               type="password"
               value={newToken}
               onChange={e => { setNewToken(e.target.value); setError(''); }}
               placeholder="输入新 Token (至少 6 位)"
-              style={inputStyle}
+              className="form-input"
             />
           </div>
           <div>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>确认新 Token</label>
+            <label className="form-label">确认新 Token</label>
             <input
               type="password"
               value={confirmToken}
               onChange={e => { setConfirmToken(e.target.value); setError(''); }}
               placeholder="再次输入新 Token"
-              style={inputStyle}
+              className="form-input"
             />
           </div>
 
@@ -112,8 +106,8 @@ export default function ChangeKeyModal({ open, onClose }: { open: boolean; onClo
 
         <div className="modal-footer">
           <button onClick={onClose} className="btn btn-ghost">取消</button>
-          <button onClick={handleSubmit} disabled={saving} className="btn btn-primary">
-            {saving ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} />更新中...</> : '确认修改'}
+          <button onClick={handleSubmit} disabled={saving} className={`btn btn-primary ${saving ? 'is-loading' : ''}`.trim()}>
+            {saving ? <><span className="spinner spinner-sm spinner-on-primary" />更新中...</> : '确认修改'}
           </button>
         </div>
       </div>

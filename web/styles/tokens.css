@@ -36,6 +36,10 @@
   --color-bg-elevated: #ffffff;
   --color-bg-hover: rgba(0, 0, 0, 0.04);
   --color-bg-active: rgba(0, 0, 0, 0.06);
+  /* Design.md aliases (U1 consumers) */
+  --color-surface: var(--color-bg-card);
+  --color-surface-2: var(--color-bg-secondary);
+  --color-surface-subtle: var(--color-bg-secondary);
 
   /* Borders */
   --color-border: #e8e8e8;
@@ -54,8 +58,10 @@
   --color-primary: #4f46e5;
   --color-primary-light: #eef2ff;
   --color-primary-hover: #4338ca;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
   --color-accent: #06b6d4;
   --color-accent-soft: #ecfeff;
+  --color-accent-hover: var(--color-primary-hover);
   --color-brand-gradient: linear-gradient(135deg, #4f46e5, #06b6d4);
 
   /* Semantic */
@@ -67,6 +73,9 @@
   --color-danger-soft: #fee2e2;
   --color-info: #2563eb;
   --color-info-soft: #dbeafe;
+  /* DESIGN.md warn alias */
+  --color-warn: var(--color-warning);
+  --color-warn-soft: var(--color-warning-soft);
 
   /* Chart categorical series (shared across themes) */
   --color-chart-1: #4f46e5;
@@ -77,6 +86,9 @@
   --color-chart-6: #8b5cf6;
   --color-chart-7: #ec4899;
   --color-chart-8: #14b8a6;
+  --color-chart-1-soft: color-mix(in srgb, var(--color-chart-1) 25%, transparent);
+  --color-chart-1-faint: color-mix(in srgb, var(--color-chart-1) 2%, transparent);
+  --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));
 
   /* Stat icon chips */
   --color-stat-blue: #dbeafe;
@@ -98,8 +110,11 @@
 
   /* Focus / overlay */
   --color-focus-ring: rgba(79, 70, 229, 0.45);
+  --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
   --color-overlay: rgba(15, 15, 15, 0.45);
   --color-scrollbar: #cfcfcf;
+  --color-on-primary: #ffffff;
+  --color-spinner-track-on-primary: rgba(255, 255, 255, 0.3);
 
   /* Spacing scale (4px base) */
   --space-0: 0;
@@ -180,8 +195,10 @@
   --color-primary: #6366f1;
   --color-primary-light: #1e1b4b;
   --color-primary-hover: #818cf8;
+  --color-primary-soft: color-mix(in srgb, var(--color-primary) 18%, transparent);
   --color-accent: #22d3ee;
   --color-accent-soft: #083344;
+  --color-accent-hover: var(--color-primary-hover);
   --color-brand-gradient: linear-gradient(135deg, #6366f1, #22d3ee);
 
   --color-success: #4ade80;
@@ -192,8 +209,11 @@
   --color-danger-soft: #450a0a;
   --color-info: #60a5fa;
   --color-info-soft: #172554;
+  --color-warn: var(--color-warning);
+  --color-warn-soft: var(--color-warning-soft);
 
   /* Chart series intentionally unchanged for operator continuity */
+  --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));
 
   --color-stat-blue: #172554;
   --color-stat-blue-ink: #60a5fa;
@@ -213,8 +233,11 @@
   --color-stat-cyan-ink: #22d3ee;
 
   --color-focus-ring: rgba(99, 102, 241, 0.55);
+  --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
   --color-overlay: rgba(0, 0, 0, 0.65);
   --color-scrollbar: #3a3a3a;
+  --color-on-primary: #ffffff;
+  --color-spinner-track-on-primary: rgba(255, 255, 255, 0.3);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);

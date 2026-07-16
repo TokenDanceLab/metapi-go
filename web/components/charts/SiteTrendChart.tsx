@@ -27,14 +27,14 @@ const METRIC_OPTIONS: { key: Metric; label: string }[] = [
 ];
 
 const COLOR_PALETTE = [
-  '#4f46e5',
-  '#06b6d4',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
+  'var(--color-chart-1)',
+  'var(--color-chart-2)',
+  'var(--color-chart-3)',
+  'var(--color-chart-4)',
+  'var(--color-chart-5)',
+  'var(--color-chart-6)',
+  'var(--color-chart-7)',
+  'var(--color-chart-8)',
 ];
 
 /* ------------------------------------------------------------------ */
@@ -244,7 +244,7 @@ const toggleBtnBase: React.CSSProperties = {
 
 const toggleBtnActive: React.CSSProperties = {
   background: 'var(--color-primary)',
-  color: '#ffffff',
+  color: 'var(--color-on-primary)',
 };
 
 const toggleBtnInactive: React.CSSProperties = {

@@ -32,9 +32,9 @@ export default function DeleteConfirmModal({
       footer={(
         <>
           <button onClick={onClose} className="btn btn-ghost" disabled={loading}>{cancelText}</button>
-          <button onClick={onConfirm} className="btn btn-danger" disabled={loading}>
+          <button onClick={onConfirm} className={`btn btn-danger ${loading ? 'is-loading' : ''}`.trim()} disabled={loading}>
             {loading
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 删除中...</>
+              ? <><span className="spinner spinner-sm spinner-on-primary" /> 删除中...</>
               : confirmText}
           </button>
         </>
@@ -42,7 +42,7 @@ export default function DeleteConfirmModal({
     >
       <div className="alert alert-error" style={{ margin: 0 }}>
         <div className="alert-title">此操作不可撤销</div>
-        <div style={{ marginTop: 6, fontSize: 13 }}>{description}</div>
+        <div style={{ marginTop: 6, fontSize: 'var(--text-md)' }}>{description}</div>
       </div>
     </CenteredModal>
   );

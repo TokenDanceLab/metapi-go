@@ -105,7 +105,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
 
   const hasData = chartData.length > 0 && chartData.some((d) => d.value > 0);
 
-  const PIE_COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const PIE_COLORS = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-6)', 'var(--color-chart-7)', 'var(--color-chart-8)'];
 
   const spec = useMemo(() => {
     if (!hasData) return null;
@@ -233,7 +233,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               background: viewMode === 'balance' ? 'var(--color-primary)' : 'transparent',
-              color: viewMode === 'balance' ? '#ffffff' : 'var(--color-text-secondary)',
+              color: viewMode === 'balance' ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
               boxShadow: viewMode === 'balance' ? 'var(--shadow-sm)' : 'none',
             }}
           >
@@ -250,7 +250,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               background: viewMode === 'spend' ? 'var(--color-primary)' : 'transparent',
-              color: viewMode === 'spend' ? '#ffffff' : 'var(--color-text-secondary)',
+              color: viewMode === 'spend' ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
               boxShadow: viewMode === 'spend' ? 'var(--shadow-sm)' : 'none',
             }}
           >

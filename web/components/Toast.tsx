@@ -69,10 +69,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={t.id}
             className={`toast toast-${t.type} ${t.exiting ? 'toast-exit' : ''}`}
             onClick={() => removeToast(t.id)}
-            style={{ cursor: 'pointer' }}
           >
-            <span style={{ flexShrink: 0, marginTop: 1 }}>{icons[t.type]}</span>
-            <span style={{ fontSize: 13, lineHeight: 1.5 }}>{t.message}</span>
+            <span className="toast-icon">{icons[t.type]}</span>
+            <span className="toast-message">{t.message}</span>
             <div className="toast-progress" />
           </div>
         ))}

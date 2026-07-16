@@ -85,38 +85,32 @@ export default function NotificationPanel({
   return (
     <div
       ref={panelRef}
-      className={`user-dropdown ${presence.isVisible ? '' : 'is-closing'}`.trim()}
-      style={{ right: 0, top: '100%', width: 360, maxHeight: 480, padding: 0, marginTop: 4 }}
+      className={`user-dropdown notification-panel ${presence.isVisible ? '' : 'is-closing'}`.trim()}
     >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--color-border-light)' }}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>{tr('通知')}</span>
+      <div className="notification-panel-header">
+        <span className="notification-panel-title">{tr('通知')}</span>
         <button onClick={clearAll} className="btn btn-link">
           {tr('清空')}
         </button>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 4, padding: '8px 12px', borderBottom: '1px solid var(--color-border-light)', flexWrap: 'wrap' }}>
+      <div className="notification-panel-filters">
         {['', 'checkin', 'balance', 'token', 'proxy', 'status', 'site_notice'].map((filterType) => (
-          <button key={filterType} onClick={() => setFilter(filterType)}
-            style={{
-              fontSize: 11, padding: '3px 8px', borderRadius: 12,
-              border: filter === filterType ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-              background: filter === filterType ? 'var(--color-primary-light)' : 'transparent',
-              color: filter === filterType ? 'var(--color-primary)' : 'var(--color-text-muted)',
-              cursor: 'pointer',
-            }}>
+          <button
+            key={filterType}
+            type="button"
+            onClick={() => setFilter(filterType)}
+            className={`chip-filter ${filter === filterType ? 'is-active' : ''}`.trim()}
+          >
             {filterType ? tr(typeLabels[filterType] || filterType) : tr('全部')}
           </button>
         ))}
       </div>
 
-      {/* Events list */}
-      <div style={{ maxHeight: 360, overflow: 'auto' }}>
-        {loading && <div style={{ padding: 20, textAlign: 'center' }}><span className="spinner spinner-sm" /></div>}
+      <div className="notification-panel-list">
+        {loading && <div className="notification-panel-loading"><span className="spinner spinner-sm" /></div>}
         {!loading && events.length === 0 && (
-          <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
+          <div className="notification-panel-empty">
             {tr('暂无通知')}
           </div>
         )}
@@ -130,14 +124,6 @@ export default function NotificationPanel({
             <div
               key={ev.id}
               className="notification-event-item"
-              style={{
-                padding: '10px 16px',
-                borderBottom: '1px solid var(--color-border-light)',
-                display: 'flex',
-                gap: 10,
-                alignItems: 'flex-start',
-                cursor: 'pointer',
-              }}
               onClick={openTarget}
               role="button"
               tabIndex={0}
@@ -148,19 +134,19 @@ export default function NotificationPanel({
                 }
               }}
             >
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 5,
-                background: levelColors[ev.level] || 'var(--color-info)',
-              }} />
+              <div
+                className="notification-event-dot"
+                style={{ background: levelColors[ev.level] || 'var(--color-info)' }}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                  <span style={{ fontWeight: 500, fontSize: 13 }}>{ev.title}</span>
-                  <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: 'var(--color-bg)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-light)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-tight)', marginBottom: 2 }}>
+                  <span style={{ fontWeight: 500, fontSize: 'var(--text-md)' }}>{ev.title}</span>
+                  <span className="notification-event-type">
                     {tr(typeLabels[ev.type] || ev.type)}
                   </span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.4 }}>{ev.message}</div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', lineHeight: 1.4 }}>{ev.message}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
                   {formatDateTimeMinuteLocal(ev.createdAt)}
                 </div>
               </div>

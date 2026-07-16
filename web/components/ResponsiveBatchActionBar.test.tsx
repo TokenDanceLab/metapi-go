@@ -23,7 +23,9 @@ describe('ResponsiveBatchActionBar', () => {
       </ResponsiveBatchActionBar>,
     );
 
-    const card = root.root.find((node) => node.props.className === 'card');
+    const card = root.root.find((node) =>
+      typeof node.props.className === 'string' && node.props.className.includes('card') && node.props.className.includes('batch-action-bar')
+    );
     expect(card).toBeTruthy();
     expect(root.root.findAllByType('span').some((node) => node.children.includes('已选 3 项'))).toBe(true);
   });
