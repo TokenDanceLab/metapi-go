@@ -401,7 +401,7 @@ func getCandidateEligibilityReasonsExplain(
 			break
 		}
 	}
-	if candidate.Channel.CooldownUntil != nil && *candidate.Channel.CooldownUntil > nowISO {
+	if isChannelCoolingDown(candidate.Channel.ID, candidate.Channel.CooldownUntil, nowISO) {
 		reasons = append(reasons, "冷却中")
 	}
 	return reasons
@@ -529,6 +529,7 @@ func (tr *TokenRouter) RecordSuccess(ctx context.Context, channelID int64, laten
 		ch.ConsecutiveFailCount = 0
 		ch.CooldownLevel = 0
 	})
+	ClearSoftChannelCooldown(channelID)
 
 	return nil
 }
@@ -585,6 +586,7 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 			ch.ConsecutiveFailCount = 0
 			ch.CooldownLevel = 0
 		})
+		ClearSoftChannelCooldown(channelID)
 		tr.cache.InvalidateRouteScopedCache(ch.RouteID)
 		return nil
 	}
@@ -609,6 +611,7 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 				ch.ConsecutiveFailCount = 0
 				ch.CooldownLevel = 0
 			})
+			ClearSoftChannelCooldown(id)
 		}
 	}
 
@@ -733,6 +736,7 @@ func (tr *TokenRouter) RecordProbeFailure(ctx context.Context, channelID int64, 
 			ch.CooldownLevel = cooldownLevel
 			ch.CooldownUntil = cooldownUntil
 		})
+		MarkSoftChannelCooldownFromUntil(id, cooldownUntil)
 	}
 
 	RecordSiteRuntimeFailure(account.SiteID, failureCtx)
@@ -870,6 +874,7 @@ func (tr *TokenRouter) RecordFailure(ctx context.Context, channelID int64, failu
 			ch.CooldownLevel = cooldownLevel
 			ch.CooldownUntil = cooldownUntil
 		})
+		MarkSoftChannelCooldownFromUntil(id, cooldownUntil)
 	}
 
 	RecordSiteRuntimeFailure(account.SiteID, failureCtx)
@@ -904,6 +909,10 @@ func (tr *TokenRouter) ClearChannelFailureState(ctx context.Context, channelIDs 
 
 	if err := tr.db.ClearChannelFailureStates(ctx, channelIDs); err != nil {
 		return 0, err
+	}
+
+	for _, id := range channelIDs {
+		ClearSoftChannelCooldown(id)
 	}
 
 	tr.cache.InvalidateAll()

@@ -74,6 +74,12 @@ type Config struct {
 	DbSslMode  string
 	Tz         string
 
+	// RedisURL enables optional multi-instance shared state for key admission
+	// counters and soft channel cooldown markers (learn #118). Empty = disabled
+	// (default process-local). redis://host:port[/db] or host:port.
+	// No hard dependency: single-node installs leave this empty.
+	RedisURL string
+
 	// Cron (5 fields)
 	CheckinCron          string
 	CheckinScheduleMode  string
@@ -403,6 +409,8 @@ func Load(env map[string]string) *Config {
 	cfg.DbSsl = parseBoolean(get("DB_SSL"), false)
 	cfg.DbSslMode = normalizeDbSslMode(get("DB_SSLMODE"))
 	cfg.Tz = get("TZ")
+	// Optional shared state backend (admission counters + soft cooldown). Empty disables.
+	cfg.RedisURL = strings.TrimSpace(firstNonEmpty(get("REDIS_URL"), get("RedisURL")))
 
 	// ---- §3.4 Cron ----
 	cfg.CheckinCron = firstNonEmpty(get("CHECKIN_CRON"), DefaultCheckinCron)

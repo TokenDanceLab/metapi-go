@@ -51,8 +51,8 @@ func TestPublicMarkdownHygiene(t *testing.T) {
 				findings = append(findings, formatFinding(rel, lineNo, "AI citation or tracking artifact", line))
 			case dsnWithPasswordRE.MatchString(line) && !isAllowedExampleDSN(line):
 				findings = append(findings, formatFinding(rel, lineNo, "credential-bearing DSN without placeholders", line))
-			case looksLikeRedisSupportedClaim(line):
-				findings = append(findings, formatFinding(rel, lineNo, "unsupported Redis runtime claim", line))
+			case looksLikeRedisHardDependencyClaim(line):
+				findings = append(findings, formatFinding(rel, lineNo, "Redis hard-dependency claim (Redis is optional)", line))
 			}
 		}
 		return nil
@@ -129,30 +129,47 @@ func hasDisallowedUnixHomePath(line string) bool {
 	return false
 }
 
-func looksLikeRedisSupportedClaim(line string) bool {
+// looksLikeRedisHardDependencyClaim flags docs that claim Redis is mandatory.
+// Optional Redis (#118) is supported via REDIS_URL; single-node installs may
+// leave it empty. Claims that Redis is a hard/required runtime dependency are
+// incorrect. Optional / fail-open language is allowed.
+func looksLikeRedisHardDependencyClaim(line string) bool {
 	lower := strings.ToLower(line)
 	if !strings.Contains(lower, "redis") {
 		return false
 	}
-	hasClaim := strings.Contains(lower, "supported") ||
-		strings.Contains(lower, "integrated") ||
-		strings.Contains(lower, "required") ||
-		strings.Contains(lower, "dependency") ||
-		strings.Contains(lower, "runtime") ||
-		strings.Contains(lower, "兼容") ||
-		strings.Contains(lower, "支持") ||
-		strings.Contains(lower, "集成")
-	if !hasClaim {
-		return false
-	}
-	hasNegation := strings.Contains(lower, "not ") ||
-		strings.Contains(lower, " no ") ||
-		strings.Contains(lower, "no `redis_url`") ||
-		strings.Contains(lower, "without redis") ||
+	// Explicitly optional / disabled-by-default wording is fine.
+	if strings.Contains(lower, "optional") ||
+		strings.Contains(lower, "可选") ||
+		strings.Contains(lower, "fail-open") ||
+		strings.Contains(lower, "fail open") ||
+		strings.Contains(lower, "never a hard") ||
+		strings.Contains(lower, "not a hard") ||
+		strings.Contains(lower, "no hard") ||
+		strings.Contains(lower, "not required") ||
+		strings.Contains(lower, "not mandatory") ||
+		strings.Contains(lower, "empty =") ||
+		strings.Contains(lower, "empty disables") ||
+		strings.Contains(lower, "leave it empty") ||
+		strings.Contains(lower, "default remains") ||
+		strings.Contains(lower, "process-local") ||
+		strings.Contains(lower, "process local") ||
+		strings.Contains(lower, "off by default") ||
+		strings.Contains(lower, "by default") ||
+		strings.Contains(lower, "redis_url") ||
 		strings.Contains(lower, "尚未") ||
 		strings.Contains(lower, "没有") ||
-		strings.Contains(lower, "无 redis")
-	return !hasNegation
+		strings.Contains(lower, "无 redis") {
+		return false
+	}
+	// Ban only hard-requirement wording.
+	return strings.Contains(lower, "hard dependency") ||
+		strings.Contains(lower, "hard-dependency") ||
+		strings.Contains(lower, "required dependency") ||
+		strings.Contains(lower, "redis is required") ||
+		strings.Contains(lower, "must set redis") ||
+		strings.Contains(lower, "requires redis") ||
+		strings.Contains(lower, "必须") && strings.Contains(lower, "redis")
 }
 
 func itoa(n int) string {

@@ -629,8 +629,8 @@ func (s *ChannelSelector) getCandidateEligibilityReasons(
 		reasons = append(reasons, "令牌不可用")
 	}
 
-	// Cooldown
-	if candidate.Channel.CooldownUntil != nil && *candidate.Channel.CooldownUntil > nowISO {
+	// Cooldown (DB cooldown_until + optional shared soft marker #118)
+	if isChannelCoolingDown(candidate.Channel.ID, candidate.Channel.CooldownUntil, nowISO) {
 		reasons = append(reasons, "冷却中")
 	}
 

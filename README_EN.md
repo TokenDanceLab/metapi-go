@@ -73,7 +73,7 @@ All env vars are identical to the TypeScript version.
 
 Full list: [`.env.example`](.env.example).
 
-The runtime supports two database modes: single-process SQLite and PostgreSQL for production deployments. In PostgreSQL mode, side-effecting schedulers such as external requests, notifications, uploads, cleanup, and sync jobs use PG advisory locks so multiple replicas do not run the same job batch at the same time. Redis is not integrated yet: there is no `REDIS_URL` setting, Redis client, or distributed cache.
+The runtime supports two database modes: single-process SQLite and PostgreSQL for production deployments. In PostgreSQL mode, side-effecting schedulers such as external requests, notifications, uploads, cleanup, and sync jobs use PG advisory locks so multiple replicas do not run the same job batch at the same time. Optional Redis (`REDIS_URL`) shares downstream-key RPM/TPM admission counters and soft channel cooldown markers across instances; it is off by default, not required for single-node installs, and fail-open on Redis errors. See `docs/analysis/redis-shared-state.md`.
 
 Proxy forwarding returns HTTP 503 when routing and upstream dependencies are not configured. `METAPI_ENABLE_PROXY_STUB=1` is for tests and demos only.
 

@@ -22,5 +22,5 @@ List/summary rows include `windowUsedRpm` / `windowUsedTpm` from the local windo
 
 ## Residual
 
-- Multi-instance shared admission needs Redis (#118).
+- ~~Multi-instance shared admission needs Redis (#118).~~ Landed: set `REDIS_URL` for shared fixed-window RPM/TPM counters (`docs/analysis/redis-shared-state.md`). Default remains process-local; Redis errors fail-open to local.
 - TPM currently reserved at 0 tokens on auth (request-count RPM is primary); token estimate hook can feed later.

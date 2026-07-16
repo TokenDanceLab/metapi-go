@@ -47,6 +47,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Optional Redis shared state for multi-instance admission/cooldown (#118).
+	// Empty REDIS_URL keeps process-local defaults; never hard-fails startup.
+	app.ConfigureSharedState(cfg)
+
 	// Normalize DataDir (E11: trailing slash / Windows backslash)
 	cfg.DataDir = filepath.Clean(cfg.DataDir)
 

@@ -136,7 +136,7 @@ Schema migrations run automatically at startup. Use `metapi-migrate` to transfer
 
 Use PostgreSQL for multi-instance deployments. Side-effecting schedulers use PostgreSQL advisory locks, so only one replica runs each job batch at a time. `admin-snapshot` remains process-local cache warming; `usage-aggregation` uses its own checkpoint lease.
 
-Redis is not part of the current runtime. There is no `REDIS_URL` setting, Redis client, or distributed cache in this build.
+Optional Redis (`REDIS_URL`) shares downstream-key RPM/TPM admission counters and soft channel cooldown markers across replicas. Leave it empty for process-local state (default). Redis is never a hard dependency: parse/connect errors keep in-process defaults, and runtime command errors fail-open. See `docs/analysis/redis-shared-state.md`.
 
 ### Proxy Forwarding
 

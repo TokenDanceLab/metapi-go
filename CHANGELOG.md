@@ -11,6 +11,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - Enterprise modernization program (stack TS7/React19/Vite8, UI tokens/a11y, backend boundaries, schema additive migrations, reliability SSOT).
 - Feature completeness from original metapi gap matrix: site max concurrency, per-key proxy, group route rebuild, `/v1/rerank`, usage/token accounting, failover/first-byte, protocol pack (Gemini thought_signature, Minimax thinking, models shape, previous_response_id, skill-call, responses multi-turn reasoning, responses-only sites), Codex OAuth gpt-5.5 + discovery soft-retry.
 - Competitive learning milestone (M-COMPETE) vs all-api-hub / axonhub / new-api / litellm with matrix + `[learn]` backlog.
+- Optional Redis shared state for multi-instance RPM/TPM admission + soft channel cooldown markers (`REDIS_URL`, learn #118); default process-local, fail-open, no hard dependency.
 
 ### Fixed
 - Admin correctness: key refresh name/enable preserve, quota clear, model whitelist non-destructive parse, in-route model config preserve, expired account health.

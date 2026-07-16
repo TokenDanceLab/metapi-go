@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#117. Open #118–#121 |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#118. Open #119–#121 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none — next P1 #118 Redis cooldown · #119 admin API harness |
-| Next | M-COMPETE P1 residual: #118 Redis cooldown · #119 admin API harness · P2 #120–#121 |
+| In flight WFs | none — next P1 #119 admin API harness |
+| Next | M-COMPETE P1 residual: #119 admin API harness · P2 #120–#121 |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)

@@ -5,6 +5,22 @@ import (
 	"testing"
 )
 
+func TestLoadParsesRedisURL(t *testing.T) {
+	cfg := Load(map[string]string{
+		"REDIS_URL": "redis://:secret@127.0.0.1:6379/1",
+	})
+	if cfg.RedisURL != "redis://:secret@127.0.0.1:6379/1" {
+		t.Fatalf("RedisURL = %q", cfg.RedisURL)
+	}
+}
+
+func TestLoadRedisURLEmptyByDefault(t *testing.T) {
+	cfg := Load(map[string]string{})
+	if cfg.RedisURL != "" {
+		t.Fatalf("RedisURL default = %q, want empty", cfg.RedisURL)
+	}
+}
+
 func TestLoadParsesAdminCorsAllowedOrigins(t *testing.T) {
 	cfg := Load(map[string]string{
 		"ADMIN_CORS_ALLOWED_ORIGINS": " https://admin.example.com,https://ops.example.com ,, ",
