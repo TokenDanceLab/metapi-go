@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | 🔄 P0 partial: site concurrency + per-key proxy + group rebuild shipped; remaining backlog #38–#56 |
+| **M-FEATURE** | Feature completeness from gap matrix | 🔄 Wave F1 largely landed (#39–#46, #40–#43, #45–#46 closed via PRs #74–#80). In flight: #44 token count, #38 failover/first-byte, #48 rerank. Open P1 protocol pack #47–#56 (excl. #48 scheduled) |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -64,9 +64,19 @@
 | Item | Detail |
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/4 |
-| B0 (#16) | `docs/architecture.md` truth + `docs/design/BACKEND.md` principles (docs only) |
-| Next | B1 package boundaries · B2 CRITICAL concurrency · B3 unified errors |
+| B0–B3 | Landed (architecture docs, package boundaries, concurrency, unified errors) |
 | Philosophy SSOT | `docs/design/BACKEND.md` |
+
+### M-FEATURE notes (active)
+
+| Item | Detail |
+|------|--------|
+| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
+| Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
+| Closed F1 bugs | #39 expired health · #40 key refresh preserve · #41 quota clear · #42 token stats · #43 cache_ratio · #45 whitelist · #46 route model config (PRs #74–#80) |
+| In flight WFs | #44 uncounted tokens · #38 failover/first-byte · #48 `/v1/rerank` |
+| Next | Harvest #44/#38/#48 → schedule P1 protocol pack (#47–#56) |
+| Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ## Hardening Results
 
