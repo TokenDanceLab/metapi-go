@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/routing"
 )
 
@@ -394,15 +396,21 @@ func (h *tokenRoutesHandler) batchRoutes(w http.ResponseWriter, r *http.Request)
 
 // ---- Rebuild Routes ----
 // POST /api/routes/rebuild
+// Currently only invalidates the in-process route cache. Response must stay
+// truthful: do not claim a background job was queued.
 func (h *tokenRoutesHandler) rebuildRoutes(w http.ResponseWriter, r *http.Request) {
 	routing.InvalidateCache()
-	writeJSON(w, http.StatusAccepted, map[string]any{
+	shared.RecordRouteRebuildCompleted()
+	slog.Info("routes rebuild: route cache invalidated",
+		"queued", false,
+		"status", "completed",
+	)
+	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
-		"queued":  true,
+		"queued":  false,
 		"reused":  false,
-		"jobId":   "stub-rebuild",
-		"status":  "pending",
-		"message": "已开始路由重建，请稍后查看程序日志",
+		"status":  "completed",
+		"message": "路由缓存已刷新",
 	})
 }
 

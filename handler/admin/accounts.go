@@ -107,7 +107,7 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	accounts, err := service.ListAccountsWithSites(h.db)
 	if err != nil {
 		slog.Error("Failed to load accounts", "err", err)
-		writeError(w, http.StatusInternalServerError, "Failed to load accounts")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load accounts"})
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountCreatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid account payload.")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid account payload."})
 		return
 	}
 
@@ -177,7 +177,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if len(requestedTokens) == 0 {
-		writeError(w, http.StatusBadRequest, "请填写 Token")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "请填写 Token"})
 		return
 	}
 
@@ -247,7 +247,10 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	accountID, err := h.createSingleAccount(body, site, credentialMode, requestedTokens[0], body.Username)
 	if err != nil {
 		slog.Error("Account creation failed", "err", err)
-		writeError(w, http.StatusBadRequest, "Account creation failed")
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "Account creation failed",
+		})
 		return
 	}
 
@@ -344,11 +347,11 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(body.Username) == "" {
-		writeError(w, http.StatusBadRequest, "Invalid username. Expected string.")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid username. Expected string."})
 		return
 	}
 	if strings.TrimSpace(body.Password) == "" {
-		writeError(w, http.StatusBadRequest, "Invalid password. Expected string.")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid password. Expected string."})
 		return
 	}
 
@@ -361,7 +364,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 
 	adp := platform.GetAdapter(site.Platform)
 	if adp == nil {
-		writeError(w, http.StatusBadRequest, "unsupported platform: "+site.Platform)
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "unsupported platform: " + site.Platform})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -369,7 +372,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	loginResult, err := adp.Login(ctx, site.URL, body.Username, body.Password, nil, service.BuildPlatformProxyConfig(h.cfg, nil, &site))
 	if err != nil {
 		slog.Warn("Account login failed", "err", err, "site_id", site.ID, "platform", site.Platform)
-		writeError(w, http.StatusBadGateway, "login failed")
+		writeError(w, http.StatusUnauthorized, "login failed")
 		return
 	}
 	if loginResult == nil || !loginResult.Success || strings.TrimSpace(loginResult.AccessToken) == "" {
@@ -398,7 +401,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	// Encrypt password for autoRelogin
 	passwordCipher, encErr := service.EncryptPassword(h.cfg, body.Password)
 	if encErr != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to encrypt password.")
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to encrypt password."})
 		return
 	}
 
@@ -421,7 +424,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 			loginAccessToken, true, extraConfigStr, now, existing.ID,
 		); err != nil {
 			slog.Error("Failed to update login account", "err", err, "account_id", existing.ID)
-			writeError(w, http.StatusInternalServerError, "Failed to save account.")
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to save account."})
 			return
 		}
 	} else {
@@ -433,7 +436,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 			body.SiteID, body.Username, loginAccessToken, true, false, sortOrder, extraConfigStr, now, now,
 		); err != nil {
 			slog.Error("Failed to insert login account", "err", err, "site_id", body.SiteID)
-			writeError(w, http.StatusInternalServerError, "Failed to save account.")
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to save account."})
 			return
 		}
 	}
@@ -442,7 +445,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	var loginAcct store.Account
 	if err := h.db.Get(&loginAcct, h.db.Rebind("SELECT * FROM accounts WHERE site_id = ? AND username = ?"), body.SiteID, body.Username); err != nil {
 		slog.Error("Failed to load login account", "err", err, "site_id", body.SiteID)
-		writeError(w, http.StatusInternalServerError, "Failed to load account.")
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load account."})
 		return
 	}
 	loginAcctMap := map[string]any{
@@ -503,7 +506,7 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 
 	adp := platform.GetAdapter(site.Platform)
 	if adp == nil {
-		writeError(w, http.StatusBadRequest, "unsupported platform: "+site.Platform)
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "unsupported platform: " + site.Platform})
 		return
 	}
 
@@ -511,11 +514,15 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	result, err := adp.VerifyToken(ctx, site.URL, accessToken, body.PlatformUserID, service.BuildPlatformProxyConfig(h.cfg, nil, &site))
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "token verification failed")
+		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": err.Error()})
 		return
 	}
 	if result == nil || result.TokenType == "" || result.TokenType == "unknown" {
-		writeError(w, http.StatusBadRequest, "token verification failed")
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success":   false,
+			"tokenType": "unknown",
+			"message":   "token verification failed",
+		})
 		return
 	}
 
@@ -575,13 +582,13 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	accountID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || accountID <= 0 {
-		writeError(w, http.StatusBadRequest, "账号 ID 无效")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "账号 ID 无效"})
 		return
 	}
 
 	var body payloads.AccountRebindSessionPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid rebind payload.")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid rebind payload."})
 		return
 	}
 
@@ -590,13 +597,13 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 		nextAccessToken = strings.TrimSpace(*body.AccessToken)
 	}
 	if nextAccessToken == "" {
-		writeError(w, http.StatusBadRequest, "请提供新的 Session Token")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "请提供新的 Session Token"})
 		return
 	}
 
 	row, err := service.GetAccountWithSiteByID(h.db, accountID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "账号不存在")
+		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "账号不存在"})
 		return
 	}
 
@@ -613,14 +620,14 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 		h.db.Rebind("UPDATE accounts SET access_token = ?, status = 'active', extra_config = ?, updated_at = ? WHERE id = ?"),
 		nextAccessToken, extraConfigStr, now, accountID,
 	); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update account")
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "failed to update account"})
 		return
 	}
 
 	// Fetch updated account for response
 	var rebindAcct store.Account
 	if err := h.db.Get(&rebindAcct, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), accountID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to read updated account")
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "failed to read updated account"})
 		return
 	}
 	rebindAcctMap := map[string]any{
@@ -656,19 +663,19 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid account id")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account id"})
 		return
 	}
 
 	var body payloads.AccountUpdatePayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid account payload.")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account payload."})
 		return
 	}
 
 	row, err := service.GetAccountWithSiteByID(h.db, id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "account not found")
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found"})
 		return
 	}
 
@@ -699,14 +706,14 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	if body.Status != nil {
 		status := normalizeAccountStatus(*body.Status)
 		if status == "" {
-			writeError(w, http.StatusBadRequest, "Invalid account status. Expected active, disabled, or expired.")
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account status. Expected active, disabled, or expired."})
 			return
 		}
 		updates["status"] = status
 	}
 	if body.UnitCost != nil {
 		if *body.UnitCost <= 0 {
-			writeError(w, http.StatusBadRequest, "Invalid unitCost value. Expected positive number.")
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid unitCost value. Expected positive number."})
 			return
 		}
 		updates["unitCost"] = *body.UnitCost
@@ -738,7 +745,7 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	if body.SortOrder != nil {
 		so := service.NormalizeSortOrder(body.SortOrder)
 		if so == nil {
-			writeError(w, http.StatusBadRequest, "Invalid sortOrder value. Expected non-negative integer.")
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid sortOrder value. Expected non-negative integer."})
 			return
 		}
 		updates["sortOrder"] = int64(*so)
@@ -756,7 +763,7 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 
 	if err := service.UpdateAccountFields(h.db, id, updates); err != nil {
 		slog.Error("Failed to update account", "err", err, "account_id", id)
-		writeError(w, http.StatusInternalServerError, "Failed to update account")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to update account"})
 		return
 	}
 
@@ -773,12 +780,12 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "Invalid account id")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid account id"})
 		return
 	}
 	if err := service.DeleteAccount(h.db, id); err != nil {
 		slog.Error("Failed to delete account", "err", err, "account_id", id)
-		writeError(w, http.StatusInternalServerError, "Failed to delete account")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to delete account"})
 		return
 	}
 	service.RebuildRoutesBestEffort()
@@ -791,19 +798,19 @@ func (h *accountsHandler) deleteAccount(w http.ResponseWriter, r *http.Request) 
 func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountBatchPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid account batch payload.")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid account batch payload."})
 		return
 	}
 
 	if len(body.IDs) == 0 {
-		writeError(w, http.StatusBadRequest, "ids is required")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids is required"})
 		return
 	}
 
 	action := strings.TrimSpace(body.Action)
 	validActions := map[string]bool{"enable": true, "disable": true, "delete": true, "refreshBalance": true}
 	if !validActions[action] {
-		writeError(w, http.StatusBadRequest, "Invalid action")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Invalid action"})
 		return
 	}
 
@@ -886,7 +893,7 @@ func (h *accountsHandler) batchAccounts(w http.ResponseWriter, r *http.Request) 
 func (h *accountsHandler) healthRefresh(w http.ResponseWriter, r *http.Request) {
 	var body payloads.AccountHealthRefreshPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid health refresh payload.")
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "error": "Invalid health refresh payload."})
 		return
 	}
 
@@ -922,22 +929,22 @@ func (h *accountsHandler) refreshBalance(w http.ResponseWriter, r *http.Request)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "account not found or platform not supported")
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found or platform not supported"})
 		return
 	}
 
 	result, err := balanceService.RefreshBalance(h.cfg, h.db, id)
 	if result == nil && err == nil {
-		writeError(w, http.StatusNotFound, "account not found or platform not supported")
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found or platform not supported"})
 		return
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "unsupported platform") {
-			writeError(w, http.StatusNotFound, "account not found or platform not supported")
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": "account not found or platform not supported"})
 			return
 		}
 		slog.Warn("Balance refresh failed", "err", err, "account_id", id)
-		writeError(w, http.StatusBadGateway, "balance refresh failed")
+		writeJSON(w, http.StatusBadGateway, map[string]string{"message": "balance refresh failed"})
 		return
 	}
 
@@ -956,13 +963,13 @@ func (h *accountsHandler) getAccountModels(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "账号 ID 无效")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "账号 ID 无效"})
 		return
 	}
 
 	row, err := service.GetAccountWithSiteByID(h.db, id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "账号不存在")
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "账号不存在"})
 		return
 	}
 
@@ -1011,18 +1018,18 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "账号 ID 无效")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "账号 ID 无效"})
 		return
 	}
 
 	var body payloads.AccountManualModelsPayload
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid models. Expected string[].")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid models. Expected string[]."})
 		return
 	}
 
 	if len(body.Models) == 0 {
-		writeError(w, http.StatusBadRequest, "模型列表不能为空")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "模型列表不能为空"})
 		return
 	}
 
@@ -1037,20 +1044,20 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(models) == 0 {
-		writeError(w, http.StatusBadRequest, "模型列表不能为空")
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "模型列表不能为空"})
 		return
 	}
 
 	var account store.Account
 	if err := h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), id); err != nil {
-		writeError(w, http.StatusNotFound, "账号不存在")
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": "账号不存在"})
 		return
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	tx, err := h.db.Beginx()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to start transaction")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to start transaction"})
 		return
 	}
 	committed := false
@@ -1065,22 +1072,22 @@ func (h *accountsHandler) manualModels(w http.ResponseWriter, r *http.Request) {
 		err := tx.Get(&existingID, tx.Rebind("SELECT id FROM model_availability WHERE account_id = ? AND model_name = ?"), id, m)
 		if err == nil {
 			if _, err := tx.Exec(tx.Rebind("UPDATE model_availability SET available = ?, latency_ms = NULL, is_manual = ?, checked_at = ? WHERE id = ?"), true, true, now, existingID); err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to update manual model")
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update manual model"})
 				return
 			}
 			continue
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusInternalServerError, "failed to read manual model")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read manual model"})
 			return
 		}
 		if _, err := tx.Exec(tx.Rebind("INSERT INTO model_availability (account_id, model_name, available, is_manual, latency_ms, checked_at) VALUES (?, ?, ?, ?, NULL, ?)"), id, m, true, true, now); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to insert manual model")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to insert manual model"})
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to commit manual models")
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to commit manual models"})
 		return
 	}
 	committed = true

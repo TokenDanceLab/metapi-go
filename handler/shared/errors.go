@@ -4,6 +4,7 @@ package shared
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -60,8 +61,10 @@ func WriteAPIError(w http.ResponseWriter, err *APIError) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(APIError{
+	if encErr := json.NewEncoder(w).Encode(APIError{
 		Message: err.Message,
 		Detail:  err.Detail,
-	})
+	}); encErr != nil {
+		slog.Warn("shared: failed to write error response", "error", encErr)
+	}
 }
