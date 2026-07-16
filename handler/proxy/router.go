@@ -80,11 +80,26 @@ func RegisterNonV1ProxyRoutes(r chi.Router) {
 // In Go/chi, `net/http` natively parses multipart forms, so this is a no-op.
 func EnsureMultipartBufferParser() {}
 
-// writeJSONError writes a JSON error response.
+// writeJSONError writes a JSON error response without a request id.
+// Prefer writeJSONErrorWithRequest when the ingress request/trace id is known.
 func writeJSONError(w http.ResponseWriter, status int, message, typ string) {
+	writeJSONErrorWithRequest(w, status, message, typ, "")
+}
+
+// writeJSONErrorWithRequest writes an OpenAI-shaped JSON error and, when
+// requestID is non-empty, attaches it both in the body and as X-Request-Id
+// when the response header is still unset.
+func writeJSONErrorWithRequest(w http.ResponseWriter, status int, message, typ, requestID string) {
+	if requestID != "" && w.Header().Get("X-Request-Id") == "" {
+		w.Header().Set("X-Request-Id", requestID)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	body := `{"error":{"message":"` + jsonEscape(message) + `","type":"` + jsonEscape(typ) + `"}}`
+	body := `{"error":{"message":"` + jsonEscape(message) + `","type":"` + jsonEscape(typ) + `"`
+	if requestID != "" {
+		body += `,"request_id":"` + jsonEscape(requestID) + `"`
+	}
+	body += `}}`
 	w.Write([]byte(body))
 }
 

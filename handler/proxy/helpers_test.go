@@ -103,6 +103,26 @@ func TestWriteJSONError_SpecialChars(t *testing.T) {
 	}
 }
 
+func TestWriteJSONErrorWithRequest_IncludesRequestID(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeJSONErrorWithRequest(rec, 503, "All channels exhausted", "server_error", "req-trace-9")
+
+	if rec.Code != 503 {
+		t.Fatalf("status = %d, want 503", rec.Code)
+	}
+	if got := rec.Header().Get("X-Request-Id"); got != "req-trace-9" {
+		t.Fatalf("X-Request-Id = %q", got)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON: %v body=%s", err, rec.Body.String())
+	}
+	errObj := m["error"].(map[string]any)
+	if errObj["request_id"] != "req-trace-9" {
+		t.Fatalf("request_id = %v", errObj["request_id"])
+	}
+}
+
 // ---- writeJSON ----
 
 func TestWriteJSON(t *testing.T) {

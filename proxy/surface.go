@@ -130,8 +130,11 @@ type ProxyLogEntry struct {
 	ClientConfidence    string
 	ErrorMessage        *string
 	RetryCount          int
-	UpstreamPath        *string
-	UsageSource         string
+	// RequestID correlates multi-channel retry/failover attempts for one client call.
+	// Same value as chi X-Request-Id / middleware.GetReqID for the ingress request.
+	RequestID    string
+	UpstreamPath *string
+	UsageSource  string
 }
 
 // SurfaceUsageSummary is a usage summary for surface operations.
