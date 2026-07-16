@@ -219,7 +219,7 @@ const toggleBtnBase: React.CSSProperties = {
 
 const toggleBtnActive: React.CSSProperties = {
   background: 'var(--color-primary)',
-  color: '#ffffff',
+  color: 'var(--color-on-primary)',
 };
 
 const toggleBtnInactive: React.CSSProperties = {

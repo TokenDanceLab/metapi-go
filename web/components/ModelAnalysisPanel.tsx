@@ -78,7 +78,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     type: 'bar' as const,
     data: [{ id: 'data', values: spendDistribution.map(d => ({ model: d.model.length > 25 ? d.model.slice(0, 25) + '...' : d.model, value: toSafeNumber(d.spend) })).reverse() }],
     xField: 'value', yField: 'model', direction: 'horizontal' as const,
-    bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: '#4f46e5' }, { offset: 1, color: '#818cf8' }] } } },
+    bar: { style: { cornerRadius: [0, 6, 6, 0], fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 1, y1: 0, stops: [{ offset: 0, color: 'var(--color-chart-1)' }, { offset: 1, color: 'color-mix(in srgb, var(--color-chart-1) 55%, white)' }] } } },
     label: { visible: true, position: 'right', formatter: '{value}', style: { fontSize: 11, fill: labelColor, stroke: 'transparent' } },
     axes: [{ orient: 'left', label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'bottom', visible: false }],
     animation: true, background: 'transparent',
@@ -88,9 +88,9 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     type: 'area' as const,
     data: [{ id: 'data', values: spendTrend.map(d => ({ day: d.day, spend: toSafeNumber(d.spend) })) }],
     xField: 'day', yField: 'spend',
-    line: { style: { lineWidth: 2.5, curveType: 'monotone' as const, stroke: '#4f46e5' } },
-    area: { style: { fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 0, y1: 1, stops: [{ offset: 0, color: 'rgba(79,70,229,0.25)' }, { offset: 1, color: 'rgba(79,70,229,0.02)' }] }, curveType: 'monotone' as const } },
-    point: { visible: true, style: { size: 7, fill: '#4f46e5', stroke: '#fff', lineWidth: 2 } },
+    line: { style: { lineWidth: 2.5, curveType: 'monotone' as const, stroke: 'var(--color-chart-1)' } },
+    area: { style: { fill: { gradient: 'linear' as const, x0: 0, y0: 0, x1: 0, y1: 1, stops: [{ offset: 0, color: 'var(--color-chart-1-soft)' }, { offset: 1, color: 'var(--color-chart-1-faint)' }] }, curveType: 'monotone' as const } },
+    point: { visible: true, style: { size: 7, fill: 'var(--color-chart-1)', stroke: 'var(--color-on-primary)', lineWidth: 2 } },
     axes: [{ orient: 'bottom' as const, label: { style: { fontSize: 11, fill: labelColor } } }, { orient: 'left' as const, label: { style: { fontSize: 11, fill: labelColor } } }],
     tooltip: { mark: { content: [{ key: () => '消耗', value: (datum: any) => formatCurrency(datum?.spend ?? 0) }] } },
     animation: true, background: 'transparent',
@@ -105,7 +105,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
     label: { visible: true, position: 'outside', formatter: '{_percent_}%', style: { fill: labelColor } },
     legends: { visible: false },
     animation: true,
-    color: ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'],
+    color: ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-6)', 'var(--color-chart-7)', 'var(--color-chart-8)'],
     background: 'transparent',
   }), [callsDistribution, labelColor]);
 
@@ -175,7 +175,7 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', marginTop: 10, padding: '0 4px' }}>
             {callsDistribution.map((d, idx) => {
-              const pieColors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+              const pieColors = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)', 'var(--color-chart-6)', 'var(--color-chart-7)', 'var(--color-chart-8)'];
               return (
                 <span key={d.model} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: pieColors[idx % pieColors.length], flexShrink: 0 }} />
@@ -226,12 +226,12 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                   latColor = `rgb(${r},${g},${b})`;
                   latBg = `rgba(${r},${g},${b},0.08)`;
                 } else {
-                  latColor = '#ef4444';
-                  latBg = 'rgba(239,68,68,0.08)';
+                  latColor = 'var(--color-danger)';
+                  latBg = 'var(--color-danger-soft)';
                 }
                 const latText = latMs >= 1000 ? `${(latMs / 1000).toFixed(latSec >= 60 ? 0 : 1)}s` : `${latMs}ms`;
-                const rateColor = item.successRate >= 90 ? '#16a34a' : item.successRate >= 60 ? '#d97706' : '#dc2626';
-                const rateBg = item.successRate >= 90 ? 'rgba(34,197,94,0.1)' : item.successRate >= 60 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)';
+                const rateColor = item.successRate >= 90 ? 'var(--color-success)' : item.successRate >= 60 ? 'var(--color-warning)' : 'var(--color-danger)';
+                const rateBg = item.successRate >= 90 ? 'var(--color-success-soft)' : item.successRate >= 60 ? 'var(--color-warning-soft)' : 'var(--color-danger-soft)';
 
                 return (
                   <tr key={item.model}>
@@ -240,9 +240,9 @@ export default function ModelAnalysisPanel({ data }: ModelAnalysisPanelProps) {
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: 22, height: 22, borderRadius: 6, fontSize: 11, fontWeight: 700,
                         background: index < 3
-                          ? ['linear-gradient(135deg,#fbbf24,#f59e0b)', 'linear-gradient(135deg,#94a3b8,#cbd5e1)', 'linear-gradient(135deg,#d97706,#fbbf24)'][index]
+                          ? ['linear-gradient(135deg,var(--color-chart-4),color-mix(in srgb,var(--color-chart-4) 70%, black))', 'linear-gradient(135deg,var(--color-text-muted),var(--color-border-strong))', 'linear-gradient(135deg,var(--color-warning),var(--color-chart-4))'][index]
                           : 'var(--color-bg)',
-                        color: index < 3 ? '#fff' : 'var(--color-text-muted)',
+                        color: index < 3 ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
                       }}>
                         {index + 1}
                       </span>

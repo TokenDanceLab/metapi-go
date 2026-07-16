@@ -62,7 +62,6 @@ export default function SiteCreatedModal({
           <button
             onClick={() => onChoice(secondaryAction.choice)}
             className="btn btn-ghost"
-            style={{ border: '1px solid var(--color-border)' }}
           >
             {secondaryAction.label}
           </button>

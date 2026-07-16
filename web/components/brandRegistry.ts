@@ -36,14 +36,14 @@ function normalizeInput(value: string): string {
 }
 
 const FALLBACK_COLORS = [
-  'linear-gradient(135deg, #4f46e5, #818cf8)',
-  'linear-gradient(135deg, #059669, #34d399)',
-  'linear-gradient(135deg, #2563eb, #60a5fa)',
-  'linear-gradient(135deg, #d946ef, #f0abfc)',
-  'linear-gradient(135deg, #ea580c, #fb923c)',
-  'linear-gradient(135deg, #0891b2, #22d3ee)',
-  'linear-gradient(135deg, #7c3aed, #a78bfa)',
-  'linear-gradient(135deg, #dc2626, #f87171)',
+  'linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white))',
+  'linear-gradient(135deg, var(--color-chart-3), color-mix(in srgb, var(--color-chart-3) 55%, white))',
+  'linear-gradient(135deg, var(--color-chart-2), color-mix(in srgb, var(--color-chart-2) 55%, white))',
+  'linear-gradient(135deg, var(--color-chart-7), color-mix(in srgb, var(--color-chart-7) 55%, white))',
+  'linear-gradient(135deg, var(--color-stat-orange-ink), color-mix(in srgb, var(--color-stat-orange-ink) 55%, white))',
+  'linear-gradient(135deg, var(--color-stat-cyan-ink), color-mix(in srgb, var(--color-stat-cyan-ink) 55%, white))',
+  'linear-gradient(135deg, var(--color-chart-6), color-mix(in srgb, var(--color-chart-6) 55%, white))',
+  'linear-gradient(135deg, var(--color-chart-5), color-mix(in srgb, var(--color-chart-5) 55%, white))',
 ];
 
 export function normalizeBrandIconKey(icon: string | null | undefined): string | null {

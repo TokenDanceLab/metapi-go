@@ -9,19 +9,6 @@ type ResponsiveBatchActionBarProps = {
   infoStyle?: React.CSSProperties;
 };
 
-const DEFAULT_DESKTOP_STYLE: React.CSSProperties = {
-  padding: 12,
-  display: 'flex',
-  gap: 8,
-  flexWrap: 'wrap',
-  alignItems: 'center',
-};
-
-const DEFAULT_INFO_STYLE: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-};
-
 export default function ResponsiveBatchActionBar({
   isMobile,
   info,
@@ -34,8 +21,8 @@ export default function ResponsiveBatchActionBar({
   }
 
   return (
-    <div className="card" style={{ ...DEFAULT_DESKTOP_STYLE, ...desktopStyle }}>
-      <span style={{ ...DEFAULT_INFO_STYLE, ...infoStyle }}>{info}</span>
+    <div className="card batch-action-bar" style={desktopStyle}>
+      <span className="batch-action-bar-info" style={infoStyle}>{info}</span>
       {children}
     </div>
   );
