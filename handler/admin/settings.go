@@ -112,9 +112,9 @@ func (h *settingsHandler) getRuntime(w http.ResponseWriter, r *http.Request) {
 		"payloadRules":                 cfg.PayloadRules,
 		"proxyErrorKeywords":           cfg.ProxyErrorKeywords,
 		"proxyEmptyContentFailEnabled": cfg.ProxyEmptyContentFailEnabled,
-		// Global filters
-		"globalBlockedBrands": cfg.GlobalBlockedBrands,
-		"globalAllowedModels": cfg.GlobalAllowedModels,
+		// Global filters (always JSON arrays; never null)
+		"globalBlockedBrands": stringSliceOrEmpty(cfg.GlobalBlockedBrands),
+		"globalAllowedModels": stringSliceOrEmpty(cfg.GlobalAllowedModels),
 	})
 }
 
@@ -531,36 +531,32 @@ func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) 
 
 	// Global blocked brands
 	if v, ok := body["globalBlockedBrands"]; ok {
-		var brands []string
-		if arr, ok2 := v.([]any); ok2 {
-			for _, item := range arr {
-				if s, ok3 := item.(string); ok3 {
-					s = strings.TrimSpace(s)
-					if s != "" {
-						brands = append(brands, s)
-					}
-				}
-			}
+		brands, err := parseStringArraySetting(v, "globalBlockedBrands")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": err.Error()})
+			return
 		}
 		cfg.GlobalBlockedBrands = brands
-		upsertSettingDB(h.db, "global_blocked_brands", brands)
+		if err := upsertSettingDB(h.db, "global_blocked_brands", brands); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "保存品牌屏蔽失败"})
+			return
+		}
 	}
 
 	// Global allowed models
+	// Only an explicit array (including []) may mutate this setting. null /
+	// wrong types used to silently wipe the allowlist (upstream #515).
 	if v, ok := body["globalAllowedModels"]; ok {
-		var models []string
-		if arr, ok2 := v.([]any); ok2 {
-			for _, item := range arr {
-				if s, ok3 := item.(string); ok3 {
-					s = strings.TrimSpace(s)
-					if s != "" {
-						models = append(models, s)
-					}
-				}
-			}
+		models, err := parseStringArraySetting(v, "globalAllowedModels")
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": err.Error()})
+			return
 		}
 		cfg.GlobalAllowedModels = models
-		upsertSettingDB(h.db, "global_allowed_models", models)
+		if err := upsertSettingDB(h.db, "global_allowed_models", models); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "保存模型白名单失败"})
+			return
+		}
 	}
 
 	// Proxy error keywords
@@ -647,9 +643,13 @@ func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) 
 	// Log the event
 	logSettingsEvent(h.db, "status", "运行时设置已更新", "运行时设置已更新", "info", now)
 
+	// Echo current filter lists so partial-update clients can re-sync without
+	// another GET, and so empty arrays serialize as [] rather than null.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "运行时设置已更新",
+		"success":             true,
+		"message":             "运行时设置已更新",
+		"globalAllowedModels": stringSliceOrEmpty(cfg.GlobalAllowedModels),
+		"globalBlockedBrands": stringSliceOrEmpty(cfg.GlobalBlockedBrands),
 	})
 }
 
@@ -801,6 +801,11 @@ func applyBoolSettingDB(db *sqlx.DB, body map[string]any, key string, target *bo
 }
 
 func upsertSettingDB(db *sqlx.DB, key string, value any) error {
+	// Normalize nil string slices to empty arrays so we never persist JSON null
+	// for list settings (null historically rehydrated as a wiped allowlist).
+	if value == nil {
+		value = []string{}
+	}
 	jsonValue, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("settings: marshal %q: %w", key, err)
@@ -811,6 +816,44 @@ func upsertSettingDB(db *sqlx.DB, key string, value any) error {
 		return fmt.Errorf("settings: upsert %q: %w", key, err)
 	}
 	return nil
+}
+
+// parseStringArraySetting validates an explicit JSON array setting.
+// null / non-array values are rejected so accidental clients cannot wipe lists.
+// Empty arrays are allowed and mean "clear / allow all" for the model whitelist.
+func parseStringArraySetting(v any, field string) ([]string, error) {
+	if v == nil {
+		return nil, fmt.Errorf("%s must be an array of strings (use [] to clear)", field)
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be an array of strings", field)
+	}
+	out := make([]string, 0, len(arr))
+	seen := make(map[string]struct{}, len(arr))
+	for _, item := range arr {
+		s, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("%s must be an array of strings", field)
+		}
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, exists := seen[s]; exists {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
+func stringSliceOrEmpty(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }
 
 func logSettingsEvent(db *sqlx.DB, eventType, title, message, level, createdAt string) {

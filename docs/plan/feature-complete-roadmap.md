@@ -314,11 +314,19 @@ Global lane rules still apply (`docs/plan/lane-charters.md`). Below is the **fea
 
 ```markdown
 ## Acceptance criteria
-- [ ] Repro-or-refute recorded (failing test or closed as cannot-reproduce with evidence)
-- [ ] Concurrent or partial updates do not clobber unrelated settings/route model fields
-- [ ] Global model whitelist empty array is only saved when operator explicitly clears
-- [ ] Regression tests for update payloads that omit optional fields
+- [x] Repro-or-refute recorded (failing test or closed as cannot-reproduce with evidence)
+- [x] Concurrent or partial updates do not clobber unrelated settings/route model fields
+- [x] Global model whitelist empty array is only saved when operator explicitly clears
+- [x] Regression tests for update payloads that omit optional fields
 ```
+
+**#45 / upstream #515 status (2026-07-17):** fixed on save + load path.
+
+- PUT `/api/settings/runtime` rejects `null` / non-array `globalAllowedModels` instead of silently writing `[]`.
+- Explicit `[]` still clears (allow-all semantics).
+- Partial updates that omit the field never touch the whitelist.
+- `ApplyRuntimeSettings` hydrates JSON arrays, double-encoded legacy strings, and CSV; invalid values no longer wipe in-memory config.
+- Residual risk: process-level concurrent PUTs still race on shared `*config.Config` (no settings mutex). Last writer wins per-key via SQL upsert, but multi-field concurrent partial updates can interleave in-memory fields. Mitigate later with a settings write lock if multi-admin concurrency is required. UI still shows empty whitelist as `[]` text when loaded empty (display-only).
 
 ### FE-PROTOCOL — pack template (use per issue #47–#56 except #48)
 
