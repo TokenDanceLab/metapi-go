@@ -33,7 +33,7 @@ var tableColumnCount = map[string]int{
 	"SiteDayUsage":                   13,
 	"SiteHourUsage":                  13,
 	"ModelDayUsage":                  13,
-	"DownstreamAPIKey":               21,
+	"DownstreamAPIKey":               22,
 	"SiteAnnouncement":               17,
 	"Event":                          9,
 }

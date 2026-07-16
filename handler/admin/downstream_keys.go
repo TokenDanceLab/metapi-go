@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/auth"
 )
 
 // RegisterDownstreamKeysRoutes registers all /api/downstream-keys routes.
@@ -123,6 +124,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		ExpiresAt              *string  `json:"expiresAt"`
 		MaxCost                any      `json:"maxCost"`
 		MaxRequests            any      `json:"maxRequests"`
+		RpmLimit               any      `json:"rpmLimit"`
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
@@ -168,6 +170,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	normalizedCredRefs := normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
 	maxCost := normalizeQuotaFloatOrNull(body.MaxCost)
 	maxRequests := normalizeQuotaIntOrNull(body.MaxRequests)
+	rpmLimit := normalizeQuotaIntOrNull(body.RpmLimit)
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
@@ -206,11 +209,11 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	id, err := execInsertID(h.db,
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
-		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		 rpm_limit, supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
 		 proxy_url, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
-		maxCost, maxRequests,
+		maxCost, maxRequests, rpmLimit,
 		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
 		proxyURL, now, now,
 	)
@@ -311,6 +314,9 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	if _, ok := rawBody["maxRequests"]; ok {
 		hasField["maxRequests"] = true
 	}
+	if _, ok := rawBody["rpmLimit"]; ok {
+		hasField["rpmLimit"] = true
+	}
 	if _, ok := rawBody["supportedModels"]; ok {
 		hasField["supportedModels"] = true
 	}
@@ -382,6 +388,11 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	maxRequests := existingInt64Ptr(existing, "max_requests")
 	if hasField["maxRequests"] {
 		maxRequests = normalizeQuotaIntOrNull(rawBody["maxRequests"])
+	}
+
+	rpmLimit := existingInt64Ptr(existing, "rpm_limit")
+	if hasField["rpmLimit"] {
+		rpmLimit = normalizeQuotaIntOrNull(rawBody["rpmLimit"])
 	}
 
 	existingSupportedModels := parseStringArrayFromDB(existing, "supported_models")
@@ -467,12 +478,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		rebindAdminQuery(h.db,
 			`UPDATE downstream_api_keys SET
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
-			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?,
+			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?, rpm_limit = ?,
 			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
 			excluded_site_ids = ?, excluded_credential_refs = ?, proxy_url = ?, updated_at = ?
 		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
-		enabled, expiresAt, maxCost, maxRequests,
+		enabled, expiresAt, maxCost, maxRequests, rpmLimit,
 		modelsJSON, routeIdsJSON, swmJSON,
 		excludedSitesJSON, credRefsJSON, proxyURL, now, id,
 	)
@@ -555,6 +566,20 @@ func (h *downstreamKeysHandler) overview(w http.ResponseWriter, r *http.Request)
 		row["keyMasked"] = maskKey(key)
 	}
 
+	// Soft RPM window snapshot (in-process; multi-instance does not share).
+	rpmAdmission := map[string]any{
+		"windowSeconds": int(auth.DefaultKeyRPMWindow.Seconds()),
+		"used":          0,
+		"limit":         nil,
+	}
+	if rpm := existingInt64Ptr(row, "rpm_limit"); rpm != nil && *rpm > 0 {
+		rpmAdmission["limit"] = *rpm
+	}
+	if used, win := auth.DefaultKeyRPMLimiter.Snapshot(id); used >= 0 {
+		rpmAdmission["used"] = used
+		rpmAdmission["windowSeconds"] = int(win.Seconds())
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"item":    row,
@@ -563,6 +588,7 @@ func (h *downstreamKeysHandler) overview(w http.ResponseWriter, r *http.Request)
 			"last7d":  nil,
 			"all":     nil,
 		},
+		"rpmAdmission": rpmAdmission,
 	})
 }
 

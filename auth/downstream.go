@@ -29,7 +29,7 @@ type DownstreamTokenAuthResult struct {
 	Policy     DownstreamRoutingPolicy // resolved policy (when OK)
 	StatusCode int                     // HTTP status (when !OK)
 	Error      string                  // error message (when !OK)
-	Reason     string                  // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"
+	Reason     string                  // "missing"|"invalid"|"disabled"|"expired"|"over_cost"|"over_requests"|"over_rpm"
 }
 
 // managedKeyView is an internal struct mirroring the downstream_api_keys row
@@ -43,6 +43,10 @@ type managedKeyView struct {
 	UsedCost     float64
 	MaxRequests  *int64
 	UsedRequests int64
+	// RpmLimit is the optional per-key soft RPM admission cap
+	// (downstream_api_keys.rpm_limit). nil/0 means unlimited.
+	// Enforced in-process via KeyRPMLimiter before upstream dispatch (#116).
+	RpmLimit *int64
 	// ProxyURL is the optional per-key egress proxy (downstream_api_keys.proxy_url).
 	// nil/empty means inherit site/account/system proxy (FE-KEY-PROXY / #578).
 	ProxyURL *string
@@ -180,7 +184,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	row := db.QueryRowx(
 		`SELECT id, name, enabled, expires_at, max_cost, used_cost,
-		        max_requests, used_requests, proxy_url,
+		        max_requests, used_requests, rpm_limit, proxy_url,
 		        supported_models, allowed_route_ids,
 		        site_weight_multipliers, excluded_site_ids,
 		        excluded_credential_refs
@@ -196,7 +200,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	err := row.Scan(
 		&v.ID, &v.Name, &v.Enabled, &v.ExpiresAt, &v.MaxCost, &v.UsedCost,
-		&v.MaxRequests, &v.UsedRequests, &proxyURL,
+		&v.MaxRequests, &v.UsedRequests, &v.RpmLimit, &proxyURL,
 		&supportedModelsJSON, &allowedRouteIDsJSON,
 		&siteWeightMultiJSON, &excludedSiteIDsJSON,
 		&excludedCredRefsJSON,

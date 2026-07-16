@@ -66,6 +66,14 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 				`CREATE INDEX IF NOT EXISTS proxy_logs_request_id_created_at_idx ON proxy_logs (request_id, created_at)`)
 		},
 	},
+	{
+		// Learn #116: soft RPM admission per managed downstream key.
+		Version:     "sc2_005_downstream_rpm_limit",
+		Description: "downstream_api_keys.rpm_limit INTEGER NULL - soft RPM admission; NULL/0 unlimited",
+		Apply: func(db *DB) error {
+			return EnsureColumn(db, "downstream_api_keys", "rpm_limit", "INTEGER", "INTEGER", "")
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.

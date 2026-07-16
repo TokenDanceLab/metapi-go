@@ -49,6 +49,24 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
+			// ---- Soft RPM admission (in-memory sliding window, #116) ----
+			// Runs before max_requests consumption so over-RPM denials do not
+			// burn lifetime quota. Unlimited when rpm_limit is nil/0.
+			if result.Source == "managed" && result.Key != nil {
+				var rpmLimit int64
+				if result.Key.RpmLimit != nil {
+					rpmLimit = *result.Key.RpmLimit
+				}
+				decision := DefaultKeyRPMLimiter.TryAdmit(result.Key.ID, rpmLimit)
+				if !decision.Allowed {
+					w.Header().Set("Retry-After", formatRetryAfterSeconds(decision.RetryAfter))
+					writeJSON(w, http.StatusTooManyRequests, jsonError(
+						"API key has exceeded RPM limit",
+					))
+					return
+				}
+			}
+
 			// ---- Reserve managed key request count (atomic quota gate) ----
 			if result.Source == "managed" && result.Key != nil {
 				if !consumeManagedKeyRequest(result.Key.ID) {

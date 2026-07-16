@@ -704,3 +704,61 @@ func TestProxyAuthMiddleware_PropagatesKeyProxyURL(t *testing.T) {
 		t.Fatalf("captured ProxyURL = %#v, want %q", captured, proxyURL)
 	}
 }
+
+
+func TestProxyAuthMiddleware_RPMLimit_AllowsThen429(t *testing.T) {
+	setupTestDB(t)
+	DefaultKeyRPMLimiter.Reset(0) // no-op safety
+	id := insertTestKey(t, "sk-rpm-limited", true, nil, 0, nil, 0, nil)
+	// Set rpm_limit=2
+	db := testDB(t)
+	if _, err := db.Exec(`UPDATE downstream_api_keys SET rpm_limit = 2 WHERE id = ?`, id); err != nil {
+		t.Fatalf("set rpm_limit: %v", err)
+	}
+	DefaultKeyRPMLimiter.Reset(id)
+
+	cfg := proxyCfg("global-secret")
+	headers := map[string]string{"Authorization": "Bearer sk-rpm-limited"}
+
+	// First two should pass
+	for i := 0; i < 2; i++ {
+		w := proxyAuthMiddlewareHelper(t, cfg, headers, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("attempt %d: expected 200, got %d: %s", i+1, w.Code, w.Body.String())
+		}
+	}
+	// Third is over RPM
+	w := proxyAuthMiddlewareHelper(t, cfg, headers, "")
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 over RPM, got %d: %s", w.Code, w.Body.String())
+	}
+	if ra := w.Header().Get("Retry-After"); ra == "" {
+		t.Fatal("expected Retry-After header on 429")
+	}
+	if !strings.Contains(w.Body.String(), "RPM") {
+		t.Fatalf("expected RPM error body, got %s", w.Body.String())
+	}
+
+	// used_requests should only have incremented for the two allowed admits
+	var used int64
+	if err := db.QueryRow(`SELECT used_requests FROM downstream_api_keys WHERE id = ?`, id).Scan(&used); err != nil {
+		t.Fatalf("select used_requests: %v", err)
+	}
+	if used != 2 {
+		t.Fatalf("used_requests=%d want 2 (429 must not burn quota)", used)
+	}
+}
+
+func TestProxyAuthMiddleware_RPMLimit_UnlimitedNil(t *testing.T) {
+	setupTestDB(t)
+	id := insertTestKey(t, "sk-rpm-unlimited", true, nil, 0, nil, 0, nil)
+	DefaultKeyRPMLimiter.Reset(id)
+	cfg := proxyCfg("global-secret")
+	headers := map[string]string{"Authorization": "Bearer sk-rpm-unlimited"}
+	for i := 0; i < 5; i++ {
+		w := proxyAuthMiddlewareHelper(t, cfg, headers, "")
+		if w.Code != http.StatusOK {
+			t.Fatalf("attempt %d: expected 200 with nil rpm_limit, got %d", i+1, w.Code)
+		}
+	}
+}

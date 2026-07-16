@@ -432,6 +432,9 @@ type DownstreamAPIKey struct {
 	SiteWeightMultipliers   *string  `db:"site_weight_multipliers" json:"siteWeightMultipliers"`
 	ExcludedSiteIDs         *string  `db:"excluded_site_ids" json:"excludedSiteIds"`
 	ExcludedCredentialRefs  *string  `db:"excluded_credential_refs" json:"excludedCredentialRefs"`
+	// RpmLimit is an optional soft requests-per-minute admission cap.
+	// NULL/0 means unlimited (legacy behavior). Enforced in-process (#116).
+	RpmLimit                *int64   `db:"rpm_limit" json:"rpmLimit"`
 	// ProxyURL is an optional per-key egress proxy override.
 	// NULL falls back to site / system proxy — preserves pre-SC2 behavior.
 	ProxyURL                *string  `db:"proxy_url" json:"proxyUrl"`
