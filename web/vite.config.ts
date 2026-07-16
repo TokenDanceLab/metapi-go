@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+/// <reference types="vitest/config" />
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -18,5 +19,12 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+    // Avoid flaky EnvironmentTeardownError under concurrent React19 + chart stubs.
+    fileParallelism: false,
+    maxWorkers: 1,
   },
 });

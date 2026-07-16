@@ -15,7 +15,7 @@ type ConversationComposerProps = {
   conversationFileAccept: string;
   conversationFileHint: string;
   conversationFiles: ConversationDraftFile[];
-  conversationFileInputRef: React.RefObject<HTMLInputElement>;
+  conversationFileInputRef: React.RefObject<HTMLInputElement | null>;
   input: string;
   canSend: boolean;
   inputBaseStyle: React.CSSProperties;

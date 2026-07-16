@@ -35,6 +35,8 @@ async function flushMicrotasks() {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -637,7 +639,11 @@ describe('ProxyLogs server-driven page', () => {
   });
 
   it('keeps debug trace detail visible during polling refresh instead of flashing back to loading', async () => {
-    vi.useFakeTimers();
+    // Fake timers from the start so the debug poll interval is controllable.
+    // Keep requestAnimationFrame real for presence animations under React 19.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'],
+    });
     apiMock.getRuntimeSettings.mockResolvedValue({
       proxyDebugTraceEnabled: true,
       proxyDebugCaptureHeaders: true,
@@ -650,20 +656,20 @@ describe('ProxyLogs server-driven page', () => {
       proxyDebugMaxBodyBytes: 262144,
     });
 
-    let resolveDetail!: (value: any) => void;
-    apiMock.getProxyDebugTraceDetail
-      .mockResolvedValueOnce({
-        trace: {
-          id: 701,
-          requestedModel: 'gpt-4o',
-          sessionId: 'sess-debug-1',
-          requestHeadersJson: '{\"before\":true}',
-        },
-        attempts: [],
-      })
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveDetail = resolve;
-      }));
+    let resolveInitialDetail!: (value: any) => void;
+    let resolveRefreshDetail!: (value: any) => void;
+    let detailCallCount = 0;
+    apiMock.getProxyDebugTraceDetail.mockImplementation(() => {
+      detailCallCount += 1;
+      if (detailCallCount === 1) {
+        return new Promise((resolve) => {
+          resolveInitialDetail = resolve;
+        });
+      }
+      return new Promise((resolve) => {
+        resolveRefreshDetail = resolve;
+      });
+    });
 
     let root!: WebTestRenderer;
 
@@ -690,11 +696,18 @@ describe('ProxyLogs server-driven page', () => {
       });
       await flushMicrotasks();
 
-      expect(collectText(root.root)).toContain('原始下游请求头');
-      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
+      expect(collectText(root.root)).toContain('加载追踪详情中...');
 
       await act(async () => {
-        vi.advanceTimersByTime(2100);
+        resolveInitialDetail({
+          trace: {
+            id: 701,
+            requestedModel: 'gpt-4o',
+            sessionId: 'sess-debug-1',
+            requestHeadersJson: '{\"before\":true}',
+          },
+          attempts: [],
+        });
       });
       await flushMicrotasks();
 
@@ -702,7 +715,16 @@ describe('ProxyLogs server-driven page', () => {
       expect(collectText(root.root)).not.toContain('加载追踪详情中...');
 
       await act(async () => {
-        resolveDetail({
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+      await flushMicrotasks();
+
+      expect(collectText(root.root)).toContain('原始下游请求头');
+      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
+      expect(detailCallCount).toBeGreaterThan(1);
+
+      await act(async () => {
+        resolveRefreshDetail({
           trace: {
             id: 701,
             requestedModel: 'gpt-4o',
@@ -720,7 +742,9 @@ describe('ProxyLogs server-driven page', () => {
       await act(async () => {
         root?.unmount();
       });
-      vi.runOnlyPendingTimers();
+      if (vi.isFakeTimers()) {
+        vi.runOnlyPendingTimers();
+      }
       vi.useRealTimers();
     }
   });

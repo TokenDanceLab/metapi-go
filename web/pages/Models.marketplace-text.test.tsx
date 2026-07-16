@@ -408,6 +408,12 @@ describe('Models marketplace text', () => {
     nextWindow.innerWidth = 768;
     nextWindow.addEventListener = nextWindow.addEventListener || (() => {});
     nextWindow.removeEventListener = nextWindow.removeEventListener || (() => {});
+    nextWindow.requestAnimationFrame = nextWindow.requestAnimationFrame
+      || ((cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      });
+    nextWindow.cancelAnimationFrame = nextWindow.cancelAnimationFrame || (() => {});
     nextWindow.matchMedia = (() => ({
       matches: true,
       media: '(max-width: 768px)',
@@ -446,6 +452,11 @@ describe('Models marketplace text', () => {
       innerWidth: 768,
       addEventListener: () => {},
       removeEventListener: () => {},
+      requestAnimationFrame: (cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      },
+      cancelAnimationFrame: () => {},
     } as unknown as Window & typeof globalThis;
     apiMock.getModelsMarketplace.mockImplementation(() => new Promise(() => {}));
 
