@@ -477,13 +477,17 @@ func sanitizeAnthropicContentBlock(item map[string]any) map[string]any {
 			return nil
 		}
 		next := map[string]any{"type": "tool_result", "tool_use_id": toolUseID, "content": content}
+		if item["is_error"] == true {
+			next["is_error"] = true
+		}
 		if cc, ok := item["cache_control"].(map[string]any); ok && shared.AsTrimmedString(cc["type"]) == "ephemeral" {
 			next["cache_control"] = map[string]any{"type": "ephemeral"}
 		}
 		return next
 	}
 
-	if t == "tool_use" {
+	// tool_use is the Claude Code Skill path; server_tool_use is Anthropic server tools.
+	if t == "tool_use" || t == "server_tool_use" {
 		id := shared.AsTrimmedString(item["id"])
 		name := shared.AsTrimmedString(item["name"])
 		if name == "" {
@@ -499,7 +503,7 @@ func sanitizeAnthropicContentBlock(item map[string]any) map[string]any {
 		if input == nil {
 			input = normalizeAnthropicToolInput(item["argumentsText"])
 		}
-		next := map[string]any{"type": "tool_use", "id": id, "name": name, "input": input}
+		next := map[string]any{"type": t, "id": id, "name": name, "input": input}
 		if cc, ok := item["cache_control"].(map[string]any); ok && shared.AsTrimmedString(cc["type"]) == "ephemeral" {
 			next["cache_control"] = map[string]any{"type": "ephemeral"}
 		}

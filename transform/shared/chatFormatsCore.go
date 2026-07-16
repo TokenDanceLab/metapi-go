@@ -210,17 +210,17 @@ func convertClaudeRequestToOpenAiBody(body map[string]any) claudeConvertResult {
 					appendToolResultMsg(bm["tool_use_id"], bm["content"])
 					continue
 				}
-				if mappedRole == "assistant" && bt == "tool_use" {
+				// tool_use covers Claude Code Skill and ordinary tools; server_tool_use is
+				// Anthropic server-side tools (e.g. web_search). Both become OpenAI tool_calls.
+				if mappedRole == "assistant" && (bt == "tool_use" || bt == "server_tool_use") {
 					id := AsTrimmedString(bm["id"])
 					if id == "" {
 						id = "call_" + itoa(int64(len(tcs)))
 					}
 					name := AsTrimmedString(bm["name"])
-					args := ""
-					if s, ok := bm["input"].(string); ok {
-						args = s
-					} else {
-						args = StringifyUnknownValue(bm["input"])
+					args := coerceToolArgumentsText(bm["input"])
+					if args == "" {
+						args = coerceToolArgumentsText(bm["arguments"])
 					}
 					if args == "" {
 						args = "{}"
@@ -430,6 +430,27 @@ func extractClaudeReasoning(body map[string]any) (effort string, budget int) {
 	return
 }
 
+
+// coerceToolArgumentsText normalizes tool argument payloads to the OpenAI string form.
+// Empty maps become "{}" so Claude Code Skill tool_use.input is never dropped to nil.
+func coerceToolArgumentsText(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return v
+	case map[string]any, []any:
+		s := SafeJSONString(v)
+		if s == "" {
+			return "{}"
+		}
+		return s
+	default:
+		return StringifyUnknownValue(raw)
+	}
+}
+
 func convertClaudeToolsToOpenAIChat(raw any) any {
 	arr, ok := raw.([]any)
 	if !ok {
@@ -456,15 +477,21 @@ func convertClaudeToolsToOpenAIChat(raw any) any {
 			out = append(out, item)
 			continue
 		}
-		params := map[string]any{"type": "object"}
+		params := map[string]any{"type": "object", "properties": map[string]any{}}
 		if is, ok := m["input_schema"].(map[string]any); ok {
 			params = is
 		} else if p, ok := m["parameters"].(map[string]any); ok {
 			params = p
+		} else if schema, ok := m["inputSchema"].(map[string]any); ok {
+			params = schema
 		}
 		fn := map[string]any{"name": name, "parameters": params}
 		if d := AsTrimmedString(m["description"]); d != "" {
 			fn["description"] = d
+		}
+		// Keep strict if present so OpenAI-compatible models honor required Skill fields.
+		if strict, ok := m["strict"].(bool); ok && strict {
+			fn["strict"] = true
 		}
 		out = append(out, map[string]any{"type": "function", "function": fn})
 	}
@@ -767,11 +794,12 @@ func collectToolCallsFromOpenAIChoice(choice any) []ToolCall {
 		if name == "" {
 			name = AsTrimmedString(tcm["name"])
 		}
-		args := ""
-		if s, ok := fn["arguments"].(string); ok {
-			args = s
-		} else {
-			args = StringifyUnknownValue(fn["arguments"])
+		args := coerceToolArgumentsText(fn["arguments"])
+		if args == "" {
+			args = coerceToolArgumentsText(tcm["arguments"])
+		}
+		if args == "" {
+			args = "{}"
 		}
 		tcs = append(tcs, ToolCall{ID: id, Name: name, Arguments: args})
 	}
@@ -783,7 +811,13 @@ func collectToolCallsFromClaudeContent(content any) []ToolCall {
 	var tcs []ToolCall
 	for i, item := range arr {
 		m, ok := item.(map[string]any)
-		if !ok || m["type"] != "tool_use" {
+		if !ok {
+			continue
+		}
+		// Claude Code skill-call and server tools share the same id/name/input shape.
+		// Preserve tool_use and server_tool_use so OpenAI bridges do not drop them.
+		bt := AsTrimmedString(m["type"])
+		if bt != "tool_use" && bt != "server_tool_use" {
 			continue
 		}
 		id := AsTrimmedString(m["id"])
@@ -791,7 +825,13 @@ func collectToolCallsFromClaudeContent(content any) []ToolCall {
 			id = "toolu_" + itoa(int64(i))
 		}
 		name := AsTrimmedString(m["name"])
-		args := StringifyUnknownValue(m["input"])
+		args := coerceToolArgumentsText(m["input"])
+		if args == "" {
+			args = coerceToolArgumentsText(m["arguments"])
+		}
+		if args == "" {
+			args = "{}"
+		}
 		tcs = append(tcs, ToolCall{ID: id, Name: name, Arguments: args})
 	}
 	return tcs
@@ -1003,7 +1043,15 @@ func NormalizeUpstreamStreamEvent(payload any, ctx *StreamTransformContext, fall
 				}
 				id := AsTrimmedString(tcm["id"])
 				name := AsTrimmedString(fn["name"])
-				ad := AsTrimmedString(fn["arguments"])
+				if name == "" {
+					name = AsTrimmedString(tcm["name"])
+				}
+				// Preserve string or object arguments (some OpenAI-compatible
+				// providers emit function.arguments as a map; Skill calls need it).
+				ad := coerceToolArgumentsText(fn["arguments"])
+				if ad == "" {
+					ad = coerceToolArgumentsText(tcm["arguments"])
+				}
 				if id == "" && name == "" && ad == "" {
 					continue
 				}
@@ -1057,19 +1105,22 @@ func NormalizeUpstreamStreamEvent(payload any, ctx *StreamTransformContext, fall
 	case "content_block_start":
 		cb, _ := m["content_block"].(map[string]any)
 		idx := PickFiniteInt(m["index"])
-		if cb != nil && cb["type"] == "tool_use" {
-			id := AsTrimmedString(cb["id"])
-			name := AsTrimmedString(cb["name"])
-			var ad string
-			if s, ok := cb["input"].(string); ok {
-				ad = s
-			} else {
-				ad = SafeJSONString(cb["input"])
+		if cb != nil {
+			cbType := AsTrimmedString(cb["type"])
+			if cbType == "tool_use" || cbType == "server_tool_use" {
+				id := AsTrimmedString(cb["id"])
+				name := AsTrimmedString(cb["name"])
+				ad := coerceToolArgumentsText(cb["input"])
+				if ad == "" {
+					ad = coerceToolArgumentsText(cb["arguments"])
+				}
+				// Empty object is a valid initial input for streaming tool_use starts
+				// (arguments arrive via input_json_delta). Do not invent fake args.
+				if ad == "{}" || ad == "[]" {
+					ad = ""
+				}
+				return NormalizedStreamEvent{ToolCallDeltas: []ToolCallDelta{{Index: idx, ID: id, Name: name, ArgumentsDelta: ad}}}
 			}
-			if ad == "{}" || ad == "[]" {
-				ad = ""
-			}
-			return NormalizedStreamEvent{ToolCallDeltas: []ToolCallDelta{{Index: idx, ID: id, Name: name, ArgumentsDelta: ad}}}
 		}
 		cd, cr := ConsumeThinkTaggedText(ctx.ThinkTagParser, StringifyUnknownValue(cb))
 		return NormalizedStreamEvent{ContentDelta: cd, ReasoningDelta: cr}
