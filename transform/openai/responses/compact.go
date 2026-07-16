@@ -23,6 +23,10 @@ func ShouldForceResponsesUpstreamStream(sitePlatform string, isCompactRequest bo
 // SanitizeCompactResponsesRequestBody removes stream/stream_options and
 // conditionally store. Compact never continues a prior stored response, so
 // previous_response_id is always stripped here (see previous_response_id.go).
+//
+// Input items (including multi-turn reasoning with encrypted_content / summary /
+// content) are preserved verbatim — compact must not drop required reasoning
+// content needed for Hermes/Codex second-turn replay (#50 / upstream #538).
 func SanitizeCompactResponsesRequestBody(body map[string]any, sitePlatform string) map[string]any {
 	next := map[string]any{}
 	for k, v := range body {
@@ -34,6 +38,7 @@ func SanitizeCompactResponsesRequestBody(body map[string]any, sitePlatform strin
 	if ShouldStripCompactResponsesStore(sitePlatform) {
 		delete(next, "store")
 	}
+	// Explicit: never touch "input" / reasoning item fields here.
 	return next
 }
 

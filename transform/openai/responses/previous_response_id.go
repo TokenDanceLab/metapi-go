@@ -215,12 +215,23 @@ func ApplyPreviousResponseIDPolicy(body map[string]any, input ContinuityPolicyIn
 // SanitizeResponsesRequestBody applies Responses request sanitization for one
 // upstream attempt:
 //  1. previous_response_id forward/strip/reject policy
-//  2. when isCompact: also remove stream / stream_options / conditional store
+//  2. multi-turn input reasoning items: preserve required content fields
+//     (encrypted_content / summary) and ensure top-level content is present
+//     (#50 / upstream #538)
+//  3. when isCompact: also remove stream / stream_options / conditional store
 //
 // Callers that fall back from Responses → chat/messages should pass
 // ProtocolChat or ProtocolMessages so continuity is stripped cleanly.
+//
+// Reasoning input sanitization runs for every protocol: chat/messages fallback
+// still benefits from explicit missing-content errors and content preservation
+// before any later protocol conversion.
 func SanitizeResponsesRequestBody(body map[string]any, input ContinuityPolicyInput) (map[string]any, ContinuityDecision, error) {
 	next, decision, err := ApplyPreviousResponseIDPolicy(body, input)
+	if err != nil {
+		return next, decision, err
+	}
+	next, err = applyResponsesInputSanitization(next)
 	if err != nil {
 		return next, decision, err
 	}
@@ -228,6 +239,28 @@ func SanitizeResponsesRequestBody(body map[string]any, input ContinuityPolicyInp
 		next = SanitizeCompactResponsesRequestBody(next, input.SitePlatform)
 	}
 	return next, decision, nil
+}
+
+// applyResponsesInputSanitization rewrites body["input"] on a shallow body copy.
+// Compact field stripping must not drop reasoning content; this runs before
+// compact sanitize so stream/store cleanup cannot touch input items.
+func applyResponsesInputSanitization(body map[string]any) (map[string]any, error) {
+	if body == nil {
+		return map[string]any{}, nil
+	}
+	raw, ok := body["input"]
+	if !ok {
+		return body, nil
+	}
+	sanitized, err := SanitizeResponsesInputItems(raw)
+	if err != nil {
+		return body, err
+	}
+	// Always write sanitized input via a shallow body copy. Do not compare
+	// sanitized == raw: []any is not comparable and panics.
+	next := cloneBodyMap(body)
+	next["input"] = sanitized
+	return next, nil
 }
 
 // ContinuityError is a clear client-facing validation error for continuity

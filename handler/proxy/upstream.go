@@ -984,19 +984,27 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	w.Write(bodyBytes)
 }
 
-// sanitizeUpstreamJSONBody applies Responses continuity/compact sanitization for one
-// upstream attempt. Chat/messages candidates strip previous_response_id; Responses
-// platforms forward or strip per SupportsResponsesPreviousResponseID.
-// See docs/analysis/previous-response-id.md (issue #54 / upstream #504).
+// sanitizeUpstreamJSONBody applies Responses continuity/compact/reasoning-input
+// sanitization for one upstream attempt. Chat/messages candidates strip
+// previous_response_id; Responses platforms forward or strip per
+// SupportsResponsesPreviousResponseID. Multi-turn reasoning items get required
+// content preserved/injected (#50 / upstream #538).
+// See docs/analysis/previous-response-id.md and
+// docs/analysis/responses-multi-turn-reasoning.md.
 func sanitizeUpstreamJSONBody(bodyBytes []byte, sitePlatform, upstreamPath string) ([]byte, error) {
 	if len(bodyBytes) == 0 {
 		return bodyBytes, nil
 	}
-	// Cheap gate: only rewrite when continuity field or compact path is involved.
+	// Cheap gate: only rewrite when continuity, compact, or multi-turn reasoning
+	// input is involved. Avoid full JSON parse on hot path otherwise.
 	pathLower := strings.ToLower(upstreamPath)
 	needsCompact := strings.Contains(pathLower, "/responses/compact")
 	needsContinuity := bytes.Contains(bodyBytes, []byte(`"previous_response_id"`))
-	if !needsCompact && !needsContinuity {
+	// Match both "type":"reasoning" and "type": "reasoning" (space after colon).
+	needsReasoningInput := bytes.Contains(bodyBytes, []byte(`"type":"reasoning"`)) ||
+		bytes.Contains(bodyBytes, []byte(`"type": "reasoning"`)) ||
+		bytes.Contains(bodyBytes, []byte(`"encrypted_content"`))
+	if !needsCompact && !needsContinuity && !needsReasoningInput {
 		return bodyBytes, nil
 	}
 	var body map[string]any

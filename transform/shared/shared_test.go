@@ -951,3 +951,95 @@ func TestBuildSyntheticOpenAiChunks(t *testing.T) {
 		t.Errorf("expected finish_reason in second chunk, got %v", c2[0]["finish_reason"])
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Responses multi-turn reasoning (#50 / upstream #538)
+// ---------------------------------------------------------------------------
+
+func TestParseResponsesReasoning_OutputAndInputRoundTrip(t *testing.T) {
+	// Final response shape: output[] with reasoning item.
+	final := map[string]any{
+		"object": "response",
+		"id":     "resp_1",
+		"model":  "gpt-5.4",
+		"output": []any{
+			map[string]any{
+				"type":              "reasoning",
+				"id":                "rs_1",
+				"encrypted_content": "enc_sig",
+				"summary": []any{
+					map[string]any{"type": "summary_text", "text": "plan A"},
+				},
+			},
+			map[string]any{
+				"type":    "message",
+				"role":    "assistant",
+				"content": []any{map[string]any{"type": "output_text", "text": "done"}},
+			},
+		},
+	}
+	rr := parseResponsesReasoning(final)
+	if rr.reasoningContent != "plan A" {
+		t.Fatalf("output reasoningContent = %q", rr.reasoningContent)
+	}
+	if rr.reasoningSignature != "enc_sig" {
+		t.Fatalf("output signature = %q", rr.reasoningSignature)
+	}
+
+	// Second-turn request shape: same item replayed into input[].
+	// parseResponsesReasoning must not drop required content when reading input.
+	secondTurn := map[string]any{
+		"input": []any{
+			map[string]any{
+				"type":              "reasoning",
+				"encrypted_content": "enc_sig",
+				"content":           "plan A",
+				"summary": []any{
+					map[string]any{"type": "summary_text", "text": "plan A"},
+				},
+			},
+		},
+	}
+	rr2 := parseResponsesReasoning(secondTurn)
+	if rr2.reasoningContent != "plan A" {
+		t.Fatalf("input reasoningContent = %q", rr2.reasoningContent)
+	}
+	if rr2.reasoningSignature != "enc_sig" {
+		t.Fatalf("input signature = %q", rr2.reasoningSignature)
+	}
+}
+
+func TestNormalizeUpstreamFinalResponse_ResponsesReasoning(t *testing.T) {
+	payload := map[string]any{
+		"object": "response",
+		"id":     "resp_rt",
+		"model":  "gpt-5.4",
+		"status": "completed",
+		"output": []any{
+			map[string]any{
+				"type":              "reasoning",
+				"encrypted_content": "enc_rt",
+				"summary": []any{
+					map[string]any{"type": "summary_text", "text": "think step"},
+				},
+			},
+			map[string]any{
+				"type": "message",
+				"role": "assistant",
+				// String content path is stable across parseResponsesOutputText shapes.
+				"content": "answer",
+			},
+		},
+	}
+	result := NormalizeUpstreamFinalResponse(payload, "gpt-5.4", "")
+	if result.ReasoningContent != "think step" {
+		t.Fatalf("ReasoningContent = %q", result.ReasoningContent)
+	}
+	if result.ReasoningSignature != "enc_rt" {
+		t.Fatalf("ReasoningSignature = %q", result.ReasoningSignature)
+	}
+	// Assert reasoning was separated from visible content path (signature retained).
+	if result.ID != "resp_rt" {
+		t.Fatalf("ID = %q", result.ID)
+	}
+}
