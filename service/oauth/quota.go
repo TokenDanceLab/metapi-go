@@ -301,10 +301,14 @@ func buildUnsupportedQuotaSnapshot() *OauthQuotaSnapshot {
 
 func buildQuotaSnapshotFromProbe(proxyURL *string) *OauthQuotaSnapshot {
 	// In production, this would make an HTTP POST /responses probe request
-	// to the Codex upstream with model "gpt-5.4" and parse the rate-limit
-	// headers (x-codex-primary-*, x-codex-secondary-*).
+	// to the Codex upstream with SelectCodexQuotaProbeModel(discovered)
+	// (prefers gpt-5.5 / gpt-5.x family — not obsolete-only gpt-5.4) and
+	// parse the rate-limit headers (x-codex-primary-*, x-codex-secondary-*).
 	// For now, return a placeholder error snapshot indicating the probe
-	// infrastructure is not yet wired.
+	// infrastructure is not yet wired; model selection is exercised via
+	// SelectCodexQuotaProbeModel unit tests.
+	_ = SelectCodexQuotaProbeModel(nil)
+	_ = proxyURL
 	return &OauthQuotaSnapshot{
 		Status:     "error",
 		Source:     "reverse_engineered",
@@ -315,6 +319,18 @@ func buildQuotaSnapshotFromProbe(proxyURL *string) *OauthQuotaSnapshot {
 			SevenDay: &OauthQuotaWindowSnapshot{Supported: false},
 		},
 	}
+}
+
+// CodexQuotaProbeModelForAccount resolves the model id used for a Codex
+// reverse-engineered quota probe. Prefer lastDiscoveredModels when present so
+// gpt-5.5 is used once discovery has seen it; otherwise fall back to the
+// version-flexible preference list (gpt-5.5 first).
+func CodexQuotaProbeModelForAccount(oauth *OauthInfo) string {
+	var discovered []string
+	if oauth != nil {
+		discovered = oauth.LastDiscoveredModels
+	}
+	return SelectCodexQuotaProbeModel(discovered)
 }
 
 func buildQuotaSnapshotFromHeaders(headers map[string]string) *OauthQuotaSnapshot {
