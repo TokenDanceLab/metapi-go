@@ -706,6 +706,111 @@ export default function Models() {
           </div>
         </div>
 
+        {/* Cross-site price compare (#112) */}
+        <div className="card" style={{ padding: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{tr('跨站有效价格对比')}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                {tr('基于账单明细 / 观测成本 / 配置单价；回退估算会明确标注')}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                value={priceModel}
+                onChange={(e) => setPriceModel(e.target.value)}
+                placeholder={tr('模型名（可空=热门模型）')}
+                style={{ minWidth: 180, height: 32, padding: '0 10px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-bg)' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void loadPriceCompare();
+                }}
+              />
+              <button
+                className="btn btn-primary"
+                style={{ height: 32, padding: '0 12px' }}
+                disabled={priceLoading}
+                onClick={() => void loadPriceCompare()}
+              >
+                {priceLoading ? tr('对比中...') : tr('对比价格')}
+              </button>
+              {search && (
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 32, padding: '0 10px', border: '1px solid var(--color-border)' }}
+                  disabled={priceLoading}
+                  onClick={() => {
+                    setPriceModel(search);
+                    void loadPriceCompare(search);
+                  }}
+                >
+                  {tr('用当前搜索')}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {priceError && (
+            <div style={{ fontSize: 12, color: 'var(--color-danger)', marginBottom: 8 }}>{priceError}</div>
+          )}
+
+          {!priceLoaded && !priceLoading && (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('输入模型名后点击对比，或留空查看近期热门模型。')}</div>
+          )}
+
+          {priceLoaded && priceItems.length === 0 && !priceLoading && !priceError && (
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{tr('暂无价格候选（无观测/配置/可用性信号）。')}</div>
+          )}
+
+          {priceItems.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table" style={{ width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th>{tr('站点')}</th>
+                    <th>{tr('模型')}</th>
+                    <th>{tr('输入 $/1M')}</th>
+                    <th>{tr('输出 $/1M')}</th>
+                    <th>{tr('样本成本')}</th>
+                    <th>{tr('来源')}</th>
+                    <th>{tr('状态')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceItems.map((item) => (
+                    <tr key={`${item.siteId}-${item.accountId}-${item.model}`}>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <SiteBadgeLink siteId={item.siteId} siteName={item.siteName} badgeStyle={{ fontSize: 11 }} />
+                          <span style={{ color: 'var(--color-text-muted)' }}>{item.username || `ID:${item.accountId}`} · {item.platform || '—'}</span>
+                        </div>
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-mono, monospace)' }}>{item.model}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(item.inputPerMillion, 4)}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(item.outputPerMillion, 4)}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(item.estimatedCostSample, 6)}</td>
+                      <td>
+                        <span className={`badge ${item.source === 'fallback' ? 'badge-muted' : 'badge-info'}`} style={{ fontSize: 11 }}>
+                          {formatPriceSource(item.source)}
+                        </span>
+                        {item.observedSamples ? (
+                          <span style={{ marginLeft: 6, color: 'var(--color-text-muted)' }}>n={item.observedSamples}</span>
+                        ) : null}
+                      </td>
+                      <td>
+                        {item.missingPrice ? (
+                          <span className="badge badge-muted" style={{ fontSize: 11 }}>{tr('缺少真实价格')}</span>
+                        ) : (
+                          <span className="badge badge-success" style={{ fontSize: 11 }}>{tr('有效')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {/* Empty */}
         {detailModels.length === 0 ? (
           <div className="empty-state">
