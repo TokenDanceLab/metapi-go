@@ -491,6 +491,11 @@ func TestNormalizeRouteRoutingStrategy(t *testing.T) {
 		{"weighted", StrategyWeighted},
 		{"round_robin", StrategyRoundRobin},
 		{"stable_first", StrategyStableFirst},
+		{"least_busy", StrategyLeastBusy},
+		{"lowest_latency", StrategyLowestLatency},
+		{"latency", StrategyLowestLatency},
+		{"lowest_cost", StrategyLowestCost},
+		{"cost", StrategyLowestCost},
 		{"", StrategyWeighted},           // unknown → weighted
 		{"unknown", StrategyWeighted},    // unknown → weighted
 		{"WEIGHTED", StrategyWeighted},   // case sensitive? Let's check

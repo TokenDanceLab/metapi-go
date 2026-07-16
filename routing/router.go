@@ -297,6 +297,12 @@ func explainSelectionFromMatch(match *RouteMatch, requestedModel string, exclude
 		summary = append(summary, "路由策略：轮询")
 	case StrategyStableFirst:
 		summary = append(summary, "路由策略：稳定优先")
+	case StrategyLeastBusy:
+		summary = append(summary, "路由策略：最少繁忙")
+	case StrategyLowestLatency:
+		summary = append(summary, "路由策略：最低延迟")
+	case StrategyLowestCost:
+		summary = append(summary, "路由策略：最低成本")
 	default:
 		summary = append(summary, "路由策略：按权重随机")
 	}

@@ -128,10 +128,23 @@ type RouteDecisionCandidate struct {
 type RouteRoutingStrategy string
 
 const (
-	StrategyWeighted     RouteRoutingStrategy = "weighted"
-	StrategyRoundRobin   RouteRoutingStrategy = "round_robin"
-	StrategyStableFirst  RouteRoutingStrategy = "stable_first"
+	StrategyWeighted       RouteRoutingStrategy = "weighted"
+	StrategyRoundRobin     RouteRoutingStrategy = "round_robin"
+	StrategyStableFirst    RouteRoutingStrategy = "stable_first"
+	StrategyLeastBusy      RouteRoutingStrategy = "least_busy"
+	StrategyLowestLatency  RouteRoutingStrategy = "lowest_latency"
+	StrategyLowestCost     RouteRoutingStrategy = "lowest_cost"
 )
+
+// KnownRouteRoutingStrategies lists operator-selectable strategies (#115).
+var KnownRouteRoutingStrategies = []RouteRoutingStrategy{
+	StrategyWeighted,
+	StrategyRoundRobin,
+	StrategyStableFirst,
+	StrategyLeastBusy,
+	StrategyLowestLatency,
+	StrategyLowestCost,
+}
 
 // NormalizeRouteRoutingStrategy normalizes a strategy string.
 func NormalizeRouteRoutingStrategy(value string) RouteRoutingStrategy {
@@ -140,6 +153,12 @@ func NormalizeRouteRoutingStrategy(value string) RouteRoutingStrategy {
 		return StrategyRoundRobin
 	case "stable_first":
 		return StrategyStableFirst
+	case "least_busy":
+		return StrategyLeastBusy
+	case "lowest_latency", "latency":
+		return StrategyLowestLatency
+	case "lowest_cost", "cost":
+		return StrategyLowestCost
 	default:
 		return StrategyWeighted
 	}
