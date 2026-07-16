@@ -707,9 +707,19 @@ func extractAssistantReasoning(choice any) string {
 	msg, _ := m["message"].(map[string]any)
 	var candidates []string
 	if msg != nil {
-		candidates = append(candidates, AsTrimmedString(msg["reasoning_content"]), AsTrimmedString(msg["reasoning"]))
+		candidates = append(candidates,
+			AsTrimmedString(msg["reasoning_content"]),
+			AsTrimmedString(msg["reasoning"]),
+			ExtractReasoningDetailsText(msg["reasoning_details"]),
+			ExtractReasoningDetailsText(msg["reasoning_detail"]),
+		)
 	}
-	candidates = append(candidates, AsTrimmedString(m["reasoning_content"]), AsTrimmedString(m["reasoning"]))
+	candidates = append(candidates,
+		AsTrimmedString(m["reasoning_content"]),
+		AsTrimmedString(m["reasoning"]),
+		ExtractReasoningDetailsText(m["reasoning_details"]),
+		ExtractReasoningDetailsText(m["reasoning_detail"]),
+	)
 	for _, c := range candidates {
 		if c != "" {
 			return c
@@ -920,29 +930,54 @@ func NormalizeUpstreamStreamEvent(payload any, ctx *StreamTransformContext, fall
 			delta = map[string]any{}
 		}
 
-		dpContent, dpReasoning := ConsumeThinkTaggedText(ctx.ThinkTagParser, AsTrimmedString(delta["content"]))
-		msgContent, _ := choice["message"].(map[string]any)
-		mpContent, mpReasoning := ConsumeThinkTaggedText(ctx.ThinkTagParser, AsTrimmedString(msgContent["content"]))
-
-		rawContentDelta := dpContent
-		if rawContentDelta == "" {
-			rawContentDelta = mpContent
+		// Prefer delta.content; only fall back to message.content when delta has no content.
+		// Never feed both into the think-tag parser — that would double-consume parser state.
+		rawTagged := AsTrimmedString(delta["content"])
+		if rawTagged == "" {
+			if msgContent, ok := choice["message"].(map[string]any); ok {
+				rawTagged = AsTrimmedString(msgContent["content"])
+			}
 		}
+		dpContent, dpReasoning := ConsumeThinkTaggedText(ctx.ThinkTagParser, rawTagged)
 
 		reasoningDelta := AsTrimmedString(delta["reasoning_content"])
 		if reasoningDelta == "" {
 			reasoningDelta = AsTrimmedString(delta["reasoning"])
 		}
 		if reasoningDelta == "" {
-			reasoningDelta = dpReasoning
+			reasoningDelta = ExtractReasoningDetailsText(delta["reasoning_details"])
 		}
 		if reasoningDelta == "" {
-			reasoningDelta = mpReasoning
+			if msgContent, ok := choice["message"].(map[string]any); ok {
+				reasoningDelta = AsTrimmedString(msgContent["reasoning_content"])
+				if reasoningDelta == "" {
+					reasoningDelta = AsTrimmedString(msgContent["reasoning"])
+				}
+				if reasoningDelta == "" {
+					reasoningDelta = ExtractReasoningDetailsText(msgContent["reasoning_details"])
+				}
+			}
+		}
+		if reasoningDelta == "" {
+			reasoningDelta = dpReasoning
+		} else if dpReasoning != "" {
+			reasoningDelta = JoinNonEmpty([]string{reasoningDelta, dpReasoning})
 		}
 
-		contentDelta := rawContentDelta
-		if reasoningDelta != "" && rawContentDelta == reasoningDelta {
+		contentDelta := dpContent
+		if reasoningDelta != "" && contentDelta == reasoningDelta {
 			contentDelta = ""
+		}
+
+		finishReason := NormalizeStopReason(AsTrimmedString(choice["finish_reason"]))
+		if finishReason != "" {
+			fc, fr := FlushThinkTaggedText(ctx.ThinkTagParser)
+			if fc != "" {
+				contentDelta += fc
+			}
+			if fr != "" {
+				reasoningDelta = JoinNonEmpty([]string{reasoningDelta, fr})
+			}
 		}
 
 		reasoningSig := ""
@@ -996,7 +1031,7 @@ func NormalizeUpstreamStreamEvent(payload any, ctx *StreamTransformContext, fall
 			ReasoningDelta:     reasoningDelta,
 			ReasoningSignature: reasoningSig,
 			ToolCallDeltas:     tcds,
-			FinishReason:       NormalizeStopReason(AsTrimmedString(choice["finish_reason"])),
+			FinishReason:       finishReason,
 		}
 	}
 
