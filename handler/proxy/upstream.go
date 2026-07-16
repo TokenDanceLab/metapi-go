@@ -27,6 +27,10 @@ type UpstreamConfig struct {
 	RouteRefresher proxy.RouteRefreshWorkflow
 	Coordinator    *proxy.ProxyChannelCoordinator
 	Executor       *proxy.RuntimeExecutor
+	// SiteLimiter caps concurrent dispatches per site (sites.max_concurrency).
+	// When nil, proxy.DefaultSiteConcurrencyLimiter is used.
+	// Orthogonal to Coordinator channel leases (FE-SITE-CONC / upstream #594).
+	SiteLimiter *proxy.SiteConcurrencyLimiter
 }
 
 var upstreamCfg *UpstreamConfig
@@ -103,137 +107,179 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		}
 		excludeChannelIDs = append(excludeChannelIDs, selected.Channel.ID)
 
-		// Step 7: Build upstream request
-		upstreamModel := selected.ActualModel
-		if upstreamModel == "" {
-			upstreamModel = ctx.RequestedModel
+		// Site-scoped concurrency (orthogonal to channel leases).
+		// On saturate: skip to next channel/site — do NOT mark expired/cascade.
+		// FE-SITE-CONC / upstream #594 / SC2 sites.max_concurrency.
+		siteLimiter := cfg.SiteLimiter
+		if siteLimiter == nil {
+			siteLimiter = proxy.DefaultSiteConcurrencyLimiter
 		}
-		upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
-		proxyConfig := service.BuildPlatformProxyConfig(config.Get(), &selected.Account, &selected.Site)
+		siteSlot, acquired := siteLimiter.TryAcquire(selected.Site.ID, selected.Site.MaxConcurrency)
+		if !acquired {
+			slog.Info("site concurrency saturated; skipping channel without failure cascade",
+				"site_id", selected.Site.ID,
+				"channel_id", selected.Channel.ID,
+				"max_concurrency", selected.Site.MaxConcurrency,
+				"model", ctx.RequestedModel,
+				"retry", retry,
+			)
+			continue
+		}
 
-		// Step 8: Send upstream request
-		startedAt := time.Now()
-		contentType := "application/json"
-		var bodyReader io.Reader
-		if ctx.Multipart {
-			bodyReader, contentType, err = CloneMultipartBody(r, map[string]string{"model": upstreamModel})
-			if err != nil {
-				slog.Warn("multipart upstream body construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
-				writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
-				return
-			}
-		} else {
-			forwardBytes := swapModelInJSON(ctx.RawBody, upstreamModel)
-			bodyReader = bytesReader(forwardBytes)
-		}
-		req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bodyReader)
-		if err != nil {
-			slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
-			if retry < maxRetries {
-				pendingFailure = jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
-				continue
-			}
-			writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+		// Hold the site slot for the full attempt; always release (even on panic path).
+		var finished bool
+		var nextPending *pendingUpstreamFailure
+		func() {
+			defer siteSlot.Release()
+			finished, nextPending = dispatchSelectedUpstream(w, r, ctx, cfg, selected, upstreamPath, retry, maxRetries)
+		}()
+		if finished {
 			return
 		}
-		req.Header.Set("Content-Type", contentType)
-		if selected.TokenValue != "" {
-			req.Header.Set("Authorization", "Bearer "+selected.TokenValue)
+		if nextPending != nil {
+			pendingFailure = nextPending
 		}
-		applyProxyCustomHeaders(req, proxyConfig)
-
-		var resp *http.Response
-		resp, err = sendUpstreamRequest(cfg, req, proxyConfig)
-		latencyMs := time.Since(startedAt).Milliseconds()
-
-		if err != nil {
-			slog.Warn("upstream request failed", "err", err, "url", upstreamURL, "model", upstreamModel, "channel_id", selected.Channel.ID)
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
-			if retry < maxRetries {
-				pendingFailure = jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
-				continue
-			}
-			writeJSONError(w, 502, "Upstream request failed", "upstream_error")
-			return
-		}
-
-		// Step 9: Handle response
-		if ctx.IsStream {
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
-				resp.Body.Close()
-				if readErr != nil {
-					slog.Warn("failed to read upstream stream error response", "err", readErr, "latency_ms", latencyMs, "status", resp.StatusCode)
-					recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
-					if retry < maxRetries {
-						pendingFailure = jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
-						continue
-					}
-					writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-					return
-				}
-				rawErrText := string(bodyBytes)
-				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
-				if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-					pendingFailure = bufferedPendingUpstreamFailure(resp, bodyBytes)
-					continue
-				}
-				relayBufferedUpstreamErrorResponse(w, resp, bodyBytes)
-				return
-			}
-			// Always close the upstream body, including early client disconnects.
-			func() {
-				defer resp.Body.Close()
-				handleStreamUpstream(w, r, resp, latencyMs)
-			}()
-			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
-		} else {
-			bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
-			resp.Body.Close()
-			if readErr != nil {
-				slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
-				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
-				if retry < maxRetries {
-					pendingFailure = jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
-					continue
-				}
-				writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-				return
-			}
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				rawErrText := string(bodyBytes)
-				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
-				if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-					pendingFailure = bufferedPendingUpstreamFailure(resp, bodyBytes)
-					continue
-				}
-				relayBufferedUpstreamResponse(w, resp, bodyBytes)
-				return
-			}
-			failure := proxy.DetectProxyFailure(string(bodyBytes), &proxy.UsageSummary{})
-			if failure != nil {
-				slog.Warn("content-based failure detected",
-					"reason", failure.Reason,
-					"status", failure.Status,
-					"model", upstreamModel,
-					"channel_id", selected.Channel.ID,
-					"latency_ms", latencyMs,
-				)
-				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
-				if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
-					pendingFailure = jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error")
-					continue
-				}
-				writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
-				return
-			}
-			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
-			relayBufferedUpstreamResponse(w, resp, bodyBytes)
-		}
-		return
 	}
 
 	writeJSONError(w, 503, "All channels exhausted", "server_error")
+}
+
+// dispatchSelectedUpstream runs steps 7-9 for one selected channel.
+// finished=true means the response was written (success or terminal error).
+// finished=false means the caller should continue the retry loop (optionally
+// with nextPending as the last soft failure to surface if selection ends).
+func dispatchSelectedUpstream(
+	w http.ResponseWriter,
+	r *http.Request,
+	ctx *Ctx,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	upstreamPath string,
+	retry int,
+	maxRetries int,
+) (finished bool, nextPending *pendingUpstreamFailure) {
+	// Step 7: Build upstream request
+	upstreamModel := selected.ActualModel
+	if upstreamModel == "" {
+		upstreamModel = ctx.RequestedModel
+	}
+	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
+	proxyConfig := service.BuildPlatformProxyConfig(config.Get(), &selected.Account, &selected.Site)
+
+	// Step 8: Send upstream request
+	startedAt := time.Now()
+	contentType := "application/json"
+	var bodyReader io.Reader
+	var err error
+	if ctx.Multipart {
+		bodyReader, contentType, err = CloneMultipartBody(r, map[string]string{"model": upstreamModel})
+		if err != nil {
+			slog.Warn("multipart upstream body construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
+			writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
+			return true, nil
+		}
+	} else {
+		forwardBytes := swapModelInJSON(ctx.RawBody, upstreamModel)
+		bodyReader = bytesReader(forwardBytes)
+	}
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bodyReader)
+	if err != nil {
+		slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
+		if retry < maxRetries {
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
+		}
+		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+		return true, nil
+	}
+	req.Header.Set("Content-Type", contentType)
+	if selected.TokenValue != "" {
+		req.Header.Set("Authorization", "Bearer "+selected.TokenValue)
+	}
+	applyProxyCustomHeaders(req, proxyConfig)
+
+	var resp *http.Response
+	resp, err = sendUpstreamRequest(cfg, req, proxyConfig)
+	latencyMs := time.Since(startedAt).Milliseconds()
+
+	if err != nil {
+		slog.Warn("upstream request failed", "err", err, "url", upstreamURL, "model", upstreamModel, "channel_id", selected.Channel.ID)
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
+		if retry < maxRetries {
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
+		}
+		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+		return true, nil
+	}
+
+	// Step 9: Handle response
+	if ctx.IsStream {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
+				slog.Warn("failed to read upstream stream error response", "err", readErr, "latency_ms", latencyMs, "status", resp.StatusCode)
+				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+				if retry < maxRetries {
+					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
+				}
+				writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
+				return true, nil
+			}
+			rawErrText := string(bodyBytes)
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
+				return false, bufferedPendingUpstreamFailure(resp, bodyBytes)
+			}
+			relayBufferedUpstreamErrorResponse(w, resp, bodyBytes)
+			return true, nil
+		}
+		// Always close the upstream body, including early client disconnects.
+		func() {
+			defer resp.Body.Close()
+			handleStreamUpstream(w, r, resp, latencyMs)
+		}()
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
+	} else {
+		bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+			if retry < maxRetries {
+				return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error")
+			}
+			writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
+			return true, nil
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			rawErrText := string(bodyBytes)
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
+				return false, bufferedPendingUpstreamFailure(resp, bodyBytes)
+			}
+			relayBufferedUpstreamResponse(w, resp, bodyBytes)
+			return true, nil
+		}
+		failure := proxy.DetectProxyFailure(string(bodyBytes), &proxy.UsageSummary{})
+		if failure != nil {
+			slog.Warn("content-based failure detected",
+				"reason", failure.Reason,
+				"status", failure.Status,
+				"model", upstreamModel,
+				"channel_id", selected.Channel.ID,
+				"latency_ms", latencyMs,
+			)
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
+			if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
+				return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error")
+			}
+			writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
+			return true, nil
+		}
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
+		relayBufferedUpstreamResponse(w, resp, bodyBytes)
+	}
+	return true, nil
 }
 
 type pendingUpstreamFailure struct {

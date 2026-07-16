@@ -927,3 +927,62 @@ func itoa(i int64) string {
 	}
 	return s
 }
+
+func TestSites_MaxConcurrencyRoundTrip(t *testing.T) {
+	_, r := setupSitesTest(t)
+
+	// Create with maxConcurrency
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":           "Conc Site",
+		"url":            "https://conc.example.com",
+		"platform":       "openai",
+		"maxConcurrency": 3,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create: expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	if got := int64(created["maxConcurrency"].(float64)); got != 3 {
+		t.Fatalf("create maxConcurrency=%v, want 3", created["maxConcurrency"])
+	}
+	id := int64(created["id"].(float64))
+
+	// List should include field
+	resp = doGet(t, r, "/api/sites")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list: %d", resp.Code)
+	}
+	var sites []map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &sites); err != nil {
+		t.Fatalf("unmarshal list: %v", err)
+	}
+	if len(sites) != 1 || int64(sites[0]["maxConcurrency"].(float64)) != 3 {
+		t.Fatalf("list maxConcurrency missing/wrong: %+v", sites)
+	}
+
+	// Update to unlimited (0)
+	resp = doPutJSON(t, r, "/api/sites/"+strconv.FormatInt(id, 10), map[string]any{
+		"maxConcurrency": 0,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("update: expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var updated map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("unmarshal update: %v", err)
+	}
+	if got := int64(updated["maxConcurrency"].(float64)); got != 0 {
+		t.Fatalf("update maxConcurrency=%v, want 0", updated["maxConcurrency"])
+	}
+
+	// Negative rejected
+	resp = doPutJSON(t, r, "/api/sites/"+strconv.FormatInt(id, 10), map[string]any{
+		"maxConcurrency": -1,
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("negative maxConcurrency: expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
