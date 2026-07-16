@@ -1,7 +1,6 @@
 package routing
 
 import (
-	"math"
 	"strings"
 )
 
@@ -275,7 +274,7 @@ func clonePositiveFloat(v *float64) *float64 {
 }
 
 func maxIntNonNeg(v int) int {
-	if v < 0 || math.IsNaN(float64(v)) {
+	if v < 0 {
 		return 0
 	}
 	return v

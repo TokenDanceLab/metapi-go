@@ -27,7 +27,7 @@ func (h *statsHandler) modelPriceCompare(w http.ResponseWriter, r *http.Request)
 
 	since := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format(time.RFC3339)
 
-	models := []string{}
+	var models []string
 	if modelQ != "" {
 		models = []string{modelQ}
 	} else {
