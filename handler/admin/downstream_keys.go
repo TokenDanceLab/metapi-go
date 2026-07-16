@@ -128,7 +128,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -136,15 +136,15 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	body.Key = strings.TrimSpace(body.Key)
 
 	if body.Name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "name 不能为空"})
+		writeError(w, http.StatusBadRequest, "name 不能为空")
 		return
 	}
 	if body.Key == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 不能为空"})
+		writeError(w, http.StatusBadRequest, "key 不能为空")
 		return
 	}
 	if !strings.HasPrefix(body.Key, "sk-") || len(body.Key) < 6 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 必须以 sk- 开头且长度至少 6"})
+		writeError(w, http.StatusBadRequest, "key 必须以 sk- 开头且长度至少 6")
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	var count int
 	h.db.Get(&count, rebindAdminQuery(h.db, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ?"), body.Key)
 	if count > 0 {
-		writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+		writeError(w, http.StatusConflict, "API key 已存在")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": refErr})
+		writeError(w, http.StatusBadRequest, refErr)
 		return
 	}
 
@@ -204,10 +204,10 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
-			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			writeError(w, http.StatusConflict, "API key 已存在")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建失败"})
+		writeError(w, http.StatusInternalServerError, "创建失败")
 		return
 	}
 	created := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
@@ -228,13 +228,13 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		writeError(w, http.StatusBadRequest, "id 无效")
 		return
 	}
 
 	existing := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	if existing == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		writeError(w, http.StatusNotFound, "API key 不存在")
 		return
 	}
 
@@ -259,14 +259,14 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 
 	bodyBytes, err := decodeJSONRequestRaw(r, &body)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	// First unmarshal into map to detect which fields were present in JSON.
 	rawBody := map[string]any{}
 	if err := json.Unmarshal(bodyBytes, &rawBody); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -399,15 +399,15 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 
 	// Validate.
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "name 不能为空"})
+		writeError(w, http.StatusBadRequest, "name 不能为空")
 		return
 	}
 	if key == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 不能为空"})
+		writeError(w, http.StatusBadRequest, "key 不能为空")
 		return
 	}
 	if !strings.HasPrefix(key, "sk-") || len(key) < 6 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "key 必须以 sk- 开头且长度至少 6"})
+		writeError(w, http.StatusBadRequest, "key 必须以 sk- 开头且长度至少 6")
 		return
 	}
 
@@ -416,14 +416,14 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		var dupCount int
 		h.db.Get(&dupCount, rebindAdminQuery(h.db, "SELECT COUNT(*) FROM downstream_api_keys WHERE key = ? AND id != ?"), key, id)
 		if dupCount > 0 {
-			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			writeError(w, http.StatusConflict, "API key 已存在")
 			return
 		}
 	}
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(allowedRouteIds, siteWeightMultipliers, excludedSiteIds, excludedCredentialRefs); refErr != "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": refErr})
+		writeError(w, http.StatusBadRequest, refErr)
 		return
 	}
 
@@ -450,10 +450,10 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
-			writeJSON(w, http.StatusConflict, map[string]any{"success": false, "message": "API key 已存在"})
+			writeError(w, http.StatusConflict, "API key 已存在")
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "更新失败"})
+		writeError(w, http.StatusInternalServerError, "更新失败")
 		return
 	}
 
@@ -475,13 +475,13 @@ func (h *downstreamKeysHandler) resetUsage(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		writeError(w, http.StatusBadRequest, "id 无效")
 		return
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := h.db.Exec(rebindAdminQuery(h.db, "UPDATE downstream_api_keys SET used_cost = 0, used_requests = 0, updated_at = ? WHERE id = ?"), now, id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "重置失败"})
+		writeError(w, http.StatusInternalServerError, "重置失败")
 		return
 	}
 
@@ -497,12 +497,12 @@ func (h *downstreamKeysHandler) deleteKey(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		writeError(w, http.StatusBadRequest, "id 无效")
 		return
 	}
 
 	if _, err := h.db.Exec(rebindAdminQuery(h.db, "DELETE FROM downstream_api_keys WHERE id = ?"), id); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "删除失败"})
+		writeError(w, http.StatusInternalServerError, "删除失败")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -513,13 +513,13 @@ func (h *downstreamKeysHandler) overview(w http.ResponseWriter, r *http.Request)
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		writeError(w, http.StatusBadRequest, "id 无效")
 		return
 	}
 
 	row := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	if row == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		writeError(w, http.StatusNotFound, "API key 不存在")
 		return
 	}
 
@@ -543,13 +543,13 @@ func (h *downstreamKeysHandler) trend(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "id 无效"})
+		writeError(w, http.StatusBadRequest, "id 无效")
 		return
 	}
 
 	row := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
 	if row == nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"success": false, "message": "API key 不存在"})
+		writeError(w, http.StatusNotFound, "API key 不存在")
 		return
 	}
 
@@ -576,12 +576,12 @@ func (h *downstreamKeysHandler) batchKeys(w http.ResponseWriter, r *http.Request
 		TagOperation   *string  `json:"tagOperation"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if len(body.IDs) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "ids is required"})
+		writeError(w, http.StatusBadRequest, "ids is required")
 		return
 	}
 
@@ -591,7 +591,7 @@ func (h *downstreamKeysHandler) batchKeys(w http.ResponseWriter, r *http.Request
 		"resetUsage": true, "updateMetadata": true,
 	}
 	if !validActions[action] {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid action"})
+		writeError(w, http.StatusBadRequest, "Invalid action")
 		return
 	}
 
