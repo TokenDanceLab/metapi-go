@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none — next P1 #118 Redis cooldown |
-| Next | M-COMPETE P1 residual: #118 Redis cooldown · P2 #120–#121 |
+| In flight WFs | none — next P2 learn #120 credential export · #121 heatmaps |
+| Next | M-COMPETE P2: #120 client/tool credential export · #121 usage heatmaps/slow-request ranking |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
