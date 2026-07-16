@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
@@ -96,21 +97,24 @@ type channelRuntimeState struct {
 // Both are conditional: only activate when the downstream request has a valid sticky
 // session key AND the channel's account uses session-scoped credentials.
 type ProxyChannelCoordinator struct {
-	stickyBindings    map[string]StickyEntry
-	channelStates     map[int64]*channelRuntimeState
-	nextLeaseID       int
-	mu                sync.Mutex
-	cfg               *config.Config
+	stickyBindings map[string]StickyEntry
+	channelStates  map[int64]*channelRuntimeState
+	// nextLeaseID is allocated with atomic ops so createTrackedLease never needs
+	// c.mu while state.mu is already held (lock order: c.mu then state.mu).
+	nextLeaseID atomic.Int64
+	mu          sync.Mutex
+	cfg         *config.Config
 }
 
 // NewProxyChannelCoordinator creates a new coordinator.
 func NewProxyChannelCoordinator(cfg *config.Config) *ProxyChannelCoordinator {
-	return &ProxyChannelCoordinator{
+	c := &ProxyChannelCoordinator{
 		stickyBindings: make(map[string]StickyEntry),
 		channelStates:  make(map[int64]*channelRuntimeState),
-		nextLeaseID:    1,
 		cfg:            cfg,
 	}
+	c.nextLeaseID.Store(1)
+	return c
 }
 
 // ---- Sticky Session Key ----
@@ -265,11 +269,8 @@ func (c *ProxyChannelCoordinator) getOrCreateChannelState(channelID int64) *chan
 }
 
 func (c *ProxyChannelCoordinator) nextLeaseIDValue() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	id := c.nextLeaseID
-	c.nextLeaseID++
-	return id
+	// Atomic allocation: safe under state.mu without taking c.mu.
+	return int(c.nextLeaseID.Add(1) - 1)
 }
 
 // AcquireChannelLease acquires a lease for a channel. Returns noop if channelID <= 0
@@ -295,9 +296,10 @@ func (c *ProxyChannelCoordinator) AcquireChannelLease(
 	}
 
 	state := c.getOrCreateChannelState(channelID)
-	state.concurrencyLimit = concurrencyLimit
 
 	state.mu.Lock()
+	// concurrencyLimit is shared state; always update under state.mu.
+	state.concurrencyLimit = concurrencyLimit
 	c.pruneCancelledWaitersLocked(state)
 
 	if len(state.activeLeaseIDs) < concurrencyLimit {
@@ -348,9 +350,9 @@ func (c *ProxyChannelCoordinator) createNoopLease(channelID int64) *ChannelLease
 }
 
 func (c *ProxyChannelCoordinator) createTrackedLease(channelID int64, state *channelRuntimeState) *ChannelLease {
+	// Caller (AcquireChannelLease / drainQueueLocked) already holds state.mu.
+	// Lease IDs are atomic so we never take c.mu while holding state.mu.
 	leaseID := c.nextLeaseIDValue()
-
-	// Caller (AcquireChannelLease) already holds state.mu
 	state.activeLeaseIDs[leaseID] = true
 
 	lease := &ChannelLease{
@@ -360,7 +362,7 @@ func (c *ProxyChannelCoordinator) createTrackedLease(channelID int64, state *cha
 		coord:     c,
 		state:     state,
 		expiryCh:  make(chan struct{}, 1),
-		doneCh:    make(chan struct{}, 1),
+		doneCh:    make(chan struct{}), // close-only signal; unbuffered is intentional
 	}
 
 	// Start expiry timer (single goroutine; resets via expiryCh on Touch)
@@ -582,5 +584,5 @@ func (c *ProxyChannelCoordinator) Reset() {
 	defer c.mu.Unlock()
 	c.stickyBindings = make(map[string]StickyEntry)
 	c.channelStates = make(map[int64]*channelRuntimeState)
-	c.nextLeaseID = 1
+	c.nextLeaseID.Store(1)
 }

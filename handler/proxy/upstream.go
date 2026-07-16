@@ -181,9 +181,12 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 				relayBufferedUpstreamErrorResponse(w, resp, bodyBytes)
 				return
 			}
-			handleStreamUpstream(w, r, resp, latencyMs)
+			// Always close the upstream body, including early client disconnects.
+			func() {
+				defer resp.Body.Close()
+				handleStreamUpstream(w, r, resp, latencyMs)
+			}()
 			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
-			resp.Body.Close()
 		} else {
 			bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 			resp.Body.Close()
@@ -377,6 +380,9 @@ func writeStubResponse(w http.ResponseWriter, ctx *Ctx) {
 // Disables the server-level WriteTimeout via http.ResponseController so long-running
 // LLM streams (>60s) are not torn down mid-response.
 func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Response, latencyMs int64) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		relayUpstreamErrorResponse(w, resp, latencyMs)
 		return
