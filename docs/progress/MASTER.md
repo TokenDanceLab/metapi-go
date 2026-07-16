@@ -113,8 +113,12 @@
 - Milestones (hardening): `docs/plan/milestones-hardening.md`
 - Milestones (stack + gap): `docs/plan/milestones-stack-gap.md`
 
+## Enterprise modernization (active)
+- **M-UI** design system foundation: `docs/design/DESIGN.md` + `web/styles/tokens.css` (U0 / #12)
+
 ## Next Steps
-1. Complete Wave 1 in parallel: S1 (core lock) and G1→G2 (gap matrix)
-2. Wave 2: S2/S3 tooling + G3 backlog issue publish
-3. Wave 3: S4 CI/Docker/embed gate + G4 inventory acceptance
-4. Do **not** implement original-gap product fixes in this program
+1. Complete Wave 1: S1 core lock + remaining lane PRs (U0/B0/B2/R0)
+2. Wave 2: S2/S3 tooling + G3 backlog + U1 components + SC1/R1
+3. Wave 3: S4 gate + U2/U3 + feature fleets from F0
+4. Continue M-UI: U1 shared components on design tokens (`docs/design/DESIGN.md`)
+5. Product gap implementation only after F0 scheduling (except CRITICAL B2/R*)
