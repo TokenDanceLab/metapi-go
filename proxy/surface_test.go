@@ -105,6 +105,92 @@ func TestConvertToSurfaceSelectedChannel(t *testing.T) {
 	}
 }
 
+func TestHandleUpstreamFailure_TokenExpiredMarkGuard(t *testing.T) {
+	cases := []struct {
+		name       string
+		status     int
+		errText    string
+		rawErrText string
+		wantMark   bool
+	}{
+		{
+			name:       "jwt expired marks",
+			status:     401,
+			errText:    "jwt expired",
+			rawErrText: "jwt expired",
+			wantMark:   true,
+		},
+		{
+			name:       "bare 401 empty body marks",
+			status:     401,
+			errText:    "",
+			rawErrText: "",
+			wantMark:   true,
+		},
+		{
+			name:       "billing 401 does not mark",
+			status:     401,
+			errText:    "No payment method. Add a payment method here: https://example.com/billing",
+			rawErrText: "No payment method. Add a payment method here: https://example.com/billing",
+			wantMark:   false,
+		},
+		{
+			name:       "model unsupported 401 does not mark",
+			status:     401,
+			errText:    "Model foo is not supported for format openai",
+			rawErrText: "Model foo is not supported for format openai",
+			wantMark:   false,
+		},
+		{
+			name:       "validation 400 does not mark",
+			status:     400,
+			errText:    "invalid_argument: input token limit is 202752",
+			rawErrText: "invalid_argument: input token limit is 202752",
+			wantMark:   false,
+		},
+		{
+			name:       "rate limit does not mark",
+			status:     429,
+			errText:    "rate limit exceeded",
+			rawErrText: "rate limit exceeded",
+			wantMark:   false,
+		},
+		{
+			name:       "opaque 401 does not mark",
+			status:     401,
+			errText:    "upstream rejected the request",
+			rawErrText: "upstream rejected the request",
+			wantMark:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var marked []string
+			toolkit, _ := makeToolkit(0)
+			toolkit.ReportTokenExpired = func(accountID int64, username *string, siteName *string, detail string) {
+				marked = append(marked, detail)
+			}
+			selected := makeSurfaceSelectedChannel(7)
+			username := "acct"
+			selected.Account.Username = &username
+
+			_ = toolkit.HandleUpstreamFailure(
+				context.Background(), selected, "gpt-4", "gpt-4",
+				tc.status, tc.errText, tc.rawErrText,
+				false, 100, 0,
+			)
+
+			if tc.wantMark && len(marked) != 1 {
+				t.Fatalf("expected mark, got %v", marked)
+			}
+			if !tc.wantMark && len(marked) != 0 {
+				t.Fatalf("expected no mark, got %v", marked)
+			}
+		})
+	}
+}
+
 func TestHandleUpstreamFailure(t *testing.T) {
 	t.Run("retryable failure within maxRetries", func(t *testing.T) {
 		toolkit, state := makeToolkit(2)

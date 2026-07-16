@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/routing"
 )
 
@@ -273,6 +275,10 @@ func (ft *SurfaceFailureToolkit) HandleUpstreamFailure(
 		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
 
+	// Mark account expired only for ClassExpired (R0 guard). Non-auth 401s
+	// (billing/model/validation) must not flip accounts.status.
+	ft.maybeReportTokenExpired(selected, status, rawErrText, errText)
+
 	// Check retry
 	if ShouldRetryProxyRequest(status, errText) {
 		if retryCount < ft.MaxRetries {
@@ -295,6 +301,31 @@ func (ft *SurfaceFailureToolkit) HandleUpstreamFailure(
 			},
 		},
 	}
+}
+
+// maybeReportTokenExpired invokes ReportTokenExpired only when classification
+// says the credential is expired — never for billing/model/validation/transient.
+func (ft *SurfaceFailureToolkit) maybeReportTokenExpired(
+	selected SurfaceSelectedChannel,
+	status int,
+	rawErrText string,
+	errText string,
+) {
+	if ft.ReportTokenExpired == nil {
+		return
+	}
+	detail := strings.TrimSpace(rawErrText)
+	if detail == "" {
+		detail = strings.TrimSpace(errText)
+	}
+	if !platform.ShouldMarkAccountExpired(status, detail) {
+		return
+	}
+	var siteName *string
+	if selected.Site.Name != nil && strings.TrimSpace(*selected.Site.Name) != "" {
+		siteName = selected.Site.Name
+	}
+	ft.ReportTokenExpired(selected.Account.ID, selected.Account.Username, siteName, detail)
 }
 
 // HandleDetectedFailure handles a content-based failure detection.
@@ -341,6 +372,9 @@ func (ft *SurfaceFailureToolkit) HandleDetectedFailure(
 	}); err != nil {
 		slog.Warn("LogProxy failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
+
+	// Content-based failures may still carry auth expiry text without HTTP 401.
+	ft.maybeReportTokenExpired(selected, failure.Status, failure.Reason, failure.Reason)
 
 	// Check retry
 	if ShouldRetryProxyRequest(failure.Status, failure.Reason) {

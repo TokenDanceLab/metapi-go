@@ -256,17 +256,28 @@ func resolveGroupFetchErrorMessage(payload map[string]interface{}) string {
 	if msg == "" {
 		return "failed to fetch groups"
 	}
+	// UX rewrite only — does not mark accounts.status. Prefer auth-related
+	// classes; avoid rewriting pure billing/model/validation messages.
+	if IsAuthRelatedUpstreamError(0, msg) || IsTokenExpiredError(0, msg) {
+		return "账号会话可能已过期，请重新登录后再拉取分组"
+	}
+	// Keep a few historical session phrases that classify as auth residual.
 	lower := strings.ToLower(msg)
-	indicatesExpired := strings.Contains(lower, "expired") ||
-		strings.Contains(lower, "invalid token") ||
-		strings.Contains(lower, "access token") ||
+	if strings.Contains(lower, "未登录") ||
+		strings.Contains(lower, "not login") ||
+		strings.Contains(lower, "not logged") ||
 		strings.Contains(lower, "unauthorized") ||
 		strings.Contains(lower, "forbidden") ||
-		strings.Contains(lower, "未登录") ||
-		strings.Contains(lower, "登录") ||
-		strings.Contains(lower, "过期")
-	if indicatesExpired {
-		return "账号会话可能已过期，请重新登录后再拉取分组"
+		strings.Contains(lower, "invalid token") ||
+		strings.Contains(lower, "access token") {
+		// Exclude non-auth classes already handled by classifier above; if we
+		// still land here, rewrite only when not clearly billing/model/validation.
+		switch ClassifyUpstreamError(0, msg) {
+		case ClassBilling, ClassModel, ClassValidation, ClassTransient:
+			return msg
+		default:
+			return "账号会话可能已过期，请重新登录后再拉取分组"
+		}
 	}
 	return msg
 }

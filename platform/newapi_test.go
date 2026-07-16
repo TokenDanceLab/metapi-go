@@ -378,8 +378,8 @@ func TestIsMissingCheckinEndpointMessage(t *testing.T) {
 
 func TestIsCookieSessionFailureMessage(t *testing.T) {
 	tests := []struct {
-		msg     string
-		isFail  bool
+		msg    string
+		isFail bool
 	}{
 		{"access token invalid", true},
 		{"unauthorized", true},
@@ -391,6 +391,11 @@ func TestIsCookieSessionFailureMessage(t *testing.T) {
 		{"not login", true},
 		{"success", false},
 		{"checkin completed", false},
+		// Non-auth residual: bare "expired" alone must not look like cookie session failure
+		// when the class is billing/model (R0).
+		{"No payment method. Add a payment method here: https://example.com/billing", false},
+		{"Model foo is not supported for format openai", false},
+		{"rate limit exceeded", false},
 	}
 	for _, tt := range tests {
 		if got := isCookieSessionFailureMessage(tt.msg); got != tt.isFail {

@@ -792,6 +792,15 @@ func isMissingCheckinEndpointMessage(msg string) bool {
 }
 
 func isCookieSessionFailureMessage(msg string) bool {
+	// Session/cookie retry heuristic only — never marks accounts.status.
+	// Non-auth classes (billing/model/validation/transient) must not look like
+	// cookie session failures just because they mention "expired" or "token".
+	switch ClassifyUpstreamError(0, msg) {
+	case ClassExpired, ClassAuth:
+		return true
+	case ClassBilling, ClassModel, ClassValidation, ClassTransient:
+		return false
+	}
 	lower := strings.ToLower(msg)
 	return strings.Contains(lower, "access token") ||
 		strings.Contains(lower, "unauthorized") ||
@@ -799,7 +808,6 @@ func isCookieSessionFailureMessage(msg string) bool {
 		strings.Contains(lower, "new-api-user") ||
 		strings.Contains(lower, "user id") ||
 		strings.Contains(lower, "invalid token") ||
-		strings.Contains(lower, "expired") ||
 		strings.Contains(lower, "无权") ||
 		strings.Contains(lower, "未登录") ||
 		strings.Contains(lower, "未提供") ||
