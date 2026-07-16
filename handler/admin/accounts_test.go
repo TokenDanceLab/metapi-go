@@ -895,6 +895,101 @@ func TestAccounts_RebindSession_DBWriteFailureReturnsError(t *testing.T) {
 
 // ---- Update Account ----
 
+
+func TestAccounts_List_ExpiredStatusNotHealthy(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	_, accountID := setupAccountFixtureWithSite(t, db, r, "ExpiredHealthSite", "https://api.openai.com")
+
+	// Stale healthy runtimeHealth should not win over expired status.
+	extra := `{"credentialMode":"session","runtimeHealth":{"state":"healthy","reason":"余额刷新成功","source":"balance"}}`
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	if _, err := db.Exec(
+		"UPDATE accounts SET status = 'expired', extra_config = ?, updated_at = ? WHERE id = ?",
+		extra, now, accountID,
+	); err != nil {
+		t.Fatalf("seed expired account: %v", err)
+	}
+
+	resp := doGet(t, r, "/api/accounts?refresh=1")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list accounts: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	accounts, _ := result["accounts"].([]any)
+	if len(accounts) == 0 {
+		t.Fatal("expected accounts in list")
+	}
+	var found map[string]any
+	for _, raw := range accounts {
+		acc, _ := raw.(map[string]any)
+		if int64(acc["id"].(float64)) == accountID {
+			found = acc
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("account %d not found in list", accountID)
+	}
+	if found["status"] != "expired" {
+		t.Fatalf("status = %v, want expired", found["status"])
+	}
+	health, _ := found["runtimeHealth"].(map[string]any)
+	if health == nil {
+		t.Fatalf("runtimeHealth missing: %#v", found)
+	}
+	if health["state"] != "unhealthy" {
+		t.Fatalf("runtimeHealth.state = %v, want unhealthy", health["state"])
+	}
+	if health["source"] != "auth" {
+		t.Fatalf("runtimeHealth.source = %v, want auth", health["source"])
+	}
+	if reason, _ := health["reason"].(string); reason == "" || strings.Contains(reason, "余额刷新成功") {
+		t.Fatalf("runtimeHealth.reason = %q, want expired auth reason", reason)
+	}
+}
+
+func TestAccounts_Update_ExpiredStatusReturnsUnhealthyRuntimeHealth(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	_, accountID := setupAccountFixtureWithSite(t, db, r, "UpdateExpiredHealth", "https://api.openai.com")
+
+	// Leave a stale healthy runtimeHealth in extraConfig.
+	extra := `{"credentialMode":"session","runtimeHealth":{"state":"healthy","reason":"余额刷新成功","source":"balance"}}`
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	if _, err := db.Exec(
+		"UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?",
+		extra, now, accountID,
+	); err != nil {
+		t.Fatalf("seed healthy runtimeHealth: %v", err)
+	}
+
+	resp := doPutJSON(t, r, "/api/accounts/"+itoa(accountID), map[string]any{
+		"status": "expired",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("update expired: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode update: %v", err)
+	}
+	if result["status"] != "expired" {
+		t.Fatalf("status = %v, want expired", result["status"])
+	}
+	health, _ := result["runtimeHealth"].(map[string]any)
+	if health == nil {
+		t.Fatalf("runtimeHealth missing on detail response: %#v", result)
+	}
+	if health["state"] != "unhealthy" {
+		t.Fatalf("runtimeHealth.state = %v, want unhealthy", health["state"])
+	}
+	if health["source"] != "auth" {
+		t.Fatalf("runtimeHealth.source = %v, want auth", health["source"])
+	}
+}
+
 func TestAccounts_Update(t *testing.T) {
 	db, r, _ := setupAccountsTest(t)
 	_, accountID := setupAccountFixtureWithSite(t, db, r, "UpdateSite", "https://api.openai.com")

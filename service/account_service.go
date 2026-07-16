@@ -477,6 +477,8 @@ func UpdateAccountFields(db *sqlx.DB, accountID int64, updates map[string]any) e
 }
 
 // ListAccountsWithSites returns all accounts joined with their sites.
+// Each account is enriched with nested site, capabilities, credentialMode, and
+// effective runtimeHealth (expired status never reports healthy — FE-EXPIRED #39).
 func ListAccountsWithSites(db *sqlx.DB) ([]map[string]any, error) {
 	rows, err := db.Queryx(
 		`SELECT a.*, s.id as site_id_val, s.name as site_name, s.url as site_url,
@@ -495,9 +497,94 @@ func ListAccountsWithSites(db *sqlx.DB) ([]map[string]any, error) {
 		if err := rows.MapScan(row); err != nil {
 			continue
 		}
-		result = append(result, mapKeysToCamel(row))
+		normalizeMapScanValues(row)
+		account := mapKeysToCamel(row)
+		result = append(result, enrichAccountOverviewRow(account))
 	}
 	return result, nil
+}
+
+// enrichAccountOverviewRow attaches admin-list overview fields used by the UI.
+func enrichAccountOverviewRow(account map[string]any) map[string]any {
+	if account == nil {
+		return account
+	}
+
+	status := asString(account["status"])
+	siteStatus := asString(account["siteStatus"])
+	extraConfig := asStringPtr(account["extraConfig"])
+	accessToken := asString(account["accessToken"])
+	oauthProvider := asStringPtr(account["oauthProvider"])
+
+	acct := &store.Account{
+		AccessToken:   accessToken,
+		APIToken:      asStringPtr(account["apiToken"]),
+		ExtraConfig:   extraConfig,
+		OAuthProvider: oauthProvider,
+	}
+	credentialMode := ResolveStoredCredentialMode(acct)
+	capabilities := BuildCapabilitiesForAccount(acct)
+	sessionCapable := capabilities.CanRefreshBalance
+
+	account["credentialMode"] = string(credentialMode)
+	account["capabilities"] = capabilities
+	account["runtimeHealth"] = BuildRuntimeHealthForAccount(RuntimeHealthInput{
+		AccountStatus:  status,
+		SiteStatus:     siteStatus,
+		ExtraConfig:    extraConfig,
+		SessionCapable: &sessionCapable,
+		OAuthProvider:  oauthProvider,
+	})
+	account["site"] = map[string]any{
+		"id":       account["siteIdVal"],
+		"name":     account["siteName"],
+		"url":      account["siteUrl"],
+		"platform": account["sitePlatform"],
+		"status":   siteStatus,
+	}
+	// Prefer nested site; drop flat join aliases that are not account columns.
+	delete(account, "siteIdVal")
+	delete(account, "siteName")
+	delete(account, "siteUrl")
+	delete(account, "sitePlatform")
+	delete(account, "siteStatus")
+	return account
+}
+
+func normalizeMapScanValues(m map[string]any) {
+	for k, v := range m {
+		switch typed := v.(type) {
+		case []byte:
+			m[k] = string(typed)
+		}
+	}
+}
+
+func asString(v any) string {
+	switch typed := v.(type) {
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(v)
+	}
+}
+
+func asStringPtr(v any) *string {
+	if v == nil {
+		return nil
+	}
+	s := strings.TrimSpace(asString(v))
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // ---- Event helpers ----

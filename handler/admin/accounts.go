@@ -767,11 +767,67 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var updated store.Account
-	h.db.Get(&updated, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), id)
+	// When status is forced to expired, align stored runtime health with R0 auth class.
+	if status, ok := updates["status"].(string); ok && status == "expired" {
+		_ = service.SetAccountRuntimeHealth(h.db, id, service.RuntimeHealthEntry{
+			State:  service.HealthUnhealthy,
+			Reason: "连接凭证已过期，请更新凭证",
+			Source: service.HealthSourceAuth,
+		})
+	}
+
+	updatedRow, err := service.GetAccountWithSiteByID(h.db, id)
+	if err != nil {
+		slog.Error("Failed to load updated account", "err", err, "account_id", id)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "Failed to load updated account"})
+		return
+	}
+	updated := updatedRow.Account
+	caps := service.BuildCapabilitiesForAccount(&updated)
+	sessionCapable := caps.CanRefreshBalance
+	resp := map[string]any{
+		"id":                 updated.ID,
+		"siteId":             updated.SiteID,
+		"username":           updated.Username,
+		"accessToken":        updated.AccessToken,
+		"apiToken":           updated.APIToken,
+		"balance":            updated.Balance,
+		"balanceUsed":        updated.BalanceUsed,
+		"quota":              updated.Quota,
+		"unitCost":           updated.UnitCost,
+		"valueScore":         updated.ValueScore,
+		"status":             updated.Status,
+		"isPinned":           updated.IsPinned,
+		"sortOrder":          updated.SortOrder,
+		"checkinEnabled":     updated.CheckinEnabled,
+		"lastCheckinAt":      updated.LastCheckinAt,
+		"lastBalanceRefresh": updated.LastBalanceRefresh,
+		"oauthProvider":      updated.OAuthProvider,
+		"oauthAccountKey":    updated.OAuthAccountKey,
+		"oauthProjectId":     updated.OAuthProjectID,
+		"extraConfig":        updated.ExtraConfig,
+		"createdAt":          updated.CreatedAt,
+		"updatedAt":          updated.UpdatedAt,
+		"credentialMode":     string(service.ResolveStoredCredentialMode(&updated)),
+		"capabilities":       caps,
+		"runtimeHealth": service.BuildRuntimeHealthForAccount(service.RuntimeHealthInput{
+			AccountStatus:  updated.Status,
+			SiteStatus:     updatedRow.Site.Status,
+			ExtraConfig:    updated.ExtraConfig,
+			SessionCapable: &sessionCapable,
+			OAuthProvider:  updated.OAuthProvider,
+		}),
+		"site": map[string]any{
+			"id":       updatedRow.Site.ID,
+			"name":     updatedRow.Site.Name,
+			"url":      updatedRow.Site.URL,
+			"platform": updatedRow.Site.Platform,
+			"status":   updatedRow.Site.Status,
+		},
+	}
 	routing.InvalidateCache()
 	globalAccountsCache.clear()
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ---- Delete Account ----
