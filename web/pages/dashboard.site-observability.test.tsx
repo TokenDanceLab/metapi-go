@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, create, type ReactTestInstance } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.js';
 import Dashboard from './Dashboard.js';
@@ -36,7 +36,13 @@ async function flushMicrotasks() {
 }
 
 describe('Dashboard site observability panel', () => {
-  const originalDocument = globalThis.document;
+  // Prefer property spies over replacing globalThis.document wholesale.
+  // Replacing document mid-suite leaves pending jsdom console RPC during
+  // EnvironmentTeardown (CI flake: EnvironmentTeardownError / onUserConsoleLog).
+  let visibilityDescriptor: PropertyDescriptor | undefined;
+  let addEventListenerSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let removeEventListenerSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let getElementByIdSpy: ReturnType<typeof vi.spyOn> | undefined;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,18 +82,35 @@ describe('Dashboard site observability panel', () => {
     apiMock.getSiteDistribution.mockResolvedValue({ distribution: [] });
     apiMock.getSiteTrend.mockResolvedValue({ trend: [] });
     apiMock.getSites.mockResolvedValue([]);
-    globalThis.document = {
-      visibilityState: 'visible',
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      getElementById: vi.fn(() => null),
-    } as unknown as Document;
+
+    visibilityDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')
+      || Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      enumerable: true,
+      get: () => 'visible',
+    });
+    addEventListenerSpy = vi.spyOn(document, 'addEventListener').mockImplementation(() => {});
+    removeEventListenerSpy = vi.spyOn(document, 'removeEventListener').mockImplementation(() => {});
+    getElementByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue(null);
   });
 
-  afterEach(() => {
-    // Restore real document before clearing mocks to avoid pending jsdom listeners
-    // throwing unhandled rejections during vitest worker teardown.
-    globalThis.document = originalDocument;
+  afterEach(async () => {
+    addEventListenerSpy?.mockRestore();
+    removeEventListenerSpy?.mockRestore();
+    getElementByIdSpy?.mockRestore();
+    if (visibilityDescriptor) {
+      Object.defineProperty(document, 'visibilityState', visibilityDescriptor);
+    } else {
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        enumerable: true,
+        get: () => 'visible',
+      });
+    }
+    // Drain microtasks so worker teardown does not race pending console RPC.
+    await Promise.resolve();
+    await Promise.resolve();
     try {
       vi.clearAllMocks();
     } catch {
@@ -96,7 +119,7 @@ describe('Dashboard site observability panel', () => {
   });
 
   it('renders site availability strips and summary metrics', async () => {
-    let root!: WebTestRenderer;
+    let root!: ReactTestRenderer;
 
     try {
       await act(async () => {
@@ -110,7 +133,7 @@ describe('Dashboard site observability panel', () => {
       });
       await flushMicrotasks();
 
-      const panel = root!.root.find((node) => (
+      const panel = root.root.find((node) => (
         typeof node.props.className === 'string'
         && node.props.className.includes('site-observability-panel')
       ));
@@ -140,7 +163,10 @@ describe('Dashboard site observability panel', () => {
       expect(String(cells[0]?.props['data-tooltip'] || '')).toContain('成功/失败：1/0');
       expect(String(logLink.props.href || logLink.props.to || '')).toContain('/logs?siteId=1');
     } finally {
-      root?.unmount();
+      await act(async () => {
+        root?.unmount();
+      });
+      await flushMicrotasks();
     }
   });
 });
