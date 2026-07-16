@@ -34,6 +34,11 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 		Router:      router,
 		Coordinator: coord,
 		Executor:    proxy.NewRuntimeExecutor(requestTimeout),
+		// Persist successful/failed proxy attempts (token usage when available).
+		// Writer uses store.GetDB() so it follows runtime DB overrides in tests.
+		LogProxy: func(ctx context.Context, entry proxy.ProxyLogEntry) error {
+			return proxyhandler.InsertProxyLog(ctx, store.GetDB(), entry)
+		},
 	})
 	return nil
 }

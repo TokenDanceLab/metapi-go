@@ -32,6 +32,9 @@ type UpstreamConfig struct {
 	// When nil, proxy.DefaultSiteConcurrencyLimiter is used.
 	// Orthogonal to Coordinator channel leases (FE-SITE-CONC / upstream #594).
 	SiteLimiter *proxy.SiteConcurrencyLimiter
+	// LogProxy persists successful/failed proxy attempts into proxy_logs.
+	// When nil, defaultLogProxyWriter uses store.GetDB() (no-op if DB unset).
+	LogProxy func(ctx context.Context, entry proxy.ProxyLogEntry) error
 }
 
 var upstreamCfg *UpstreamConfig
@@ -241,11 +244,13 @@ func dispatchSelectedUpstream(
 			return true, nil
 		}
 		// Always close the upstream body, including early client disconnects.
+		var streamUsage ParsedUsage
 		func() {
 			defer resp.Body.Close()
-			handleStreamUpstream(w, r, resp, latencyMs)
+			streamUsage = handleStreamUpstream(w, r, resp, latencyMs)
 		}()
-		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
+		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
 	} else {
 		bodyBytes, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 		resp.Body.Close()
@@ -267,7 +272,8 @@ func dispatchSelectedUpstream(
 			relayBufferedUpstreamResponse(w, resp, bodyBytes)
 			return true, nil
 		}
-		failure := proxy.DetectProxyFailure(string(bodyBytes), &proxy.UsageSummary{})
+		usage := ParseUsageFromBody(bodyBytes)
+		failure := proxy.DetectProxyFailure(string(bodyBytes), usage.ToUsageSummary())
 		if failure != nil {
 			slog.Warn("content-based failure detected",
 				"reason", failure.Reason,
@@ -283,7 +289,8 @@ func dispatchSelectedUpstream(
 			writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
 			return true, nil
 		}
-		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs)
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
+		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry)
 		relayBufferedUpstreamResponse(w, resp, bodyBytes)
 	}
 	return true, nil
@@ -368,13 +375,90 @@ func recordUpstreamFailure(ctx context.Context, cfg *UpstreamConfig, selected *r
 	}
 }
 
-func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *routing.SelectedChannel, modelName string, latencyMs int64) {
+func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *routing.SelectedChannel, modelName string, latencyMs int64, usage ParsedUsage) {
 	if cfg == nil || cfg.Router == nil || selected == nil {
 		return
 	}
+	// Cost remains 0 here; pricing is a separate concern (#43). Token totals
+	// are persisted via writeSuccessProxyLog for aggregation.
 	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), 0, &modelName, nil); err != nil {
 		slog.Warn("RecordSuccess failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
+	_ = usage
+}
+
+func writeSuccessProxyLog(
+	ctx context.Context,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	proxyCtx *Ctx,
+	upstreamModel string,
+	upstreamPath string,
+	latencyMs int64,
+	httpStatus int,
+	isStream bool,
+	usage ParsedUsage,
+	retryCount int,
+) {
+	if cfg == nil || selected == nil {
+		return
+	}
+	requestedModel := ""
+	var keyID *int64
+	clientFamily, clientAppID, clientAppName, clientConfidence := "", "", "", ""
+	if proxyCtx != nil {
+		requestedModel = proxyCtx.RequestedModel
+		if proxyCtx.Auth != nil {
+			keyID = proxyCtx.Auth.KeyID
+		}
+		clientFamily = proxyCtx.ClientCtx.ClientKind
+		clientAppID = proxyCtx.ClientCtx.ClientAppID
+		clientAppName = proxyCtx.ClientCtx.ClientAppName
+		clientConfidence = proxyCtx.ClientCtx.ClientConfidence
+	}
+	if requestedModel == "" {
+		requestedModel = upstreamModel
+	}
+	modelActual := upstreamModel
+	routeID := selected.Channel.RouteID
+	var routeIDPtr *int64
+	if routeID != 0 {
+		routeIDPtr = &routeID
+	}
+	channelID := selected.Channel.ID
+	accountID := selected.Account.ID
+	source := usage.Source
+	if source == "" {
+		if usage.Found {
+			source = usageSourceUpstream
+		} else {
+			source = usageSourceUnknown
+		}
+	}
+	entry := proxy.ProxyLogEntry{
+		RouteID:            routeIDPtr,
+		ChannelID:          &channelID,
+		AccountID:          &accountID,
+		DownstreamAPIKeyID: keyID,
+		ModelRequested:     requestedModel,
+		ModelActual:        &modelActual,
+		Status:             "success",
+		HTTPStatus:         httpStatus,
+		IsStream:           boolPtr(isStream),
+		FirstByteLatencyMs: int64Ptr(latencyMs),
+		LatencyMs:          latencyMs,
+		PromptTokens:       int64Ptr(usage.PromptTokens),
+		CompletionTokens:   int64Ptr(usage.CompletionTokens),
+		TotalTokens:        int64Ptr(usage.TotalTokens),
+		ClientFamily:       clientFamily,
+		ClientAppID:        clientAppID,
+		ClientAppName:      clientAppName,
+		ClientConfidence:   clientConfidence,
+		RetryCount:         retryCount,
+		UpstreamPath:       &upstreamPath,
+		UsageSource:        source,
+	}
+	logProxy(ctx, cfg, entry)
 }
 
 func isProxyStubEnabled() bool {
@@ -428,17 +512,21 @@ func writeStubResponse(w http.ResponseWriter, ctx *Ctx) {
 
 // handleStreamUpstream relays an SSE stream from upstream to the downstream client.
 // It performs raw byte passthrough for minimal latency while incrementally
-// analyzing bounded SSE event state for error and empty-content detection.
+// analyzing bounded SSE event state for error/empty-content detection and
+// end-of-stream usage extraction (OpenAI/Anthropic/Gemini/Responses shapes).
 //
 // Disables the server-level WriteTimeout via http.ResponseController so long-running
 // LLM streams (>60s) are not torn down mid-response.
-func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Response, latencyMs int64) {
+//
+// Returns best-effort ParsedUsage from SSE events (may be zero/unknown).
+func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Response, latencyMs int64) ParsedUsage {
+	empty := ParsedUsage{Source: usageSourceUnknown}
 	if resp == nil || resp.Body == nil {
-		return
+		return empty
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		relayUpstreamErrorResponse(w, resp, latencyMs)
-		return
+		return empty
 	}
 
 	writeSSEHeaders(w)
@@ -471,7 +559,7 @@ func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Res
 				"latency_ms", latencyMs,
 				"streamed_bytes", streamedBytes,
 			)
-			return
+			return empty
 		default:
 		}
 
@@ -529,9 +617,8 @@ func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Res
 
 	// Post-stream SSE analysis uses bounded incremental state instead of
 	// retaining the complete upstream body.
+	result := analyzer.Result()
 	if sawStreamBytes {
-		result := analyzer.Result()
-
 		if result.DroppedOversizedEvent {
 			slog.Warn("SSE stream event exceeded analysis buffer",
 				"latency_ms", latencyMs,
@@ -555,7 +642,11 @@ func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Res
 				)
 			}
 		}
+		if result.Usage.Found {
+			return result.Usage
+		}
 	}
+	return empty
 }
 
 func maxStreamResponseBytes() int64 {
@@ -627,7 +718,8 @@ func handleNonStreamUpstream(w http.ResponseWriter, resp *http.Response, latency
 	}
 
 	// Detect proxy failure
-	failure := proxy.DetectProxyFailure(string(bodyBytes), &proxy.UsageSummary{})
+	usage := ParseUsageFromBody(bodyBytes)
+	failure := proxy.DetectProxyFailure(string(bodyBytes), usage.ToUsageSummary())
 	if failure != nil {
 		slog.Warn("content-based failure detected",
 			"reason", failure.Reason,

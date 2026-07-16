@@ -33,6 +33,8 @@ type incrementalSseAnalysisResult struct {
 	EventCount            int
 	PendingBytes          int
 	DroppedOversizedEvent bool
+	// Usage is the best-effort final usage extracted from SSE data events.
+	Usage ParsedUsage
 }
 
 type incrementalSseAnalyzer struct {
@@ -40,6 +42,7 @@ type incrementalSseAnalyzer struct {
 	skippingOversized     bool
 	droppedOversizedEvent bool
 	result                incrementalSseAnalysisResult
+	usage                 ParsedUsage
 }
 
 func newIncrementalSseAnalyzer() *incrementalSseAnalyzer {
@@ -83,6 +86,14 @@ func (a *incrementalSseAnalyzer) Result() incrementalSseAnalysisResult {
 	result := a.result
 	result.PendingBytes = len(a.pending)
 	result.DroppedOversizedEvent = a.droppedOversizedEvent
+	result.Usage = a.usage
+	if result.Usage.Source == "" {
+		if result.Usage.Found {
+			result.Usage.Source = usageSourceUpstream
+		} else {
+			result.Usage.Source = usageSourceUnknown
+		}
+	}
 	return result
 }
 
@@ -133,6 +144,14 @@ func (a *incrementalSseAnalyzer) recordEvent(ev SseEvent) {
 	a.result.EventCount++
 	if ev.Data != "" && ev.Data != "[DONE]" {
 		a.result.HasDataEvent = true
+		// Best-effort usage extraction without retaining full stream bodies.
+		// Later events with usage win (stream-end usage / message_delta / response.completed).
+		if looksLikeJSONObject(ev.Data) {
+			got := ParseUsageFromBody([]byte(ev.Data))
+			if got.Found {
+				a.usage = mergeUsagePreferLater(a.usage, got)
+			}
+		}
 	}
 	if IsSseErrorEvent(ev) {
 		a.result.HasErrorEvent = true
