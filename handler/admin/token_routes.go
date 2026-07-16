@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -235,11 +236,18 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
+	var modelMapping any
+	if body.ModelMapping != nil {
+		if b, err := json.Marshal(body.ModelMapping); err == nil {
+			modelMapping = string(b)
+		}
+	}
+
 	id, err := execInsertID(h.db,
 		`INSERT INTO token_routes (model_pattern, display_name, display_icon, route_mode, model_mapping, routing_strategy, enabled, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		modelPattern, strOrNull(&displayName), strOrNull(body.DisplayIcon), routeMode,
-		nil, routingStrategy, enabled, now, now,
+		modelMapping, routingStrategy, enabled, now, now,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建路由失败"})
@@ -336,10 +344,14 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Pattern change: recompose automatic channels while preserving manual overrides.
+	// Unrelated field updates (displayName, routingStrategy, modelMapping, enabled)
+	// must not wipe intentional in-route channel configuration.
 	if v, ok := body["modelPattern"]; ok {
-		if _, ok2 := v.(string); ok2 {
+		if s, ok2 := v.(string); ok2 {
+			nextPattern := strings.TrimSpace(s)
+			prevPattern, _ := existing["modelPattern"].(string)
 			mode, _ := existing["routeMode"].(string)
-			if !routing.IsExplicitGroupRoute(mode) {
+			if nextPattern != prevPattern && !routing.IsExplicitGroupRoute(mode) {
 				if _, err := service.RebuildTokenRoutesFromAvailability(r.Context(), h.db); err != nil {
 					slog.Warn("route update: rebuild after modelPattern change failed", "routeId", id, "error", err)
 				}
@@ -552,9 +564,12 @@ func (h *tokenRoutesHandler) addChannel(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Operator-added channels are intentional configuration and must survive
+	// RebuildTokenRoutesFromAvailability (manual_override stays true unless
+	// the channel is explicitly deleted).
 	id, err := execInsertID(h.db,
 		"INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		routeID, body.AccountID, body.TokenID, body.SourceModel, priority, weight, true, false,
+		routeID, body.AccountID, body.TokenID, body.SourceModel, priority, weight, true, true,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建通道失败"})
@@ -691,6 +706,8 @@ func (h *tokenRoutesHandler) updateChannel(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Any intentional channel edit marks manual_override so rebuild cannot
+	// wipe operator-tuned priority/weight/enabled/sourceModel.
 	if v, ok := body["priority"]; ok {
 		h.db.Exec(h.db.Rebind("UPDATE route_channels SET priority = ?, manual_override = ? WHERE id = ?"), toFloat64(v), true, channelID)
 	}
@@ -699,6 +716,23 @@ func (h *tokenRoutesHandler) updateChannel(w http.ResponseWriter, r *http.Reques
 	}
 	if v, ok := body["enabled"]; ok {
 		h.db.Exec(h.db.Rebind("UPDATE route_channels SET enabled = ?, manual_override = ? WHERE id = ?"), toBool(v), true, channelID)
+	}
+	if v, ok := body["sourceModel"]; ok {
+		var sourceModel any
+		switch s := v.(type) {
+		case nil:
+			sourceModel = nil
+		case string:
+			trimmed := strings.TrimSpace(s)
+			if trimmed == "" {
+				sourceModel = nil
+			} else {
+				sourceModel = trimmed
+			}
+		default:
+			sourceModel = fmt.Sprint(v)
+		}
+		h.db.Exec(h.db.Rebind("UPDATE route_channels SET source_model = ?, manual_override = ? WHERE id = ?"), sourceModel, true, channelID)
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM route_channels WHERE id = ?", channelID)
