@@ -49,7 +49,7 @@ func InsertProxyLog(ctx context.Context, db *store.DB, entry proxy.ProxyLogEntry
 			prompt_tokens, completion_tokens, total_tokens,
 			estimated_cost, billing_details,
 			client_family, client_app_id, client_app_name, client_confidence,
-			error_message, retry_count, created_at
+			error_message, retry_count, request_id, created_at
 		) VALUES (
 			?, ?, ?, ?,
 			?, ?, ?, ?, ?,
@@ -57,7 +57,7 @@ func InsertProxyLog(ctx context.Context, db *store.DB, entry proxy.ProxyLogEntry
 			?, ?, ?,
 			?, ?,
 			?, ?, ?, ?,
-			?, ?, ?
+			?, ?, ?, ?
 		)`
 
 	args := []any{
@@ -83,6 +83,7 @@ func InsertProxyLog(ctx context.Context, db *store.DB, entry proxy.ProxyLogEntry
 		nullString(strPtrOrEmpty(entry.ClientConfidence)),
 		nullString(entry.ErrorMessage),
 		entry.RetryCount,
+		nullString(strPtrOrEmpty(entry.RequestID)),
 		createdAt,
 	}
 
@@ -101,6 +102,10 @@ func logProxy(ctx context.Context, cfg *UpstreamConfig, entry proxy.ProxyLogEntr
 	if cfg == nil {
 		return
 	}
+	// Prefer explicit entry.RequestID; otherwise inherit chi/MetAPI request id.
+	if entry.RequestID == "" {
+		entry.RequestID = proxy.RequestIDFromContext(ctx)
+	}
 	writer := cfg.LogProxy
 	if writer == nil {
 		writer = defaultLogProxyWriter
@@ -110,6 +115,8 @@ func logProxy(ctx context.Context, cfg *UpstreamConfig, entry proxy.ProxyLogEntr
 			"err", err,
 			"status", entry.Status,
 			"model", entry.ModelRequested,
+			"request_id", entry.RequestID,
+			"retry_count", entry.RetryCount,
 		)
 	}
 }

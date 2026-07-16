@@ -67,6 +67,11 @@ func getUpstreamConfig() *UpstreamConfig {
 // Implements the spec's 10-step Handler pattern.
 func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 	shared.RecordProxyRequest()
+	// Parent request/trace id is stable across channel retries and endpoint fallbacks.
+	reqCtx, requestID := proxy.EnsureRequestID(r.Context(), "")
+	if requestID != "" && r.Context() != reqCtx {
+		r = r.WithContext(reqCtx)
+	}
 	cfg := getUpstreamConfig()
 	if cfg == nil {
 		if isProxyStubEnabled() {
@@ -74,9 +79,10 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 			return
 		}
 		unconfiguredUpstreamLogOnce.Do(func() {
-			slog.Error("proxy upstream dependencies are not configured")
+			slog.Error("proxy upstream dependencies are not configured", "request_id", requestID)
 		})
-		shared.RecordProxyError(); writeJSONError(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error")
+		shared.RecordProxyError()
+		writeJSONErrorWithRequest(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error", requestID)
 		return
 	}
 
@@ -104,12 +110,17 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 			},
 		)
 		if err != nil || selected == nil {
-			slog.Warn("channel selection failed", "err", err, "model", ctx.RequestedModel, "retry", retry)
+			slog.Warn("channel selection failed",
+				"err", err,
+				"model", ctx.RequestedModel,
+				"retry", retry,
+				"request_id", requestID,
+			)
 			if pendingFailure != nil {
-				pendingFailure.write(w)
+				pendingFailure.write(w, requestID)
 				return
 			}
-			writeJSONError(w, 503, "No available channels", "server_error")
+			writeJSONErrorWithRequest(w, 503, "No available channels", "server_error", requestID)
 			return
 		}
 		excludeChannelIDs = append(excludeChannelIDs, selected.Channel.ID)
@@ -129,6 +140,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 				"max_concurrency", selected.Site.MaxConcurrency,
 				"model", ctx.RequestedModel,
 				"retry", retry,
+				"request_id", requestID,
 			)
 			continue
 		}
@@ -138,7 +150,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		var nextPending *pendingUpstreamFailure
 		func() {
 			defer siteSlot.Release()
-			finished, nextPending = dispatchSelectedUpstream(w, r, ctx, cfg, selected, upstreamPath, retry, maxRetries)
+			finished, nextPending = dispatchSelectedUpstream(w, r, ctx, cfg, selected, upstreamPath, retry, maxRetries, requestID)
 		}()
 		if finished {
 			return
@@ -148,7 +160,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		}
 	}
 
-	writeJSONError(w, 503, "All channels exhausted", "server_error")
+	writeJSONErrorWithRequest(w, 503, "All channels exhausted", "server_error", requestID)
 }
 
 // dispatchSelectedUpstream runs steps 7-9 for one selected channel.
@@ -169,7 +181,11 @@ func dispatchSelectedUpstream(
 	upstreamPath string,
 	retry int,
 	maxRetries int,
+	requestID string,
 ) (finished bool, nextPending *pendingUpstreamFailure) {
+	if requestID == "" {
+		requestID = proxy.RequestIDFromContext(r.Context())
+	}
 	// Step 7: Build upstream request materials
 	upstreamModel := selected.ActualModel
 	if upstreamModel == "" {
@@ -197,19 +213,21 @@ func dispatchSelectedUpstream(
 		var bodyReader io.Reader
 		bodyReader, contentType, err = CloneMultipartBody(r, map[string]string{"model": upstreamModel})
 		if err != nil {
-			slog.Warn("multipart upstream body construction failed", "err", err, "path", upstreamPath, "model", upstreamModel)
-			writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
+			slog.Warn("multipart upstream body construction failed",
+				"err", err, "path", upstreamPath, "model", upstreamModel, "request_id", requestID, "retry", retry)
+			writeJSONErrorWithRequest(w, 400, "Invalid multipart request body", "invalid_request_error", requestID)
 			return true, nil
 		}
 		if bodyReader != nil {
 			bodyBytes, err = io.ReadAll(bodyReader)
 			if err != nil {
-				slog.Warn("multipart upstream body read failed", "err", err, "path", upstreamPath)
-				writeJSONError(w, 400, "Invalid multipart request body", "invalid_request_error")
+				slog.Warn("multipart upstream body read failed",
+					"err", err, "path", upstreamPath, "request_id", requestID, "retry", retry)
+				writeJSONErrorWithRequest(w, 400, "Invalid multipart request body", "invalid_request_error", requestID)
 				return true, nil
 			}
 		}
-		return dispatchEndpointAttempt(w, r, ctx, cfg, selected, upstreamModel, proxyConfig, upstreamPath, contentType, bodyBytes, firstByteTimeoutMs, retry, maxRetries, true)
+		return dispatchEndpointAttempt(w, r, ctx, cfg, selected, upstreamModel, proxyConfig, upstreamPath, contentType, bodyBytes, firstByteTimeoutMs, retry, maxRetries, true, requestID)
 	}
 	bodyBytes = swapModelInJSON(ctx.RawBody, upstreamModel)
 
@@ -221,7 +239,7 @@ func dispatchSelectedUpstream(
 	)
 	if errMsg := responsesOnlyClientError(upstreamPath, bodyBytes, sitePref); errMsg != "" {
 		// Clear failure for chat/messages clients when site cannot serve without transform.
-		writeJSONError(w, http.StatusBadRequest, errMsg, "invalid_request_error")
+		writeJSONErrorWithRequest(w, http.StatusBadRequest, errMsg, "invalid_request_error", requestID)
 		return true, nil
 	}
 
@@ -232,7 +250,7 @@ func dispatchSelectedUpstream(
 		attemptBody, sanitizeErr := sanitizeUpstreamJSONBody(bodyBytes, selected.Site.Platform, path)
 		if sanitizeErr != nil {
 			// Clear client-facing continuity error (issue #54 / upstream #504).
-			writeJSONError(w, http.StatusBadRequest, sanitizeErr.Error(), "invalid_request_error")
+			writeJSONErrorWithRequest(w, http.StatusBadRequest, sanitizeErr.Error(), "invalid_request_error", requestID)
 			return true, nil
 		}
 		// Force stream=true for responses-only / stream-preferring sites (and codex/sub2api).
@@ -241,7 +259,7 @@ func dispatchSelectedUpstream(
 		finished, pending, cont := dispatchEndpointAttemptWithContinue(
 			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 			path, contentType, attemptBody, firstByteTimeoutMs,
-			retry, maxRetries, isLast, disableCrossProtocolFallback, effectiveStream,
+			retry, maxRetries, isLast, disableCrossProtocolFallback, effectiveStream, requestID,
 		)
 		if finished {
 			return true, nil
@@ -262,7 +280,7 @@ func dispatchSelectedUpstream(
 	if retry < maxRetries {
 		return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error")
 	}
-	writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+	writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
 	return true, nil
 }
 
@@ -377,11 +395,12 @@ func dispatchEndpointAttempt(
 	retry int,
 	maxRetries int,
 	recordFailure bool,
+	requestID string,
 ) (finished bool, nextPending *pendingUpstreamFailure) {
 	finished, pending, _ := dispatchEndpointAttemptWithContinue(
 		w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 		upstreamPath, contentType, bodyBytes, firstByteTimeoutMs,
-		retry, maxRetries, true, true, ctx != nil && ctx.IsStream,
+		retry, maxRetries, true, true, ctx != nil && ctx.IsStream, requestID,
 	)
 	if !recordFailure {
 		return finished, pending
@@ -409,20 +428,26 @@ func dispatchEndpointAttemptWithContinue(
 	isLastEndpoint bool,
 	disableCrossProtocolFallback bool,
 	effectiveStream bool,
+	requestID string,
 ) (finished bool, nextPending *pendingUpstreamFailure, cont bool) {
+	if requestID == "" {
+		requestID = proxy.RequestIDFromContext(r.Context())
+	}
 	upstreamURL := proxy.BuildUpstreamURL(selected.Site.URL, upstreamPath)
 	startedAt := time.Now()
 
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytesReader(bodyBytes))
 	if err != nil {
-		slog.Warn("upstream request construction failed", "err", err, "url", upstreamURL, "model", upstreamModel)
+		slog.Warn("upstream request construction failed",
+			"err", err, "url", upstreamURL, "model", upstreamModel,
+			"request_id", requestID, "retry", retry)
 		if !isLastEndpoint && !disableCrossProtocolFallback {
 			return false, nil, true
 		}
 		if retry < maxRetries {
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
-		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+		writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
 		return true, nil, false
 	}
 	req.Header.Set("Content-Type", contentType)
@@ -443,6 +468,8 @@ func dispatchEndpointAttemptWithContinue(
 				"channel_id", selected.Channel.ID,
 				"first_byte_timeout_ms", firstByteTimeoutMs,
 				"is_last_endpoint", isLastEndpoint,
+				"request_id", requestID,
+				"retry", retry,
 			)
 			if !isLastEndpoint && !disableCrossProtocolFallback {
 				return false, nil, true
@@ -452,10 +479,12 @@ func dispatchEndpointAttemptWithContinue(
 			if retry < maxRetries && proxy.ShouldRetryProxyRequest(408, err.Error()) {
 				return false, jsonPendingUpstreamFailure(http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error"), false
 			}
-			writeJSONError(w, http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error")
+			writeJSONErrorWithRequest(w, http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error", requestID)
 			return true, nil, false
 		}
-		slog.Warn("upstream request failed", "err", err, "url", upstreamURL, "model", upstreamModel, "channel_id", selected.Channel.ID)
+		slog.Warn("upstream request failed",
+			"err", err, "url", upstreamURL, "model", upstreamModel,
+			"channel_id", selected.Channel.ID, "request_id", requestID, "retry", retry)
 		if !isLastEndpoint && !disableCrossProtocolFallback {
 			// Network error may still be protocol-local; allow next endpoint without poison.
 			return false, nil, true
@@ -464,7 +493,7 @@ func dispatchEndpointAttemptWithContinue(
 		if retry < maxRetries {
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
-		writeJSONError(w, 502, "Upstream request failed", "upstream_error")
+		writeJSONErrorWithRequest(w, 502, "Upstream request failed", "upstream_error", requestID)
 		return true, nil, false
 	}
 
@@ -474,7 +503,9 @@ func dispatchEndpointAttemptWithContinue(
 			respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
 			resp.Body.Close()
 			if readErr != nil {
-				slog.Warn("failed to read upstream stream error response", "err", readErr, "latency_ms", latencyMs, "status", resp.StatusCode)
+				slog.Warn("failed to read upstream stream error response",
+					"err", readErr, "latency_ms", latencyMs, "status", resp.StatusCode,
+					"request_id", requestID, "retry", retry)
 				if !isLastEndpoint && !disableCrossProtocolFallback {
 					return false, nil, true
 				}
@@ -482,7 +513,7 @@ func dispatchEndpointAttemptWithContinue(
 				if retry < maxRetries {
 					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 				}
-				writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
+				writeJSONErrorWithRequest(w, 502, "Failed to read upstream response", "upstream_error", requestID)
 				return true, nil, false
 			}
 			rawErrText := string(respBody)
@@ -502,62 +533,66 @@ func dispatchEndpointAttemptWithContinue(
 			defer resp.Body.Close()
 			streamUsage = handleStreamUpstream(w, r, resp, latencyMs)
 		}()
-			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
-			writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
-			return true, nil, false
-		}
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
+		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry, requestID)
+		return true, nil, false
+	}
 
-		respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
-			if !isLastEndpoint && !disableCrossProtocolFallback {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
-			if retry < maxRetries {
-				return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
-			}
-			writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-			return true, nil, false
+	respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+	resp.Body.Close()
+	if readErr != nil {
+		slog.Warn("failed to read upstream response",
+			"err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID,
+			"request_id", requestID, "retry", retry)
+		if !isLastEndpoint && !disableCrossProtocolFallback {
+			return false, nil, true
 		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			rawErrText := string(respBody)
-			if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
-			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-				return false, bufferedPendingUpstreamFailure(resp, respBody), false
-			}
-			relayBufferedUpstreamResponse(w, resp, respBody)
-			return true, nil, false
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+		if retry < maxRetries {
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 		}
-		usage := ParseUsageFromBody(respBody)
-		failure := proxy.DetectProxyFailure(string(respBody), usage.ToUsageSummary())
-		if failure != nil {
-			slog.Warn("content-based failure detected",
-				"reason", failure.Reason,
-				"status", failure.Status,
-				"model", upstreamModel,
-				"channel_id", selected.Channel.ID,
-				"latency_ms", latencyMs,
-			)
-			if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
-			if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
-				return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
-			}
-			writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
-			return true, nil, false
+		writeJSONErrorWithRequest(w, 502, "Failed to read upstream response", "upstream_error", requestID)
+		return true, nil, false
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rawErrText := string(respBody)
+		if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
+			return false, nil, true
 		}
-		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
-		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry)
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+		if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
+			return false, bufferedPendingUpstreamFailure(resp, respBody), false
+		}
 		relayBufferedUpstreamResponse(w, resp, respBody)
 		return true, nil, false
 	}
+	usage := ParseUsageFromBody(respBody)
+	failure := proxy.DetectProxyFailure(string(respBody), usage.ToUsageSummary())
+	if failure != nil {
+		slog.Warn("content-based failure detected",
+			"reason", failure.Reason,
+			"status", failure.Status,
+			"model", upstreamModel,
+			"channel_id", selected.Channel.ID,
+			"latency_ms", latencyMs,
+			"request_id", requestID,
+			"retry", retry,
+		)
+		if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
+			return false, nil, true
+		}
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
+		if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
+			return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
+		}
+		writeJSONErrorWithRequest(w, failure.Status, "Upstream returned an error response", "upstream_error", requestID)
+		return true, nil, false
+	}
+	recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
+	writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry, requestID)
+	relayBufferedUpstreamResponse(w, resp, respBody)
+	return true, nil, false
+}
 
 func shouldContinueEndpointFallback(status int, rawErrText string, isLastEndpoint bool, disableCrossProtocolFallback bool) bool {
 	if isLastEndpoint || disableCrossProtocolFallback {
@@ -596,9 +631,9 @@ func jsonPendingUpstreamFailure(status int, message, typ string) *pendingUpstrea
 	}
 }
 
-func (p *pendingUpstreamFailure) write(w http.ResponseWriter) {
+func (p *pendingUpstreamFailure) write(w http.ResponseWriter, requestID string) {
 	if p == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "No available channels", "server_error")
+		writeJSONErrorWithRequest(w, http.StatusServiceUnavailable, "No available channels", "server_error", requestID)
 		return
 	}
 	if p.resp != nil {
@@ -617,7 +652,7 @@ func (p *pendingUpstreamFailure) write(w http.ResponseWriter) {
 	if typ == "" {
 		typ = "upstream_error"
 	}
-	writeJSONError(w, status, message, typ)
+	writeJSONErrorWithRequest(w, status, message, typ, requestID)
 }
 
 func applyProxyCustomHeaders(req *http.Request, proxyConfig *platform.ProxyConfig) {
@@ -736,9 +771,13 @@ func writeSuccessProxyLog(
 	isStream bool,
 	usage ParsedUsage,
 	retryCount int,
+	requestID string,
 ) {
 	if cfg == nil || selected == nil {
 		return
+	}
+	if requestID == "" {
+		requestID = proxy.RequestIDFromContext(ctx)
 	}
 	requestedModel := ""
 	var keyID *int64
@@ -792,6 +831,7 @@ func writeSuccessProxyLog(
 		ClientAppName:      clientAppName,
 		ClientConfidence:   clientConfidence,
 		RetryCount:         retryCount,
+		RequestID:          requestID,
 		UpstreamPath:       &upstreamPath,
 		UsageSource:        source,
 	}

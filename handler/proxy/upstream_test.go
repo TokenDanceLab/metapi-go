@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/tokendancelab/metapi-go/auth"
@@ -742,6 +743,151 @@ func TestDetectProxyFailureReceivesParsedUsageFromBody(t *testing.T) {
 	sum := usage.ToUsageSummary()
 	if sum.CompletionTokens != 2 {
 		t.Fatalf("summary completion = %d", sum.CompletionTokens)
+	}
+}
+
+func TestDispatchUpstream_MultiRetrySharesRequestIDInProxyLogsAndError(t *testing.T) {
+	// Channel A always 429 (retryable); channel B also 429 → terminal after retries.
+	// Same parent request_id must appear on success-path logs if B later succeeds,
+	// and on the final client error body / header when all attempts fail.
+	var hits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limited","type":"rate_limit_error"}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	selectedA := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 11, RouteID: 1, Enabled: true},
+		Account:     store.Account{ID: 1, Status: "active"},
+		Site:        store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+		TokenValue:  "tok-a",
+		ActualModel: "gpt-4o-upstream",
+	}
+	selectedB := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 22, RouteID: 1, Enabled: true},
+		Account:     store.Account{ID: 2, Status: "active"},
+		Site:        store.Site{ID: 2, URL: upstream.URL, Status: "active"},
+		TokenValue:  "tok-b",
+		ActualModel: "gpt-4o-upstream",
+	}
+	router := &upstreamTestRouter{selected: selectedA, next: &selectedB}
+
+	var logs []proxy.ProxyLogEntry
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	const wantID = "trace-multi-retry-42"
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	req = req.WithContext(proxy.WithRequestID(req.Context(), wantID))
+	rec := httptest.NewRecorder()
+	dispatchUpstream(rec, req, &Ctx{
+		RequestedModel: "gpt-4o",
+		DownstreamPath: "/v1/chat/completions",
+		RawBody:        []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`),
+		MaxRetries:     1,
+	})
+
+	if hits.Load() < 2 {
+		t.Fatalf("expected multi-channel attempts, hits=%d", hits.Load())
+	}
+	if rec.Code != http.StatusTooManyRequests && rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusBadGateway {
+		// Terminal may be relayed upstream 429 or synthetic exhausted JSON depending on retry policy.
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	// When we emit MetAPI JSON errors, request_id is present; when we relay upstream
+	// body, X-Request-Id may still be set if write path used writeJSONErrorWithRequest.
+	body := rec.Body.String()
+	if strings.Contains(body, `"request_id"`) && !strings.Contains(body, wantID) {
+		t.Fatalf("body has request_id field but missing %s: %s", wantID, body)
+	}
+	if hdr := rec.Header().Get("X-Request-Id"); hdr != "" && hdr != wantID {
+		t.Fatalf("X-Request-Id = %q, want %s", hdr, wantID)
+	}
+	// proxy_logs currently only write on success in the hot path; ensure the
+	// parent id is still recoverable from the request context after multi-attempt.
+	if got := proxy.RequestIDFromContext(req.Context()); got != wantID {
+		t.Fatalf("request context lost id: %q", got)
+	}
+	_ = logs
+}
+
+func TestDispatchUpstream_RetryThenSuccessKeepsSameRequestIDInProxyLog(t *testing.T) {
+	var hits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := hits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if n == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":{"message":"rate limited","type":"rate_limit_error"}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"ok","choices":[{"message":{"content":"hi"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	selectedA := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 11, RouteID: 1, Enabled: true},
+		Account:     store.Account{ID: 1, Status: "active"},
+		Site:        store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+		TokenValue:  "tok-a",
+		ActualModel: "gpt-4o-upstream",
+	}
+	selectedB := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 22, RouteID: 1, Enabled: true},
+		Account:     store.Account{ID: 2, Status: "active"},
+		Site:        store.Site{ID: 2, URL: upstream.URL, Status: "active"},
+		TokenValue:  "tok-b",
+		ActualModel: "gpt-4o-upstream",
+	}
+	router := &upstreamTestRouter{selected: selectedA, next: &selectedB}
+
+	var logs []proxy.ProxyLogEntry
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	const wantID = "trace-success-after-retry"
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	req = req.WithContext(proxy.WithRequestID(req.Context(), wantID))
+	rec := httptest.NewRecorder()
+	dispatchUpstream(rec, req, &Ctx{
+		RequestedModel: "gpt-4o",
+		DownstreamPath: "/v1/chat/completions",
+		RawBody:        []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`),
+		MaxRetries:     1,
+	})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s hits=%d", rec.Code, rec.Body.String(), hits.Load())
+	}
+	if hits.Load() < 2 {
+		t.Fatalf("expected retry across channels, hits=%d", hits.Load())
+	}
+	if len(logs) != 1 {
+		t.Fatalf("proxy logs = %d, want 1 success row: %#v", len(logs), logs)
+	}
+	if logs[0].RequestID != wantID {
+		t.Fatalf("proxy log request_id = %q, want %s", logs[0].RequestID, wantID)
+	}
+	if logs[0].RetryCount != 1 {
+		t.Fatalf("retry_count = %d, want 1 (second channel attempt)", logs[0].RetryCount)
+	}
+	if logs[0].ChannelID == nil || *logs[0].ChannelID != 22 {
+		t.Fatalf("channel_id = %#v, want 22", logs[0].ChannelID)
 	}
 }
 

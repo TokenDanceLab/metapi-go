@@ -229,6 +229,8 @@ type ProxyLog struct {
 	ClientConfidence     *string  `db:"client_confidence" json:"clientConfidence"`
 	ErrorMessage         *string  `db:"error_message" json:"errorMessage"`
 	RetryCount           int64    `db:"retry_count" json:"retryCount"`
+	// RequestID is the ingress X-Request-Id / chi RequestID shared across retries.
+	RequestID            *string  `db:"request_id" json:"requestId"`
 	CreatedAt            string   `db:"created_at" json:"createdAt"`
 }
 

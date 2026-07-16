@@ -54,6 +54,18 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 			return EnsureColumn(db, "token_routes", "context_length", "INTEGER", "INTEGER", "")
 		},
 	},
+	{
+		// Learn #110: end-to-end request/trace ids across channel retries.
+		Version:     "sc2_004_proxy_logs_request_id",
+		Description: "proxy_logs.request_id TEXT NULL — ingress X-Request-Id shared across retry/failover attempts",
+		Apply: func(db *DB) error {
+			if err := EnsureColumn(db, "proxy_logs", "request_id", "TEXT", "TEXT", ""); err != nil {
+				return err
+			}
+			return EnsureIndex(db, "proxy_logs_request_id_created_at_idx",
+				`CREATE INDEX IF NOT EXISTS proxy_logs_request_id_created_at_idx ON proxy_logs (request_id, created_at)`)
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.
