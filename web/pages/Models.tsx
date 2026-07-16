@@ -72,6 +72,29 @@ interface ModelsMarketplaceResponse {
   };
 }
 
+interface PriceCompareItem {
+  siteId: number;
+  siteName: string;
+  platform: string;
+  model: string;
+  accountId: number;
+  username?: string;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  source: string;
+  ratesSource: string;
+  estimatedCostSample: number;
+  observedSamples?: number;
+  configuredUnitCost?: number | null;
+  missingPrice?: boolean;
+}
+
+interface PriceCompareResponse {
+  model?: string;
+  items?: PriceCompareItem[];
+  meta?: { count?: number; notes?: string };
+}
+
 function isKnownLatency(latency: number | null | undefined): latency is number {
   return typeof latency === 'number' && Number.isFinite(latency);
 }
@@ -125,6 +148,26 @@ function renderGroupPricingValue(pricing: ModelGroupPricing): string {
   return `${pricing.perCallTotal ?? 0} USD / call`;
 }
 
+function formatPriceSource(source: string | undefined): string {
+  switch (source) {
+    case 'billing_details':
+      return tr('账单明细');
+    case 'observed':
+      return tr('观测成本');
+    case 'configured':
+      return tr('配置单价');
+    case 'fallback':
+      return tr('回退估算');
+    default:
+      return source || '—';
+  }
+}
+
+function formatMoney(value: number | null | undefined, digits = 6): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return value.toFixed(digits);
+}
+
 const PAGE_SIZES = [10, 20, 50];
 
 function compareModels(a: ModelRow, b: ModelRow, sortBy: SortColumn, sortDir: 'asc' | 'desc'): number {
@@ -168,6 +211,11 @@ export default function Models() {
   const [filterCollapsed, setFilterCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [metadataHydrating, setMetadataHydrating] = useState(false);
+  const [priceModel, setPriceModel] = useState('');
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceItems, setPriceItems] = useState<PriceCompareItem[]>([]);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [priceLoaded, setPriceLoaded] = useState(false);
   const isMobile = useIsMobile();
   const filterPanelPresence = useAnimatedVisibility(!isMobile && !filterCollapsed, 220);
   const latestPrimaryRequestRef = useRef(0);
@@ -285,6 +333,27 @@ export default function Models() {
       }, 600);
     })();
   }, [hydrateMarketplaceMetadata, loadBaseMarketplace]);
+
+  const loadPriceCompare = useCallback(async (modelOverride?: string) => {
+    const model = (modelOverride ?? priceModel).trim();
+    setPriceLoading(true);
+    setPriceError(null);
+    try {
+      const res = await api.getModelPriceCompare({
+        model: model || undefined,
+        limit: 40,
+        days: 30,
+      }) as PriceCompareResponse;
+      setPriceItems(Array.isArray(res.items) ? res.items : []);
+      setPriceLoaded(true);
+    } catch (err) {
+      setPriceItems([]);
+      setPriceLoaded(true);
+      setPriceError(err instanceof Error ? err.message : tr('价格对比加载失败'));
+    } finally {
+      setPriceLoading(false);
+    }
+  }, [priceModel]);
 
   useEffect(() => {
     const q = new URLSearchParams(location.search).get('q') || '';
