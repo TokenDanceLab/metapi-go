@@ -106,3 +106,25 @@ Wave E4  Product features from backlog (P0 first)
 - File ownership lanes; no two WFs write same lock/schema file  
 - Main session orchestrates only; Workflows execute issues  
 - Original product gaps implement only after G2/F0 (except CRITICAL reliability B2/R*)
+
+## Lane teams (mandatory)
+
+See **[lane-charters.md](./lane-charters.md)** — each milestone has a dedicated Workflow fleet and file ownership.
+
+| Lane WF | Active E1 work |
+|:--------|:---------------|
+| `lane-stack` | S0/S1 |
+| `lane-gap` | G1/G2 |
+| `lane-ui` | U0 DESIGN.md |
+| `lane-backend` | B0 + B2 |
+| `lane-schema` | SC0 |
+| `lane-reliability` | R0 |
+| `lane-feature` | blocked on G2+F0 |
+| `lane-gate` | merge MASTER / release |
+
+Detail design SSOT files:
+
+- UI: `docs/design/DESIGN.md`
+- Backend: `docs/design/BACKEND.md`
+- Schema: `docs/analysis/schema-parity.md` (SC0)
+- Program: this file + `lane-charters.md`
