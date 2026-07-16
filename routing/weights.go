@@ -354,7 +354,7 @@ var (
 	stableFirstLastSelectedSiteByKey        = make(map[string]int64)
 	stableFirstObservationProgressByKey     = make(map[string]StableFirstObservationProgressState)
 	stableFirstObservationSiteCooldownByKey = make(map[string]int64)
-	stableFirstStateMu                      sync_RWMutex
+	stableFirstStateMu                      sync.RWMutex
 )
 
 const (
@@ -369,14 +369,16 @@ type StableFirstObservationProgressState struct {
 	LastObservationAtMs *int64
 }
 
-type sync_RWMutex = sync.RWMutex
-
 func rememberStableFirstSiteSelectionForKey(rotationKey string, siteID int64) {
 	if rotationKey == "" || siteID <= 0 {
 		return
 	}
 	stableFirstStateMu.Lock()
 	defer stableFirstStateMu.Unlock()
+	rememberStableFirstSiteSelectionForKeyLocked(rotationKey, siteID)
+}
+
+func rememberStableFirstSiteSelectionForKeyLocked(rotationKey string, siteID int64) {
 	delete(stableFirstLastSelectedSiteByKey, rotationKey)
 	stableFirstLastSelectedSiteByKey[rotationKey] = siteID
 	for len(stableFirstLastSelectedSiteByKey) > MaxStableFirstRotationKeys {
@@ -393,6 +395,10 @@ func rememberStableFirstObservationProgressForKey(rotationKey string, state Stab
 	}
 	stableFirstStateMu.Lock()
 	defer stableFirstStateMu.Unlock()
+	rememberStableFirstObservationProgressForKeyLocked(rotationKey, state)
+}
+
+func rememberStableFirstObservationProgressForKeyLocked(rotationKey string, state StableFirstObservationProgressState) {
 	delete(stableFirstObservationProgressByKey, rotationKey)
 	stableFirstObservationProgressByKey[rotationKey] = state
 	for len(stableFirstObservationProgressByKey) > MaxStableFirstObservationProgressKeys {
@@ -407,9 +413,13 @@ func rememberStableFirstObservationSiteCooldown(rotationKey string, siteID int64
 	if rotationKey == "" || siteID <= 0 {
 		return
 	}
-	scopedKey := rotationKey + ":" + formatInt(siteID)
 	stableFirstStateMu.Lock()
 	defer stableFirstStateMu.Unlock()
+	rememberStableFirstObservationSiteCooldownLocked(rotationKey, siteID, observedAtMs)
+}
+
+func rememberStableFirstObservationSiteCooldownLocked(rotationKey string, siteID int64, observedAtMs int64) {
+	scopedKey := rotationKey + ":" + formatInt(siteID)
 	delete(stableFirstObservationSiteCooldownByKey, scopedKey)
 	stableFirstObservationSiteCooldownByKey[scopedKey] = observedAtMs
 	for len(stableFirstObservationSiteCooldownByKey) > MaxStableFirstObservationSiteCooldownKeys {
@@ -503,7 +513,9 @@ func selectStableFirstCandidate(candidates []RouteChannelCandidate, contribution
 
 	orderedSiteLeaderIndices := getStableFirstOrderedSiteLeaderIndices(candidates, stableSiteLeaderIndices)
 
+	stableFirstStateMu.RLock()
 	lastSelectedSiteID := stableFirstLastSelectedSiteByKey[rotationKey]
+	stableFirstStateMu.RUnlock()
 	lastSelectedIndex := -1
 	for i, idx := range orderedSiteLeaderIndices {
 		if candidates[idx].Site.ID == lastSelectedSiteID {
@@ -588,26 +600,31 @@ func ShouldUseStableFirstObservationCandidate(rotationKey string, observationCan
 }
 
 // UpdateStableFirstObservationProgress updates observation progress after a selection.
+// The full read-modify-write of progress (and optional cooldown) is held under a
+// single exclusive lock to avoid TOCTOU races on the shared maps.
 func UpdateStableFirstObservationProgress(rotationKey string, usedObservation bool, selectedSiteID int64) {
 	if rotationKey == "" {
 		return
 	}
 	n := nowMs()
+	stableFirstStateMu.Lock()
+	defer stableFirstStateMu.Unlock()
+
 	previous, ok := stableFirstObservationProgressByKey[rotationKey]
 	if !ok {
 		previous = StableFirstObservationProgressState{}
 	}
 	if usedObservation {
-		rememberStableFirstObservationProgressForKey(rotationKey, StableFirstObservationProgressState{
+		rememberStableFirstObservationProgressForKeyLocked(rotationKey, StableFirstObservationProgressState{
 			RequestCount:        0,
 			LastObservationAtMs: &n,
 		})
 		if selectedSiteID > 0 {
-			rememberStableFirstObservationSiteCooldown(rotationKey, selectedSiteID, n)
+			rememberStableFirstObservationSiteCooldownLocked(rotationKey, selectedSiteID, n)
 		}
 		return
 	}
-	rememberStableFirstObservationProgressForKey(rotationKey, StableFirstObservationProgressState{
+	rememberStableFirstObservationProgressForKeyLocked(rotationKey, StableFirstObservationProgressState{
 		RequestCount:        previous.RequestCount + 1,
 		LastObservationAtMs: previous.LastObservationAtMs,
 	})

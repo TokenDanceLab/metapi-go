@@ -4,6 +4,7 @@ import (
 	"math"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/tokendancelab/metapi-go/store"
@@ -554,4 +555,51 @@ func BenchmarkMakeCandidate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = makeCandidate(int64(i%100)+1, int64(i%10)*10, int64(i)+1, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil)
 	}
+}
+
+
+// TestStableFirstStateMaps_ConcurrentRace exercises concurrent select + update + clear
+// against the shared stable-first maps. Run with -race.
+func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	ClearStableFirstCachesForRoute(42)
+
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 100, 1001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+		makeCandidate(2, 200, 2001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+		makeCandidate(3, 300, 3001, 10, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+	}
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+	rotationKey := BuildStableFirstRotationKey(42, "gpt-4")
+
+	var wg sync.WaitGroup
+	const workers = 8
+	const iters = 200
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func(worker int) {
+			defer wg.Done()
+			for i := 0; i < iters; i++ {
+				result := CalculateWeightedSelection(
+					candidates, staticModel("gpt-4"), routingWeights,
+					nil, nil, 0, StableFirstMode, rotationKey, nil, 1.0,
+				)
+				if result.Selected != nil {
+					rememberStableFirstSiteSelectionForKey(rotationKey, result.Selected.Site.ID)
+					UpdateStableFirstObservationProgress(rotationKey, i%17 == 0, result.Selected.Site.ID)
+				}
+				_ = ShouldUseStableFirstObservationCandidate(rotationKey, candidates)
+				if i%50 == 0 {
+					ClearStableFirstCachesForRoute(42)
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
 }

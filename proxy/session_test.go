@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -523,4 +524,56 @@ func TestCredentialModeIntegration(t *testing.T) {
 			t.Errorf("expected empty mode for nil config, got %q", mode)
 		}
 	})
+}
+
+
+// TestLeaseLifecycle_ConcurrentAcquireSnapshot stresses acquire/touch/release
+// against GetActiveChannelIDs under -race and verifies lock-order safety.
+func TestLeaseLifecycle_ConcurrentAcquireSnapshot(t *testing.T) {
+	coord := newTestCoordinator()
+	coord.cfg.ProxySessionChannelConcurrencyLimit = 4
+	coord.cfg.ProxySessionChannelQueueWaitMs = 20
+	coord.cfg.ProxySessionChannelLeaseTtlMs = 500
+	coord.cfg.ProxySessionChannelLeaseKeepaliveMs = 50
+	ec, op := sessionScopedConfig()
+
+	var wg sync.WaitGroup
+	const workers = 8
+	const iters = 40
+	wg.Add(workers + 1)
+
+	// Snapshotter
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iters*workers; i++ {
+			_ = coord.GetActiveChannelIDs()
+			_ = coord.GetChannelLoadSnapshot(int64(1000+(i%3)), ec, op)
+		}
+	}()
+
+	for w := 0; w < workers; w++ {
+		go func(worker int) {
+			defer wg.Done()
+			channelID := int64(1000 + (worker % 3))
+			for i := 0; i < iters; i++ {
+				result := coord.AcquireChannelLease(channelID, ec, op)
+				if result.Status != "acquired" || result.Lease == nil {
+					continue
+				}
+				// Keepalive path: Touch must not spawn unbounded goroutines.
+				for k := 0; k < 3; k++ {
+					result.Lease.Touch()
+				}
+				result.Lease.Release()
+			}
+		}(w)
+	}
+	wg.Wait()
+
+	// Allow expiry/keepalive goroutines to observe doneCh.
+	time.Sleep(50 * time.Millisecond)
+	ids := coord.GetActiveChannelIDs()
+	if len(ids) != 0 {
+		t.Fatalf("expected no active leases after concurrent release, got %v", ids)
+	}
 }
