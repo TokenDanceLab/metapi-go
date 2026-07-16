@@ -126,6 +126,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
+		ProxyURL               *string  `json:"proxyUrl"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -191,16 +192,23 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		desc = &s
 	}
 
+	// Per-key egress proxy (FE-KEY-PROXY / #578). NULL/empty inherits site/system.
+	proxyURL, proxyErr := normalizeDownstreamProxyURL(body.ProxyURL)
+	if proxyErr != "" {
+		writeError(w, http.StatusBadRequest, proxyErr)
+		return
+	}
+
 	id, err := execInsertID(h.db,
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
 		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
-		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+		 proxy_url, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
 		body.MaxCost, body.MaxRequests,
 		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
-		now, now,
+		proxyURL, now, now,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -255,6 +263,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
+		ProxyURL               *string  `json:"proxyUrl"`
 	}
 
 	bodyBytes, err := decodeJSONRequestRaw(r, &body)
@@ -312,6 +321,9 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 	if _, ok := rawBody["excludedCredentialRefs"]; ok {
 		hasField["excludedCredentialRefs"] = true
+	}
+	if _, ok := rawBody["proxyUrl"]; ok {
+		hasField["proxyUrl"] = true
 	}
 
 	// Merge: present fields from body, missing fields from existing record.
@@ -397,6 +409,17 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		excludedCredentialRefs = normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
 	}
 
+	// proxyUrl: absent keeps existing; present empty/null clears to inherit site/system.
+	proxyURL := existingStringPtr(existing, "proxy_url")
+	if hasField["proxyUrl"] {
+		normalized, proxyErr := normalizeDownstreamProxyURL(body.ProxyURL)
+		if proxyErr != "" {
+			writeError(w, http.StatusBadRequest, proxyErr)
+			return
+		}
+		proxyURL = normalized
+	}
+
 	// Validate.
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "name 不能为空")
@@ -441,12 +464,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
 			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?,
 			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
-			excluded_site_ids = ?, excluded_credential_refs = ?, updated_at = ?
+			excluded_site_ids = ?, excluded_credential_refs = ?, proxy_url = ?, updated_at = ?
 		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
 		enabled, expiresAt, maxCost, maxRequests,
 		modelsJSON, routeIdsJSON, swmJSON,
-		excludedSitesJSON, credRefsJSON, now, id,
+		excludedSitesJSON, credRefsJSON, proxyURL, now, id,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -1069,6 +1092,31 @@ func int64FromAny(v any) int64 {
 		return int64(val)
 	}
 	return 0
+}
+
+// normalizeDownstreamProxyURL trims proxyUrl for create/update.
+// Empty / whitespace / null -> nil (inherit site/account/system proxy).
+// Non-empty values must include a supported scheme (http/https/socks*).
+func normalizeDownstreamProxyURL(input *string) (*string, string) {
+	if input == nil {
+		return nil, ""
+	}
+	v := strings.TrimSpace(*input)
+	if v == "" {
+		return nil, ""
+	}
+	lower := strings.ToLower(v)
+	supported := false
+	for _, scheme := range []string{"http://", "https://", "socks://", "socks4://", "socks4a://", "socks5://", "socks5h://"} {
+		if strings.HasPrefix(lower, scheme) {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return nil, "proxyUrl 必须以 http://、https:// 或 socks 代理 scheme 开头"
+	}
+	return &v, ""
 }
 
 func normalizeExpiresAt(input *string) *string {

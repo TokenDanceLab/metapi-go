@@ -66,6 +66,13 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 			if result.Key != nil {
 				pac.KeyID = &result.Key.ID
 				pac.KeyName = result.Key.Name
+				// Per-key egress proxy override (FE-KEY-PROXY / #578).
+				// Prefer over site/account proxy when non-empty; nil inherits.
+				if result.Key.ProxyURL != nil {
+					if trimmed := strings.TrimSpace(*result.Key.ProxyURL); trimmed != "" {
+						pac.ProxyURL = &trimmed
+					}
+				}
 			} else {
 				pac.KeyName = "global"
 			}

@@ -326,3 +326,119 @@ func assertNullString(t *testing.T, name string, got sql.NullString, want string
 		t.Fatalf("%s = %#v, want %q", name, got, want)
 	}
 }
+
+func TestDownstreamKeysProxyURLCreateUpdateGetAndClear(t *testing.T) {
+	_, r := setupDownstreamKeysTest(t)
+
+	// Create with proxyUrl
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name":     "proxy-client",
+		"key":      "sk-proxy-client-1",
+		"proxyUrl": "http://key-proxy.example:8080",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	item, ok := createBody["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("create missing item: %#v", createBody)
+	}
+	if item["proxyUrl"] != "http://key-proxy.example:8080" {
+		t.Fatalf("create proxyUrl = %#v, want key proxy", item["proxyUrl"])
+	}
+	keyID := int64(item["id"].(float64))
+
+	// List/get should include proxyUrl (camelCase via SELECT *)
+	resp = doGet(t, r, "/api/downstream-keys")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var listBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list: %v", err)
+	}
+	items, _ := listBody["items"].([]any)
+	found := false
+	for _, raw := range items {
+		row, _ := raw.(map[string]any)
+		if int64(row["id"].(float64)) == keyID {
+			found = true
+			if row["proxyUrl"] != "http://key-proxy.example:8080" {
+				t.Fatalf("list proxyUrl = %#v", row["proxyUrl"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("created key not in list")
+	}
+
+	// Partial update without proxyUrl preserves it
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"name": "proxy-client-renamed",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("partial update returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var updateBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &updateBody); err != nil {
+		t.Fatalf("unmarshal update: %v", err)
+	}
+	item = updateBody["item"].(map[string]any)
+	if item["proxyUrl"] != "http://key-proxy.example:8080" {
+		t.Fatalf("partial update dropped proxyUrl: %#v", item["proxyUrl"])
+	}
+	if item["name"] != "proxy-client-renamed" {
+		t.Fatalf("name not updated: %#v", item["name"])
+	}
+
+	// Clear proxyUrl with empty string → inherit (null)
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"proxyUrl": "",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("clear proxyUrl returned %d: %s", resp.Code, resp.Body.String())
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &updateBody); err != nil {
+		t.Fatalf("unmarshal clear: %v", err)
+	}
+	item = updateBody["item"].(map[string]any)
+	if item["proxyUrl"] != nil {
+		t.Fatalf("cleared proxyUrl should be null, got %#v", item["proxyUrl"])
+	}
+
+	// Invalid scheme rejected
+	resp = doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name":     "bad-proxy",
+		"key":      "sk-bad-proxy-1",
+		"proxyUrl": "ftp://not-supported",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("invalid proxyUrl create returned %d, want 400: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestNormalizeDownstreamProxyURL(t *testing.T) {
+	got, errMsg := normalizeDownstreamProxyURL(nil)
+	if got != nil || errMsg != "" {
+		t.Fatalf("nil => (%v, %q)", got, errMsg)
+	}
+	empty := "  "
+	got, errMsg = normalizeDownstreamProxyURL(&empty)
+	if got != nil || errMsg != "" {
+		t.Fatalf("empty => (%v, %q)", got, errMsg)
+	}
+	ok := " http://proxy:1 "
+	got, errMsg = normalizeDownstreamProxyURL(&ok)
+	if errMsg != "" || got == nil || *got != "http://proxy:1" {
+		t.Fatalf("ok => (%v, %q)", got, errMsg)
+	}
+	bad := "notaurl"
+	got, errMsg = normalizeDownstreamProxyURL(&bad)
+	if got != nil || errMsg == "" {
+		t.Fatalf("bad => (%v, %q)", got, errMsg)
+	}
+}
