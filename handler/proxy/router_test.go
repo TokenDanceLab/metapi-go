@@ -225,7 +225,7 @@ func TestFilesListRoute_Returns200(t *testing.T) {
 	}
 }
 
-func TestFilesUploadRoute_501(t *testing.T) {
+func TestFilesUploadRoute_NoLonger501(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(injectAuth)
 	RegisterProxyRoutes(r)
@@ -234,8 +234,13 @@ func TestFilesUploadRoute_501(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != 501 {
-		t.Errorf("expected 501, got %d: %s", rec.Code, rec.Body.String())
+	// Issue #155: /v1/files is a real proxy surface (stub/empty-body path may
+	// still return 200/400/503 depending on upstream wiring — never hard-501).
+	if rec.Code == 501 {
+		t.Errorf("expected non-501 files proxy, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Code == 404 || rec.Code == 405 {
+		t.Errorf("files upload route missing: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
