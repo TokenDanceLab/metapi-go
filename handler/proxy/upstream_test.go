@@ -32,10 +32,11 @@ type upstreamTestFailure struct {
 }
 
 type upstreamTestSuccess struct {
-	channelID int64
-	latencyMs float64
-	cost      float64
-	modelName *string
+	channelID          int64
+	latencyMs          float64
+	cost               float64
+	modelName          *string
+	firstByteLatencyMs *float64
 }
 
 func (r *upstreamTestRouter) SelectChannel(_ context.Context, _ string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
@@ -53,14 +54,23 @@ func (r *upstreamTestRouter) SelectPreferredChannel(_ context.Context, _ string,
 	return nil, nil
 }
 
-func (r *upstreamTestRouter) RecordSuccess(_ context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, _ *int64) error {
+func (r *upstreamTestRouter) RecordSuccess(_ context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, _ *int64, firstByteLatencyMs *float64) error {
 	r.successes = append(r.successes, upstreamTestSuccess{
-		channelID: channelID,
-		latencyMs: latencyMs,
-		cost:      cost,
-		modelName: cloneStringPtr(modelName),
+		channelID:          channelID,
+		latencyMs:          latencyMs,
+		cost:               cost,
+		modelName:          cloneStringPtr(modelName),
+		firstByteLatencyMs: cloneFloat64Ptr(firstByteLatencyMs),
 	})
 	return nil
+}
+
+func cloneFloat64Ptr(v *float64) *float64 {
+	if v == nil {
+		return nil
+	}
+	cloned := *v
+	return &cloned
 }
 
 func (r *upstreamTestRouter) RecordFailure(_ context.Context, channelID int64, failureCtx routing.SiteRuntimeFailureContext, _ *int64) error {
@@ -604,7 +614,6 @@ func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
 		t.Fatalf("expected channel 202 success, got %d", router.successes[0].channelID)
 	}
 }
-
 
 func TestNonStreamSuccessPersistsUsageTokensToProxyLog(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

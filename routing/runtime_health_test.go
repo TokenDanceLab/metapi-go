@@ -441,7 +441,7 @@ func TestRecordSiteRuntimeSuccess_ClearsBreaker(t *testing.T) {
 
 	// Record success → clears breaker
 	modelName := "gpt-4"
-	RecordSiteRuntimeSuccess(siteID, 500.0, &modelName)
+	RecordSiteRuntimeSuccess(siteID, 500.0, &modelName, nil)
 
 	state = siteRuntimeHealthStates[siteID]
 	if state.BreakerLevel != 0 {
@@ -461,7 +461,7 @@ func TestRecordSiteRuntimeSuccess_ReducesPenalty(t *testing.T) {
 	// Record an auth failure (penalty 1.8) then success
 	RecordSiteRuntimeFailure(siteID, SiteRuntimeFailureContext{Status: &status401})
 	modelName := "gpt-4"
-	RecordSiteRuntimeSuccess(siteID, 800.0, &modelName)
+	RecordSiteRuntimeSuccess(siteID, 800.0, &modelName, nil)
 
 	state := siteRuntimeHealthStates[siteID]
 	// max(0, 1.8*0.2 - 0.3) = max(0, 0.36-0.3) = max(0, 0.06) = 0.06
@@ -475,7 +475,7 @@ func TestRecordSiteRuntimeSuccess_UpdatesLatencyEMA(t *testing.T) {
 
 	siteID := int64(9994)
 	modelName := "gpt-4"
-	RecordSiteRuntimeSuccess(siteID, 1000.0, &modelName)
+	RecordSiteRuntimeSuccess(siteID, 1000.0, &modelName, nil)
 
 	state := siteRuntimeHealthStates[siteID]
 	if state.LatencyEMAMs == nil {
@@ -486,7 +486,7 @@ func TestRecordSiteRuntimeSuccess_UpdatesLatencyEMA(t *testing.T) {
 	}
 
 	// Second call: EMA = 1000*0.7 + 500*0.3 = 850
-	RecordSiteRuntimeSuccess(siteID, 500.0, &modelName)
+	RecordSiteRuntimeSuccess(siteID, 500.0, &modelName, nil)
 	state = siteRuntimeHealthStates[siteID]
 	if math.Abs(*state.LatencyEMAMs-850.0) > 0.001 {
 		t.Errorf("expected EMA = 850, got %.2f", *state.LatencyEMAMs)
@@ -651,7 +651,7 @@ func TestRuntimeHealthPublicReadersConcurrentWithUpdates(t *testing.T) {
 					})
 					continue
 				}
-				RecordSiteRuntimeSuccess(siteID, float64(100+j), &modelName)
+				RecordSiteRuntimeSuccess(siteID, float64(100+j), &modelName, nil)
 			}
 		}()
 	}
@@ -698,7 +698,7 @@ func TestResetSiteRuntimeHealthState(t *testing.T) {
 	// Seed some state
 	siteID := int64(9991)
 	modelName := "gpt-4"
-	RecordSiteRuntimeSuccess(siteID, 100.0, &modelName)
+	RecordSiteRuntimeSuccess(siteID, 100.0, &modelName, nil)
 
 	if len(siteRuntimeHealthStates) == 0 {
 		t.Fatal("expected state to exist before reset")
@@ -732,5 +732,113 @@ func TestBuildRuntimeBreakerReason(t *testing.T) {
 	modelOnly := buildRuntimeBreakerReason(SiteRuntimeHealthDetails{GlobalBreakerOpen: false, ModelBreakerOpen: true})
 	if modelOnly == "" {
 		t.Error("expected non-empty reason")
+	}
+}
+
+// =============================================================================
+// TTFT / first-byte soft scoring (#113)
+// =============================================================================
+
+func TestResolveFirstByteLatencyFactor_MissingIsNeutral(t *testing.T) {
+	if got := resolveFirstByteLatencyFactor(nil); math.Abs(got-1.0) > 0.001 {
+		t.Errorf("nil EMA should be neutral 1.0, got %.4f", got)
+	}
+	zero := 0.0
+	if got := resolveFirstByteLatencyFactor(&zero); math.Abs(got-1.0) > 0.001 {
+		t.Errorf("zero EMA should be neutral 1.0, got %.4f", got)
+	}
+	fast := 200.0
+	if got := resolveFirstByteLatencyFactor(&fast); math.Abs(got-1.0) > 0.001 {
+		t.Errorf("sub-baseline TTFT should not penalize, got %.4f", got)
+	}
+}
+
+func TestResolveFirstByteLatencyFactor_SlowSoftPenalty(t *testing.T) {
+	// Exactly at baseline+window → full soft penalty.
+	slow := float64(SiteRuntimeFirstByteLatencyBaselineMs + SiteRuntimeFirstByteLatencyWindowMs)
+	got := resolveFirstByteLatencyFactor(&slow)
+	expected := 1.0 - SiteRuntimeMaxFirstByteLatencyPenalty
+	if math.Abs(got-expected) > 0.001 {
+		t.Errorf("expected %.4f, got %.4f", expected, got)
+	}
+	// Mid-window partial penalty.
+	mid := float64(SiteRuntimeFirstByteLatencyBaselineMs) + float64(SiteRuntimeFirstByteLatencyWindowMs)/2
+	got = resolveFirstByteLatencyFactor(&mid)
+	expected = 1.0 - (0.5 * SiteRuntimeMaxFirstByteLatencyPenalty)
+	if math.Abs(got-expected) > 0.001 {
+		t.Errorf("mid-window expected %.4f, got %.4f", expected, got)
+	}
+}
+
+func TestGetRuntimeHealthMultiplier_TTFTSoftOnly(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	n := nowMs()
+	// Same overall latency, different TTFT.
+	overall := 2000.0 // below overall latency baseline
+	fastTTFT := 300.0
+	slowTTFT := float64(SiteRuntimeFirstByteLatencyBaselineMs + SiteRuntimeFirstByteLatencyWindowMs)
+	fastState := &SiteRuntimeHealthState{
+		LatencyEMAMs:          &overall,
+		FirstByteLatencyEMAMs: &fastTTFT,
+		LastUpdatedAtMs:       n,
+	}
+	slowState := &SiteRuntimeHealthState{
+		LatencyEMAMs:          &overall,
+		FirstByteLatencyEMAMs: &slowTTFT,
+		LastUpdatedAtMs:       n,
+	}
+	fastM := GetRuntimeHealthMultiplier(fastState)
+	slowM := GetRuntimeHealthMultiplier(slowState)
+	if !(fastM > slowM) {
+		t.Fatalf("expected faster TTFT to score higher: fast=%.4f slow=%.4f", fastM, slowM)
+	}
+	// Soft bound: max TTFT penalty is 12%.
+	if slowM < 1.0-SiteRuntimeMaxFirstByteLatencyPenalty-0.001 {
+		t.Fatalf("TTFT penalty should be soft (max 12%%), got %.4f", slowM)
+	}
+}
+
+func TestRecordSiteRuntimeSuccess_UpdatesFirstByteEMA(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteID := int64(11301)
+	modelName := "gpt-4"
+	fb1 := 1000.0
+	RecordSiteRuntimeSuccess(siteID, 3000.0, &modelName, &fb1)
+	state := siteRuntimeHealthStates[siteID]
+	if state == nil || state.FirstByteLatencyEMAMs == nil {
+		t.Fatal("expected first-byte EMA after success with observation")
+	}
+	if math.Abs(*state.FirstByteLatencyEMAMs-1000.0) > 0.001 {
+		t.Errorf("first EMA want 1000, got %.2f", *state.FirstByteLatencyEMAMs)
+	}
+	// Nil observation must not invent/overwrite TTFT samples.
+	RecordSiteRuntimeSuccess(siteID, 2500.0, &modelName, nil)
+	if math.Abs(*state.FirstByteLatencyEMAMs-1000.0) > 0.001 {
+		t.Errorf("nil observation should preserve EMA, got %.2f", *state.FirstByteLatencyEMAMs)
+	}
+	// Second observation: EMA = 1000*0.7 + 400*0.3 = 820
+	fb2 := 400.0
+	RecordSiteRuntimeSuccess(siteID, 2000.0, &modelName, &fb2)
+	if math.Abs(*state.FirstByteLatencyEMAMs-820.0) > 0.001 {
+		t.Errorf("expected EMA 820, got %.2f", *state.FirstByteLatencyEMAMs)
+	}
+}
+
+func TestRecordSiteRuntimeSuccess_TTFTDoesNotOpenBreaker(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteID := int64(11302)
+	modelName := "gpt-4"
+	// Extremely slow TTFT should only soft-score, never trip breaker.
+	slow := 60000.0
+	for i := 0; i < 5; i++ {
+		RecordSiteRuntimeSuccess(siteID, 5000.0, &modelName, &slow)
+	}
+	if IsSiteRuntimeBreakerOpen(siteID) {
+		t.Fatal("TTFT soft scoring must not open breaker")
+	}
+	state := siteRuntimeHealthStates[siteID]
+	if state.PenaltyScore != 0 {
+		// Success path reduces penalty; should remain 0 without failures.
+		t.Errorf("expected zero failure penalty, got %.4f", state.PenaltyScore)
 	}
 }

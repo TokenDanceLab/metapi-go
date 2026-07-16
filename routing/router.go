@@ -454,7 +454,8 @@ func stringsTrimSpaceImpl(s string) string {
 }
 
 // RecordSuccess records a successful channel usage.
-func (tr *TokenRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64) error {
+// firstByteLatencyMs is optional TTFT/first-byte observation (ms); nil skips TTFT scoring.
+func (tr *TokenRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64, firstByteLatencyMs *float64) error {
 	if err := EnsureSiteRuntimeHealthStateLoaded(); err != nil {
 		return err
 	}
@@ -493,13 +494,13 @@ func (tr *TokenRouter) RecordSuccess(ctx context.Context, channelID int64, laten
 				"cooldownLevel":  int64(0),
 				"updatedAt":      nowISO,
 			})
-			RecordSiteRuntimeSuccess(memberRow.Account.SiteID, latencyMs, modelName)
+			RecordSiteRuntimeSuccess(memberRow.Account.SiteID, latencyMs, modelName, firstByteLatencyMs)
 		} else {
-			RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+			RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName, firstByteLatencyMs)
 		}
 		tr.cache.InvalidateRouteScopedCache(ch.RouteID)
 	} else {
-		RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+		RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName, firstByteLatencyMs)
 	}
 
 	_ = tr.db.UpdateChannelSuccessFields(ctx, channelID, map[string]interface{}{
@@ -557,9 +558,9 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 				"cooldownLevel":  int64(0),
 				"updatedAt":      nowISO,
 			})
-			RecordSiteRuntimeSuccess(memberRow.Account.SiteID, latencyMs, modelName)
+			RecordSiteRuntimeSuccess(memberRow.Account.SiteID, latencyMs, modelName, nil)
 		} else {
-			RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+			RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName, nil)
 		}
 
 		_ = tr.db.UpdateChannelCooldownFields(ctx, []int64{channelID}, map[string]interface{}{
@@ -601,7 +602,7 @@ func (tr *TokenRouter) RecordProbeSuccess(ctx context.Context, channelID int64, 
 		}
 	}
 
-	RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName)
+	RecordSiteRuntimeSuccess(account.SiteID, latencyMs, modelName, nil)
 	return nil
 }
 

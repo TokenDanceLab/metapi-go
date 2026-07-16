@@ -557,7 +557,6 @@ func BenchmarkMakeCandidate(b *testing.B) {
 	}
 }
 
-
 // TestStableFirstStateMaps_ConcurrentRace exercises concurrent select + update + clear
 // against the shared stable-first maps. Run with -race.
 func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
@@ -602,4 +601,56 @@ func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
 		}(w)
 	}
 	wg.Wait()
+}
+
+// =============================================================================
+// TTFT soft scoring preference in weighted selection (#113)
+// =============================================================================
+
+func TestCalculateWeightedSelection_PrefersLowerTTFT(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+
+	// Two otherwise equal candidates on different sites.
+	// Seed identical success/cost history so value scores match.
+	candidates := []RouteChannelCandidate{
+		makeCandidate(11, 501, 5001, 10, 0, 20, 0, 2.0, 1.0, ptrFloat(0.01), 1.0, nil),
+		makeCandidate(12, 502, 5002, 10, 0, 20, 0, 2.0, 1.0, ptrFloat(0.01), 1.0, nil),
+	}
+	model := "gpt-4"
+	// Fast TTFT site 501, slow TTFT site 502; same overall latency.
+	fast := 200.0
+	slow := float64(SiteRuntimeFirstByteLatencyBaselineMs + SiteRuntimeFirstByteLatencyWindowMs)
+	overall := 2000.0
+	RecordSiteRuntimeSuccess(501, overall, &model, &fast)
+	RecordSiteRuntimeSuccess(502, overall, &model, &slow)
+
+	routingWeights := RoutingWeightsConfig{
+		BaseWeightFactor: 0.5,
+		ValueScoreFactor: 0.5,
+		CostWeight:       0.4,
+		BalanceWeight:    0.3,
+		UsageWeight:      0.3,
+	}
+
+	// Deterministic ranking via contributions / probabilities (not rand pick).
+	// Use many trials and inspect probabilities directly.
+	result := CalculateWeightedSelection(
+		candidates, staticModel(model), routingWeights,
+		nil, nil, 0, WeightedMode, "", nil, 1.0,
+	)
+	if len(result.Details) != 2 {
+		t.Fatalf("expected 2 details, got %d", len(result.Details))
+	}
+	var fastProb, slowProb float64
+	for _, d := range result.Details {
+		switch d.Candidate.Site.ID {
+		case 501:
+			fastProb = d.Probability
+		case 502:
+			slowProb = d.Probability
+		}
+	}
+	if !(fastProb > slowProb) {
+		t.Fatalf("expected lower-TTFT site higher probability: fast=%.6f slow=%.6f", fastProb, slowProb)
+	}
 }

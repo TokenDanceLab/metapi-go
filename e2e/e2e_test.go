@@ -123,7 +123,7 @@ func (m *mockRouter) SelectPreferredChannel(ctx context.Context, requestedModel 
 	return ch, nil
 }
 
-func (m *mockRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64) error {
+func (m *mockRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64, firstByteLatencyMs *float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.recordedSuccess = append(m.recordedSuccess, recordedSuccess{channelID, latencyMs})

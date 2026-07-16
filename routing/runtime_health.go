@@ -11,20 +11,26 @@ import (
 // ---- Site runtime health constants ----
 
 const (
-	SiteRuntimeHealthDecayHalfLifeMs   = 10 * 60 * 1000
-	SiteRuntimeMinMultiplier           = 0.08
-	SiteRuntimeLatencyBaselineMs       = 2500
-	SiteRuntimeLatencyWindowMs         = 30000
-	SiteRuntimeMaxLatencyPenalty       = 0.35
-	SiteRuntimeLatencyEMAAlpha         = 0.3
-	SiteRuntimeBreakerStreakThreshold  = 3
-	SiteTransientStreakWindowMs        = 5 * 60 * 1000
-	SiteRecentOutcomeHalfLifeMs        = 30 * 60 * 1000
-	SiteRecentSuccessConfidenceSamples = 12
-	SiteRecentSuccessPriorSuccesses    = 1
-	SiteRecentSuccessPriorFailures     = 1
-	SiteRecentSuccessFallbackRate      = 0.5
-	SiteRecentModelWeight              = 0.65
+	SiteRuntimeHealthDecayHalfLifeMs = 10 * 60 * 1000
+	SiteRuntimeMinMultiplier         = 0.08
+	SiteRuntimeLatencyBaselineMs     = 2500
+	SiteRuntimeLatencyWindowMs       = 30000
+	SiteRuntimeMaxLatencyPenalty     = 0.35
+	SiteRuntimeLatencyEMAAlpha       = 0.3
+	// TTFT / first-byte soft scoring (issue #113). Small max penalty keeps the
+	// signal non-breaking relative to failure + overall latency multipliers.
+	SiteRuntimeFirstByteLatencyBaselineMs = 800
+	SiteRuntimeFirstByteLatencyWindowMs   = 10000
+	SiteRuntimeMaxFirstByteLatencyPenalty = 0.12
+	SiteRuntimeFirstByteLatencyEMAAlpha   = 0.3
+	SiteRuntimeBreakerStreakThreshold     = 3
+	SiteTransientStreakWindowMs           = 5 * 60 * 1000
+	SiteRecentOutcomeHalfLifeMs           = 30 * 60 * 1000
+	SiteRecentSuccessConfidenceSamples    = 12
+	SiteRecentSuccessPriorSuccesses       = 1
+	SiteRecentSuccessPriorFailures        = 1
+	SiteRecentSuccessFallbackRate         = 0.5
+	SiteRecentModelWeight                 = 0.65
 
 	SiteHistoricalHealthMinMultiplier = 0.45
 	SiteHistoricalHealthMaxSample     = 24
@@ -114,8 +120,11 @@ var usageLimitRateLimitPatterns = []*regexp.Regexp{
 
 // SiteRuntimeHealthState tracks runtime health for a site or (site, model).
 type SiteRuntimeHealthState struct {
-	PenaltyScore             float64  `json:"penaltyScore"`
-	LatencyEMAMs             *float64 `json:"latencyEmaMs,omitempty"`
+	PenaltyScore float64  `json:"penaltyScore"`
+	LatencyEMAMs *float64 `json:"latencyEmaMs,omitempty"`
+	// FirstByteLatencyEMAMs is the EMA of observed first-byte / TTFT latency (ms).
+	// Soft-scored separately from end-to-end LatencyEMAMs (issue #113).
+	FirstByteLatencyEMAMs    *float64 `json:"firstByteLatencyEmaMs,omitempty"`
 	TransientFailureStreak   int64    `json:"transientFailureStreak"`
 	LastTransientFailureAtMs *int64   `json:"lastTransientFailureAtMs,omitempty"`
 	RecentSuccessCount       float64  `json:"recentSuccessCount"`
@@ -431,6 +440,8 @@ func resolveSiteRuntimeBreakerMs(level int64) int64 {
 }
 
 // GetRuntimeHealthMultiplier returns the health multiplier for a state.
+// Soft signals (overall latency + optional TTFT/first-byte) only reduce weight;
+// they never open breakers and never double-count as failures.
 func GetRuntimeHealthMultiplier(state *SiteRuntimeHealthState) float64 {
 	if state == nil {
 		return 1
@@ -449,7 +460,22 @@ func GetRuntimeHealthMultiplier(state *SiteRuntimeHealthState) float64 {
 		)
 	}
 	latencyFactor := 1.0 - (latencyPenaltyRatio * SiteRuntimeMaxLatencyPenalty)
-	return ClampNumber(failurePenaltyFactor*latencyFactor, SiteRuntimeMinMultiplier, 1)
+	ttftFactor := resolveFirstByteLatencyFactor(state.FirstByteLatencyEMAMs)
+	return ClampNumber(failurePenaltyFactor*latencyFactor*ttftFactor, SiteRuntimeMinMultiplier, 1)
+}
+
+// resolveFirstByteLatencyFactor maps observed TTFT EMA into a soft multiplier.
+// Missing samples return 1 (no bias). Slow first-byte reduces weight by at most
+// SiteRuntimeMaxFirstByteLatencyPenalty (default 12%).
+func resolveFirstByteLatencyFactor(firstByteEMAMs *float64) float64 {
+	if firstByteEMAMs == nil || !isFiniteFloat(*firstByteEMAMs) || *firstByteEMAMs <= 0 {
+		return 1
+	}
+	penaltyRatio := ClampNumber(
+		(*firstByteEMAMs-SiteRuntimeFirstByteLatencyBaselineMs)/SiteRuntimeFirstByteLatencyWindowMs,
+		0, 1,
+	)
+	return 1.0 - (penaltyRatio * SiteRuntimeMaxFirstByteLatencyPenalty)
 }
 
 // GetSiteRuntimeHealthDetails returns combined health details for a site and model.
@@ -706,7 +732,7 @@ func applyRuntimeHealthFailure(state *SiteRuntimeHealthState, ctx SiteRuntimeFai
 	state.LastFailureAtMs = &n
 }
 
-func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64) {
+func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64, firstByteLatencyMs *float64) {
 	n := nowMs()
 	refreshRecentOutcomeWindow(state)
 	state.RecentSuccessCount += 1
@@ -717,11 +743,26 @@ func applyRuntimeHealthSuccess(state *SiteRuntimeHealthState, latencyMs float64)
 	state.BreakerUntilMs = nil
 	state.LastSuccessAtMs = &n
 
-	if state.LatencyEMAMs == nil {
-		state.LatencyEMAMs = &latencyMs
-	} else {
-		ema := (*state.LatencyEMAMs)*(1-SiteRuntimeLatencyEMAAlpha) + latencyMs*SiteRuntimeLatencyEMAAlpha
-		state.LatencyEMAMs = &ema
+	if isFiniteFloat(latencyMs) && latencyMs >= 0 {
+		if state.LatencyEMAMs == nil {
+			v := latencyMs
+			state.LatencyEMAMs = &v
+		} else {
+			ema := (*state.LatencyEMAMs)*(1-SiteRuntimeLatencyEMAAlpha) + latencyMs*SiteRuntimeLatencyEMAAlpha
+			state.LatencyEMAMs = &ema
+		}
+	}
+
+	// TTFT is optional: only update when a positive observation is available so
+	// non-streaming / untimed paths do not invent first-byte samples.
+	if firstByteLatencyMs != nil && isFiniteFloat(*firstByteLatencyMs) && *firstByteLatencyMs > 0 {
+		fb := *firstByteLatencyMs
+		if state.FirstByteLatencyEMAMs == nil {
+			state.FirstByteLatencyEMAMs = &fb
+		} else {
+			ema := (*state.FirstByteLatencyEMAMs)*(1-SiteRuntimeFirstByteLatencyEMAAlpha) + fb*SiteRuntimeFirstByteLatencyEMAAlpha
+			state.FirstByteLatencyEMAMs = &ema
+		}
 	}
 }
 
@@ -743,17 +784,18 @@ func RecordSiteRuntimeFailure(siteID int64, ctx SiteRuntimeFailureContext) {
 }
 
 // RecordSiteRuntimeSuccess records a success against a site and model.
-func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string) {
+// firstByteLatencyMs is optional TTFT/first-byte observation in milliseconds.
+func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string, firstByteLatencyMs *float64) {
 	healthStateMu.Lock()
 	defer healthStateMu.Unlock()
 
 	globalState := getOrCreateSiteRuntimeHealthState(siteID)
-	applyRuntimeHealthSuccess(globalState, latencyMs)
+	applyRuntimeHealthSuccess(globalState, latencyMs, firstByteLatencyMs)
 
 	if modelName != nil && *modelName != "" {
 		modelState := getOrCreateSiteModelRuntimeHealthState(siteID, *modelName)
 		if modelState != nil {
-			applyRuntimeHealthSuccess(modelState, latencyMs)
+			applyRuntimeHealthSuccess(modelState, latencyMs, firstByteLatencyMs)
 		}
 	}
 	scheduleSiteRuntimeHealthPersistence()
@@ -880,6 +922,9 @@ func shouldPersistSiteRuntimeHealthState(state *SiteRuntimeHealthState) bool {
 	if state.LatencyEMAMs != nil && *state.LatencyEMAMs > 0 {
 		return true
 	}
+	if state.FirstByteLatencyEMAMs != nil && *state.FirstByteLatencyEMAMs > 0 {
+		return true
+	}
 	return n-lastTouchedAtMs <= SiteRuntimeHealthPersistIdleTTLMs
 }
 
@@ -896,6 +941,10 @@ func cloneSiteRuntimeHealthState(state *SiteRuntimeHealthState) *SiteRuntimeHeal
 	if state.LatencyEMAMs != nil {
 		v := *state.LatencyEMAMs
 		clone.LatencyEMAMs = &v
+	}
+	if state.FirstByteLatencyEMAMs != nil {
+		v := *state.FirstByteLatencyEMAMs
+		clone.FirstByteLatencyEMAMs = &v
 	}
 	if state.LastTransientFailureAtMs != nil {
 		v := *state.LastTransientFailureAtMs
@@ -1221,6 +1270,12 @@ func marshalState(s *SiteRuntimeHealthState) []byte {
 		buf = append(buf, fmtFloat(*s.LatencyEMAMs)...)
 	} else {
 		buf = append(buf, `,"latencyEmaMs":null`...)
+	}
+	if s.FirstByteLatencyEMAMs != nil {
+		buf = append(buf, `,"firstByteLatencyEmaMs":`...)
+		buf = append(buf, fmtFloat(*s.FirstByteLatencyEMAMs)...)
+	} else {
+		buf = append(buf, `,"firstByteLatencyEmaMs":null`...)
 	}
 	buf = append(buf, `,"transientFailureStreak":`...)
 	buf = append(buf, fmtInt(s.TransientFailureStreak)...)

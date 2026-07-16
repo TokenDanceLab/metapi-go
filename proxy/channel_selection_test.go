@@ -39,7 +39,7 @@ func (m *mockRouter) SelectPreferredChannel(ctx context.Context, requestedModel 
 	return nil, nil
 }
 
-func (m *mockRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64) error {
+func (m *mockRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64, firstByteLatencyMs *float64) error {
 	return nil
 }
 func (m *mockRouter) RecordFailure(ctx context.Context, channelID int64, failureCtx routing.SiteRuntimeFailureContext, actualAccountID *int64) error {
