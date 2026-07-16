@@ -858,18 +858,24 @@ type responsesReasoningResult struct {
 }
 
 func parseResponsesReasoning(m map[string]any) responsesReasoningResult {
-	output, _ := m["output"].([]any)
+	// Prefer output[] (final response). Also accept input[] so multi-turn
+	// reasoning items replayed by Hermes/Codex can be parsed for round-trip
+	// fixtures and stream/final normalize (#50 / upstream #538).
+	items := firstResponsesItemArray(m, "output", "input")
 	var parts []string
 	var sig string
-	for _, item := range output {
+	for _, item := range items {
 		om, ok := item.(map[string]any)
 		if !ok || strings.ToLower(AsTrimmedString(om["type"])) != "reasoning" {
 			continue
 		}
-		tr := ExtractInlineThinkTags(StringifyUnknownValue(om["summary"]))
-		t := JoinNonEmpty([]string{tr.Content, tr.Reasoning})
-		if t != "" {
-			parts = append(parts, t)
+		// Required content sources (do not drop any):
+		//   summary (array of summary_text / string)
+		//   content / text (some gateways / clients)
+		// encrypted_content is the continuity signature, not visible text.
+		text := extractResponsesReasoningItemText(om)
+		if text != "" {
+			parts = append(parts, text)
 		}
 		if sig == "" {
 			if ec := AsTrimmedString(om["encrypted_content"]); ec != "" {
@@ -880,6 +886,72 @@ func parseResponsesReasoning(m map[string]any) responsesReasoningResult {
 	return responsesReasoningResult{
 		reasoningContent:   JoinNonEmpty(parts),
 		reasoningSignature: sig,
+	}
+}
+
+// firstResponsesItemArray returns the first present []any among keys.
+func firstResponsesItemArray(m map[string]any, keys ...string) []any {
+	if m == nil {
+		return nil
+	}
+	for _, k := range keys {
+		if arr, ok := m[k].([]any); ok && len(arr) > 0 {
+			return arr
+		}
+	}
+	// Still return empty slice if key exists as empty array (caller iterates).
+	for _, k := range keys {
+		if arr, ok := m[k].([]any); ok {
+			return arr
+		}
+	}
+	return nil
+}
+
+// extractResponsesReasoningItemText flattens summary/content/text on a
+// type=reasoning item into visible reasoning text. Prefers summary, then
+// content, then text — without double-counting identical values. Never uses
+// encrypted_content as text.
+func extractResponsesReasoningItemText(om map[string]any) string {
+	if om == nil {
+		return ""
+	}
+	// Prefer summary (Responses native), then content/text fallbacks.
+	for _, key := range []string{"summary", "content", "text"} {
+		if t := flattenResponsesReasoningText(om[key]); t != "" {
+			tr := ExtractInlineThinkTags(t)
+			return JoinNonEmpty([]string{tr.Content, tr.Reasoning})
+		}
+	}
+	return ""
+}
+
+func flattenResponsesReasoningText(v any) string {
+	switch x := v.(type) {
+	case string:
+		return strings.TrimSpace(x)
+	case []any:
+		var parts []string
+		for _, item := range x {
+			if t := flattenResponsesReasoningText(item); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		return JoinNonEmpty(parts)
+	case map[string]any:
+		// summary_text / text / content blocks
+		for _, key := range []string{"text", "content", "summary_text", "output_text", "reasoning", "reasoning_content"} {
+			if t := AsTrimmedString(x[key]); t != "" {
+				return t
+			}
+		}
+		if s, ok := x["summary"]; ok {
+			return flattenResponsesReasoningText(s)
+		}
+		// Fallback: stringify only if it looks like a leaf text container.
+		return ""
+	default:
+		return ""
 	}
 }
 
