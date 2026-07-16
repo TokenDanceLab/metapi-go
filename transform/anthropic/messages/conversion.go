@@ -165,17 +165,7 @@ func ConvertOpenAiBodyToAnthropicMessagesBody(openaiBody map[string]any, modelNa
 					toolUseID = shared.AsTrimmedString(candidate["id"])
 				}
 				toolResultContent := normalizeToolMessageContent(candidate["content"])
-				hasContent := false
-				switch c := toolResultContent.(type) {
-				case string:
-					hasContent = strings.TrimSpace(c) != ""
-				case []any:
-					hasContent = len(c) > 0
-				case []map[string]any:
-					hasContent = len(c) > 0
-				default:
-					hasContent = toolResultContent != nil
-				}
+				hasContent := toolResultContentHasPayload(toolResultContent)
 				if toolUseID != "" && hasContent {
 					block := map[string]any{
 						"type":        "tool_result",
@@ -648,6 +638,22 @@ func normalizeAnthropicToolInput(raw any) any {
 		return raw
 	}
 	return map[string]any{}
+}
+
+
+func toolResultContentHasPayload(content any) bool {
+	switch c := content.(type) {
+	case string:
+		return strings.TrimSpace(c) != ""
+	case []any:
+		return len(c) > 0
+	case []map[string]any:
+		return len(c) > 0
+	default:
+		// normalizeToolMessageContent returns concrete string/slice values.
+		s := shared.StringifyUnknownValue(content)
+		return strings.TrimSpace(s) != "" && s != "{}" && s != "null"
+	}
 }
 
 func normalizeToolMessageContent(raw any) any {
