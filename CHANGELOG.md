@@ -5,6 +5,21 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.7.0] — 2026-07-17
+
+### Added
+- Enterprise modernization program (stack TS7/React19/Vite8, UI tokens/a11y, backend boundaries, schema additive migrations, reliability SSOT).
+- Feature completeness from original metapi gap matrix: site max concurrency, per-key proxy, group route rebuild, `/v1/rerank`, usage/token accounting, failover/first-byte, protocol pack (Gemini thought_signature, Minimax thinking, models shape, previous_response_id, skill-call, responses multi-turn reasoning, responses-only sites), Codex OAuth gpt-5.5 + discovery soft-retry.
+- Competitive learning milestone (M-COMPETE) vs all-api-hub / axonhub / new-api / litellm with matrix + `[learn]` backlog.
+
+### Fixed
+- Admin correctness: key refresh name/enable preserve, quota clear, model whitelist non-destructive parse, in-route model config preserve, expired account health.
+- Frontend CI flake: dashboard site-observability EnvironmentTeardownError hardening.
+
+### Notes
+- `vulncheck` may still fail on Go 1.26.4 stdlib advisories (GO-2026-5856 class); CI keeps continue-on-error until Go patch available.
+- Competitive `[learn]` items remain backlog-only until scheduled for implementation.
+
 ## [v0.6.5] — 2026-07-10
 
 ### Fixed
