@@ -76,6 +76,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 			admin.RegisterAuthSettingsRoutes(r, db.DB, cfg)
 			admin.RegisterCheckinRoutes(r, db.DB, cfg)
 			admin.RegisterTokenRoutes(r, db.DB)
+			admin.RegisterChannelTestRoutes(r, db.DB, cfg)
 			admin.RegisterUpdateCenterRoutes(r)
 			admin.RegisterOauthRoutes(r, db.DB)
 		} else {

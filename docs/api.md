@@ -132,6 +132,14 @@ Update a single channel.
 
 Delete a channel.
 
+### POST /api/admin/test-channel
+
+Admin-only forced channel/site probe (competitive learn #119). Alias: `POST /api/debug/channel-probe`.
+
+Body: `{ "channelId"?: number, "siteId"?: number, "model"?: string, "prompt"?: string, "mode"?: "chat"|"models", "timeoutMs"?: number }`.
+
+Requires `channelId` or `siteId`. Forces one upstream request (no weighted selection). Returns `{ success, statusCode, latencyMs, truncatedBody, error, channelId, siteId, accountId, model, mode, bodyTruncated, ... }` with ~2 KiB redacted body summary. See `docs/analysis/admin-channel-test-harness.md`.
+
 ---
 
 ## Route Decision
