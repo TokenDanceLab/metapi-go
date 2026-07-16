@@ -312,7 +312,9 @@ func RepairDefaultToken(db *sqlx.DB, accountID int64) (*store.AccountToken, erro
 }
 
 // EnsureDefaultTokenForAccount ensures a token exists and is default for a given account.
-// Mirrors TS ensureDefaultTokenForAccount().
+// Mirrors TS ensureDefaultTokenForAccount(), with #565 preserve semantics:
+// on an existing token match by value, operator-set name and enabled are kept
+// (callers often pass name="default"; that must not clobber a real key name).
 func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue string, name, source, tokenGroup string, enabled bool) (int64, error) {
 	normalized := strings.TrimSpace(tokenValue)
 	if normalized == "" || IsMaskedTokenValue(normalized) {
@@ -397,19 +399,31 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 		return targetID, nil
 	}
 
-	// Update existing
+	// Update existing: preserve operator-set name/enable (upstream #565 / backlog #40).
+	// Refresh/sync callers pass name="default" and enabled=true; those must not clobber.
 	updateName := target.Name
-	if name != "" {
-		updateName = name
+	if strings.TrimSpace(updateName) == "" {
+		if name != "" {
+			updateName = name
+		} else {
+			updateName = "default"
+		}
+	}
+	updateGroup := tokenGroup
+	if target.TokenGroup != nil && strings.TrimSpace(*target.TokenGroup) != "" {
+		updateGroup = *target.TokenGroup
 	}
 	src := source
 	if src == "" {
 		src = target.Source
 	}
+	if src == "" {
+		src = "manual"
+	}
 	_, err = tx.Exec(
 		tx.Rebind(`UPDATE account_tokens SET name = ?, token_group = ?, value_status = ?, source = ?, enabled = ?, is_default = ?, updated_at = ?
 		 WHERE id = ?`),
-		updateName, tokenGroup, TokenValueStatusReady, src, enabled, true, now, target.ID,
+		updateName, updateGroup, TokenValueStatusReady, src, target.Enabled, true, now, target.ID,
 	)
 	if err != nil {
 		return 0, err
@@ -429,6 +443,148 @@ func EnsureDefaultTokenForAccount(db *sqlx.DB, accountID int64, tokenValue strin
 	}
 	committed = true
 	return target.ID, nil
+}
+
+// UpstreamAPIToken is a token payload returned by platform adapters during sync.
+type UpstreamAPIToken struct {
+	Name       string
+	Key        string
+	Enabled    bool
+	TokenGroup string
+}
+
+// TokenSyncResult summarizes SyncTokensFromUpstream outcomes.
+type TokenSyncResult struct {
+	Created         int
+	Updated         int
+	MaskedPending   int
+	PendingTokenIDs []int64
+	Total           int
+	DefaultTokenID  *int64
+}
+
+// SyncTokensFromUpstream upserts account tokens from upstream listings.
+// When an existing ready token matches by key, local enabled (and non-empty
+// operator-set name) are preserved; upstream enable flags do not clobber
+// operator disable/enable choices (upstream #565 / backlog #40).
+func SyncTokensFromUpstream(db *sqlx.DB, accountID int64, upstreamTokens []UpstreamAPIToken) (*TokenSyncResult, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	var existing []store.AccountToken
+	if err := db.Select(&existing, db.Rebind("SELECT * FROM account_tokens WHERE account_id = ?"), accountID); err != nil {
+		return nil, err
+	}
+
+	result := &TokenSyncResult{Total: len(existing)}
+	index := len(existing) + 1
+
+	for _, upstream := range upstreamTokens {
+		tokenValue := strings.TrimSpace(upstream.Key)
+		if tokenValue == "" {
+			continue
+		}
+		tokenName := strings.TrimSpace(upstream.Name)
+		if tokenName == "" {
+			if index == 1 {
+				tokenName = "default"
+			} else {
+				tokenName = fmt.Sprintf("token-%d", index)
+			}
+		}
+		tokenGroup := strings.TrimSpace(upstream.TokenGroup)
+		if tokenGroup == "" {
+			tokenGroup = "default"
+		}
+		nextValueStatus := TokenValueStatusReady
+		if IsMaskedTokenValue(tokenValue) {
+			nextValueStatus = TokenValueStatusMaskedPending
+		}
+
+		// Match existing ready token by exact key value.
+		var byToken *store.AccountToken
+		for i := range existing {
+			if existing[i].Token == tokenValue && ResolveAccountTokenValueStatus(&existing[i]) == TokenValueStatusReady {
+				byToken = &existing[i]
+				break
+			}
+		}
+		if byToken != nil {
+			// Preserve local enable state; keep operator-set name when present.
+			preservedName := byToken.Name
+			if strings.TrimSpace(preservedName) == "" {
+				preservedName = tokenName
+			}
+			preservedEnabled := byToken.Enabled
+			if _, err := db.Exec(
+				db.Rebind(`UPDATE account_tokens SET name = ?, token_group = ?, value_status = ?, source = ?, enabled = ?, updated_at = ?
+				 WHERE id = ?`),
+				preservedName, tokenGroup, TokenValueStatusReady, "sync", preservedEnabled, now, byToken.ID,
+			); err != nil {
+				return nil, err
+			}
+			byToken.Name = preservedName
+			groupCopy := tokenGroup
+			byToken.TokenGroup = &groupCopy
+			byToken.ValueStatus = TokenValueStatusReady
+			byToken.Enabled = preservedEnabled
+			byToken.Source = "sync"
+			byToken.UpdatedAt = now
+			result.Updated++
+			continue
+		}
+
+		// New token from upstream.
+		nextEnabled := nextValueStatus == TokenValueStatusReady && upstream.Enabled
+		if nextValueStatus == TokenValueStatusMaskedPending {
+			nextEnabled = false
+		}
+		insertRes, err := db.Exec(
+			db.Rebind(`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+			accountID, tokenName, tokenValue, tokenGroup, nextValueStatus, "sync", nextEnabled, false, now, now,
+		)
+		if err != nil {
+			return nil, err
+		}
+		id, err := insertRes.LastInsertId()
+		if err != nil {
+			if err := db.Get(&id, db.Rebind("SELECT id FROM account_tokens WHERE account_id = ? AND token = ? ORDER BY id DESC LIMIT 1"), accountID, tokenValue); err != nil {
+				return nil, err
+			}
+		}
+		groupCopy := tokenGroup
+		createdRow := store.AccountToken{
+			ID:          id,
+			AccountID:   accountID,
+			Name:        tokenName,
+			Token:       tokenValue,
+			TokenGroup:  &groupCopy,
+			ValueStatus: nextValueStatus,
+			Source:      "sync",
+			Enabled:     nextEnabled,
+			IsDefault:   false,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		existing = append(existing, createdRow)
+		result.Created++
+		index++
+		if nextValueStatus == TokenValueStatusMaskedPending {
+			result.MaskedPending++
+			result.PendingTokenIDs = append(result.PendingTokenIDs, id)
+		}
+	}
+
+	repaired, err := RepairDefaultToken(db, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if repaired != nil {
+		id := repaired.ID
+		result.DefaultTokenID = &id
+	}
+	result.Total = len(existing)
+	return result, nil
 }
 
 // GetDefaultTokenForAccount returns the default token for an account.
