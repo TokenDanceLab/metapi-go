@@ -120,6 +120,8 @@ type Config struct {
 	// Notify: General (2 fields)
 	NotifyCooldownSec int
 	SystemProxyUrl    string
+	// RedisURL enables optional shared admission counters (#118).
+	RedisURL string
 
 	// Admin (3 fields)
 	AdminIpAllowlist        []string
@@ -127,7 +129,7 @@ type Config struct {
 	TrustedProxyCidrs       []string
 
 	// Proxy: Core (2 fields)
-	RequestBodyLimit int
+	RequestBodyLimit        int
 	RoutingFallbackUnitCost float64
 	// ProxyFirstByteTimeoutSec is the operator-facing first-byte / first-token
 	// timeout in SECONDS (env PROXY_FIRST_BYTE_TIMEOUT_SEC). Internal dispatch
@@ -458,6 +460,7 @@ func Load(env map[string]string) *Config {
 	// ---- §3.11 Notify: General ----
 	cfg.NotifyCooldownSec = maxInt(0, int(math.Trunc(parseNumber(get("NOTIFY_COOLDOWN_SEC"), DefaultNotifyCooldownSec))))
 	cfg.SystemProxyUrl = firstNonEmpty(get("SYSTEM_PROXY_URL"), "")
+	cfg.RedisURL = firstNonEmpty(get("REDIS_URL"), get("METAPI_REDIS_URL"))
 
 	// ---- §3.12 Admin ----
 	cfg.AdminIpAllowlist = parseCsvList(get("ADMIN_IP_ALLOWLIST"))

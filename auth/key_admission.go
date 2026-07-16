@@ -1,8 +1,13 @@
 package auth
 
 import (
+	"context"
+	"log/slog"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/tokendancelab/metapi-go/internal/sharedcount"
 )
 
 // KeyAdmissionLimiter is an in-process sliding-window RPM/TPM gate for
@@ -13,6 +18,9 @@ type KeyAdmissionLimiter struct {
 	keys map[int64]*keyWindow
 	// nowFn is injectable for tests.
 	nowFn func() time.Time
+	// sharedRPM is optional multi-instance counter (#118). nil = memory-only.
+	// Fail-open: Redis errors fall back to local window.
+	sharedRPM sharedcount.WindowCounter
 }
 
 type keyWindow struct {
@@ -36,6 +44,35 @@ func NewKeyAdmissionLimiter() *KeyAdmissionLimiter {
 		keys:  make(map[int64]*keyWindow),
 		nowFn: time.Now,
 	}
+}
+
+// SetSharedRPMCounter wires an optional multi-instance window counter (#118).
+// Pass nil to clear (memory-only). Safe to call at process startup.
+func (l *KeyAdmissionLimiter) SetSharedRPMCounter(c sharedcount.WindowCounter) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sharedRPM = c
+}
+
+// ConfigureSharedAdmissionFromRedisURL enables Redis-backed RPM counting when url is non-empty.
+// On parse/dial setup failure, logs and keeps memory-only. Runtime Redis errors fail open.
+func ConfigureSharedAdmissionFromRedisURL(redisURL string) {
+	redisURL = strings.TrimSpace(redisURL)
+	if redisURL == "" {
+		GlobalKeyAdmission.SetSharedRPMCounter(nil)
+		return
+	}
+	rc, err := sharedcount.NewRedisCounter(redisURL)
+	if err != nil {
+		slog.Warn("redis admission: disabled (bad REDIS_URL)", "error", err)
+		GlobalKeyAdmission.SetSharedRPMCounter(nil)
+		return
+	}
+	GlobalKeyAdmission.SetSharedRPMCounter(rc)
+	slog.Info("redis admission: shared RPM counter enabled")
 }
 
 // ResetKeyAdmissionForTest clears the global limiter state.
@@ -90,7 +127,28 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 	usedRPM := int64(len(w.reqTimes))
 	usedTPM := sumTokens(w.tokenEvents)
 
-	if rpmLimit > 0 && usedRPM >= rpmLimit {
+	// Optional multi-instance RPM (#118). Fail-open on errors.
+	sharedCounted := false
+	if rpmLimit > 0 && l.sharedRPM != nil {
+		n, err := l.sharedRPM.Incr(context.Background(), rpmSharedKey(keyID), time.Minute)
+		if err != nil {
+			slog.Debug("redis admission: fail-open on error", "key_id", keyID, "error", err)
+		} else {
+			sharedCounted = true
+			usedRPM = n
+			if n > rpmLimit {
+				return AdmissionDecision{
+					Allowed:    false,
+					Reason:     "over_rpm",
+					RetryAfter: time.Second,
+					UsedRPM:    usedRPM,
+					UsedTPM:    usedTPM,
+				}
+			}
+		}
+	}
+
+	if !sharedCounted && rpmLimit > 0 && usedRPM >= rpmLimit {
 		retry := retryAfterMs(w.reqTimes, nowMs)
 		return AdmissionDecision{
 			Allowed:    false,
@@ -211,4 +269,8 @@ func max64z(v, floor int64) int64 {
 		return floor
 	}
 	return v
+}
+
+func rpmSharedKey(keyID int64) string {
+	return "metapi:rpm:" + formatInt64(keyID)
 }
