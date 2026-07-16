@@ -295,10 +295,12 @@ Global lane rules still apply (`docs/plan/lane-charters.md`). Below is the **fea
 ## Acceptance criteria
 - [ ] Channel failure exclude/cooldown scope is channel-level unless policy says site-level (document)
 - [ ] One channel 5xx does not permanently poison other channels on same site without cooldown rules
-- [ ] Multi-protocol / multi-endpoint candidates attempted per policy; abort rules tested
-- [ ] First-byte / first-token timeout units documented and enforced consistently
+- [x] Multi-protocol / multi-endpoint candidates attempted per policy; abort rules tested (#38)
+- [x] First-byte / first-token timeout units documented and enforced consistently (#38; see docs/analysis/failover-first-byte.md)
 - [ ] Load/integration test with multi-channel fixture
 ```
+
+**#38 residual:** path-level multi-protocol fallback reuses the same request body (no chat↔messages transform); multipart stays single-path.
 
 ### FE-KEYS-CORR — sync + quota clear (#40/#41 · #565/#405)
 

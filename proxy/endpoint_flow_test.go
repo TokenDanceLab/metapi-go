@@ -468,6 +468,109 @@ func TestExecuteEndpointFlow_DisableCrossProtocolFallback(t *testing.T) {
 	})
 }
 
+func TestResolveEndpointCandidates(t *testing.T) {
+	t.Run("chat primary includes multi-protocol order", func(t *testing.T) {
+		got := ResolveEndpointCandidates("/v1/chat/completions", false)
+		want := []UpstreamEndpoint{EndpointChat, EndpointMessages, EndpointResponses}
+		if len(got) != len(want) {
+			t.Fatalf("len=%d want %d (%v)", len(got), len(want), got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("got %v want %v", got, want)
+			}
+		}
+	})
+	t.Run("disableCrossProtocolFallback returns primary only", func(t *testing.T) {
+		got := ResolveEndpointCandidates("/v1/messages", true)
+		if len(got) != 1 || got[0] != EndpointMessages {
+			t.Fatalf("got %v, want [messages]", got)
+		}
+	})
+	t.Run("non chat-family returns nil", func(t *testing.T) {
+		got := ResolveEndpointCandidates("/v1/embeddings", false)
+		if got != nil {
+			t.Fatalf("got %v, want nil", got)
+		}
+	})
+}
+
+func TestPathForEndpointAndFromPath(t *testing.T) {
+	if PathForEndpoint(EndpointChat) != "/v1/chat/completions" {
+		t.Fatalf("PathForEndpoint chat = %q", PathForEndpoint(EndpointChat))
+	}
+	ep, ok := EndpointFromPath("/v1/responses")
+	if !ok || ep != EndpointResponses {
+		t.Fatalf("EndpointFromPath responses = %v %v", ep, ok)
+	}
+}
+
+func TestShouldDowngradeToNextEndpoint(t *testing.T) {
+	if !ShouldDowngradeToNextEndpoint(400, "please use /v1/chat/completions") {
+		t.Fatal("expected protocol redirect to downgrade")
+	}
+	if !ShouldDowngradeToNextEndpoint(404, "not found") {
+		t.Fatal("expected 404 to downgrade")
+	}
+	if ShouldDowngradeToNextEndpoint(500, "internal") {
+		t.Fatal("generic 500 should not auto-downgrade")
+	}
+	if ShouldDowngradeToNextEndpoint(0, "first byte timeout") {
+		t.Fatal("status 0 is handled by timeout path, not downgrade helper")
+	}
+}
+
+func TestExecuteEndpointFlow_FirstByteTimeoutPassesMsToDispatch(t *testing.T) {
+	var gotTimeout int64 = -1
+	_ = ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+		SiteURL:            "https://api.example.com",
+		EndpointCandidates: makeEndpointCandidates(EndpointChat),
+		FirstByteTimeoutMs: 1500,
+		BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+			return BuiltEndpointRequest{Endpoint: endpoint, Path: PathForEndpoint(endpoint)}
+		},
+		DispatchRequest: func(request BuiltEndpointRequest, targetURL string, firstByteTimeoutMs int64) (*ExecutorDispatchResult, error) {
+			gotTimeout = firstByteTimeoutMs
+			return makeSuccessResponse(200, "ok"), nil
+		},
+	})
+	if gotTimeout != 1500 {
+		t.Fatalf("firstByteTimeoutMs = %d, want 1500", gotTimeout)
+	}
+}
+
+func TestExecuteEndpointFlow_TimeoutDoesNotPoisonViaFailureHookSemantics(t *testing.T) {
+	// Soft timeout on non-last endpoint should call OnAttemptFailure but still
+	// continue; callers must not treat intermediate timeout as terminal poison.
+	failures := 0
+	result := ExecuteEndpointFlow(ExecuteEndpointFlowInput{
+		SiteURL:                      "https://api.example.com",
+		DisableCrossProtocolFallback: false,
+		EndpointCandidates:           makeEndpointCandidates(EndpointChat, EndpointMessages),
+		BuildRequest: func(endpoint UpstreamEndpoint, index int) BuiltEndpointRequest {
+			return BuiltEndpointRequest{Endpoint: endpoint, Path: PathForEndpoint(endpoint)}
+		},
+		DispatchRequest: func(request BuiltEndpointRequest, targetURL string, _ int64) (*ExecutorDispatchResult, error) {
+			if request.Endpoint == EndpointChat {
+				return makeTimeoutResponse(), nil
+			}
+			return makeSuccessResponse(200, "ok"), nil
+		},
+		OnAttemptFailure: func(ctx EndpointAttemptContext) {
+			failures++
+			if ctx.Response == nil || ctx.Response.Status != 0 {
+				t.Fatalf("expected timeout marker failure, got %+v", ctx.Response)
+			}
+		},
+	})
+	if !result.OK {
+		t.Fatal("expected success after timeout fallback")
+	}
+	if failures != 1 {
+		t.Fatalf("failures=%d, want 1 intermediate timeout failure", failures)
+	}
+}
+
 func TestExecuteEndpointFlow_ProxyURL(t *testing.T) {
 	t.Run("uses proxy URL when provided", func(t *testing.T) {
 		var capturedURL string
