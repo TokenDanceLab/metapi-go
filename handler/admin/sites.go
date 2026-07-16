@@ -14,6 +14,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/handler/admin/payloads"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -649,19 +650,21 @@ func (h *sitesHandler) probeNow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body payloads.ProbeNowBody
-	if err := decodeJSONRequest(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
+	// Body is optional for probe-now.
+	_ = decodeJSONRequest(r, &body)
 
-	// Stub: real probe implementation in P5
-	_ = id
+	sched := scheduler.GetGlobalModelProbeScheduler()
+	if sched == nil {
+		// Fall back: create ephemeral scheduler for one-shot probe.
+		sched = scheduler.NewModelProbeScheduler(nil)
+	}
+	results, available, unavailable := sched.ProbeSite(id)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":     true,
-		"totalModels": 0,
-		"available":   0,
-		"unavailable": 0,
-		"results":     []any{},
+		"totalModels": len(results),
+		"available":   available,
+		"unavailable": unavailable,
+		"results":     results,
 	})
 }
 
@@ -690,23 +693,26 @@ func (h *sitesHandler) probeStream(w http.ResponseWriter, r *http.Request) {
 	modelName := r.URL.Query().Get("modelName")
 	latencyStr := r.URL.Query().Get("latencyThresholdMs")
 
-	// Build scope options
 	_ = scope
 	_ = modelName
 	_ = latencyStr
-	_ = id
 
-	// Send start event
+	sched := scheduler.GetGlobalModelProbeScheduler()
+	if sched == nil {
+		sched = scheduler.NewModelProbeScheduler(nil)
+	}
+	results, available, unavailable := sched.ProbeSite(id)
 	sseWrite(w, flusher, "probe-start", map[string]any{
-		"totalModels": 0,
+		"totalModels": len(results),
 		"startedAt":   time.Now().UTC().Format(time.RFC3339),
 	})
-
-	// Stub: complete immediately
+	for _, res := range results {
+		sseWrite(w, flusher, "probe-result", res)
+	}
 	sseWrite(w, flusher, "complete", map[string]any{
-		"totalModels": 0,
-		"available":   0,
-		"unavailable": 0,
+		"totalModels": len(results),
+		"available":   available,
+		"unavailable": unavailable,
 	})
 }
 
