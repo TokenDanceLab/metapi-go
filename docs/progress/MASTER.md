@@ -1,8 +1,17 @@
 # MASTER.md — MetAPI Go Rewrite
 
-**Task**: MetAPI TypeScript → Go 完整重写 + 生产就绪优化
-**Tracking Mode**: LOCAL_ONLY
+**Task**: MetAPI TypeScript → Go 完整重写 + 生产就绪优化 + stack/gap 双轨计划
+**Tracking Mode**: GitHub Project + Milestones (SDD)
 **Repository**: https://github.com/TokenDanceLab/metapi-go
+
+## Tracking
+
+| Item | URL |
+|:-----|:----|
+| Project | https://github.com/orgs/TokenDanceLab/projects/1 |
+| Milestone M-STACK | https://github.com/TokenDanceLab/metapi-go/milestone/1 |
+| Milestone M-GAP | https://github.com/TokenDanceLab/metapi-go/milestone/2 |
+| Plan | `docs/plan/milestones-stack-gap.md` |
 
 ## Current Status
 
@@ -13,6 +22,26 @@
 | AUDIT | 16-dimension audit | ✅ |
 | FIX | Audit findings remediation | ✅ |
 | **HARDEN** | Production hardening (18/23 findings) | ✅ Done |
+| **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | 🔄 In progress (Wave 1) |
+| **M-GAP** | Original metapi gap inventory (docs-only) | 🔄 In progress (Wave 1) |
+
+> **Scope boundary (this round):** M-STACK and M-GAP **do not** implement original-gap product fixes.
+> Stack work modernizes frontend tooling only. Gap work is inventory + backlog issues only.
+> No product feature implementation ships under either milestone in this program.
+
+## Program map (#3–#11)
+
+| Issue | Track | Title | Wave |
+|------:|:------|:------|:-----|
+| #3 | S0 / gate | Bootstrap SDD + MASTER status for stack/gap program | Wave 0→1 |
+| #4 | S1 | Bump TS 7.0.2 + React 19.2.7 + Vite 8.1.5 (core lock) | Wave 1 |
+| #5 | S2 | React 19 test adaptation (~79 react-test-renderer files) | Wave 2 |
+| #6 | S3 | Vite 8 plugin / vitepress-mermaid tooling closure | Wave 2 |
+| #7 | S4 | CI / Docker / embed regression gate + CHANGELOG | Wave 3 |
+| #8 | G1 | Capture original metapi open issues + taxonomy | Wave 1 |
+| #9 | G2 | metapi-go capability gap matrix with code evidence | Wave 1 |
+| #10 | G3 | Publish [backlog] GitHub issues from gap matrix | Wave 2 |
+| #11 | G4 | Gap inventory acceptance (docs-only gate) | Wave 3 |
 
 ## Hardening Results
 
@@ -74,15 +103,17 @@
 ## CI/CD Status
 - CI workflow includes lint, vet, vulncheck, frontend, test-sqlite `-race`, test-pg, build, and Docker image build plus `/health` and `/ready` smoke gates.
 - CD: ✅ (ghcr.io/tokendancelab/metapi-go:latest)
-- Release: v0.3.0 → **next: v0.4.0**
+- Release: v0.3.0 → **next: v0.4.0** (stack modernization may land in a later patch/minor after S4 gate)
 
 ## Specs
 - Audit: `docs/analysis/hardening-audit.md`
 - Task breakdown: `docs/plan/task-breakdown-hardening.md`
 - Dependency graph: `docs/plan/dependency-graph-hardening.md`
-- Milestones: `docs/plan/milestones-hardening.md`
+- Milestones (hardening): `docs/plan/milestones-hardening.md`
+- Milestones (stack + gap): `docs/plan/milestones-stack-gap.md`
 
 ## Next Steps
-1. Wait for CI to pass on latest push (commit 04106fd)
-2. Tag v0.4.0
-3. Verify CD publishes GHCR package
+1. Complete Wave 1 in parallel: S1 (core lock) and G1→G2 (gap matrix)
+2. Wave 2: S2/S3 tooling + G3 backlog issue publish
+3. Wave 3: S4 CI/Docker/embed gate + G4 inventory acceptance
+4. Do **not** implement original-gap product fixes in this program
