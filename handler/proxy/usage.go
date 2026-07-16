@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/tokendancelab/metapi-go/proxy"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 const (
@@ -13,10 +14,23 @@ const (
 )
 
 // ParsedUsage is a normalized token usage snapshot extracted from an upstream body/SSE.
+//
+// Token-type breakdown fields (cache/reasoning) are best-effort: they are filled
+// only when the upstream payload exposes them (Anthropic cache_*, OpenAI
+// prompt_tokens_details.cached_tokens, OpenAI completion_tokens_details.reasoning_tokens,
+// Gemini cachedContentTokenCount / thoughtsTokenCount). Missing fields stay 0.
 type ParsedUsage struct {
-	PromptTokens     int64
-	CompletionTokens int64
-	TotalTokens      int64
+	PromptTokens        int64
+	CompletionTokens    int64
+	TotalTokens         int64
+	CacheReadTokens     int64
+	CacheCreationTokens int64
+	ReasoningTokens     int64
+	// PromptTokensIncludeCache:
+	//   true  → prompt/input tokens already include cache tokens (typical OpenAI/Anthropic)
+	//   false → prompt tokens exclude cache (rare; set only when upstream is known exclusive)
+	//   nil   → unknown; cost builder treats as include (conservative billable split)
+	PromptTokensIncludeCache *bool
 	// Source is "upstream" when any token field was present, otherwise "unknown".
 	Source string
 	Found  bool
@@ -28,6 +42,18 @@ func (u ParsedUsage) ToUsageSummary() *proxy.UsageSummary {
 		PromptTokens:     int(u.PromptTokens),
 		CompletionTokens: int(u.CompletionTokens),
 		TotalTokens:      int(u.TotalTokens),
+	}
+}
+
+// ToUsageForCost maps ParsedUsage into the routing cost calculator input.
+func (u ParsedUsage) ToUsageForCost() routing.UsageForCost {
+	return routing.UsageForCost{
+		PromptTokens:             u.PromptTokens,
+		CompletionTokens:         u.CompletionTokens,
+		TotalTokens:              u.TotalTokens,
+		CacheReadTokens:          u.CacheReadTokens,
+		CacheCreationTokens:      u.CacheCreationTokens,
+		PromptTokensIncludeCache: u.PromptTokensIncludeCache,
 	}
 }
 
@@ -86,6 +112,24 @@ func mergeUsagePreferLater(prev, next ParsedUsage) ParsedUsage {
 		out.CompletionTokens = next.CompletionTokens
 	} else if !prev.Found {
 		out.CompletionTokens = next.CompletionTokens
+	}
+	if next.CacheReadTokens > 0 {
+		out.CacheReadTokens = next.CacheReadTokens
+	} else if !prev.Found {
+		out.CacheReadTokens = next.CacheReadTokens
+	}
+	if next.CacheCreationTokens > 0 {
+		out.CacheCreationTokens = next.CacheCreationTokens
+	} else if !prev.Found {
+		out.CacheCreationTokens = next.CacheCreationTokens
+	}
+	if next.ReasoningTokens > 0 {
+		out.ReasoningTokens = next.ReasoningTokens
+	} else if !prev.Found {
+		out.ReasoningTokens = next.ReasoningTokens
+	}
+	if next.PromptTokensIncludeCache != nil {
+		out.PromptTokensIncludeCache = next.PromptTokensIncludeCache
 	}
 	// Recompute total from merged prompt+completion unless the later event
 	// provides an explicit total that covers both sides (total >= sum).
@@ -166,14 +210,89 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		out.CompletionTokens = n
 		out.Found = true
 	}
-	// Optional Anthropic cache fields roll into prompt when present.
-	cacheRead, hasCacheRead := asInt64(usage["cache_read_input_tokens"])
-	cacheCreate, hasCacheCreate := asInt64(usage["cache_creation_input_tokens"])
-	if hasCacheRead || hasCacheCreate {
+	// Optional Anthropic cache fields (also accepted as top-level usage fields).
+	// Anthropic input_tokens is exclusive of cache in some versions and inclusive
+	// in others; when both are present we keep input_tokens as-is and record
+	// cache separately so billing can apply cache ratios without double-count
+	// when PromptTokensIncludeCache is true (default for Anthropic/OpenAI).
+	if n, ok := asInt64(usage["cache_read_input_tokens"]); ok {
+		out.CacheReadTokens = n
 		// Prefer explicit input_tokens when set; otherwise sum cache fields.
 		if out.PromptTokens == 0 {
-			out.PromptTokens = cacheRead + cacheCreate
+			out.PromptTokens = n
 		}
+		// Anthropic reports cache tokens separately from billable input; treat
+		// prompt as inclusive only when we had to synthesize it from cache.
+		// Default include=true for explicit input_tokens (matches TS cost builder).
+		if out.PromptTokensIncludeCache == nil {
+			include := true
+			out.PromptTokensIncludeCache = &include
+		}
+		out.Found = true
+	}
+	if n, ok := asInt64(usage["cache_creation_input_tokens"]); ok {
+		out.CacheCreationTokens = n
+		if out.PromptTokens == 0 {
+			out.PromptTokens = n
+		}
+		if out.PromptTokensIncludeCache == nil {
+			include := true
+			out.PromptTokensIncludeCache = &include
+		}
+		out.Found = true
+	}
+	// Nested Anthropic cache_creation object (newer payloads).
+	if cc, ok := usage["cache_creation"].(map[string]any); ok {
+		var sum int64
+		if n, ok := asInt64(cc["ephemeral_5m_input_tokens"]); ok {
+			sum += n
+		}
+		if n, ok := asInt64(cc["ephemeral_1h_input_tokens"]); ok {
+			sum += n
+		}
+		if sum > 0 && out.CacheCreationTokens == 0 {
+			out.CacheCreationTokens = sum
+			out.Found = true
+		}
+	}
+
+	// OpenAI prompt_tokens_details.cached_tokens (and input_tokens_details).
+	if details, ok := usage["prompt_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["cached_tokens"]); ok {
+			out.CacheReadTokens = n
+			if out.PromptTokensIncludeCache == nil {
+				include := true
+				out.PromptTokensIncludeCache = &include
+			}
+			out.Found = true
+		}
+	}
+	if details, ok := usage["input_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["cached_tokens"]); ok && out.CacheReadTokens == 0 {
+			out.CacheReadTokens = n
+			if out.PromptTokensIncludeCache == nil {
+				include := true
+				out.PromptTokensIncludeCache = &include
+			}
+			out.Found = true
+		}
+	}
+	// OpenAI completion_tokens_details.reasoning_tokens / output_tokens_details.
+	if details, ok := usage["completion_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["reasoning_tokens"]); ok {
+			out.ReasoningTokens = n
+			out.Found = true
+		}
+	}
+	if details, ok := usage["output_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["reasoning_tokens"]); ok && out.ReasoningTokens == 0 {
+			out.ReasoningTokens = n
+			out.Found = true
+		}
+	}
+	// Top-level reasoning_tokens (some gateways flatten the field).
+	if n, ok := asInt64(usage["reasoning_tokens"]); ok && out.ReasoningTokens == 0 {
+		out.ReasoningTokens = n
 		out.Found = true
 	}
 
@@ -188,6 +307,18 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 	}
 	if n, ok := asInt64(usage["totalTokenCount"]); ok {
 		out.TotalTokens = n
+		out.Found = true
+	}
+	if n, ok := asInt64(usage["cachedContentTokenCount"]); ok {
+		out.CacheReadTokens = n
+		if out.PromptTokensIncludeCache == nil {
+			include := true
+			out.PromptTokensIncludeCache = &include
+		}
+		out.Found = true
+	}
+	if n, ok := asInt64(usage["thoughtsTokenCount"]); ok {
+		out.ReasoningTokens = n
 		out.Found = true
 	}
 

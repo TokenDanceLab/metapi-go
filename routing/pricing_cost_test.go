@@ -11,8 +11,8 @@ func boolPtr(v bool) *bool { return &v }
 
 func TestIsClaudeModel(t *testing.T) {
 	cases := []struct {
-		name  string
-		want  bool
+		name string
+		want bool
 	}{
 		{"claude-opus-4-7", true},
 		{"Claude-Sonnet-4", true},
@@ -310,6 +310,63 @@ func TestFallbackTokenCost(t *testing.T) {
 	}
 	if got := FallbackTokenCost(1500, "veloera"); math.Abs(got-0.0015) > 1e-9 {
 		t.Fatalf("veloera fallback=%v want 0.0015", got)
+	}
+}
+
+func TestEstimateRequestCost_WithPricingModel(t *testing.T) {
+	model := PricingModel{
+		ModelName:          "gpt-4o",
+		QuotaType:          0,
+		ModelRatio:         2.5,
+		CompletionRatio:    5,
+		CacheRatio:         ptrF(0.1),
+		CacheCreationRatio: ptrF(1.25),
+		EnableGroups:       []string{"default"},
+	}
+	attr := EstimateRequestCost("gpt-4o", "new-api", UsageForCost{
+		PromptTokens:             146638,
+		CompletionTokens:         172,
+		TotalTokens:              146810,
+		CacheReadTokens:          145692,
+		CacheCreationTokens:      945,
+		PromptTokensIncludeCache: boolPtr(true),
+	}, &model, map[string]float64{"default": 1})
+	if attr.Source != CostSourcePricingModel {
+		t.Fatalf("source=%q", attr.Source)
+	}
+	if math.Abs(attr.EstimatedCost-0.083057) > 1e-9 {
+		t.Fatalf("cost=%v", attr.EstimatedCost)
+	}
+	if attr.BillingDetails == nil || attr.BillingDetails.CostSource != CostSourcePricingModel {
+		t.Fatalf("billing details costSource missing: %+v", attr.BillingDetails)
+	}
+}
+
+func TestEstimateRequestCost_MissingModelUsesFallbackZeros(t *testing.T) {
+	attr := EstimateRequestCost("gpt-4o", "new-api", UsageForCost{
+		PromptTokens:     1000,
+		CompletionTokens: 500,
+		TotalTokens:      1500,
+	}, nil, nil)
+	if attr.Source != CostSourceFallback {
+		t.Fatalf("source=%q want fallback", attr.Source)
+	}
+	if math.Abs(attr.EstimatedCost-0.003) > 1e-9 {
+		t.Fatalf("cost=%v want 0.003", attr.EstimatedCost)
+	}
+	// Ratios must be zero (not silent 1.0) when pricing is unknown.
+	if attr.BillingDetails.Pricing.CacheRatio != 0 || attr.BillingDetails.Pricing.ModelRatio != 0 {
+		t.Fatalf("fallback pricing should zero ratios: %+v", attr.BillingDetails.Pricing)
+	}
+	if attr.BillingDetails.Usage.PromptTokens != 1000 {
+		t.Fatalf("usage not preserved: %+v", attr.BillingDetails.Usage)
+	}
+}
+
+func TestEstimateRequestCost_EmptyUsageZero(t *testing.T) {
+	attr := EstimateRequestCost("gpt-4o", "new-api", UsageForCost{}, nil, nil)
+	if attr.Source != CostSourceZero || attr.EstimatedCost != 0 {
+		t.Fatalf("attr=%+v", attr)
 	}
 }
 

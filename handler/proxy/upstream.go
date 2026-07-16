@@ -76,7 +76,8 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 		unconfiguredUpstreamLogOnce.Do(func() {
 			slog.Error("proxy upstream dependencies are not configured")
 		})
-		shared.RecordProxyError(); writeJSONError(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error")
+		shared.RecordProxyError()
+		writeJSONError(w, http.StatusServiceUnavailable, "Proxy upstream is not configured", "server_error")
 		return
 	}
 
@@ -497,67 +498,71 @@ func dispatchEndpointAttemptWithContinue(
 			return true, nil, false
 		}
 		// Always close the upstream body, including early client disconnects.
+		// Stream responses commit headers at first byte, so cost headers cannot
+		// be attached after the stream ends. We still persist billing_details
+		// on the proxy log for operators (admin path).
 		var streamUsage ParsedUsage
 		func() {
 			defer resp.Body.Close()
 			streamUsage = handleStreamUpstream(w, r, resp, latencyMs)
 		}()
-			recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
-			writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
-			return true, nil, false
-		}
+		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
+		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry)
+		return true, nil, false
+	}
 
-		respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
-			if !isLastEndpoint && !disableCrossProtocolFallback {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
-			if retry < maxRetries {
-				return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
-			}
-			writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
-			return true, nil, false
+	respBody, readErr := proxy.ReadBufferedResponseBody(resp.Body)
+	resp.Body.Close()
+	if readErr != nil {
+		slog.Warn("failed to read upstream response", "err", readErr, "latency_ms", latencyMs, "channel_id", selected.Channel.ID)
+		if !isLastEndpoint && !disableCrossProtocolFallback {
+			return false, nil, true
 		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			rawErrText := string(respBody)
-			if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
-			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
-				return false, bufferedPendingUpstreamFailure(resp, respBody), false
-			}
-			relayBufferedUpstreamResponse(w, resp, respBody)
-			return true, nil, false
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+		if retry < maxRetries {
+			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 		}
-		usage := ParseUsageFromBody(respBody)
-		failure := proxy.DetectProxyFailure(string(respBody), usage.ToUsageSummary())
-		if failure != nil {
-			slog.Warn("content-based failure detected",
-				"reason", failure.Reason,
-				"status", failure.Status,
-				"model", upstreamModel,
-				"channel_id", selected.Channel.ID,
-				"latency_ms", latencyMs,
-			)
-			if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
-				return false, nil, true
-			}
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
-			if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
-				return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
-			}
-			writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
-			return true, nil, false
+		writeJSONError(w, 502, "Failed to read upstream response", "upstream_error")
+		return true, nil, false
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		rawErrText := string(respBody)
+		if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
+			return false, nil, true
 		}
-		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
-		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry)
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+		if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
+			return false, bufferedPendingUpstreamFailure(resp, respBody), false
+		}
 		relayBufferedUpstreamResponse(w, resp, respBody)
 		return true, nil, false
 	}
+	usage := ParseUsageFromBody(respBody)
+	failure := proxy.DetectProxyFailure(string(respBody), usage.ToUsageSummary())
+	if failure != nil {
+		slog.Warn("content-based failure detected",
+			"reason", failure.Reason,
+			"status", failure.Status,
+			"model", upstreamModel,
+			"channel_id", selected.Channel.ID,
+			"latency_ms", latencyMs,
+		)
+		if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
+			return false, nil, true
+		}
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
+		if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
+			return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
+		}
+		writeJSONError(w, failure.Status, "Upstream returned an error response", "upstream_error")
+		return true, nil, false
+	}
+	recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
+	// Cost headers must be applied before the body is written.
+	writeSuccessProxyLogWithHeaders(r.Context(), w, cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry)
+	relayBufferedUpstreamResponse(w, resp, respBody)
+	return true, nil, false
+}
 
 func shouldContinueEndpointFallback(status int, rawErrText string, isLastEndpoint bool, disableCrossProtocolFallback bool) bool {
 	if isLastEndpoint || disableCrossProtocolFallback {
@@ -716,12 +721,14 @@ func recordUpstreamSuccess(ctx context.Context, cfg *UpstreamConfig, selected *r
 	if cfg == nil || cfg.Router == nil || selected == nil {
 		return
 	}
-	// Cost remains 0 here; pricing is a separate concern (#43). Token totals
-	// are persisted via writeSuccessProxyLog for aggregation.
-	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), 0, &modelName, nil); err != nil {
+	platform := ""
+	if selected.Site.Platform != "" {
+		platform = selected.Site.Platform
+	}
+	attr := buildRequestCostAttribution(modelName, platform, usage, nil, nil)
+	if err := cfg.Router.RecordSuccess(ctx, selected.Channel.ID, float64(latencyMs), attr.EstimatedCost, &modelName, nil); err != nil {
 		slog.Warn("RecordSuccess failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
 	}
-	_ = usage
 }
 
 func writeSuccessProxyLog(
@@ -772,6 +779,15 @@ func writeSuccessProxyLog(
 			source = usageSourceUnknown
 		}
 	}
+	platform := selected.Site.Platform
+	// Pricing catalog is not wired into the hot path yet; EstimateRequestCost
+	// falls back to platform token divisor with zeroed ratios (documented).
+	// When a PricingModel becomes available, pass it as the model pointer.
+	attr := buildRequestCostAttribution(modelActual, platform, usage, nil, nil)
+	var billing any
+	if attr.BillingDetails != nil {
+		billing = attr.BillingDetails
+	}
 	entry := proxy.ProxyLogEntry{
 		RouteID:            routeIDPtr,
 		ChannelID:          &channelID,
@@ -787,6 +803,8 @@ func writeSuccessProxyLog(
 		PromptTokens:       int64Ptr(usage.PromptTokens),
 		CompletionTokens:   int64Ptr(usage.CompletionTokens),
 		TotalTokens:        int64Ptr(usage.TotalTokens),
+		EstimatedCost:      attr.EstimatedCost,
+		BillingDetails:     billing,
 		ClientFamily:       clientFamily,
 		ClientAppID:        clientAppID,
 		ClientAppName:      clientAppName,
@@ -796,6 +814,31 @@ func writeSuccessProxyLog(
 		UsageSource:        source,
 	}
 	logProxy(ctx, cfg, entry)
+}
+
+// writeSuccessProxyLogWithHeaders is like writeSuccessProxyLog but also sets
+// optional X-Metapi-Cost / token headers when the response has not been committed.
+func writeSuccessProxyLogWithHeaders(
+	ctx context.Context,
+	w http.ResponseWriter,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	proxyCtx *Ctx,
+	upstreamModel string,
+	upstreamPath string,
+	latencyMs int64,
+	httpStatus int,
+	isStream bool,
+	usage ParsedUsage,
+	retryCount int,
+) {
+	platform := ""
+	if selected != nil {
+		platform = selected.Site.Platform
+	}
+	attr := buildRequestCostAttribution(upstreamModel, platform, usage, nil, nil)
+	applyCostAttributionHeaders(w, usage, attr)
+	writeSuccessProxyLog(ctx, cfg, selected, proxyCtx, upstreamModel, upstreamPath, latencyMs, httpStatus, isStream, usage, retryCount)
 }
 
 func isProxyStubEnabled() bool {

@@ -39,14 +39,14 @@ const (
 // PricingModel is a normalized upstream pricing row used for cost estimation.
 // Pointer ratios distinguish "missing" from an explicit zero.
 type PricingModel struct {
-	ModelName           string
-	QuotaType           int // 0 = token-based, 1 = per-call
-	ModelRatio          float64
-	CompletionRatio     float64
-	CacheRatio          *float64
-	CacheCreationRatio  *float64
-	ModelPrice          *ModelPrice
-	EnableGroups        []string
+	ModelName          string
+	QuotaType          int // 0 = token-based, 1 = per-call
+	ModelRatio         float64
+	CompletionRatio    float64
+	CacheRatio         *float64
+	CacheCreationRatio *float64
+	ModelPrice         *ModelPrice
+	EnableGroups       []string
 }
 
 // ModelPrice is either a flat per-call price or input/output pair.
@@ -61,11 +61,11 @@ type ModelPrice struct {
 
 // UsageForCost is token usage for a single request cost estimate.
 type UsageForCost struct {
-	PromptTokens             int64
-	CompletionTokens         int64
-	TotalTokens              int64
-	CacheReadTokens          int64
-	CacheCreationTokens      int64
+	PromptTokens        int64
+	CompletionTokens    int64
+	TotalTokens         int64
+	CacheReadTokens     int64
+	CacheCreationTokens int64
 	// PromptTokensIncludeCache:
 	//   true/nil → prompt tokens already include cache tokens (subtract for billable input)
 	//   false    → prompt tokens are exclusive of cache tokens
@@ -82,20 +82,26 @@ type ProxyBillingPricingOverride struct {
 }
 
 // ProxyBillingDetails mirrors the TS ProxyBillingDetails shape (camelCase JSON).
+// CostSource / ReasoningTokens are additive operator fields for #111 and are
+// omitted when empty so older UI consumers keep working.
 type ProxyBillingDetails struct {
-	QuotaType int                    `json:"quotaType"`
-	Usage     ProxyBillingUsage      `json:"usage"`
-	Pricing   ProxyBillingPricing    `json:"pricing"`
-	Breakdown ProxyBillingBreakdown  `json:"breakdown"`
+	QuotaType int                   `json:"quotaType"`
+	Usage     ProxyBillingUsage     `json:"usage"`
+	Pricing   ProxyBillingPricing   `json:"pricing"`
+	Breakdown ProxyBillingBreakdown `json:"breakdown"`
+	// CostSource is pricing_model | fallback | zero (see CostSource* constants).
+	CostSource string `json:"costSource,omitempty"`
 }
 
 // ProxyBillingUsage is the usage section of billing details.
 type ProxyBillingUsage struct {
-	PromptTokens             int64 `json:"promptTokens"`
-	CompletionTokens         int64 `json:"completionTokens"`
-	TotalTokens              int64 `json:"totalTokens"`
-	CacheReadTokens          int64 `json:"cacheReadTokens"`
-	CacheCreationTokens      int64 `json:"cacheCreationTokens"`
+	PromptTokens        int64 `json:"promptTokens"`
+	CompletionTokens    int64 `json:"completionTokens"`
+	TotalTokens         int64 `json:"totalTokens"`
+	CacheReadTokens     int64 `json:"cacheReadTokens"`
+	CacheCreationTokens int64 `json:"cacheCreationTokens"`
+	// ReasoningTokens is operator-only (not billed separately).
+	ReasoningTokens          int64 `json:"reasoningTokens,omitempty"`
 	BillablePromptTokens     int64 `json:"billablePromptTokens"`
 	PromptTokensIncludeCache *bool `json:"promptTokensIncludeCache"`
 }
@@ -312,6 +318,124 @@ func FallbackTokenCost(totalTokens int64, platform string) float64 {
 	}
 	tokens := float64(toPositiveInt64(totalTokens))
 	return roundCost(tokens / divisor)
+}
+
+// CostEstimateSource labels how a per-request cost was produced.
+const (
+	// CostSourcePricingModel means CalculateModelUsage* ran against an explicit
+	// PricingModel (catalog row or override). Cache ratios use Claude-aware
+	// defaults when omitted.
+	CostSourcePricingModel = "pricing_model"
+	// CostSourceFallback means no pricing model was available and FallbackTokenCost
+	// was used (platform divisor; zeros for ratio fields).
+	CostSourceFallback = "fallback"
+	// CostSourceZero means usage was empty / not found; cost is 0 with zeroed
+	// token breakdown still recorded when available.
+	CostSourceZero = "zero"
+)
+
+// RequestCostAttribution is the operator-facing cost attribution package for one
+// proxy request: estimated cost + billing_details JSON + provenance.
+type RequestCostAttribution struct {
+	EstimatedCost  float64
+	BillingDetails *ProxyBillingDetails
+	// Source is one of CostSourcePricingModel / CostSourceFallback / CostSourceZero.
+	Source string
+	// ReasoningTokens is recorded for operators when upstream exposes it; it is
+	// NOT billed separately (completion cost already covers reasoning output for
+	// token-quota models). Present on the attribution envelope for headers/logs.
+	ReasoningTokens int64
+}
+
+// EstimateRequestCost builds per-request cost attribution from usage + optional
+// pricing model. Policy:
+//
+//  1. When model != nil and quota is token-based, use CalculateModelUsageBreakdown
+//     (Claude-aware cache_ratio defaults apply inside that path).
+//  2. When model is nil (or per-call with no usable price), fall back to
+//     FallbackTokenCost(totalTokens, platform) and emit a zero-ratio
+//     billing_details shell so proxy_logs always store a token-type breakdown.
+//  3. Empty usage → cost 0, source "zero", billing_details still carries zeros.
+//
+// Missing cache ratios never silently become 1.0 for Claude — that policy lives
+// in ResolveCacheRatio (see docs/analysis/cache-ratio-pricing.md).
+func EstimateRequestCost(
+	modelName string,
+	platform string,
+	usage UsageForCost,
+	model *PricingModel,
+	groupRatio map[string]float64,
+) RequestCostAttribution {
+	attr := RequestCostAttribution{}
+	hasUsage := usage.PromptTokens > 0 || usage.CompletionTokens > 0 || usage.TotalTokens > 0 ||
+		usage.CacheReadTokens > 0 || usage.CacheCreationTokens > 0
+
+	if model != nil {
+		if model.QuotaType == 1 {
+			// Per-call: cost from model price; still emit usage shell for logs.
+			cost := CalculateModelUsageCost(*model, usage, groupRatio)
+			attr.EstimatedCost = cost
+			attr.BillingDetails = buildFallbackBillingDetails(usage, cost, CostSourcePricingModel)
+			attr.Source = CostSourcePricingModel
+			return attr
+		}
+		detail := CalculateModelUsageBreakdown(*model, usage, groupRatio)
+		if detail != nil {
+			detail.CostSource = CostSourcePricingModel
+			attr.EstimatedCost = detail.Breakdown.TotalCost
+			attr.BillingDetails = detail
+			attr.Source = CostSourcePricingModel
+			return attr
+		}
+	}
+
+	if !hasUsage {
+		attr.EstimatedCost = 0
+		attr.BillingDetails = buildFallbackBillingDetails(usage, 0, CostSourceZero)
+		attr.Source = CostSourceZero
+		return attr
+	}
+
+	total := usage.TotalTokens
+	if total <= 0 {
+		total = usage.PromptTokens + usage.CompletionTokens
+	}
+	cost := FallbackTokenCost(total, platform)
+	attr.EstimatedCost = cost
+	attr.BillingDetails = buildFallbackBillingDetails(usage, cost, CostSourceFallback)
+	attr.Source = CostSourceFallback
+	return attr
+}
+
+// buildFallbackBillingDetails materializes a ProxyBillingDetails shell when no
+// full pricing model breakdown is available. Ratios are zeroed (not 1.0) so
+// operators can distinguish "unknown pricing" from "priced at input rate".
+// TotalCost is set to the fallback estimate; per-component costs stay 0.
+func buildFallbackBillingDetails(usage UsageForCost, totalCost float64, source string) *ProxyBillingDetails {
+	normalized := normalizeUsageBreakdownInput(usage)
+	return &ProxyBillingDetails{
+		QuotaType:  0,
+		Usage:      normalized,
+		CostSource: source,
+		Pricing: ProxyBillingPricing{
+			ModelRatio:         0,
+			CompletionRatio:    0,
+			CacheRatio:         0,
+			CacheCreationRatio: 0,
+			GroupRatio:         1,
+		},
+		Breakdown: ProxyBillingBreakdown{
+			InputPerMillion:         0,
+			OutputPerMillion:        0,
+			CacheReadPerMillion:     0,
+			CacheCreationPerMillion: 0,
+			InputCost:               0,
+			OutputCost:              0,
+			CacheReadCost:           0,
+			CacheCreationCost:       0,
+			TotalCost:               roundCost(totalCost),
+		},
+	}
 }
 
 // CacheAwarePerMillionRates derives input/output/cache $/M rates for catalog

@@ -42,6 +42,52 @@ func TestParseUsageFromBodyAnthropic(t *testing.T) {
 	if got.TotalTokens != 150 {
 		t.Fatalf("total = %d, want 150", got.TotalTokens)
 	}
+	if got.CacheReadTokens != 10 || got.CacheCreationTokens != 5 {
+		t.Fatalf("cache tokens = %d/%d, want 10/5", got.CacheReadTokens, got.CacheCreationTokens)
+	}
+	if got.PromptTokensIncludeCache == nil || !*got.PromptTokensIncludeCache {
+		t.Fatalf("PromptTokensIncludeCache = %v, want true", got.PromptTokensIncludeCache)
+	}
+}
+
+func TestParseUsageFromBodyOpenAICachedAndReasoning(t *testing.T) {
+	body := []byte(`{
+		"usage":{
+			"prompt_tokens":200,
+			"completion_tokens":80,
+			"total_tokens":280,
+			"prompt_tokens_details":{"cached_tokens":120},
+			"completion_tokens_details":{"reasoning_tokens":40}
+		}
+	}`)
+	got := ParseUsageFromBody(body)
+	if !got.Found {
+		t.Fatal("expected usage found")
+	}
+	if got.PromptTokens != 200 || got.CompletionTokens != 80 || got.TotalTokens != 280 {
+		t.Fatalf("usage = %+v", got)
+	}
+	if got.CacheReadTokens != 120 {
+		t.Fatalf("cache read = %d, want 120", got.CacheReadTokens)
+	}
+	if got.ReasoningTokens != 40 {
+		t.Fatalf("reasoning = %d, want 40", got.ReasoningTokens)
+	}
+}
+
+func TestParseUsageFromBodyPartialMissingFields(t *testing.T) {
+	// Partial payload: only completion side — must not invent prompt/cache.
+	body := []byte(`{"usage":{"completion_tokens":3}}`)
+	got := ParseUsageFromBody(body)
+	if !got.Found {
+		t.Fatal("expected found")
+	}
+	if got.PromptTokens != 0 || got.CacheReadTokens != 0 || got.CompletionTokens != 3 {
+		t.Fatalf("partial usage = %+v", got)
+	}
+	if got.TotalTokens != 3 {
+		t.Fatalf("total = %d, want 3", got.TotalTokens)
+	}
 }
 
 func TestParseUsageFromBodyGemini(t *testing.T) {
