@@ -26,6 +26,5 @@ export default defineConfig({
     // Avoid flaky EnvironmentTeardownError under concurrent React19 + chart stubs.
     fileParallelism: false,
     maxWorkers: 1,
-    minWorkers: 1,
   },
 });
