@@ -24,7 +24,7 @@ This program **does not** implement original-gap product fixes.
 |:-----|:-------|:-----------|:---------|:-----|
 | **Wave 0** | ✅ Done | Branch hygiene; labels; project; milestones; issues #3–#11 | same | Tracking surface ready |
 | **Wave 1** | 🔄 Active | **S1** core lock (TS 7.0.2 + React 19.2.7 + Vite 8.1.5) | **G1** issue capture + taxonomy · **G2** gap matrix | Parallel stack bump + gap evidence base |
-| **Wave 2** | Pending | **S2** React 19 test adaptation · **S3** Vite 8 / vitepress-mermaid tooling | **G3** publish `[backlog]` issues from matrix | Tests + tooling green; backlog visible |
+| **Wave 2** | 🔄 Active | **S2** React 19 test adaptation · **S3** Vite 8 / vitepress-mermaid tooling | **G3** publish `[backlog]` issues from matrix | Tests + tooling green; backlog visible |
 | **Wave 3** | Pending | **S4** CI / Docker / embed regression gate + CHANGELOG | **G4** gap inventory acceptance (docs-only) | Ship stack gate; freeze inventory |
 
 Parallelism notes:
@@ -82,6 +82,44 @@ Exact tag naming for the stack ship is decided at S4 (CHANGELOG + release notes)
 | S2 | React 19 test suite adapted; no remaining broken `react-test-renderer` assumptions in scope |
 | S3 | Vite 8 plugins / vitepress-mermaid tooling build cleanly |
 | S4 | CI + Docker + embed regression green; CHANGELOG updated |
+
+## S3 outcome (Issue #6) — Vite 8 / docs tooling closure
+
+**Status**: closed on branch `feat/s3-vitepress-tooling` (depends on S1 core lock).
+
+| Check | Result |
+|:------|:-------|
+| `@vitejs/plugin-react` + `@tailwindcss/vite` under Vite **8.1.5** | ✅ product `build:web` path |
+| `manualChunks` → `vchart-vendor` for `@visactor/*` | ✅ retained in `web/vite.config.ts` |
+| `docs:build` / `docs:dev` / `docs:preview` | ✅ **optional stubs** (exit 0) via `web/scripts/docs-optional.mjs` |
+| Nested Vite 5 from vitepress 1.6.x | ✅ removed — dropped `vitepress`, `vitepress-plugin-mermaid`, `mermaid` (unused; no `web/docs` site) |
+| Prior `overrides.vitepress.vite` pin | ✅ already gone post-S1; no reintroduction |
+| `npm run audit:prod` (`--audit-level=high --omit=dev`) | ✅ product gate unchanged; CI still runs it. Local npmmirror may 404 the audit API — re-run with `--registry=https://registry.npmjs.org` when the active registry lacks advisories. |
+
+### Why optional (not VitePress upgrade)
+
+1. Stable **vitepress@1.6.4** depends on **vite@^5.4** and would reintroduce a nested Vite 5 tree under a Vite 8 app lock.
+2. **vitepress@2.0.0-alpha.\*** targets Vite 8 but is pre-release; **vitepress-plugin-mermaid@2** only peers `vitepress@^1`.
+3. There is **no** `web/docs` VitePress content tree; product docs SSOT is repo-root `/docs` markdown (CI `docs-hygiene` only).
+4. External product docs URL remains `web/docsLink.ts` → hosted site; not built from this package.
+
+### Verify commands
+
+```bash
+cd web
+npm ci --ignore-scripts
+npm run audit:prod
+npm run build:web
+ls dist/assets | rg -i 'vchart|index'
+npm run docs:build   # optional stub, exit 0
+```
+
+### Follow-up (out of S3)
+
+- If a real VitePress site is needed later: adopt a Vite-8-compatible VitePress release, re-add mermaid plugin when peer range allows, and provision `web/docs` + config — then replace the optional stub scripts.
+
+| Gate | Pass when |
+|:-----|:----------|
 | G1 | Upstream open-issue capture + taxonomy documented |
 | G2 | Gap matrix with code evidence checked in |
 | G3 | Backlog issues published and linked from matrix |
