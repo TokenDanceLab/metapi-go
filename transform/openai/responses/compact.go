@@ -20,7 +20,9 @@ func ShouldForceResponsesUpstreamStream(sitePlatform string, isCompactRequest bo
 	return n == "codex" || n == "sub2api"
 }
 
-// SanitizeCompactResponsesRequestBody removes stream/stream_options and conditionally store.
+// SanitizeCompactResponsesRequestBody removes stream/stream_options and
+// conditionally store. Compact never continues a prior stored response, so
+// previous_response_id is always stripped here (see previous_response_id.go).
 func SanitizeCompactResponsesRequestBody(body map[string]any, sitePlatform string) map[string]any {
 	next := map[string]any{}
 	for k, v := range body {
@@ -28,6 +30,7 @@ func SanitizeCompactResponsesRequestBody(body map[string]any, sitePlatform strin
 	}
 	delete(next, "stream")
 	delete(next, "stream_options")
+	delete(next, PreviousResponseIDField)
 	if ShouldStripCompactResponsesStore(sitePlatform) {
 		delete(next, "store")
 	}

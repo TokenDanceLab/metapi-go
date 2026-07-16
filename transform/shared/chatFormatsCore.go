@@ -316,9 +316,10 @@ func convertClaudeRequestToOpenAiBody(body map[string]any) claudeConvertResult {
 	if pck := AsTrimmedString(body["prompt_cache_key"]); pck != "" {
 		payload["prompt_cache_key"] = pck
 	}
-	if pri := AsTrimmedString(body["previous_response_id"]); pri != "" {
-		payload["previous_response_id"] = pri
-	}
+	// previous_response_id is Responses-only. Never copy it onto chat bodies
+	// (avoids opaque upstream 400 "Unsupported parameter: previous_response_id").
+	// Continuity for Responses is handled in transform/openai/responses and
+	// canonical.ApplyOpenAIResponsesContinuation.
 
 	return claudeConvertResult{
 		model:    model,
