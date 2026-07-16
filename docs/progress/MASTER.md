@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | 🔄 Wave F1 largely landed (#39–#46, #40–#43, #45–#46 closed via PRs #74–#80). In flight: #44 token count, #38 failover/first-byte, #48 rerank. Open P1 protocol pack #47–#56 (excl. #48 scheduled) |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ F1 P0 closed (#38–#46, #48 via PRs #74–#84). In flight P1 protocol: #47 thought_sig · #52 Minimax · #53 models · #54 previous_response_id. Remaining backlog #49–#51,#55–#56 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -73,9 +73,9 @@
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
-| Closed F1 bugs | #39 expired health · #40 key refresh preserve · #41 quota clear · #42 token stats · #43 cache_ratio · #45 whitelist · #46 route model config (PRs #74–#80) |
-| In flight WFs | #44 uncounted tokens · #38 failover/first-byte · #48 `/v1/rerank` |
-| Next | Harvest #44/#38/#48 → schedule P1 protocol pack (#47–#56) |
+| Closed F1 | #38 failover · #39 expired health · #40–#46 admin/stats/keys · #48 rerank (PRs #74–#84) |
+| In flight WFs | P1: #47 Gemini thought_signature · #52 Minimax thinking · #53 models shape · #54 previous_response_id |
+| Next | Harvest P1 protocol PRs; then #49–#51/#55–#56 |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ## Hardening Results
