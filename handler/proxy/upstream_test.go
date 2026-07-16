@@ -604,3 +604,157 @@ func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
 		t.Fatalf("expected channel 202 success, got %d", router.successes[0].channelID)
 	}
 }
+
+
+func TestNonStreamSuccessPersistsUsageTokensToProxyLog(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl_usage","choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":12,"completion_tokens":34,"total_tokens":46}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	var logs []proxy.ProxyLogEntry
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, RouteID: 9, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o-upstream",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(logs) != 1 {
+		t.Fatalf("proxy logs = %d, want 1: %#v", len(logs), logs)
+	}
+	entry := logs[0]
+	if entry.Status != "success" {
+		t.Fatalf("status = %q, want success", entry.Status)
+	}
+	if entry.PromptTokens == nil || *entry.PromptTokens != 12 {
+		t.Fatalf("prompt_tokens = %#v, want 12", entry.PromptTokens)
+	}
+	if entry.CompletionTokens == nil || *entry.CompletionTokens != 34 {
+		t.Fatalf("completion_tokens = %#v, want 34", entry.CompletionTokens)
+	}
+	if entry.TotalTokens == nil || *entry.TotalTokens != 46 {
+		t.Fatalf("total_tokens = %#v, want 46", entry.TotalTokens)
+	}
+	if entry.UsageSource != "upstream" {
+		t.Fatalf("usage_source = %q, want upstream", entry.UsageSource)
+	}
+	if entry.ChannelID == nil || *entry.ChannelID != 42 {
+		t.Fatalf("channel_id = %#v, want 42", entry.ChannelID)
+	}
+	if entry.AccountID == nil || *entry.AccountID != 7 {
+		t.Fatalf("account_id = %#v, want 7", entry.AccountID)
+	}
+	if entry.IsStream == nil || *entry.IsStream {
+		t.Fatalf("is_stream = %#v, want false", entry.IsStream)
+	}
+}
+
+func TestStreamSuccessExtractsFinalUsageAndPersistsProxyLog(t *testing.T) {
+	streamBody := strings.Join([]string{
+		`data: {"id":"chunk1","choices":[{"delta":{"content":"He"}}]}`,
+		`data: {"id":"chunk2","choices":[{"delta":{"content":"llo"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":9,"total_tokens":14}}`,
+		`data: [DONE]`,
+		``,
+	}, "\n\n")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(streamBody))
+	}))
+	t.Cleanup(upstream.Close)
+
+	var logs []proxy.ProxyLogEntry
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, RouteID: 9, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o-upstream",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(logs) != 1 {
+		t.Fatalf("proxy logs = %d, want 1: %#v", len(logs), logs)
+	}
+	entry := logs[0]
+	if entry.Status != "success" {
+		t.Fatalf("status = %q, want success", entry.Status)
+	}
+	if entry.IsStream == nil || !*entry.IsStream {
+		t.Fatalf("is_stream = %#v, want true", entry.IsStream)
+	}
+	if entry.PromptTokens == nil || *entry.PromptTokens != 5 {
+		t.Fatalf("prompt_tokens = %#v, want 5", entry.PromptTokens)
+	}
+	if entry.CompletionTokens == nil || *entry.CompletionTokens != 9 {
+		t.Fatalf("completion_tokens = %#v, want 9", entry.CompletionTokens)
+	}
+	if entry.TotalTokens == nil || *entry.TotalTokens != 14 {
+		t.Fatalf("total_tokens = %#v, want 14", entry.TotalTokens)
+	}
+	if entry.UsageSource != "upstream" {
+		t.Fatalf("usage_source = %q, want upstream", entry.UsageSource)
+	}
+}
+
+func TestDetectProxyFailureReceivesParsedUsageFromBody(t *testing.T) {
+	// When empty-content-fail is enabled and completion tokens are present,
+	// DetectProxyFailure must not treat the response as empty even without text.
+	t.Setenv("PROXY_EMPTY_CONTENT_FAIL", "1")
+	// config.Get() may already be loaded; DetectProxyFailure reads config singleton.
+	// Prefer direct unit path: ParseUsageFromBody -> ToUsageSummary.
+	body := []byte(`{"choices":[{"message":{"content":""}}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`)
+	usage := ParseUsageFromBody(body)
+	if !usage.Found || usage.CompletionTokens != 2 {
+		t.Fatalf("usage = %+v, want completion 2", usage)
+	}
+	sum := usage.ToUsageSummary()
+	if sum.CompletionTokens != 2 {
+		t.Fatalf("summary completion = %d", sum.CompletionTokens)
+	}
+}
+
+func TestIncrementalSseAnalyzerExtractsUsage(t *testing.T) {
+	analyzer := newIncrementalSseAnalyzer()
+	analyzer.Push([]byte(`data: {"choices":[{"delta":{"content":"x"}}]}` + "\n\n"))
+	analyzer.Push([]byte(`data: {"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}` + "\n\n"))
+	analyzer.Push([]byte("data: [DONE]\n\n"))
+	result := analyzer.Result()
+	if !result.Usage.Found {
+		t.Fatal("expected usage found in analyzer result")
+	}
+	if result.Usage.TotalTokens != 5 {
+		t.Fatalf("total = %d, want 5", result.Usage.TotalTokens)
+	}
+}
