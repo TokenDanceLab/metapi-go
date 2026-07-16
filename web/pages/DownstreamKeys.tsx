@@ -424,7 +424,7 @@ function InlineToggle({
 
   const active: React.CSSProperties = {
     background: 'var(--color-primary)',
-    color: '#fff',
+    color: 'var(--color-on-primary)',
     borderColor: 'var(--color-primary)',
   };
 
@@ -1294,7 +1294,7 @@ export default function DownstreamKeys() {
           <>
             <button className="btn btn-ghost" onClick={() => { setBatchMetadataOpen(false); resetBatchMetadataForm(); }} disabled={batchActionLoading}>取消</button>
             <button className="btn btn-primary" onClick={() => void runBatchMetadata()} disabled={batchActionLoading}>
-              {batchActionLoading ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '应用到所选密钥'}
+              {batchActionLoading ? <><span className="spinner spinner-sm" /> 保存中...</> : '应用到所选密钥'}
             </button>
           </>
         )}

@@ -1655,7 +1655,7 @@ export default function Accounts() {
                         <div
                           style={{
                             opacity: 0.7,
-                            borderTop: "1px solid rgba(0,0,0,0.1)",
+                            borderTop: "1px solid var(--color-border)",
                             paddingTop: 6,
                             marginTop: 6,
                           }}
@@ -1965,13 +1965,7 @@ export default function Accounts() {
                       >
                         {saving ? (
                           <>
-                            <span
-                              className="spinner spinner-sm"
-                              style={{
-                                borderTopColor: "white",
-                                borderColor: "rgba(255,255,255,0.3)",
-                              }}
-                            />
+                            <span className="spinner spinner-sm" />
                             添加中...
                           </>
                         ) : (
@@ -2049,13 +2043,7 @@ export default function Accounts() {
                     >
                       {saving ? (
                         <>
-                          <span
-                            className="spinner spinner-sm"
-                            style={{
-                              borderTopColor: "white",
-                              borderColor: "rgba(255,255,255,0.3)",
-                            }}
-                          />
+                          <span className="spinner spinner-sm" />
                           登录并添加...
                         </>
                       ) : (
@@ -2351,13 +2339,7 @@ export default function Accounts() {
                   >
                     {saving ? (
                       <>
-                        <span
-                          className="spinner spinner-sm"
-                          style={{
-                            borderTopColor: "white",
-                            borderColor: "rgba(255,255,255,0.3)",
-                          }}
-                        />
+                        <span className="spinner spinner-sm" />
                         添加中...
                       </>
                     ) : isBatchApiKeyInput ? (
@@ -2556,13 +2538,7 @@ export default function Accounts() {
                     >
                       {rebindSaving ? (
                         <>
-                          <span
-                            className="spinner spinner-sm"
-                            style={{
-                              borderTopColor: "white",
-                              borderColor: "rgba(255,255,255,0.3)",
-                            }}
-                          />
+                          <span className="spinner spinner-sm" />
                           绑定中...
                         </>
                       ) : (
@@ -2593,13 +2569,7 @@ export default function Accounts() {
                 >
                   {savingEdit ? (
                     <>
-                      <span
-                        className="spinner spinner-sm"
-                        style={{
-                          borderTopColor: "white",
-                          borderColor: "rgba(255,255,255,0.3)",
-                        }}
-                      />{" "}
+                      <span className="spinner spinner-sm" />{" "}
                       保存中...
                     </>
                   ) : (

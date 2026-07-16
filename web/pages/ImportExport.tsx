@@ -541,7 +541,7 @@ export default function ImportExport() {
               style={{ justifyContent: 'space-between' }}
             >
               <span>导出全部（连接 + 路由 + 策略 + 设置）</span>
-              {exportingType === 'all' ? <span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> : null}
+              {exportingType === 'all' ? <span className="spinner spinner-sm" /> : null}
             </button>
             <button
               onClick={() => handleExport('accounts')}
@@ -709,7 +709,7 @@ export default function ImportExport() {
               className="btn btn-primary"
               style={{ width: '100%', padding: '10px 0', fontSize: 14, fontWeight: 600, borderRadius: 'var(--radius-sm)' }}
             >
-              {importing ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 导入中...</> : '导入'}
+              {importing ? <><span className="spinner spinner-sm" /> 导入中...</> : '导入'}
             </button>
           </div>
         </div>

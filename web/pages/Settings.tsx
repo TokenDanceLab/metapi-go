@@ -1412,7 +1412,7 @@ export default function Settings() {
           </div>
           <div style={{ marginTop: 12 }}>
             <button onClick={saveSchedule} disabled={savingSchedule} className="btn btn-primary">
-              {savingSchedule ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存定时任务'}
+              {savingSchedule ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存定时任务'}
             </button>
           </div>
         </div>
@@ -1433,7 +1433,7 @@ export default function Settings() {
           />
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={saveSystemProxy} disabled={savingSystemProxy} className="btn btn-primary">
-              {savingSystemProxy ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存系统代理'}
+              {savingSystemProxy ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存系统代理'}
             </button>
             <button
               onClick={testSystemProxy}
@@ -1486,7 +1486,7 @@ export default function Settings() {
           </label>
           <div>
             <button onClick={saveProxyFailureRules} disabled={savingProxyFailureRules} className="btn btn-primary">
-              {savingProxyFailureRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存失败规则'}
+              {savingProxyFailureRules ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存失败规则'}
             </button>
           </div>
         </div>
@@ -1736,7 +1736,7 @@ export default function Settings() {
           </div>
           <div style={settingsModernActionsStyle}>
             <button onClick={savePayloadRules} disabled={savingPayloadRules} className="btn btn-primary">
-              {savingPayloadRules ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存 Payload 规则'}
+              {savingPayloadRules ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存 Payload 规则'}
             </button>
           </div>
         </div>
@@ -1833,7 +1833,7 @@ export default function Settings() {
           </ResponsiveFormGrid>
           <div style={settingsModernActionsStyle}>
             <button onClick={saveProxyTransportSettings} disabled={savingProxyTransport} className="btn btn-primary">
-              {savingProxyTransport ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存传输与并发'}
+              {savingProxyTransport ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存传输与并发'}
             </button>
           </div>
         </div>
@@ -1904,7 +1904,7 @@ export default function Settings() {
           </ResponsiveFormGrid>
           <div style={settingsModernActionsStyle}>
             <button onClick={saveModelAvailabilityProbeSettings} disabled={savingModelAvailabilityProbe} className="btn btn-primary">
-              {savingModelAvailabilityProbe ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存批量测活设置'}
+              {savingModelAvailabilityProbe ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存批量测活设置'}
             </button>
           </div>
         </div>
@@ -1998,7 +1998,7 @@ export default function Settings() {
             </button>
           </div>
           <button onClick={saveProxyToken} disabled={savingToken} className="btn btn-primary">
-            {savingToken ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '更新下游访问令牌'}
+            {savingToken ? <><span className="spinner spinner-sm" /> 保存中...</> : '更新下游访问令牌'}
           </button>
         </div>
 
@@ -2193,7 +2193,7 @@ export default function Settings() {
 
           <div style={{ marginTop: 12 }}>
             <button onClick={saveRouting} disabled={savingRouting} className="btn btn-primary">
-              {savingRouting ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存路由策略'}
+              {savingRouting ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存路由策略'}
             </button>
           </div>
         </div>
@@ -2243,7 +2243,7 @@ export default function Settings() {
             </div>
           )}
           <button onClick={handleSaveBrandFilter} disabled={savingBrandFilter} className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }}>
-            {savingBrandFilter ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存品牌屏蔽'}
+            {savingBrandFilter ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存品牌屏蔽'}
           </button>
         </div>
 
@@ -2354,7 +2354,7 @@ export default function Settings() {
             )}
           </div>
           <button onClick={handleSaveAllowedModels} disabled={savingAllowedModels} className="btn btn-primary" style={{ fontSize: 12, padding: '6px 16px' }}>
-            {savingAllowedModels ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存模型白名单'}
+            {savingAllowedModels ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存模型白名单'}
           </button>
         </div>
 
@@ -2574,7 +2574,7 @@ export default function Settings() {
           />
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={saveSecuritySettings} disabled={savingSecurity} className="btn btn-primary">
-              {savingSecurity ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</> : '保存安全设置'}
+              {savingSecurity ? <><span className="spinner spinner-sm" /> 保存中...</> : '保存安全设置'}
             </button>
             <button
               onClick={() => {

@@ -1020,7 +1020,7 @@ export default function Dashboard({
                 background:
                   trendDays === d ? "var(--color-primary)" : "var(--color-bg)",
                 color:
-                  trendDays === d ? "white" : "var(--color-text-secondary)",
+                  trendDays === d ? "var(--color-on-primary)" : "var(--color-text-secondary)",
                 transition: "all 0.2s ease",
               }}
             >

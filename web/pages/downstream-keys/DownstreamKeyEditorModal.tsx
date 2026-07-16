@@ -357,7 +357,7 @@ export default function DownstreamKeyEditorModal({
           <button onClick={onClose} className="btn btn-ghost" disabled={saving}>取消</button>
           <button onClick={onSave} className="btn btn-primary" disabled={saving}>
             {saving
-              ? <><span className="spinner spinner-sm" style={{ borderTopColor: 'white', borderColor: 'rgba(255,255,255,0.3)' }} /> 保存中...</>
+              ? <><span className="spinner spinner-sm" /> 保存中...</>
               : (editingItem ? '保存修改' : '创建密钥')}
           </button>
         </>

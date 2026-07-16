@@ -141,7 +141,7 @@ export function RangeToggle({ range, onChange }: { range: Range; onChange: (r: R
 
   const active: React.CSSProperties = {
     background: 'var(--color-primary)',
-    color: '#fff',
+    color: 'var(--color-on-primary)',
     borderColor: 'var(--color-primary)',
   };
 
