@@ -493,6 +493,37 @@ func TestResolveEndpointCandidates(t *testing.T) {
 			t.Fatalf("got %v, want nil", got)
 		}
 	})
+	t.Run("responses-only site forces responses only", func(t *testing.T) {
+		got := ResolveEndpointCandidatesWithOptions("/v1/chat/completions", EndpointCandidateOptions{
+			Preference: SiteProtocolPreference{ResponsesOnly: true, PreferResponses: true},
+		})
+		if len(got) != 1 || got[0] != EndpointResponses {
+			t.Fatalf("got %v, want [responses]", got)
+		}
+	})
+	t.Run("prefer-responses reorders candidates", func(t *testing.T) {
+		got := ResolveEndpointCandidatesWithOptions("/v1/chat/completions", EndpointCandidateOptions{
+			Preference: SiteProtocolPreference{PreferResponses: true},
+		})
+		want := []UpstreamEndpoint{EndpointResponses, EndpointChat, EndpointMessages}
+		if len(got) != len(want) {
+			t.Fatalf("got %v want %v", got, want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("got %v want %v", got, want)
+			}
+		}
+	})
+	t.Run("responses-only ignores disableCrossProtocolFallback primary", func(t *testing.T) {
+		got := ResolveEndpointCandidatesWithOptions("/v1/chat/completions", EndpointCandidateOptions{
+			DisableCrossProtocolFallback: true,
+			Preference:                   SiteProtocolPreference{ResponsesOnly: true},
+		})
+		if len(got) != 1 || got[0] != EndpointResponses {
+			t.Fatalf("got %v, want [responses]", got)
+		}
+	})
 }
 
 func TestPathForEndpointAndFromPath(t *testing.T) {

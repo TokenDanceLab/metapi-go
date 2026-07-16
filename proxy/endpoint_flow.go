@@ -50,45 +50,8 @@ func EndpointFromPath(path string) (UpstreamEndpoint, bool) {
 	}
 }
 
-// ResolveEndpointCandidates builds the ordered multi-protocol candidate list for a
-// downstream path. Primary endpoint is first. When disableCrossProtocolFallback is
-// true, only the primary is returned. Non chat-family paths yield a single synthetic
-// candidate list of length 1 using the original path via PathForEndpoint fallbacks.
-//
-// Product policy (upstream #387 / issue #38):
-// - first-byte timeout or protocol-mismatch may continue to remaining candidates
-// - DISABLE_CROSS_PROTOCOL_FALLBACK stops after the primary attempt
-func ResolveEndpointCandidates(downstreamPath string, disableCrossProtocolFallback bool) []UpstreamEndpoint {
-	primary, ok := EndpointFromPath(downstreamPath)
-	if !ok {
-		// Non chat-family: no multi-protocol list. Caller should use the original path.
-		return nil
-	}
-	if disableCrossProtocolFallback {
-		return []UpstreamEndpoint{primary}
-	}
-	// Primary first, then remaining chat-family protocols in stable order.
-	order := []UpstreamEndpoint{EndpointChat, EndpointMessages, EndpointResponses}
-	// Prefer responses→chat→messages when primary is responses (common Codex downgrade).
-	switch primary {
-	case EndpointResponses:
-		order = []UpstreamEndpoint{EndpointResponses, EndpointChat, EndpointMessages}
-	case EndpointMessages:
-		order = []UpstreamEndpoint{EndpointMessages, EndpointChat, EndpointResponses}
-	case EndpointChat:
-		order = []UpstreamEndpoint{EndpointChat, EndpointMessages, EndpointResponses}
-	}
-	out := make([]UpstreamEndpoint, 0, len(order))
-	seen := map[UpstreamEndpoint]bool{}
-	for _, ep := range order {
-		if seen[ep] {
-			continue
-		}
-		seen[ep] = true
-		out = append(out, ep)
-	}
-	return out
-}
+// ResolveEndpointCandidates lives in site_preference.go (with responses-only options).
+// See ResolveEndpointCandidates / ResolveEndpointCandidatesWithOptions.
 
 // ShouldDowngradeToNextEndpoint reports whether an upstream error indicates the
 // current protocol/path is wrong and a different endpoint candidate should be tried.
