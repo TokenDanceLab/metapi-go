@@ -78,6 +78,7 @@
 
 ## Specs
 - Audit: `docs/analysis/hardening-audit.md`
+- Schema parity (SC0 #20): `docs/analysis/schema-parity.md`
 - Task breakdown: `docs/plan/task-breakdown-hardening.md`
 - Dependency graph: `docs/plan/dependency-graph-hardening.md`
 - Milestones: `docs/plan/milestones-hardening.md`
