@@ -221,14 +221,17 @@ type projectionCheckpoint struct {
 
 // projectionRow is a lightweight projection row from proxy_logs.
 type projectionRow struct {
-	id        int64
-	status    *string
-	tokens    *int64
-	cost      *float64
-	siteID    *int64
-	model     *string
-	latencyMs *int64
-	createdAt *string
+	id               int64
+	status           *string
+	promptTokens     *int64
+	completionTokens *int64
+	tokens           *int64
+	cost             *float64
+	siteID           *int64
+	platform         *string
+	model            *string
+	latencyMs        *int64
+	createdAt        *string
 }
 
 func (s *UsageAggregationScheduler) buildLeaseOwner() string {
@@ -336,8 +339,8 @@ func (s *UsageAggregationScheduler) readCheckpoint(dbw *store.DB) projectionChec
 
 func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, limit int) ([]projectionRow, error) {
 	rows, err := dbw.Query(`
-		SELECT pl.id, pl.status, pl.total_tokens, pl.estimated_cost, s.id as site_id,
-		       pl.model_actual, pl.latency_ms, pl.created_at
+		SELECT pl.id, pl.status, pl.prompt_tokens, pl.completion_tokens, pl.total_tokens, pl.estimated_cost,
+		       s.id as site_id, s.platform, pl.model_actual, pl.latency_ms, pl.created_at
 		FROM proxy_logs pl
 		LEFT JOIN accounts a ON pl.account_id = a.id
 		LEFT JOIN sites s ON a.site_id = s.id
@@ -353,7 +356,10 @@ func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, lim
 	var result []projectionRow
 	for rows.Next() {
 		var r projectionRow
-		if err := rows.Scan(&r.id, &r.status, &r.tokens, &r.cost, &r.siteID, &r.model, &r.latencyMs, &r.createdAt); err != nil {
+		if err := rows.Scan(
+			&r.id, &r.status, &r.promptTokens, &r.completionTokens, &r.tokens, &r.cost,
+			&r.siteID, &r.platform, &r.model, &r.latencyMs, &r.createdAt,
+		); err != nil {
 			return nil, fmt.Errorf("failed to scan projection row: %w", err)
 		}
 		result = append(result, r)
@@ -365,23 +371,41 @@ func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, lim
 }
 
 func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheckpoint, rows []projectionRow) error {
-	// Build deltas from projection rows
-	type delta struct {
-		siteID    int64
-		day       string
-		hour      string
-		model     string
-		calls     int
-		successes int
-		failures  int
-		tokens    int64
-		cost      float64
-		latencyMs int64
+	// Aggregate deltas by key so one batch never multiplies the same bucket
+	// with repeated single-row upserts (correctness + fewer writes).
+	type dayKey struct {
+		day    string
+		siteID int64
+	}
+	type hourKey struct {
+		hour   string
+		siteID int64
+	}
+	type modelKey struct {
+		day    string
+		siteID int64
+		model  string
+	}
+	type bucketDelta struct {
+		calls         int
+		successes     int
+		failures      int
+		tokens        int64
+		summarySpend  float64
+		siteSpend     float64
+		modelSpend    float64
+		latencyMs     int64
+		latencyCount  int
 	}
 
-	deltas := make([]delta, 0, len(rows))
+	dayDeltas := make(map[dayKey]*bucketDelta)
+	hourDeltas := make(map[hourKey]*bucketDelta)
+	modelDeltas := make(map[modelKey]*bucketDelta)
+
 	for _, r := range rows {
 		if r.siteID == nil {
+			// Orphan logs without a site join still advance the watermark below;
+			// they cannot contribute to site/model aggregates.
 			continue
 		}
 		logTime := projectionTimestamp(r.createdAt)
@@ -391,29 +415,72 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 		if r.model != nil && strings.TrimSpace(*r.model) != "" {
 			model = strings.TrimSpace(*r.model)
 		}
+		platform := ""
+		if r.platform != nil {
+			platform = *r.platform
+		}
 
-		d := delta{
-			siteID: *r.siteID,
-			day:    day,
-			hour:   hour,
-			model:  model,
-			calls:  1,
-		}
+		tokens := effectiveTokenCount(r.tokens, r.promptTokens, r.completionTokens)
+		summarySpend := resolveSummarySpend(r.cost, tokens, platform)
+		siteSpend := resolveSiteSpend(r.cost, tokens, platform)
+		modelSpend := resolveModelSpend(r.cost, tokens)
+
+		successes := 0
+		failures := 1
 		if r.status != nil && *r.status == "success" {
-			d.successes = 1
-		} else {
-			d.failures = 1
+			successes = 1
+			failures = 0
 		}
-		if r.tokens != nil {
-			d.tokens = *r.tokens
-		}
-		if r.cost != nil {
-			d.cost = *r.cost
-		}
+		latencyMs := int64(0)
+		latencyCount := 0
 		if r.latencyMs != nil && *r.latencyMs > 0 {
-			d.latencyMs = *r.latencyMs
+			latencyMs = *r.latencyMs
+			latencyCount = 1
 		}
-		deltas = append(deltas, d)
+
+		dk := dayKey{day: day, siteID: *r.siteID}
+		dd := dayDeltas[dk]
+		if dd == nil {
+			dd = &bucketDelta{}
+			dayDeltas[dk] = dd
+		}
+		dd.calls++
+		dd.successes += successes
+		dd.failures += failures
+		dd.tokens += tokens
+		dd.summarySpend += summarySpend
+		dd.siteSpend += siteSpend
+		dd.latencyMs += latencyMs
+		dd.latencyCount += latencyCount
+
+		hk := hourKey{hour: hour, siteID: *r.siteID}
+		hd := hourDeltas[hk]
+		if hd == nil {
+			hd = &bucketDelta{}
+			hourDeltas[hk] = hd
+		}
+		hd.calls++
+		hd.successes += successes
+		hd.failures += failures
+		hd.tokens += tokens
+		hd.summarySpend += summarySpend
+		hd.siteSpend += siteSpend
+		hd.latencyMs += latencyMs
+		hd.latencyCount += latencyCount
+
+		mk := modelKey{day: day, siteID: *r.siteID, model: model}
+		md := modelDeltas[mk]
+		if md == nil {
+			md = &bucketDelta{}
+			modelDeltas[mk] = md
+		}
+		md.calls++
+		md.successes += successes
+		md.failures += failures
+		md.tokens += tokens
+		md.modelSpend += modelSpend
+		md.latencyMs += latencyMs
+		md.latencyCount += latencyCount
 	}
 
 	// Apply to usage tables within a transaction for atomicity
@@ -462,35 +529,33 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 			latency_count = model_day_usage.latency_count + excluded.latency_count,
 			updated_at = excluded.updated_at`
 
-	for _, d := range deltas {
-		latencyCount := 0
-		if d.latencyMs > 0 {
-			latencyCount = 1
-		}
-
-		// site_day_usage upsert
+	for k, d := range dayDeltas {
 		if _, err := tx.Exec(tx.Rebind(siteDaySQL),
-			d.day, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			k.day, k.siteID, d.calls, d.successes, d.failures, d.tokens, d.summarySpend, d.siteSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
 			return fmt.Errorf("failed to upsert site_day_usage: %w", err)
 		}
-
-		// site_hour_usage upsert
+	}
+	for k, d := range hourDeltas {
 		if _, err := tx.Exec(tx.Rebind(siteHourSQL),
-			d.hour, d.siteID, d.calls, d.successes, d.failures, d.tokens, d.cost, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			k.hour, k.siteID, d.calls, d.successes, d.failures, d.tokens, d.summarySpend, d.siteSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
 			return fmt.Errorf("failed to upsert site_hour_usage: %w", err)
 		}
-
-		// model_day_usage upsert
+	}
+	for k, d := range modelDeltas {
 		if _, err := tx.Exec(tx.Rebind(modelDaySQL),
-			d.day, d.siteID, d.model, d.calls, d.successes, d.failures, d.tokens, d.cost, d.latencyMs, latencyCount, now, now); err != nil {
+			k.day, k.siteID, k.model, d.calls, d.successes, d.failures, d.tokens, d.modelSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
 			return fmt.Errorf("failed to upsert model_day_usage: %w", err)
 		}
 	}
 
-	// Write checkpoint
+	// Write checkpoint for every fetched row (including orphans) so the
+	// watermark never re-projects the same proxy_log id range.
 	if len(rows) > 0 {
 		lastID := rows[len(rows)-1].id
 		lastCreatedAt := time.Now().UTC().Format(time.RFC3339)
+		if rows[len(rows)-1].createdAt != nil && strings.TrimSpace(*rows[len(rows)-1].createdAt) != "" {
+			lastCreatedAt = strings.TrimSpace(*rows[len(rows)-1].createdAt)
+		}
 		if _, err := tx.Exec(tx.Rebind(`UPDATE analytics_projection_checkpoints
 			SET last_proxy_log_id = ?, watermark_created_at = ?, last_projected_at = ?, last_successful_at = ?, updated_at = ?
 			WHERE projector_key = ?`),
@@ -500,6 +565,65 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	}
 
 	return tx.Commit()
+}
+
+// effectiveTokenCount prefers total_tokens when present and positive; otherwise
+// falls back to prompt+completion so partial upstream payloads still count.
+func effectiveTokenCount(total, prompt, completion *int64) int64 {
+	var totalVal, promptVal, completionVal int64
+	if total != nil && *total > 0 {
+		totalVal = *total
+	}
+	if prompt != nil && *prompt > 0 {
+		promptVal = *prompt
+	}
+	if completion != nil && *completion > 0 {
+		completionVal = *completion
+	}
+	if totalVal > 0 {
+		return totalVal
+	}
+	sum := promptVal + completionVal
+	if sum > 0 {
+		return sum
+	}
+	return 0
+}
+
+func fallbackTokenCost(tokens int64, platform string) float64 {
+	if tokens <= 0 {
+		return 0
+	}
+	// Veloera-style platforms bill roughly tokens/1e6; other NewAPI-like
+	// platforms use the historical tokens/5e5 fallback from the TS service.
+	if strings.EqualFold(strings.TrimSpace(platform), "veloera") {
+		return float64(tokens) / 1_000_000
+	}
+	return float64(tokens) / 500_000
+}
+
+func resolveSummarySpend(explicit *float64, tokens int64, platform string) float64 {
+	if explicit != nil && *explicit > 0 {
+		return *explicit
+	}
+	return fallbackTokenCost(tokens, platform)
+}
+
+func resolveSiteSpend(explicit *float64, tokens int64, platform string) float64 {
+	if explicit != nil && *explicit > 0 {
+		return *explicit
+	}
+	return fallbackTokenCost(tokens, platform)
+}
+
+func resolveModelSpend(explicit *float64, tokens int64) float64 {
+	if explicit != nil && *explicit > 0 {
+		return *explicit
+	}
+	if tokens <= 0 {
+		return 0
+	}
+	return float64(tokens) / 500_000
 }
 
 func projectionTimestamp(raw *string) time.Time {
@@ -584,6 +708,8 @@ func (s *UsageAggregationScheduler) applyRecompute(dbw *store.DB, cp projectionC
 }
 
 // RequestRecompute requests a recompute of usage aggregates starting from fromLogID.
+// When a recompute is already pending, the earlier (smaller) log id is kept so the
+// rewind window is never silently reduced.
 func (s *UsageAggregationScheduler) RequestRecompute(fromLogID int64) {
 	dbw := store.GetDB()
 	if dbw == nil {
@@ -593,6 +719,10 @@ func (s *UsageAggregationScheduler) RequestRecompute(fromLogID int64) {
 	fromID := fromLogID
 	if fromID < 1 {
 		fromID = 1
+	}
+	cp := s.readCheckpoint(dbw)
+	if cp.RecomputeFromID != nil && *cp.RecomputeFromID > 0 && *cp.RecomputeFromID < fromID {
+		fromID = *cp.RecomputeFromID
 	}
 	dbw.Exec(`UPDATE analytics_projection_checkpoints
 		SET recompute_from_id = ?, recompute_requested_at = ?, updated_at = ?

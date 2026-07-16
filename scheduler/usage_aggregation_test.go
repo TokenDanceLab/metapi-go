@@ -236,9 +236,27 @@ func insertProjectionAccount(t *testing.T, db *store.DB, siteID int64, suffix, n
 
 func insertProjectionProxyLog(t *testing.T, db *store.DB, accountID int64, status, model string, tokens int64, cost float64, latencyMs int64, createdAt time.Time) int64 {
 	t.Helper()
-	query := `INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, total_tokens, estimated_cost, latency_ms, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-	args := []any{accountID, model, model, status, tokens, cost, latencyMs, createdAt.UTC().Format(time.RFC3339)}
+	return insertProjectionProxyLogTokens(t, db, accountID, status, model, nil, nil, &tokens, &cost, latencyMs, createdAt)
+}
+
+func insertProjectionProxyLogTokens(
+	t *testing.T,
+	db *store.DB,
+	accountID int64,
+	status, model string,
+	promptTokens, completionTokens, totalTokens *int64,
+	cost *float64,
+	latencyMs int64,
+	createdAt time.Time,
+) int64 {
+	t.Helper()
+	query := `INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, prompt_tokens, completion_tokens, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{
+		accountID, model, model, status,
+		promptTokens, completionTokens, totalTokens, cost, latencyMs,
+		createdAt.UTC().Format(time.RFC3339),
+	}
 	if db.Dialect == store.DialectPostgres {
 		var id int64
 		if err := db.QueryRow(query+" RETURNING id", args...).Scan(&id); err != nil {
@@ -255,4 +273,142 @@ func insertProjectionProxyLog(t *testing.T, db *store.DB, accountID int64, statu
 		t.Fatalf("sqlite proxy log LastInsertId: %v", err)
 	}
 	return id
+}
+
+func TestEffectiveTokenCount(t *testing.T) {
+	ptr := func(v int64) *int64 { return &v }
+
+	if got := effectiveTokenCount(ptr(120), ptr(50), ptr(70)); got != 120 {
+		t.Fatalf("prefer total_tokens: got %d", got)
+	}
+	if got := effectiveTokenCount(ptr(0), ptr(40), ptr(60)); got != 100 {
+		t.Fatalf("fallback prompt+completion: got %d", got)
+	}
+	if got := effectiveTokenCount(nil, ptr(25), nil); got != 25 {
+		t.Fatalf("prompt-only fallback: got %d", got)
+	}
+	if got := effectiveTokenCount(nil, nil, nil); got != 0 {
+		t.Fatalf("empty tokens: got %d", got)
+	}
+}
+
+func TestResolveSpendFallbacks(t *testing.T) {
+	explicit := 1.25
+	if got := resolveSummarySpend(&explicit, 1000, "openai"); got != 1.25 {
+		t.Fatalf("explicit cost: got %v", got)
+	}
+	if got := resolveSummarySpend(nil, 1_000_000, "veloera"); math.Abs(got-1.0) > 1e-9 {
+		t.Fatalf("veloera fallback: got %v", got)
+	}
+	if got := resolveSummarySpend(nil, 500_000, "openai"); math.Abs(got-1.0) > 1e-9 {
+		t.Fatalf("default fallback: got %v", got)
+	}
+	if got := resolveModelSpend(nil, 500_000); math.Abs(got-1.0) > 1e-9 {
+		t.Fatalf("model fallback: got %v", got)
+	}
+}
+
+func TestUsageAggregationProjection_PartialTokenFieldsAccumulate(t *testing.T) {
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	baseWatermark := maxProxyLogID(t, db)
+	seedProjectionCheckpoint(t, db, baseWatermark)
+	suffix := "partial-" + strings.ReplaceAll(t.Name(), "/", "-")
+	siteID := insertProjectionSite(t, db, suffix, now)
+	accountID := insertProjectionAccount(t, db, siteID, suffix, now)
+
+	prompt := int64(40)
+	completion := int64(60)
+	logTime := time.Date(2026, 7, 6, 11, 0, 0, 0, time.UTC)
+	// total_tokens missing/zero, but prompt+completion present.
+	insertProjectionProxyLogTokens(t, db, accountID, "success", "gpt-4.1", &prompt, &completion, nil, nil, 120, logTime)
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	s := NewUsageAggregationScheduler(testConfig())
+	result := s.RunProjectionPass()
+	if result == nil || result.ProcessedLogs != 1 {
+		t.Fatalf("projection result = %+v, want processed 1", result)
+	}
+
+	day := logTime.Format("2006-01-02")
+	var totalTokens int64
+	var spend float64
+	if err := db.Get(&totalTokens, `SELECT total_tokens FROM site_day_usage WHERE site_id = ? AND local_day = ?`, siteID, day); err != nil {
+		t.Fatalf("read tokens: %v", err)
+	}
+	if totalTokens != 100 {
+		t.Fatalf("site_day_usage total_tokens = %d, want 100 from prompt+completion", totalTokens)
+	}
+	if err := db.Get(&spend, `SELECT total_summary_spend FROM site_day_usage WHERE site_id = ? AND local_day = ?`, siteID, day); err != nil {
+		t.Fatalf("read spend: %v", err)
+	}
+	// No explicit cost → tokens/500k fallback = 100/500000 = 0.0002
+	if math.Abs(spend-0.0002) > 1e-9 {
+		t.Fatalf("site_day_usage spend = %.8f, want 0.0002", spend)
+	}
+}
+
+func TestUsageAggregationProjection_OrphanLogAdvancesWatermarkWithoutDoubleCount(t *testing.T) {
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	seedProjectionCheckpoint(t, db, 0)
+	suffix := "orphan-" + strings.ReplaceAll(t.Name(), "/", "-")
+	siteID := insertProjectionSite(t, db, suffix, now)
+	accountID := insertProjectionAccount(t, db, siteID, suffix, now)
+
+	// Orphan proxy log (no account / site join) must still move watermark.
+	orphanTime := time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)
+	if _, err := db.Exec(`INSERT INTO proxy_logs (model_requested, model_actual, status, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, "orphan-model", "orphan-model", "success", 999, 9.99, 10, orphanTime.Format(time.RFC3339)); err != nil {
+		t.Fatalf("insert orphan log: %v", err)
+	}
+	goodTime := orphanTime.Add(time.Minute)
+	insertProjectionProxyLog(t, db, accountID, "success", "gpt-4.1", 50, 0.05, 10, goodTime)
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	s := NewUsageAggregationScheduler(testConfig())
+	first := s.RunProjectionPass()
+	if first == nil || first.ProcessedLogs != 2 {
+		t.Fatalf("first pass = %+v, want processed 2", first)
+	}
+	// Re-running must not re-project already watermarked rows.
+	second := s.RunProjectionPass()
+	if second == nil || second.ProcessedLogs != 0 {
+		t.Fatalf("second pass = %+v, want processed 0 (no double count)", second)
+	}
+
+	day := goodTime.Format("2006-01-02")
+	var totalTokens int64
+	var totalCalls int
+	if err := db.Get(&totalTokens, `SELECT total_tokens FROM site_day_usage WHERE site_id = ? AND local_day = ?`, siteID, day); err != nil {
+		t.Fatalf("read tokens: %v", err)
+	}
+	if err := db.Get(&totalCalls, `SELECT total_calls FROM site_day_usage WHERE site_id = ? AND local_day = ?`, siteID, day); err != nil {
+		t.Fatalf("read calls: %v", err)
+	}
+	if totalCalls != 1 || totalTokens != 50 {
+		t.Fatalf("site_day_usage calls/tokens = %d/%d, want 1/50 (orphan excluded, good log once)", totalCalls, totalTokens)
+	}
 }

@@ -128,7 +128,12 @@ func CollectDailySummaryMetrics(cfg *config.Config, db *sqlx.DB, now time.Time) 
 			COUNT(*) AS count,
 			COALESCE(SUM(CASE WHEN status = 'success' OR status IS NULL THEN 1 ELSE 0 END), 0) AS success_count,
 			COALESCE(SUM(CASE WHEN status != 'success' AND status IS NOT NULL THEN 1 ELSE 0 END), 0) AS failed_count,
-			COALESCE(SUM(total_tokens), 0) AS total_tokens,
+			COALESCE(SUM(
+					CASE
+						WHEN COALESCE(total_tokens, 0) > 0 THEN COALESCE(total_tokens, 0)
+						ELSE COALESCE(prompt_tokens, 0) + COALESCE(completion_tokens, 0)
+					END
+				), 0) AS total_tokens,
 			COALESCE(SUM(estimated_cost), 0.0) AS total_cost
 		FROM proxy_logs
 		WHERE created_at >= ? AND created_at < ?

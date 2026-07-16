@@ -35,6 +35,14 @@ type statsHandler struct {
 	db *sqlx.DB
 }
 
+// effectiveProxyTokensSQL returns a SQL expression that prefers total_tokens
+// and falls back to prompt_tokens + completion_tokens. Avoids under-counting
+// partial upstream usage payloads and avoids double-counting when both are set.
+const effectiveProxyTokensSQL = `CASE
+	WHEN COALESCE(pl.total_tokens, 0) > 0 THEN COALESCE(pl.total_tokens, 0)
+	ELSE COALESCE(pl.prompt_tokens, 0) + COALESCE(pl.completion_tokens, 0)
+END`
+
 // ---- Dashboard ----
 // GET /api/stats/dashboard?refresh=&view=
 func (h *statsHandler) dashboard(w http.ResponseWriter, r *http.Request) {
@@ -47,33 +55,146 @@ func (h *statsHandler) dashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("x-dashboard-summary-cache", "miss")
 	w.Header().Set("x-dashboard-insights-cache", "miss")
 
-	// Stub: return basic stats
 	generatedAt := nowUTC()
-
-	var siteCount, accountCount int
-	h.db.Get(&siteCount, "SELECT COUNT(*) FROM sites")
-	h.db.Get(&accountCount, "SELECT COUNT(*) FROM accounts")
-
 	result := map[string]any{
-		"generatedAt":  generatedAt,
-		"siteCount":    siteCount,
-		"accountCount": accountCount,
+		"generatedAt": generatedAt,
 	}
 
 	if view == "summary" || view == "full" {
+		var siteCount, accountCount, activeAccounts int
+		_ = h.db.Get(&siteCount, "SELECT COUNT(*) FROM sites")
+		_ = h.db.Get(&accountCount, "SELECT COUNT(*) FROM accounts")
+		_ = h.db.Get(&activeAccounts, "SELECT COUNT(*) FROM accounts WHERE status = 'active'")
+
+		var totalBalance, totalUsed float64
+		_ = h.db.Get(&totalBalance, "SELECT COALESCE(SUM(COALESCE(balance, 0)), 0) FROM accounts")
+		_ = h.db.Get(&totalUsed, "SELECT COALESCE(SUM(COALESCE(balance_used, 0)), 0) FROM accounts")
+
+		// 24h proxy window (UTC) — single-pass aggregate with effective tokens.
+		since24h := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+		var proxy24h struct {
+			Total       int     `db:"total"`
+			Success     int     `db:"success"`
+			TotalTokens int64   `db:"total_tokens"`
+			TotalCost   float64 `db:"total_cost"`
+		}
+		_ = h.db.Get(&proxy24h, rebindAdminQuery(h.db, `
+			SELECT
+				COUNT(*) AS total,
+				COALESCE(SUM(CASE WHEN pl.status = 'success' THEN 1 ELSE 0 END), 0) AS success,
+				COALESCE(SUM(`+effectiveProxyTokensSQL+`), 0) AS total_tokens,
+				COALESCE(SUM(COALESCE(pl.estimated_cost, 0)), 0) AS total_cost
+			FROM proxy_logs pl
+			WHERE pl.created_at >= ?
+		`), since24h)
+
+		// Today spend uses UTC day start for single-instance correctness
+		// (matches aggregation local_day = UTC day).
+		todayStart := time.Now().UTC().Truncate(24 * time.Hour).Format(time.RFC3339)
+		var todaySpend float64
+		_ = h.db.Get(&todaySpend, rebindAdminQuery(h.db, `
+			SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0)
+			FROM proxy_logs
+			WHERE created_at >= ?
+		`), todayStart)
+
+		// Performance window: last 60s request/token rate from proxy_logs.
+		windowSeconds := 60
+		sincePerf := time.Now().UTC().Add(-time.Duration(windowSeconds) * time.Second).Format(time.RFC3339)
+		var perf struct {
+			Requests int64 `db:"requests"`
+			Tokens   int64 `db:"tokens"`
+		}
+		_ = h.db.Get(&perf, rebindAdminQuery(h.db, `
+			SELECT
+				COUNT(*) AS requests,
+				COALESCE(SUM(`+effectiveProxyTokensSQL+`), 0) AS tokens
+			FROM proxy_logs pl
+			WHERE pl.created_at >= ?
+		`), sincePerf)
+
+		rpm := float64(perf.Requests) * 60 / float64(windowSeconds)
+		tpm := float64(perf.Tokens) * 60 / float64(windowSeconds)
+
 		result["siteCount"] = siteCount
 		result["accountCount"] = accountCount
+		result["totalAccounts"] = accountCount
+		result["activeAccounts"] = activeAccounts
+		result["totalBalance"] = roundMicro(totalBalance)
+		result["totalUsed"] = roundMicro(totalUsed)
+		result["todaySpend"] = roundMicro(todaySpend)
+		result["todayReward"] = 0.0
+		result["proxy24h"] = map[string]any{
+			"total":       proxy24h.Total,
+			"success":     proxy24h.Success,
+			"totalTokens": proxy24h.TotalTokens,
+			"totalCost":   roundMicro(proxy24h.TotalCost),
+		}
+		result["performance"] = map[string]any{
+			"windowSeconds":     windowSeconds,
+			"requestsPerMinute": rpm,
+			"tokensPerMinute":   tpm,
+		}
+		// Legacy flat fields kept for older clients / tests.
+		result["totalTokens"] = proxy24h.TotalTokens
+		result["totalCost"] = roundMicro(proxy24h.TotalCost)
 	}
 
 	if view == "insights" || view == "full" {
-		// Add insights fields
-		var totalTokens float64
-		h.db.Get(&totalTokens, "SELECT COALESCE(SUM(COALESCE(total_tokens, 0)), 0) FROM proxy_logs")
-		result["totalTokens"] = totalTokens
-
+		// All-time totals with effective token expression (no double count).
+		var totalTokens int64
+		_ = h.db.Get(&totalTokens, rebindAdminQuery(h.db, `
+			SELECT COALESCE(SUM(`+effectiveProxyTokensSQL+`), 0) FROM proxy_logs pl
+		`))
 		var totalCost float64
-		h.db.Get(&totalCost, "SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0) FROM proxy_logs")
-		result["totalCost"] = totalCost
+		_ = h.db.Get(&totalCost, "SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0) FROM proxy_logs")
+		result["totalTokens"] = totalTokens
+		result["totalCost"] = roundMicro(totalCost)
+
+		// Site availability over last 24h from proxy_logs join path.
+		since24h := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+		rows := queryRows(h.db, `
+			SELECT
+				s.id AS site_id,
+				s.name AS site_name,
+				s.url AS site_url,
+				s.platform AS platform,
+				COUNT(pl.id) AS total_requests,
+				COALESCE(SUM(CASE WHEN pl.status = 'success' THEN 1 ELSE 0 END), 0) AS success_count,
+				COALESCE(SUM(CASE WHEN COALESCE(pl.status, '') <> 'success' THEN 1 ELSE 0 END), 0) AS failed_count,
+				CASE
+					WHEN COUNT(pl.id) = 0 THEN NULL
+					ELSE ROUND(100.0 * SUM(CASE WHEN pl.status = 'success' THEN 1 ELSE 0 END) / COUNT(pl.id), 2)
+				END AS availability_percent,
+				CASE
+					WHEN SUM(CASE WHEN COALESCE(pl.latency_ms, 0) > 0 THEN 1 ELSE 0 END) = 0 THEN NULL
+					ELSE ROUND(1.0 * SUM(CASE WHEN COALESCE(pl.latency_ms, 0) > 0 THEN pl.latency_ms ELSE 0 END)
+						/ SUM(CASE WHEN COALESCE(pl.latency_ms, 0) > 0 THEN 1 ELSE 0 END), 2)
+				END AS average_latency_ms
+			FROM sites s
+			LEFT JOIN accounts a ON a.site_id = s.id
+			LEFT JOIN proxy_logs pl ON pl.account_id = a.id AND pl.created_at >= ?
+			GROUP BY s.id, s.name, s.url, s.platform
+			ORDER BY total_requests DESC, s.name ASC
+		`, since24h)
+
+		siteAvailability := make([]map[string]any, 0, len(rows))
+		for _, row := range rows {
+			item := map[string]any{
+				"siteId":              row["siteId"],
+				"siteName":            row["siteName"],
+				"siteUrl":             row["siteUrl"],
+				"platform":            row["platform"],
+				"totalRequests":       row["totalRequests"],
+				"successCount":        row["successCount"],
+				"failedCount":         row["failedCount"],
+				"availabilityPercent": row["availabilityPercent"],
+				"averageLatencyMs":    row["averageLatencyMs"],
+				"buckets":             []any{},
+			}
+			siteAvailability = append(siteAvailability, item)
+		}
+		result["siteAvailability"] = siteAvailability
 	}
 
 	writeJSON(w, http.StatusOK, result)
@@ -153,11 +274,13 @@ func (h *statsHandler) proxyLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if view == "meta" || view == "full" {
+		// Use effective token expression so partial logs are not under-counted,
+		// and never sum prompt+completion on top of total_tokens.
 		summaryQuery := `SELECT COUNT(*) as total_count,
 			COALESCE(SUM(CASE WHEN pl.status = 'success' THEN 1 ELSE 0 END), 0) as success_count,
 			COALESCE(SUM(CASE WHEN COALESCE(pl.status, '') <> 'success' THEN 1 ELSE 0 END), 0) as failed_count,
 			COALESCE(SUM(COALESCE(pl.estimated_cost, 0)), 0) as total_cost,
-			COALESCE(SUM(COALESCE(pl.total_tokens, 0)), 0) as total_tokens_all
+			COALESCE(SUM(` + effectiveProxyTokensSQL + `), 0) as total_tokens_all
 			FROM proxy_logs pl
 			LEFT JOIN accounts a ON pl.account_id = a.id
 			LEFT JOIN sites s ON a.site_id = s.id` + where
@@ -266,43 +389,126 @@ func (h *statsHandler) debugTraceDetail(w http.ResponseWriter, r *http.Request) 
 // ---- Site Distribution ----
 // GET /api/stats/site-distribution?days=&refresh=
 func (h *statsHandler) siteDistribution(w http.ResponseWriter, r *http.Request) {
-	days := getQueryInt(r, "days", 7)
-	_ = days // validated below, defaults to 7
+	days := clampInt(getQueryInt(r, "days", 7), 1, 365)
+	fromDay := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 
-	// Stub: return empty distribution
-	_ = days
-	writeJSON(w, http.StatusOK, map[string]any{"distribution": []any{}})
+	// Prefer projected site_day_usage spend; include live account balances.
+	rows := queryRows(h.db, `
+		SELECT
+			s.id AS site_id,
+			s.name AS site_name,
+			s.platform AS platform,
+			COALESCE(bal.total_balance, 0) AS total_balance,
+			COALESCE(usage.total_spend, 0) AS total_spend,
+			COALESCE(bal.account_count, 0) AS account_count
+		FROM sites s
+		LEFT JOIN (
+			SELECT site_id, COALESCE(SUM(COALESCE(balance, 0)), 0) AS total_balance, COUNT(*) AS account_count
+			FROM accounts
+			GROUP BY site_id
+		) bal ON bal.site_id = s.id
+		LEFT JOIN (
+			SELECT site_id, COALESCE(SUM(COALESCE(total_summary_spend, 0)), 0) AS total_spend
+			FROM site_day_usage
+			WHERE local_day >= ?
+			GROUP BY site_id
+		) usage ON usage.site_id = s.id
+		ORDER BY total_spend DESC, s.name ASC
+	`, fromDay)
+
+	distribution := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		distribution = append(distribution, map[string]any{
+			"siteId":       row["siteId"],
+			"siteName":     row["siteName"],
+			"platform":     row["platform"],
+			"totalBalance": coerceFloat(row["totalBalance"]),
+			"totalSpend":   coerceFloat(row["totalSpend"]),
+			"accountCount": coerceInt(row["accountCount"]),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"distribution": distribution})
 }
 
 // ---- Site Trend ----
 // GET /api/stats/site-trend?days=&refresh=
 func (h *statsHandler) siteTrend(w http.ResponseWriter, r *http.Request) {
-	days := getQueryInt(r, "days", 7)
-	_ = days // validated below, defaults to 7
+	days := clampInt(getQueryInt(r, "days", 7), 1, 365)
+	fromDay := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 
-	// Stub: return empty trend
-	_ = days
-	writeJSON(w, http.StatusOK, map[string]any{"trend": []any{}})
+	rows := queryRows(h.db, `
+		SELECT
+			u.local_day AS local_day,
+			s.name AS site_name,
+			COALESCE(SUM(u.total_summary_spend), 0) AS spend,
+			COALESCE(SUM(u.total_calls), 0) AS calls
+		FROM site_day_usage u
+		INNER JOIN sites s ON s.id = u.site_id
+		WHERE u.local_day >= ?
+		GROUP BY u.local_day, s.name
+		ORDER BY u.local_day ASC, s.name ASC
+	`, fromDay)
+
+	// Shape: [{ date, sites: { [siteName]: { spend, calls } } }]
+	byDate := make(map[string]map[string]map[string]any)
+	order := make([]string, 0)
+	for _, row := range rows {
+		day := coerceString(row["localDay"])
+		siteName := coerceString(row["siteName"])
+		if day == "" || siteName == "" {
+			continue
+		}
+		if _, ok := byDate[day]; !ok {
+			byDate[day] = make(map[string]map[string]any)
+			order = append(order, day)
+		}
+		byDate[day][siteName] = map[string]any{
+			"spend": coerceFloat(row["spend"]),
+			"calls": coerceInt(row["calls"]),
+		}
+	}
+
+	trend := make([]map[string]any, 0, len(order))
+	for _, day := range order {
+		trend = append(trend, map[string]any{
+			"date":  day,
+			"sites": byDate[day],
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"trend": trend})
 }
 
 // ---- Model by Site ----
 // GET /api/stats/model-by-site?siteId=&days=
 func (h *statsHandler) modelBySite(w http.ResponseWriter, r *http.Request) {
-	days := getQueryInt(r, "days", 7)
-	_ = days // validated below, defaults to 7
+	days := clampInt(getQueryInt(r, "days", 7), 1, 365)
 	siteID := getQueryInt(r, "siteId", 0)
+	fromDay := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
 
-	// Stub: query model_day_usage
-	query := "SELECT model, SUM(total_calls) as calls, SUM(total_spend) as spend, SUM(total_tokens) as tokens FROM model_day_usage"
-	var args []any
+	query := `SELECT model,
+		COALESCE(SUM(total_calls), 0) AS calls,
+		COALESCE(SUM(total_spend), 0) AS spend,
+		COALESCE(SUM(total_tokens), 0) AS tokens
+		FROM model_day_usage
+		WHERE local_day >= ?`
+	args := []any{fromDay}
 	if siteID > 0 {
-		query += " WHERE site_id = ?"
+		query += " AND site_id = ?"
 		args = append(args, siteID)
 	}
 	query += " GROUP BY model ORDER BY calls DESC"
 
 	rows := queryRows(h.db, query, args...)
-	writeJSON(w, http.StatusOK, map[string]any{"models": normalizeSlice(rows)})
+	models := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		models = append(models, map[string]any{
+			"model":  coerceString(row["model"]),
+			"calls":  coerceInt(row["calls"]),
+			"spend":  coerceFloat(row["spend"]),
+			"tokens": coerceInt64(row["tokens"]),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
 // ---- Model Marketplace ----
@@ -392,4 +598,68 @@ func nowUTC() string {
 
 func roundMicro(v float64) float64 {
 	return float64(int64(v*1_000_000)) / 1_000_000
+}
+
+func coerceFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int32:
+		return float64(n)
+	case []byte:
+		f, _ := strconv.ParseFloat(string(n), 64)
+		return f
+	case string:
+		f, _ := strconv.ParseFloat(n, 64)
+		return f
+	default:
+		return 0
+	}
+}
+
+func coerceInt(v any) int {
+	return int(coerceInt64(v))
+}
+
+func coerceInt64(v any) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case int32:
+		return int64(n)
+	case float64:
+		return int64(n)
+	case float32:
+		return int64(n)
+	case []byte:
+		i, _ := strconv.ParseInt(string(n), 10, 64)
+		return i
+	case string:
+		i, _ := strconv.ParseInt(n, 10, 64)
+		return i
+	default:
+		return 0
+	}
+}
+
+func coerceString(v any) string {
+	switch s := v.(type) {
+	case string:
+		return s
+	case []byte:
+		return string(s)
+	default:
+		if v == nil {
+			return ""
+		}
+		return strings.TrimSpace(strconv.FormatInt(coerceInt64(v), 10))
+	}
 }
