@@ -331,6 +331,29 @@ func (s *ChannelSelector) selectFromMatch(
 			recordSelection, rotationKey, obsKey, shouldUseObservation, excludeChannelIDs, nowISO, nowMs)
 	}
 
+	// Deterministic pluggable strategies (#115): least_busy / lowest_latency / lowest_cost.
+	// Same eligibility + recent-failure filters as weighted; exclude lists remain upstream.
+	if strategy == StrategyLeastBusy || strategy == StrategyLowestLatency || strategy == StrategyLowestCost {
+		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
+		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
+			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+			nowMs, s.configuredMaxSec)
+		var selected *RouteChannelCandidate
+		switch strategy {
+		case StrategyLeastBusy:
+			selected = SelectLeastBusyCandidate(filteredCandidates, s.channelLoadProvider)
+		case StrategyLowestLatency:
+			selected = SelectLowestLatencyCandidate(filteredCandidates, resolveModel)
+		default:
+			selected = SelectLowestCostCandidate(filteredCandidates, resolveModel, s.pricingFn, s.fallbackUnitCost)
+		}
+		if selected == nil {
+			return nil, nil
+		}
+		return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
+			recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
+	}
+
 	// Weighted: priority layers
 	layers := make(map[int64][]RouteChannelCandidate)
 	for _, c := range available {
