@@ -146,16 +146,15 @@ describe('api proxy test timeout handling', () => {
   });
 
   it('loads proxy file content as a data URL for replay hydration', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(
-      new Blob([Buffer.from('PDF')], { type: 'application/pdf' }),
-      {
-        status: 200,
-        headers: {
-          'content-type': 'application/pdf',
-          'content-disposition': 'inline; filename="brief.pdf"',
-        },
+    // Prefer Uint8Array body: jsdom/undici may coerce Node Buffer Blob parts poorly.
+    const pdfBytes = new Uint8Array([0x50, 0x44, 0x46]); // "PDF"
+    const fetchMock = vi.fn().mockResolvedValue(new Response(pdfBytes, {
+      status: 200,
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': 'inline; filename="brief.pdf"',
       },
-    ));
+    }));
     vi.stubGlobal('fetch', fetchMock);
 
     const getProxyFileContentDataUrl = (api as Record<string, any>).getProxyFileContentDataUrl;

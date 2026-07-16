@@ -125,7 +125,11 @@ export default function RouteFilterBar(props: RouteFilterBarProps) {
     setPresenceOpen(false);
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
       const rafId = window.requestAnimationFrame(() => setPresenceOpen(true));
-      return () => window.cancelAnimationFrame(rafId);
+      return () => {
+        if (typeof window.cancelAnimationFrame === 'function') {
+          window.cancelAnimationFrame(rafId);
+        }
+      };
     }
     setPresenceOpen(true);
     return undefined;

@@ -9,7 +9,11 @@ export function useAnimatedVisibility(visible: boolean, durationMs = 220) {
       setShouldRender(true);
       if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
         const rafId = window.requestAnimationFrame(() => setIsVisible(true));
-        return () => window.cancelAnimationFrame(rafId);
+        return () => {
+          if (typeof window.cancelAnimationFrame === 'function') {
+            window.cancelAnimationFrame(rafId);
+          }
+        };
       }
       setIsVisible(true);
       return undefined;

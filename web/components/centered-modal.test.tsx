@@ -43,7 +43,9 @@ describe('CenteredModal component', () => {
 
       expect(onClose).toHaveBeenCalledTimes(1);
     } finally {
-      root?.unmount();
+      await act(async () => {
+        root?.unmount();
+      });
     }
   });
 
@@ -76,7 +78,9 @@ describe('CenteredModal component', () => {
       expect(root.toJSON()).toBeTruthy();
       expect(globalThis.document.addEventListener).not.toHaveBeenCalled();
     } finally {
-      root?.unmount();
+      await act(async () => {
+        root?.unmount();
+      });
     }
   });
 });

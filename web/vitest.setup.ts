@@ -1,41 +1,61 @@
-import { act } from 'react'
-import { afterEach, vi } from 'vitest'
+import { vi } from 'vitest';
+import type { ReactElement, ReactNode } from 'react';
+import type {
+  ReactTestRenderer,
+  TestRendererOptions,
+} from 'react-test-renderer';
 
-// React 19 + react-test-renderer require an act-enabled DOM environment.
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+// React 19 concurrent mode needs an act-enabled environment; without it RTR
+// trees unmount before tests can read `.root`.
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// Ensure createPortal targets exist under jsdom.
-if (typeof document !== 'undefined' && !document.getElementById('root')) {
-  const root = document.createElement('div')
-  root.id = 'root'
-  document.body.appendChild(root)
-}
-
-// Wrap RTR create in act so concurrent React 19 doesn't leave trees unmounted
-// before tests read `.root`.
-vi.mock('react-test-renderer', async () => {
-  const actual = await vi.importActual<typeof import('react-test-renderer')>('react-test-renderer')
+// react-test-renderer cannot host ReactDOM portals. Under jsdom, production
+// portal helpers would otherwise mix renderers and crash with
+// `parentInstance.children.indexOf is not a function`. Keep portal children
+// inline in the RTR tree so existing component assertions keep working.
+vi.mock('react-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-dom')>();
   return {
     ...actual,
-    create(element: Parameters<typeof actual.create>[0], options?: Parameters<typeof actual.create>[1]) {
-      let renderer!: ReturnType<typeof actual.create>
-      act(() => {
-        renderer = actual.create(element, options)
-      })
-      return renderer
-    },
+    createPortal: ((children: ReactNode) => children) as typeof actual.createPortal,
+  };
+});
+
+// Auto-wrap create() in act so effects/state flush before assertions. Existing
+// suites call create() without act; React 19 otherwise unmounts immediately.
+// ESM exports are not assignable, so mock the module instead of mutating it.
+vi.mock('react-test-renderer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-test-renderer')>();
+  const { act, create: originalCreate } = actual;
+
+  function createWithAct(
+    element: ReactElement,
+    options?: TestRendererOptions,
+  ): ReactTestRenderer {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = originalCreate(element, options);
+    });
+    return renderer;
   }
-})
 
-// Reduce pure-noise deprecation / act spam while keeping real errors.
-const originalError = console.error
-console.error = (...args: unknown[]) => {
-  const msg = String(args[0] ?? '')
-  if (msg.includes('react-test-renderer is deprecated')) return
-  if (msg.includes('not wrapped in act(')) return
-  originalError(...args)
-}
+  const actualRecord = actual as typeof actual & {
+    default?: { create?: typeof actual.create };
+  };
+  const patched = {
+    ...actual,
+    create: createWithAct,
+  };
 
-afterEach(() => {
-  // tests own their renderers
-})
+  if (actualRecord.default && typeof actualRecord.default === 'object') {
+    return {
+      ...patched,
+      default: {
+        ...actualRecord.default,
+        create: createWithAct,
+      },
+    };
+  }
+
+  return patched;
+});

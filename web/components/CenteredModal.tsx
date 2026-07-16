@@ -35,10 +35,15 @@ export default function CenteredModal({
 
   useEffect(() => {
     if (!open || !canUsePortal) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const body = document.body;
+    if (!body?.style) return;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = previousOverflow;
+      // Tests may replace document between mount and unmount; keep cleanup defensive.
+      if (document.body?.style) {
+        document.body.style.overflow = previousOverflow;
+      }
     };
   }, [canUsePortal, open]);
 

@@ -33,8 +33,19 @@ describe('RouteFilterBar', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uses the shared collapse presence wrapper while expanded', () => {
+  it('uses the shared collapse presence wrapper while expanded', async () => {
     const root = create(renderBar(false));
+
+    // Layout effect opens via rAF; flush it under act for React 19 concurrent timing.
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => resolve());
+        } else {
+          resolve();
+        }
+      });
+    });
 
     const presence = root.root.find((node) => (
       node.type === 'div'
