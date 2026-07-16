@@ -64,6 +64,42 @@ describe('SearchModal results', () => {
     vi.clearAllMocks();
   });
 
+  it('exposes dialog semantics and a labeled close control', async () => {
+    const onClose = vi.fn();
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/']}>
+            <SearchModal open onClose={onClose} />
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const dialog = root.root.find((node) => (
+        typeof node.props?.className === 'string'
+        && node.props.className.includes('search-modal-content')
+      ));
+      expect(dialog.props.role).toBe('dialog');
+      // react-test-renderer may string-coerce boolean aria props
+      expect(dialog.props['aria-modal'] === true || dialog.props['aria-modal'] === 'true').toBe(true);
+      expect(dialog.props['aria-label']).toBe('搜索');
+
+      const closeButton = root.root.find((node) => (
+        node.type === 'button'
+        && node.props['aria-label'] === '关闭'
+      ));
+
+      await act(async () => {
+        closeButton.props.onClick();
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      root?.unmount();
+    }
+  });
+
   it('renders account token results and navigates API key accounts to the apikey segment', async () => {
     apiMock.search.mockResolvedValue({
       models: [],
