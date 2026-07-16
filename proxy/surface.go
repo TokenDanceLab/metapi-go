@@ -132,6 +132,8 @@ type ProxyLogEntry struct {
 	RetryCount          int
 	UpstreamPath        *string
 	UsageSource         string
+	// RequestID correlates multi-attempt logs for one downstream request (#110).
+	RequestID string
 }
 
 // SurfaceUsageSummary is a usage summary for surface operations.

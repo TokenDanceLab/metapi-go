@@ -4,6 +4,7 @@ package proxyhandler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/auth"
@@ -81,11 +82,19 @@ func RegisterNonV1ProxyRoutes(r chi.Router) {
 func EnsureMultipartBufferParser() {}
 
 // writeJSONError writes a JSON error response.
+// When X-Request-Id is already on the response (RequestID middleware), it is
+// also echoed inside the error payload for client-side correlation across retries.
 func writeJSONError(w http.ResponseWriter, status int, message, typ string) {
 	w.Header().Set("Content-Type", "application/json")
+	reqID := strings.TrimSpace(w.Header().Get("X-Request-Id"))
 	w.WriteHeader(status)
+	if reqID != "" {
+		body := `{"error":{"message":"` + jsonEscape(message) + `","type":"` + jsonEscape(typ) + `","request_id":"` + jsonEscape(reqID) + `"}}`
+		_, _ = w.Write([]byte(body))
+		return
+	}
 	body := `{"error":{"message":"` + jsonEscape(message) + `","type":"` + jsonEscape(typ) + `"}}`
-	w.Write([]byte(body))
+	_, _ = w.Write([]byte(body))
 }
 
 // jsonEscape performs full JSON string escaping per RFC 8259 Section 7.

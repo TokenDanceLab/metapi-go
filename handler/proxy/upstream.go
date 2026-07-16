@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/shared"
@@ -23,6 +24,14 @@ import (
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/transform/openai/responses"
 )
+
+// requestIDFromCtx returns the chi RequestID middleware value when present.
+func requestIDFromCtx(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	return strings.TrimSpace(middleware.GetReqID(ctx))
+}
 
 // UpstreamConfig holds the dependencies needed for upstream forwarding.
 type UpstreamConfig struct {
@@ -708,7 +717,14 @@ func recordUpstreamFailure(ctx context.Context, cfg *UpstreamConfig, selected *r
 		failureCtx.Status = &status
 	}
 	if err := cfg.Router.RecordFailure(ctx, selected.Channel.ID, failureCtx, nil); err != nil {
-		slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName)
+		slog.Warn("RecordFailure failed", "err", err, "channel_id", selected.Channel.ID, "model", modelName, "request_id", requestIDFromCtx(ctx))
+	} else if rid := requestIDFromCtx(ctx); rid != "" {
+		slog.Info("proxy request failure recorded",
+			"request_id", rid,
+			"channel_id", selected.Channel.ID,
+			"model", modelName,
+			"status", status,
+		)
 	}
 }
 
@@ -772,6 +788,7 @@ func writeSuccessProxyLog(
 			source = usageSourceUnknown
 		}
 	}
+	reqID := requestIDFromCtx(ctx)
 	entry := proxy.ProxyLogEntry{
 		RouteID:            routeIDPtr,
 		ChannelID:          &channelID,
@@ -794,8 +811,26 @@ func writeSuccessProxyLog(
 		RetryCount:         retryCount,
 		UpstreamPath:       &upstreamPath,
 		UsageSource:        source,
+		RequestID:          reqID,
+	}
+	// Persist request_id inside billing_details until a dedicated column exists.
+	if reqID != "" {
+		entry.BillingDetails = map[string]any{
+			"request_id":   reqID,
+			"usage_source": source,
+			"retry_count":  retryCount,
+		}
 	}
 	logProxy(ctx, cfg, entry)
+	if reqID != "" {
+		slog.Info("proxy request success",
+			"request_id", reqID,
+			"channel_id", channelID,
+			"model", requestedModel,
+			"retry", retryCount,
+			"latency_ms", latencyMs,
+		)
+	}
 }
 
 func isProxyStubEnabled() bool {
