@@ -22,13 +22,13 @@
 | AUDIT | 16-dimension audit | ✅ |
 | FIX | Audit findings remediation | ✅ |
 | **HARDEN** | Production hardening (18/23 findings) | ✅ Done |
-| **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | 🔄 In progress (Wave 1) |
+| **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | ✅ S0–S3 landed (#35/#68); S4 operational via CI green path |
 | **M-GAP** | Original metapi gap inventory (docs-only) | ✅ Closed / accepted (G4 #11) |
-| **M-BACKEND** | Backend architecture clarity | 🔄 In progress (B0 docs #16) |
-| **M-UI** | UI/UX design system | 🔄 In progress (U0) |
-| **M-SCHEMA** | Schema compat + upgrade | 🔄 SC0 done |
-| **M-RELIABILITY** | Reliability and boundaries | 🔄 R0 in flight |
-| **M-FEATURE** | Feature completeness from gap matrix | 🔄 Scheduled (F0 roadmap; not G4) |
+| **M-BACKEND** | Backend architecture clarity | ✅ B0–B3 landed |
+| **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
+| **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
+| **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
+| **M-FEATURE** | Feature completeness from gap matrix | 🔄 P0 partial: site concurrency + per-key proxy + group rebuild shipped; remaining backlog #38–#56 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -141,12 +141,13 @@
 - Feature-complete roadmap (F0 #23): `docs/plan/feature-complete-roadmap.md`
 
 ## Enterprise modernization (active)
-- **M-UI** design system foundation: `docs/design/DESIGN.md` + `web/styles/tokens.css` (U0 / #12)
-- **M-GAP** inventory closed/accepted: `docs/plan/gap-inventory-acceptance.md` (backlog shells #36–#56)
+- **M-UI** complete foundation: `docs/design/DESIGN.md` + tokens + U1–U3
+- **M-GAP** inventory closed/accepted: `docs/plan/gap-inventory-acceptance.md` (backlog shells #36–#56; #36/#37 closed as addressed by R0/R1)
+- **M-FEATURE shipped P0 slices**: per-site max concurrency, per-key `proxy_url`, custom group route rebuild
+- **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Complete remaining stack/UI/backend/reliability lane PRs (S*/U*/B*/R*/SC*)
-2. Wave 3 stack: S4 CI/Docker/embed regression gate + CHANGELOG
-3. Claim product gaps from backlog **#36–#56** via **M-FEATURE** / individual PRs (not M-GAP)
-4. Continue M-UI design-token adoption on shared components and pages
-5. CRITICAL reliability (B2/R*) may ship earlier than full M-FEATURE when required
+1. Continue **M-FEATURE** remaining P0 backlog: token stats (#42), cache_ratio (#43), key/whitelist correctness (#40/#41/#45/#46), expired-connection UX (#39), cross-protocol failover (#38)
+2. Protocol P1: `/v1/rerank` (#48), Gemini thought_signature residual (#47), Responses multi-turn (#50), Codex/OAuth model issues (#49/#55)
+3. Watch CI frontend unhandled-rejection flakiness (dashboard observability)
+4. Optional: Go stdlib vulncheck GO-2026-5856 via Go 1.26.5 when available
