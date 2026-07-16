@@ -28,7 +28,7 @@
 | **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
 | **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
 | **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Closed backlog #38–#56 (PRs #74–#94). Competitive learn milestone M-COMPETE open (allapihub/axonhub/new-api/litellm) |
+| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn P0 #110/#111/#113 landed. Open learn #112,#114–#121 |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none (competitive docs #97 + flake fix #96 landed) |
-| Next | Schedule M-COMPETE [learn] #110–#121 (TTFT, traces, cost, health, routing strategies…); product only after backlog-only removed |
+| In flight WFs | M-COMPETE P0 shipped #110/#111/#113 (PRs #126/#128/#129); next #112/#114 |
+| Next | Continue M-COMPETE: #112 price compare · #114 health probe · P1 #115–#119 |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
