@@ -183,6 +183,7 @@ func siteToMap(site store.Site, endpoints []store.SiteAPIEndpoint) map[string]an
 		"sortOrder":                          site.SortOrder,
 		"globalWeight":                       site.GlobalWeight,
 		"apiKey":                             site.APIKey,
+		"maxConcurrency":                     site.MaxConcurrency,
 		"postRefreshProbeEnabled":            site.PostRefreshProbeEnabled,
 		"postRefreshProbeModel":              site.PostRefreshProbeModel,
 		"postRefreshProbeScope":              site.PostRefreshProbeScope,
@@ -263,16 +264,31 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	urlStr := CanonicalizeSiteURL(siteData["url"].(string))
 	platform := siteData["platform"].(string)
 
+	maxConcurrency := int64(0)
+	if v, ok := siteData["maxConcurrency"]; ok && v != nil {
+		switch n := v.(type) {
+		case int64:
+			maxConcurrency = n
+		case int:
+			maxConcurrency = int64(n)
+		case float64:
+			maxConcurrency = int64(n)
+		}
+		if maxConcurrency < 0 {
+			maxConcurrency = 0
+		}
+	}
+
 	result, err := tx.Exec(
 		tx.Rebind(`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
-		 external_checkin_url, status, is_pinned, sort_order, global_weight,
+		 external_checkin_url, status, is_pinned, sort_order, global_weight, max_concurrency,
 		 post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		 post_refresh_probe_latency_threshold_ms, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		name, urlStr, platform,
 		siteData["proxyUrl"], siteData["useSystemProxy"], siteData["customHeaders"],
 		siteData["externalCheckinUrl"], siteData["status"], siteData["isPinned"],
-		sortOrder, siteData["globalWeight"],
+		sortOrder, siteData["globalWeight"], maxConcurrency,
 		siteData["postRefreshProbeEnabled"], siteData["postRefreshProbeModel"],
 		siteData["postRefreshProbeScope"], siteData["postRefreshProbeLatencyThresholdMs"],
 		now, now,
@@ -422,6 +438,7 @@ func jsonKeyToColumn(key string) string {
 		"sortOrder":                          "sort_order",
 		"globalWeight":                       "global_weight",
 		"apiKey":                             "api_key",
+		"maxConcurrency":                     "max_concurrency",
 		"postRefreshProbeEnabled":            "post_refresh_probe_enabled",
 		"postRefreshProbeModel":              "post_refresh_probe_model",
 		"postRefreshProbeScope":              "post_refresh_probe_scope",

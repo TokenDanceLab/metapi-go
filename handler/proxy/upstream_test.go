@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -538,5 +539,68 @@ func TestVideosCreateMultipartForwardsFormToUpstream(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "vid_123") {
 		t.Fatalf("body = %q, want upstream response", body)
+	}
+}
+
+func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
+	// Site A is saturated (limit 1 already held). Fallback channel on site B must
+	// still dispatch. Saturation must NOT RecordFailure (no cascade/expired).
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"ok","choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limiter := proxy.NewSiteConcurrencyLimiter()
+	held, ok := limiter.TryAcquire(1, 1)
+	if !ok {
+		t.Fatal("pre-hold site 1 failed")
+	}
+	t.Cleanup(held.Release)
+
+	selectedA := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 101, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 1, URL: upstream.URL, Status: "active", MaxConcurrency: 1},
+		TokenValue:  "tok-a",
+		ActualModel: "gpt-4o-upstream",
+	}
+	selectedB := routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 202, Enabled: true},
+		Account:     store.Account{ID: 8, Status: "active"},
+		Site:        store.Site{ID: 2, URL: upstream.URL, Status: "active", MaxConcurrency: 1},
+		TokenValue:  "tok-b",
+		ActualModel: "gpt-4o-upstream",
+	}
+	router := &upstreamTestRouter{
+		selected: selectedA,
+		next:     &selectedB,
+	}
+	SetUpstreamConfig(&UpstreamConfig{
+		Router:      router,
+		SiteLimiter: limiter,
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	dispatchUpstream(rec, req, &Ctx{
+		RequestedModel: "gpt-4o",
+		DownstreamPath: "/v1/chat/completions",
+		RawBody:        []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`),
+		MaxRetries:     1,
+	})
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(router.failures) != 0 {
+		t.Fatalf("saturated site must not cascade RecordFailure, got %+v", router.failures)
+	}
+	if len(router.successes) != 1 {
+		t.Fatalf("expected 1 success on fallback channel, got %+v", router.successes)
+	}
+	if router.successes[0].channelID != 202 {
+		t.Fatalf("expected channel 202 success, got %d", router.successes[0].channelID)
 	}
 }

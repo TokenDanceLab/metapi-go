@@ -107,6 +107,10 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid globalWeight value. Expected a positive number."})
 		return
 	}
+	if body.MaxConcurrency != nil && *body.MaxConcurrency < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid maxConcurrency value. Expected non-negative integer (0 = unlimited)."})
+		return
+	}
 	if body.CustomHeaders != nil && *body.CustomHeaders != "" {
 		if !json.Valid([]byte(*body.CustomHeaders)) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid customHeaders."})
@@ -163,6 +167,7 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		"status":                             coalesce(normalizedStatus, "active"),
 		"isPinned":                           coalesceBool(normalizedPinned, false),
 		"globalWeight":                       coalesceFloat64(normalizedWeight, 1.0),
+		"maxConcurrency":                     coalesceInt64(body.MaxConcurrency, 0),
 		"postRefreshProbeEnabled":            false,
 		"postRefreshProbeModel":              "",
 		"postRefreshProbeScope":              "single",
@@ -318,6 +323,13 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		updates["globalWeight"] = *gw
+	}
+	if body.MaxConcurrency != nil {
+		if *body.MaxConcurrency < 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid maxConcurrency value. Expected non-negative integer (0 = unlimited)."})
+			return
+		}
+		updates["maxConcurrency"] = *body.MaxConcurrency
 	}
 	if body.PostRefreshProbeEnabled != nil {
 		updates["postRefreshProbeEnabled"] = *body.PostRefreshProbeEnabled
@@ -741,6 +753,13 @@ func coalesceFloat64(f *float64, fallback float64) float64 {
 		return fallback
 	}
 	return *f
+}
+
+func coalesceInt64(v *int64, fallback int64) int64 {
+	if v == nil {
+		return fallback
+	}
+	return *v
 }
 
 func normalizeAPIEndpointsInput(input []payloads.SiteAPIEndpointInput) ([]payloads.SiteAPIEndpointInput, string) {
