@@ -140,6 +140,8 @@ Arrows mean **“may import”**. Edges not shown are forbidden unless listed un
 
 Only `cmd/server` (and tests/e2e helpers) should construct the full graph: load config → open store → build services/router/schedulers → `app.Start`. Libraries under packages should accept dependencies via constructors/parameters, not hidden global grabs—except the existing `config.Get()` singleton pattern used for parity.
 
+**As-built inventory:** package ownership, public entrypoints, and documented exception edges (e.g. admin checkin schedule → `app`/`scheduler`, `app.ConfigureProxyUpstream` → `handler/proxy`) are recorded in [`docs/analysis/package-boundaries.md`](../analysis/package-boundaries.md). New exceptions must be listed there (and justified against §2.3) rather than introduced silently.
+
 ---
 
 ## 3. Cross-cutting behavioral contracts
@@ -184,17 +186,16 @@ Only `cmd/server` (and tests/e2e helpers) should construct the full graph: load 
 
 ---
 
-## 5. M-BACKEND follow-ons (out of B0 scope)
+## 5. M-BACKEND follow-ons
 
-B0 is **docs only**. Later issues own code:
+| Issue | Focus | Status pointer |
+|------:|-------|----------------|
+| B0 | This file + architecture truth | Done in principle docs |
+| B1 | Package boundary inventory / minimal ownership cleanup | **[`docs/analysis/package-boundaries.md`](../analysis/package-boundaries.md)** — ownership map, public entrypoints, import exceptions, cleanup queue |
+| B2 | CRITICAL concurrency (leases, contexts, stub locks) | code under `routing` / `proxy` |
+| B3 | Unified error model | prefer `handler/shared` + analysis notes |
 
-| Issue | Focus |
-|------:|-------|
-| B1 | Enforce package boundaries in code/docs/lint |
-| B2 | CRITICAL concurrency (leases, contexts, stub locks) |
-| B3 | Unified error model |
-
-When those land, update this file only if a principle changes; otherwise update `docs/architecture.md` package map if layout shifts.
+When principles change, revise this file. When only layout/ownership facts change, update [`docs/architecture.md`](../architecture.md) and/or the B1 inventory.
 
 ---
 
