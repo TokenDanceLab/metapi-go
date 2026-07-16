@@ -372,7 +372,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 	loginResult, err := adp.Login(ctx, site.URL, body.Username, body.Password, nil, service.BuildPlatformProxyConfig(h.cfg, nil, &site))
 	if err != nil {
 		slog.Warn("Account login failed", "err", err, "site_id", site.ID, "platform", site.Platform)
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "login failed"})
+		writeError(w, http.StatusUnauthorized, "login failed")
 		return
 	}
 	if loginResult == nil || !loginResult.Success || strings.TrimSpace(loginResult.AccessToken) == "" {
@@ -380,7 +380,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 		if loginResult != nil && strings.TrimSpace(loginResult.Message) != "" {
 			message = strings.TrimSpace(loginResult.Message)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": message})
+		writeError(w, http.StatusUnauthorized, message)
 		return
 	}
 	loginAccessToken := strings.TrimSpace(loginResult.AccessToken)
