@@ -78,6 +78,16 @@
 | Next | Harvest M-COMPETE learn matrix + [learn] issues; no product code until scheduled |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
+### M-COMPETE notes (active)
+
+| Item | Detail |
+|------|--------|
+| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
+| Local clones | `D:/Code/TokenDance/competitors/{all-api-hub,axonhub,new-api,litellm}` |
+| Scope | Docs-first competitive learning; `[learn]` backlog only |
+| Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
+
+
 ## Hardening Results
 
 **Completed 2026-07-05. 4 commits pushed. All 30 packages test green.**
