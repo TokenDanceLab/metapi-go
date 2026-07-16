@@ -85,8 +85,14 @@ describe('Dashboard site observability panel', () => {
   });
 
   afterEach(() => {
+    // Restore real document before clearing mocks to avoid pending jsdom listeners
+    // throwing unhandled rejections during vitest worker teardown.
     globalThis.document = originalDocument;
-    vi.clearAllMocks();
+    try {
+      vi.clearAllMocks();
+    } catch {
+      // ignore mock cleanup races under single-worker vitest
+    }
   });
 
   it('renders site availability strips and summary metrics', async () => {
