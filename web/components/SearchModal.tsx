@@ -73,7 +73,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const timerRef = useRef<number>();
+  const timerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (open) {

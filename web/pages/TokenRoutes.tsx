@@ -1,4 +1,4 @@
-import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { api } from '../api.js';
@@ -116,7 +116,7 @@ export function DesktopDetailPanelPresence({
   children,
 }: {
   open: boolean;
-  children: (closing: boolean) => JSX.Element;
+  children: (closing: boolean) => ReactElement;
 }) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isOpen, setIsOpen] = useState(open);
