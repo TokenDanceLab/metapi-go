@@ -72,6 +72,7 @@ func TestRegisterProxyRoutes_AllPathsExist(t *testing.T) {
 		{"POST", "/responses/compact", `{"model":"gpt-4o","input":"hi"}`},
 		{"GET", "/models", ``},
 		{"POST", "/embeddings", `{"model":"text-embedding","input":"hi"}`},
+		{"POST", "/rerank", `{"model":"rerank-english-v3.0","query":"q","documents":["a"]}`},
 		{"POST", "/images/generations", `{"prompt":"test"}`},
 		{"POST", "/images/edits", `{"image":"test","prompt":"edit"}`},
 		{"POST", "/images/variations", `{"image":"test"}`},
@@ -147,6 +148,20 @@ func TestEmbeddingsRoute_ModelMissing(t *testing.T) {
 	RegisterProxyRoutes(r)
 
 	req := makeProxyReq("POST", "/embeddings", `{"input":"test"}`)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != 400 {
+		t.Errorf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRerankRoute_ModelMissing(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(injectAuth)
+	RegisterProxyRoutes(r)
+
+	req := makeProxyReq("POST", "/rerank", `{"query":"q","documents":["a"]}`)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

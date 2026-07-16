@@ -37,6 +37,9 @@ func RegisterProxyRoutes(r chi.Router) {
 	// Embeddings surface
 	r.Post("/embeddings", HandleEmbeddings)
 
+	// Rerank surface (OpenAI-compatible / Cohere-style)
+	r.Post("/rerank", HandleRerank)
+
 	// Images surface
 	r.Post("/images/generations", HandleImagesGenerations)
 	r.Post("/images/edits", HandleImagesEdits)
