@@ -83,9 +83,11 @@
 | Item | Detail |
 |------|--------|
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
-| Local clones | `D:/Code/TokenDance/competitors/{all-api-hub,axonhub,new-api,litellm}` |
+| Local clones | operator-only checkouts under competitors/ (not product SSOT) |
 | Scope | Docs-first competitive learning; `[learn]` backlog only |
 | Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
+| Inventory | `docs/analysis/competitive/` — [README](../analysis/competitive/README.md) · [sources](../analysis/competitive/sources.md) · [matrix](../analysis/competitive/matrix.md) |
+| Status | Matrix L1–L12 published; `[learn]` backlog issues created under M-COMPETE. No product code until scheduled |
 
 
 ## Hardening Results
