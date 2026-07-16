@@ -23,11 +23,12 @@
 | FIX | Audit findings remediation | ✅ |
 | **HARDEN** | Production hardening (18/23 findings) | ✅ Done |
 | **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | 🔄 In progress (Wave 1) |
-| **M-GAP** | Original metapi gap inventory (docs-only) | 🔄 In progress (Wave 1) |
+| **M-GAP** | Original metapi gap inventory (docs-only) | ✅ Closed / accepted (G4 #11) |
 | **M-BACKEND** | Backend architecture clarity | 🔄 In progress (B0 docs #16) |
 | **M-UI** | UI/UX design system | 🔄 In progress (U0) |
 | **M-SCHEMA** | Schema compat + upgrade | 🔄 SC0 done |
 | **M-RELIABILITY** | Reliability and boundaries | 🔄 R0 in flight |
+| **M-FEATURE** | Feature completeness from gap matrix | 🔄 Scheduled (F0 roadmap; not G4) |
 
 > **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
 > **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
@@ -41,10 +42,22 @@
 | #5 | S2 | React 19 test adaptation (~79 react-test-renderer files) | Wave 2 |
 | #6 | S3 | Vite 8 plugin / vitepress-mermaid tooling closure | Wave 2 |
 | #7 | S4 | CI / Docker / embed regression gate + CHANGELOG | Wave 3 |
-| #8 | G1 | Capture original metapi open issues + taxonomy | Wave 1 |
-| #9 | G2 | metapi-go capability gap matrix with code evidence | Wave 1 |
-| #10 | G3 | Publish [backlog] GitHub issues from gap matrix | Wave 2 |
-| #11 | G4 | Gap inventory acceptance (docs-only gate) | Wave 3 |
+| #8 | G1 | Capture original metapi open issues + taxonomy | Wave 1 ✅ |
+| #9 | G2 | metapi-go capability gap matrix with code evidence | Wave 1 ✅ |
+| #10 | G3 | Publish [backlog] GitHub issues from gap matrix | Wave 2 ✅ |
+| #11 | G4 | Gap inventory acceptance (docs-only gate) | Wave 3 ✅ |
+
+### M-GAP notes (closed / accepted)
+
+| Item | Detail |
+|------|--------|
+| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/2 |
+| Acceptance | `docs/plan/gap-inventory-acceptance.md` (G4 #11) |
+| Sources | `docs/analysis/original-gap-sources.md` |
+| Taxonomy | `docs/analysis/original-gap-taxonomy.md` |
+| Matrix | `docs/analysis/original-gap-matrix.md` (mandatory set complete) |
+| Backlog | `docs/plan/original-gap-backlog.md` · issues **#36–#56** |
+| Product fixes | **Not** this gate — schedule via **M-FEATURE** / individual PRs (`docs/plan/feature-complete-roadmap.md`) |
 
 ### M-BACKEND notes
 
@@ -124,13 +137,16 @@
 - Dependency graph: `docs/plan/dependency-graph-hardening.md`
 - Milestones (hardening): `docs/plan/milestones-hardening.md`
 - Milestones (stack + gap): `docs/plan/milestones-stack-gap.md`
+- Gap inventory acceptance (G4 #11): `docs/plan/gap-inventory-acceptance.md`
+- Feature-complete roadmap (F0 #23): `docs/plan/feature-complete-roadmap.md`
 
 ## Enterprise modernization (active)
 - **M-UI** design system foundation: `docs/design/DESIGN.md` + `web/styles/tokens.css` (U0 / #12)
+- **M-GAP** inventory closed/accepted: `docs/plan/gap-inventory-acceptance.md` (backlog shells #36–#56)
 
 ## Next Steps
-1. Complete Wave 1: S1 core lock + remaining lane PRs (U0/B0/B2/R0)
-2. Wave 2: S2/S3 tooling + G3 backlog + U1 components + SC1/R1
-3. Wave 3: S4 gate + U2/U3 + feature fleets from F0
-4. Continue M-UI: U1 shared components on design tokens (`docs/design/DESIGN.md`)
-5. Product gap implementation only after F0 scheduling (except CRITICAL B2/R*)
+1. Complete remaining stack/UI/backend/reliability lane PRs (S*/U*/B*/R*/SC*)
+2. Wave 3 stack: S4 CI/Docker/embed regression gate + CHANGELOG
+3. Claim product gaps from backlog **#36–#56** via **M-FEATURE** / individual PRs (not M-GAP)
+4. Continue M-UI design-token adoption on shared components and pages
+5. CRITICAL reliability (B2/R*) may ship earlier than full M-FEATURE when required
