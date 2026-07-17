@@ -339,6 +339,11 @@ func (p *ChannelHealthProbeExecutor) doRequest(ctx context.Context, req *http.Re
 	if proxyCfg != nil && (proxyCfg.ProxyURL != "" || proxyCfg.InsecureSkipTLS) {
 		return platform.DoWithProxy(ctx, req, proxyCfg)
 	}
-	client := &http.Client{Timeout: 0} // context owns deadline
+	// Context owns the deadline; refuse cross-origin redirects so a public
+	// site URL cannot 302 into metadata/loopback (shared platform policy).
+	client := &http.Client{
+		Timeout:       0,
+		CheckRedirect: platform.RejectCrossOriginRedirect,
+	}
 	return client.Do(req.WithContext(ctx))
 }

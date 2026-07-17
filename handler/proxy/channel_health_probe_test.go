@@ -118,6 +118,49 @@ func TestChannelHealthProbeExecutor_Upstream5xxIsFailure(t *testing.T) {
 	}
 }
 
+func TestChannelHealthProbeExecutor_RejectsCrossOriginRedirect(t *testing.T) {
+	// SSRF residual (#416): public origin 302 → other host (e.g. 169.254) must not
+	// be followed by the bare probe client when site proxy is unset.
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ssrf":"payload"}`))
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/latest/meta-data/", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	db := openProbeTestDB(t)
+	channelID := seedProbeChannel(t, db, source.URL, "gpt-probe", "probe-token")
+
+	probe := NewChannelHealthProbeExecutor(&config.Config{})
+	probe.SetDB(db)
+	// Leave transport nil so doRequest uses the real bare http.Client path.
+	out, err := probe.ProbeChannel(context.Background(), scheduler.ProbeTarget{
+		ChannelID: channelID,
+		ModelName: "gpt-probe",
+	})
+	if err != nil {
+		t.Fatalf("ProbeChannel: %v", err)
+	}
+	if out.Status != "failure" {
+		t.Fatalf("status = %q error=%q, want failure on cross-origin redirect", out.Status, out.ErrorText)
+	}
+	if out.HTTPStatus != 0 {
+		t.Fatalf("http status = %d, want 0 (transport/redirect error)", out.HTTPStatus)
+	}
+	if !strings.Contains(out.ErrorText, "cross-origin") {
+		t.Fatalf("error = %q, want cross-origin redirect rejection", out.ErrorText)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called (SSRF)")
+	}
+}
+
 func openProbeTestDB(t *testing.T) *store.DB {
 	t.Helper()
 	db, err := store.Open(store.DialectSQLite, ":memory:", false)

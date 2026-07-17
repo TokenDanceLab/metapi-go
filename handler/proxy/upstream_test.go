@@ -1546,3 +1546,49 @@ func TestParseUsageFromSSEEvents_FakeStreamWithoutUsage(t *testing.T) {
 		t.Fatal("expected warn from incremental path without usage")
 	}
 }
+
+func TestDefaultUpstreamClientRejectsCrossOriginRedirect(t *testing.T) {
+	// SSRF residual (#416): when RuntimeExecutor is nil, defaultUpstreamClient
+	// must refuse public-origin 302 to a different host (e.g. 169.254) and not
+	// return the target body.
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ssrf-payload"))
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/latest/meta-data/", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, source.URL+"/start", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	// Executor nil → sendUpstreamRequest falls back to defaultUpstreamClient.
+	// net/http returns the last redirect Response (Body closed) together with
+	// CheckRedirect's error; treat any non-nil err as rejection and never follow.
+	resp, err := sendUpstreamRequest(&UpstreamConfig{}, req, nil, 0)
+	if err == nil {
+		if resp != nil {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64))
+			_ = resp.Body.Close()
+			t.Fatalf("cross-origin redirect was allowed: status=%d body=%q", resp.StatusCode, body)
+		}
+		t.Fatal("cross-origin redirect was allowed on defaultUpstreamClient")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin redirect rejection", err)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called (SSRF)")
+	}
+	// Even if a 302 response is returned alongside the error, never treat it as success body.
+	if resp != nil {
+		// Body is already closed by net/http on CheckRedirect error.
+		_ = resp.Body.Close()
+	}
+}
