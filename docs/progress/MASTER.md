@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 33 (v0.8.24) — next residual wave TBD |
+| Active milestone | **[Milestone 34 — Enterprise residual v0.8.25](https://github.com/TokenDanceLab/metapi-go/milestone/34)** |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -35,12 +35,15 @@
 | Enterprise residual **v0.8.22** | ✅ | #355–#359 (PRs #360–#364); tag **v0.8.22** |
 | Enterprise residual **v0.8.23** | ✅ | #366–#368 (PRs #369/#370/#372); tag **v0.8.23** |
 | Enterprise residual **v0.8.24** | ✅ | #375–#377 (PRs #378/#379/#380); tag **v0.8.24** |
+| Enterprise residual **v0.8.25** | 🔄 | Milestone 34 · #382–#384 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.24; next residual only with ACs |
+| [#382](https://github.com/TokenDanceLab/metapi-go/issues/382) | security | IsValidHTTPURL / externalCheckin metadata harden |
+| [#383](https://github.com/TokenDanceLab/metapi-go/issues/383) | perf | routes list N+1 batch channel load |
+| [#384](https://github.com/TokenDanceLab/metapi-go/issues/384) | docs | residual honesty post v0.8.24 |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
