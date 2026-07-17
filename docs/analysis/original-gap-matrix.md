@@ -43,7 +43,7 @@
 | Upstream# | Title | Category | status | Evidence | Priority | Backlog? |
 | ---: | --- | --- | --- | --- | --- | --- |
 | 582 | isTokenExpiredError misclassifies non-auth 400/401 as expired key | bug-correctness | present | `service/alert/rules.go` `IsTokenExpiredError` excludes `invalid_argument` / `isRequestValidationFailure` / `isCapabilityOrBillingFailure`; tests in `service/alert/alert_test.go` `TestIsTokenExpiredError_ExcludesNonAuthUpstreamFailures` cover 400 invalid_argument + 401 model-not-supported + billing | P0 | no |
-| 568 | Relay-station API keys frequently force-marked expired | bug-failover | partial | Classification hardened (#582), but `service/alert/alert.go` `ReportTokenExpired` still `UPDATE accounts SET status='expired'`; callers: `service/checkin/checkin.go`, `service/balance/balance.go`. Over-expiry risk remains if residual false positives or aggressive report paths fire | P0 | yes |
+| 568 | Relay-station API keys frequently force-marked expired | bug-failover | present | Hardened in #298: `platform.ShouldMarkAccountExpired` requires confirmed credential-expiry wording (no bare/generic 401 mark); `ReportTokenExpired` defense-in-depth no-ops unless ClassExpired; checkin/balance call sites use `ShouldMarkAccountExpired`; proxy surface uses same guard. Residual: novel provider wording may still need exclusion expansion | P0 | no |
 | 585 | One channel failure cascades to other channels | bug-failover | partial | Retry/exclude path: `proxy/channel_selection.go` `SelectNextChannel(..., excludeChannelIDs)`, `proxy/conductor.go` retry loop, `proxy/retry_policy.go` `ShouldRetryProxyRequest` / `ShouldAbortSameSiteEndpointFallback`. Cooldown: `routing/cooldown_test.go` / round-robin cooldown. No proof that systemic site-wide poison is fully prevented under production multi-channel load | P0 | yes |
 | 573 | Add Site silent fail: HTTP 200 error body + UI success toast | bug-correctness | present | Backend: `handler/admin/sites.go` create path returns 400/409/500 with `error`/`message` (not 200-on-error); success only `writeJSON(..., StatusOK, result)`. Frontend: `web/pages/Sites.tsx` `api.addSite` then `toast.success`; failures `catch` → `toast.error` | P0 | no |
 | 580 | Gemini official chat rejects tool history without thought_signature | feature-protocol | partial | Only aggregate field `ThoughtSignatures []string` in `transform/gemini/generate_content/compatibility.go` `GeminiAggregateState`; no request-side injection/preservation of tool-history `thought_signature` for official Gemini chat found | P1 | yes |
@@ -134,15 +134,15 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 16 | 17 |
-| partial | 12 | 32 |
+| present | 17 | 18 |
+| partial | 11 | 31 |
 | missing | 0 | 3 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (16): **#582, #573, #583, #570, #549, #550, #586, #569, #529, #594, #591, #578, #588, #526, #559, #496**.  
+Mandatory present (17): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #594, #591, #578, #588, #526, #559, #496**.  
 Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559 shipped)*.  
-Mandatory partial (12): **#568, #585, #580, #581, #590, #579, #547, #520, #584, #577, #555, #538**.  
+Mandatory partial (11): **#585, #580, #581, #590, #579, #547, #520, #584, #577, #555, #538**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.

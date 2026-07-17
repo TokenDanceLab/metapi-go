@@ -132,13 +132,24 @@ func TestClassifyFailureReason_TokenExpired(t *testing.T) {
 }
 
 func TestClassifyFailureReason_TokenExpiredWithHTTP401(t *testing.T) {
-	// HTTP 401 alone should trigger token expired
+	// Confirmed credential expiry with 401 still maps to token_expired.
+	result := ClassifyFailureReason(ClassifyFailureInput{
+		HTTPStatus: 401,
+		Message:    "jwt expired",
+	})
+	if result.Code != CodeTokenExpired {
+		t.Errorf("expected CodeTokenExpired for 401+jwt expired, got %s", result.Code)
+	}
+}
+
+func TestClassifyFailureReason_Generic401IsNotTokenExpired(t *testing.T) {
+	// #298/#568: bare/generic 401 must not be classified as token_expired for mark UX.
 	result := ClassifyFailureReason(ClassifyFailureInput{
 		HTTPStatus: 401,
 		Message:    "Unauthorized",
 	})
-	if result.Code != CodeTokenExpired {
-		t.Errorf("expected CodeTokenExpired for 401, got %s", result.Code)
+	if result.Code == CodeTokenExpired {
+		t.Errorf("generic 401 Unauthorized must NOT be CodeTokenExpired, got %s", result.Code)
 	}
 }
 

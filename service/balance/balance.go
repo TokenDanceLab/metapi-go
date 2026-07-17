@@ -454,7 +454,7 @@ func RefreshBalance(cfg *config.Config, db *sqlx.DB, accountID int64) (*BalanceR
 		service.SetAccountRuntimeHealth(db, account.ID, service.RuntimeHealthEntry{
 			State: service.HealthUnhealthy, Reason: message, Source: service.HealthSourceBalance,
 		})
-		if alert.IsTokenExpiredError(0, message) {
+		if alert.ShouldMarkAccountExpired(0, message) {
 			alert.ReportTokenExpired(cfg, db, alert.TokenExpiredParams{
 				AccountID: account.ID, Username: account.Username,
 				SiteName: &site.Name, Detail: message,
