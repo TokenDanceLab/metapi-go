@@ -26,6 +26,7 @@ var tableColumnCount = map[string]int{
 	"ProxyDebugTrace":                26,
 	"ProxyDebugAttempt":              18,
 	"ProxyVideoTask":                 15,
+	"AdminBackgroundTask":            15,
 	"ProxyFile":                      13,
 	"Setting":                        2,
 	"AdminSnapshot":                  9,

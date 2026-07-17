@@ -15,9 +15,9 @@ import (
 )
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Test: Backup Export-Import Roundtrip (all 27 tables)
+// Test: Backup Export-Import Roundtrip (all 28 tables)
 // ──────────────────────────────────────────────────────────────────────────────
-// Full roundtrip: seed all 27 tables -> export JSON -> factory-reset ->
+// Full roundtrip: seed all 28 tables -> export JSON -> factory-reset ->
 // import JSON -> verify all data intact (re-export and compare).
 // Uses SQLite :memory: for the DB.
 
@@ -44,7 +44,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 	future := time.Now().UTC().Add(30 * 24 * time.Hour).Format("2006-01-02T15:04:05.000Z")
 
 	// ══════════════════════════════════════════════════════════════════════════
-	// Phase 2: Seed all 27 tables with test data (FK-safe order)
+	// Phase 2: Seed all 28 tables with test data (FK-safe order)
 	// ══════════════════════════════════════════════════════════════════════════
 
 	// Table 1: sites (2 rows)
@@ -206,7 +206,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 		VALUES (2, 'warn', 'High latency', 'Proxy latency above threshold', 'warn', 0, ?)`, now)
 
 	// ──────────────────────────────────────────────────────────────────────────
-	// Verify seed: check row counts for all 27 tables
+	// Verify seed: check row counts for all 28 tables
 	// ──────────────────────────────────────────────────────────────────────────
 	expectedCounts := map[string]int{
 		"sites":                            2,
@@ -260,7 +260,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 		t.Fatalf("export: expected 'tables' key in payload, got %T", exportPayload["tables"])
 	}
 
-	// Check all 27 tables are present in export.
+	// Check all 28 tables are present in export.
 	for table, expectedCount := range expectedCounts {
 		rows, ok := tablesRaw[table].([]any)
 		if !ok {
@@ -290,7 +290,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 		t.Errorf("export: expected type 'all', got %q", exportType)
 	}
 
-	t.Logf("export: all 27 tables exported successfully")
+	t.Logf("export: all 28 tables exported successfully")
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 4: Factory reset via /api/settings/maintenance/factory-reset
@@ -330,7 +330,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 		t.Errorf("after reset: expected max(sites.id)=0, got %d", nextSiteID)
 	}
 
-	t.Log("factory-reset: all 27 tables truncated, auto-increment reset")
+	t.Log("factory-reset: all 28 tables truncated, auto-increment reset")
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 5: Import JSON via /api/settings/backup/import
@@ -369,7 +369,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 		}
 	}
 
-	t.Log("import: all 27 tables imported successfully")
+	t.Log("import: all 28 tables imported successfully")
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 6: Verify data integrity — re-export and compare
@@ -411,7 +411,7 @@ func TestBackupExportImportRoundtrip(t *testing.T) {
 	// 6d. Verify foreign key integrity: route_channels -> accounts, sites, etc.
 	verifyForeignKeyIntegrity(t, db)
 
-	t.Log("roundtrip: all 27 tables verified — data fully preserved through export->reset->import cycle")
+	t.Log("roundtrip: all 28 tables verified — data fully preserved through export->reset->import cycle")
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -584,9 +584,9 @@ func TestBackupEmptyDatabaseRoundtrip(t *testing.T) {
 	json.Unmarshal(exportRec.Body.Bytes(), &exportPayload)
 	tables, _ := exportPayload["tables"].(map[string]any)
 
-	// All 27 tables present but with empty arrays.
-	if len(tables) != 27 {
-		t.Errorf("empty export: expected 27 tables, got %d", len(tables))
+	// All 28 tables present but with empty arrays.
+	if len(tables) != 28 {
+		t.Errorf("empty export: expected 28 tables, got %d", len(tables))
 	}
 
 	// Factory reset (should succeed even on empty DB).

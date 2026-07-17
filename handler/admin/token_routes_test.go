@@ -763,14 +763,14 @@ func TestRouteDecisionRefresh_RealTaskNotStub(t *testing.T) {
 
 	taskResp := doGet(t, r, "/api/tasks/"+jobID)
 	// tasks routes not registered on this router — just assert task registry entry.
-	task := getBackgroundTask(jobID)
+	task := getBackgroundTask(nil, jobID)
 	if task == nil {
 		t.Fatalf("background task %s not found", jobID)
 	}
 	// Allow a short wait for status transition.
 	for i := 0; i < 50 && task.Status != BackgroundTaskSucceeded && task.Status != BackgroundTaskFailed; i++ {
 		time.Sleep(10 * time.Millisecond)
-		task = getBackgroundTask(jobID)
+		task = getBackgroundTask(nil, jobID)
 	}
 	if task.Status != BackgroundTaskSucceeded {
 		t.Fatalf("task status = %s error=%v", task.Status, task.Error)

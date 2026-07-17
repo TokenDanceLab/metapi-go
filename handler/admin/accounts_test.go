@@ -1969,7 +1969,7 @@ func TestAccounts_HealthRefresh_Background(t *testing.T) {
 	// Wait for background runner to finish and persist runtime health.
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		task := getBackgroundTask(jobID)
+		task := getBackgroundTask(nil, jobID)
 		if task != nil && (task.Status == BackgroundTaskSucceeded || task.Status == BackgroundTaskFailed) {
 			if task.Status != BackgroundTaskSucceeded {
 				t.Fatalf("background task status = %s error=%v", task.Status, task.Error)
@@ -1978,7 +1978,7 @@ func TestAccounts_HealthRefresh_Background(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	task := getBackgroundTask(jobID)
+	task := getBackgroundTask(nil, jobID)
 	if task == nil || task.Status != BackgroundTaskSucceeded {
 		t.Fatalf("background task did not succeed: %#v", task)
 	}

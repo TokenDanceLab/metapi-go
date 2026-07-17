@@ -59,7 +59,7 @@ func TestSQLiteOpenMemory(t *testing.T) {
 	}
 }
 
-// TestSQLiteAutoMigrateAllTables verifies all 27 tables are created.
+// TestSQLiteAutoMigrateAllTables verifies all 28 tables are created.
 func TestSQLiteAutoMigrateAllTables(t *testing.T) {
 	db := openTestSQLite(t)
 
@@ -81,6 +81,7 @@ func TestSQLiteAutoMigrateAllTables(t *testing.T) {
 		"proxy_debug_traces",
 		"proxy_debug_attempts",
 		"proxy_video_tasks",
+		"admin_background_tasks",
 		"proxy_files",
 		"settings",
 		"admin_snapshots",

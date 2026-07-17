@@ -7,7 +7,7 @@ import (
 	"github.com/tokendancelab/metapi-go/config"
 )
 
-// AutoMigrate creates all 27 tables with indexes, unique constraints, foreign keys,
+// AutoMigrate creates all 28 tables with indexes, unique constraints, foreign keys,
 // and check constraints. Uses CREATE TABLE IF NOT EXISTS for idempotency.
 // After the base bootstrap it runs ApplyAdditiveMigrations (schema_migrations
 // bookkeeping + ordered enterprise steps). Run on startup after Open().
@@ -73,6 +73,8 @@ func AutoMigrate(db *DB) error {
 		{"site_announcements", buildSiteAnnouncementsDDL(dialect)},
 		// Table 27: events
 		{"events", buildEventsDDL(dialect)},
+		// Table 28: admin_background_tasks
+		{"admin_background_tasks", buildAdminBackgroundTasksDDL(dialect)},
 	}
 
 	// Non-UNIQUE indexes are created separately via CREATE INDEX IF NOT EXISTS
@@ -1127,6 +1129,46 @@ func buildSiteAnnouncementsDDL(d string) string {
 	)`
 }
 
+
+func buildAdminBackgroundTasksDDL(d string) string {
+	if isPG(d) {
+		return `CREATE TABLE IF NOT EXISTS admin_background_tasks (
+			id SERIAL PRIMARY KEY,
+			task_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			message TEXT,
+			error TEXT,
+			result_json TEXT,
+			dedupe_key TEXT,
+			created_at TEXT,
+			updated_at TEXT,
+			started_at TEXT,
+			finished_at TEXT,
+			logs_json TEXT,
+			CONSTRAINT admin_background_tasks_task_id_unique UNIQUE (task_id)
+		)`
+	}
+	return `CREATE TABLE IF NOT EXISTS admin_background_tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id TEXT NOT NULL,
+		type TEXT NOT NULL,
+		title TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		message TEXT,
+		error TEXT,
+		result_json TEXT,
+		dedupe_key TEXT,
+		created_at TEXT,
+		updated_at TEXT,
+		started_at TEXT,
+		finished_at TEXT,
+		logs_json TEXT,
+		CONSTRAINT admin_background_tasks_task_id_unique UNIQUE (task_id)
+	)`
+}
+
 func buildEventsDDL(d string) string {
 	if isPG(d) {
 		return `CREATE TABLE IF NOT EXISTS events (
@@ -1263,7 +1305,7 @@ func buildIndexes() []struct {
 }
 
 // Migrate is a backward-compatible entry point for the P0 stub API.
-// AutoMigrate (called from EnsureRuntimeDatabase) already runs the 27-table
+// AutoMigrate (called from EnsureRuntimeDatabase) already runs the 28-table
 // bootstrap plus ApplyAdditiveMigrations. This entry point re-runs additive
 // steps only — useful when GetDB() is already open and callers want an
 // explicit compatibility pass without re-executing full CREATE TABLE DDL.
