@@ -355,6 +355,38 @@ func TestIsOAuthRouteUnitMemberCoolingDown(t *testing.T) {
 	}
 }
 
+// Regression #424: writers emit millis via timeMsToISO; readers used RFC3339 without millis.
+// Lexical compare of "…T15:04:05.500Z" vs "…T15:04:05Z" treats still-cooling channels as eligible.
+func TestIsCooldownActive_MillisVsSecondPrecision(t *testing.T) {
+	now := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+	nowISO := now.UTC().Format(time.RFC3339) // no fractional seconds
+	cooldownUntil := timeMsToISO(now.UnixMilli() + 500) // always-present millis
+
+	// Document the lexical trap the parse path must avoid.
+	if cooldownUntil > nowISO {
+		t.Fatalf("precondition failed: expected lexical cool>now to be false; cool=%q now=%q", cooldownUntil, nowISO)
+	}
+
+	if !IsCooldownActive(&cooldownUntil, nowISO) {
+		t.Fatalf("cooldownUntil=now+500ms must still be active; cool=%q now=%q", cooldownUntil, nowISO)
+	}
+	if !IsOAuthRouteUnitMemberCoolingDown(&cooldownUntil, nowISO) {
+		t.Fatalf("OAuth member cool path must treat now+500ms as cooling; cool=%q now=%q", cooldownUntil, nowISO)
+	}
+
+	// Expired (past) millis cooldown must be inactive against second-precision now.
+	pastCool := timeMsToISO(now.UnixMilli() - 500)
+	if IsCooldownActive(&pastCool, nowISO) {
+		t.Fatalf("past cooldown must be inactive; cool=%q now=%q", pastCool, nowISO)
+	}
+
+	// Equal second boundary (no remaining cool window) is not active.
+	exact := timeMsToISO(now.UnixMilli())
+	if IsCooldownActive(&exact, nowISO) {
+		t.Fatalf("cooldownUntil==now must not be active; cool=%q now=%q", exact, nowISO)
+	}
+}
+
 // =============================================================================
 // ParseISOTimeMs tests
 // =============================================================================

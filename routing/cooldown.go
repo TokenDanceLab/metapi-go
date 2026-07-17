@@ -179,12 +179,29 @@ func CompareNullableTimeDesc(left, right *string) int {
 	return CompareNullableTimeAsc(right, left)
 }
 
-// IsOAuthRouteUnitMemberCoolingDown checks if a route unit member is in cooldown.
-func IsOAuthRouteUnitMemberCoolingDown(cooldownUntil *string, nowISO string) bool {
+// IsCooldownActive reports whether cooldownUntil is still in the future relative to nowISO.
+// Both timestamps are parsed to milliseconds before comparison so millis-bearing writer
+// formats (timeMsToISO) cannot lose to second-precision RFC3339 nowISO via lexical order.
+// Example bug: "…T15:04:05.500Z" > "…T15:04:05Z" is false as strings ('.' < 'Z') but true by time.
+func IsCooldownActive(cooldownUntil *string, nowISO string) bool {
 	if cooldownUntil == nil || *cooldownUntil == "" {
 		return false
 	}
-	return *cooldownUntil > nowISO
+	untilMs := ParseISOTimeMs(cooldownUntil)
+	if untilMs == nil {
+		return false
+	}
+	now := nowISO
+	nowMs := ParseISOTimeMs(&now)
+	if nowMs == nil {
+		return false
+	}
+	return *untilMs > *nowMs
+}
+
+// IsOAuthRouteUnitMemberCoolingDown checks if a route unit member is in cooldown.
+func IsOAuthRouteUnitMemberCoolingDown(cooldownUntil *string, nowISO string) bool {
+	return IsCooldownActive(cooldownUntil, nowISO)
 }
 
 // ClampNumber clamps a float64 to [lo, hi].
