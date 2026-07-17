@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 30 (v0.8.21) — next residual wave TBD |
+| Active milestone | **[Milestone 31 — Enterprise residual v0.8.22](https://github.com/TokenDanceLab/metapi-go/milestone/31)** |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -32,12 +32,17 @@
 | Enterprise residual **v0.8.19** | ✅ | #334–#336 · tag v0.8.19 |
 | Enterprise residual **v0.8.20** | ✅ | #345–#346 · tag v0.8.20 |
 | Enterprise residual **v0.8.21** | ✅ | #350–#351 (PRs #352/#353); tag **v0.8.21** |
+| Enterprise residual **v0.8.22** | 🔄 | Milestone 31 · #355–#359 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.21; next residual only with ACs |
+| [#355](https://github.com/TokenDanceLab/metapi-go/issues/355) | security | redact plaintext key from admin downstream-keys list/summary/overview |
+| [#356](https://github.com/TokenDanceLab/metapi-go/issues/356) | security | deny-list sensitive custom_headers (Authorization/Host/hop-by-hop) |
+| [#357](https://github.com/TokenDanceLab/metapi-go/issues/357) | security | RuntimeExecutor CheckRedirect reject cross-origin/private SSRF |
+| [#358](https://github.com/TokenDanceLab/metapi-go/issues/358) | reliability | weighted soft-filter empty should try next priority layer |
+| [#359](https://github.com/TokenDanceLab/metapi-go/issues/359) | docs | residual honesty + security wave board post v0.8.21 |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -75,9 +80,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
-3. Keep MASTER slim; docs map at `docs/README.md`.
+1. Close Milestone 31: #355–#357 security · #358 weighted soft-filter · #359 residual honesty.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
