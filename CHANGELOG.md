@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.12] — 2026-07-17
+
+### Fixed
+- Admin BackgroundTask snapshot under mutex (DATA RACE on get/list vs runner Result write) (#271 / #275)
+
+### Added
+- Site-announcement scheduler wires to real `SyncSiteAnnouncements` via SyncFunc (#272 / #278)
+- Channel recovery active candidates via optional `ProxyChannelCoordinator` provider hook (#273 / #276)
+
+### Docs / Honesty
+- Responses WebSocket residual product path evaluation (stay 426/501 for v0.8.x) (#274 / #277)
+
 ## [v0.8.11] — 2026-07-17
 
 ### Added
