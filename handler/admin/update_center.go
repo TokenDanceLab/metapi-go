@@ -22,6 +22,7 @@ func RegisterUpdateCenterRoutes(r chi.Router) {
 type updateCenterHandler struct{}
 
 // GET /api/update-center/status
+// Local status only — remote version discovery is residual.
 func (h *updateCenterHandler) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"currentVersion":  "0.0.0",
@@ -32,6 +33,7 @@ func (h *updateCenterHandler) status(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/update-center/check
+// Local check only — no remote registry polling yet.
 func (h *updateCenterHandler) check(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"currentVersion":  "0.0.0",
@@ -42,6 +44,7 @@ func (h *updateCenterHandler) check(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /api/update-center/config
+// Accepts and echoes config for UI round-trip; deploy/rollback remain residual.
 func (h *updateCenterHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Enabled             *bool   `json:"enabled"`
@@ -77,6 +80,8 @@ func (h *updateCenterHandler) saveConfig(w http.ResponseWriter, r *http.Request)
 }
 
 // POST /api/update-center/deploy
+// Remote binary/Helm deploy is out of process scope — honest 501 residual.
+// Never invent stub-deploy task ids.
 func (h *updateCenterHandler) deploy(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Source        *string `json:"source"`
@@ -104,17 +109,15 @@ func (h *updateCenterHandler) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"success": true,
-		"reused":  false,
-		"task": map[string]any{
-			"id":     "stub-deploy",
-			"status": "pending",
-		},
-	})
+	writeNotImplementedResidual(w,
+		"Update-center deploy is not implemented in Go",
+		"remote binary/Helm deploy via helper service is out of scope; use external deploy tooling (CI/CD or helper) instead of inventing task ids",
+	)
 }
 
 // POST /api/update-center/rollback
+// Remote rollback is out of process scope — honest 501 residual.
+// Never invent stub-rollback task ids.
 func (h *updateCenterHandler) rollback(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		TargetRevision *string `json:"targetRevision"`
@@ -136,32 +139,20 @@ func (h *updateCenterHandler) rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"success": true,
-		"reused":  false,
-		"task": map[string]any{
-			"id":     "stub-rollback",
-			"status": "pending",
-		},
-	})
+	writeNotImplementedResidual(w,
+		"Update-center rollback is not implemented in Go",
+		"remote Helm/release rollback via helper service is out of scope; use external deploy tooling instead of inventing task ids",
+	)
 }
 
 // GET /api/update-center/tasks/:id/stream
+// No deploy/rollback task registry exists — honest 501 residual (no fake SSE done).
 func (h *updateCenterHandler) taskStream(w http.ResponseWriter, r *http.Request) {
-	// SSE stream for task logs
-	idStr := chi.URLParam(r, "id")
+	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
 	_ = idStr
 
-	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache, no-transform")
-	w.Header().Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK)
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		return
-	}
-
-	// Send done event immediately (stub)
-	sseWrite(w, flusher, "done", map[string]any{"status": "stub"})
+	writeNotImplementedResidual(w,
+		"Update-center task SSE stream is not implemented in Go",
+		"deploy/rollback tasks are residual; no in-process update-center task registry or SSE log stream exists",
+	)
 }
