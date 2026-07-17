@@ -2,8 +2,10 @@ package proxyhandler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -76,7 +78,10 @@ func TestGeminiRoutes_Registration(t *testing.T) {
 
 // ---- HandleGeminiModelsList ----
 
-func TestHandleGeminiModelsList(t *testing.T) {
+func TestHandleGeminiModelsList_StubFallbackCatalog(t *testing.T) {
+	// TestMain enables METAPI_ENABLE_PROXY_STUB; nil upstream uses last-resort
+	// owned catalog (mixed OpenAI/Claude/Gemini) then filters to gemini-ish.
+	SetUpstreamConfig(nil)
 	req := auth.ProxyAuthFromRequest(
 		httptest.NewRequest("GET", "/v1beta/models", nil),
 		&auth.ProxyAuthContext{Token: "test", Source: "global", Policy: auth.EmptyDownstreamRoutingPolicy},
@@ -91,14 +96,130 @@ func TestHandleGeminiModelsList(t *testing.T) {
 	m := unmarshalResponse(t, rec)
 	models, _ := m["models"].([]any)
 	if len(models) == 0 {
-		t.Error("expected non-empty models list")
+		t.Fatal("expected non-empty models list from stub fallback residual")
+	}
+	// Mixed stub catalog must filter to gemini-ish names only.
+	for _, item := range models {
+		entry := item.(map[string]any)
+		name, _ := entry["name"].(string)
+		if !strings.Contains(strings.ToLower(name), "gemini") {
+			t.Errorf("stub fallback should filter non-gemini entries, got %q", name)
+		}
+		if !strings.HasPrefix(name, "models/") {
+			t.Errorf("name must use models/ resource form, got %q", name)
+		}
+		if _, ok := entry["displayName"]; !ok {
+			t.Error("missing displayName")
+		}
+		if _, ok := entry["supportedGenerationMethods"]; !ok {
+			t.Error("missing supportedGenerationMethods")
+		}
+	}
+}
+
+func TestHandleGeminiModelsList_UsesOwnedRouterCatalog(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{
+		models: []string{"gpt-4o", "gemini-2.5-flash", "claude-sonnet-4-20250514", "models/gemini-2.5-pro", "gemini-2.5-flash"},
+	})
+	req := auth.ProxyAuthFromRequest(
+		httptest.NewRequest("GET", "/v1beta/models", nil),
+		&auth.ProxyAuthContext{Token: "test", Source: "global", Policy: auth.EmptyDownstreamRoutingPolicy},
+	)
+	rec := httptest.NewRecorder()
+	HandleGeminiModelsList(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	models, _ := m["models"].([]any)
+	if len(models) != 2 {
+		t.Fatalf("expected 2 gemini models after filter/dedupe/sort, got %d: %v", len(models), models)
+	}
+	// normalizeModelCatalog sorts: flash before pro
+	first := models[0].(map[string]any)
+	second := models[1].(map[string]any)
+	if first["name"] != "models/gemini-2.5-flash" {
+		t.Errorf("first name = %v, want models/gemini-2.5-flash", first["name"])
+	}
+	if second["name"] != "models/gemini-2.5-pro" {
+		t.Errorf("second name = %v, want models/gemini-2.5-pro", second["name"])
+	}
+	if first["displayName"] != "Gemini 2.5 Flash" {
+		t.Errorf("displayName = %v, want Gemini 2.5 Flash", first["displayName"])
+	}
+	methods, _ := first["supportedGenerationMethods"].([]any)
+	if len(methods) != 3 {
+		t.Errorf("supportedGenerationMethods = %v, want 3 entries", methods)
+	}
+}
+
+func TestHandleGeminiModelsList_EmptyCatalog(t *testing.T) {
+	// Production safety: no router + stub disabled → empty models array.
+	t.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
+	req := auth.ProxyAuthFromRequest(
+		httptest.NewRequest("GET", "/v1beta/models", nil),
+		&auth.ProxyAuthContext{Token: "test", Source: "global", Policy: auth.EmptyDownstreamRoutingPolicy},
+	)
+	rec := httptest.NewRecorder()
+	HandleGeminiModelsList(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	models, ok := m["models"].([]any)
+	if !ok {
+		t.Fatalf("models field missing or wrong type: %T", m["models"])
+	}
+	if len(models) != 0 {
+		t.Fatalf("expected empty models list, got %v", models)
+	}
+}
+
+func TestHandleGeminiModelsList_RouterErrorEmpty(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{err: errors.New("db down")})
+	req := auth.ProxyAuthFromRequest(
+		httptest.NewRequest("GET", "/v1beta/models", nil),
+		&auth.ProxyAuthContext{Token: "test", Source: "global", Policy: auth.EmptyDownstreamRoutingPolicy},
+	)
+	rec := httptest.NewRecorder()
+	HandleGeminiModelsList(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	models, _ := m["models"].([]any)
+	if len(models) != 0 {
+		t.Fatalf("router listing error should yield empty models, got %v", models)
+	}
+}
+
+func TestHandleGeminiModelsList_AllOwnedWhenNoGeminiNames(t *testing.T) {
+	// AC: prefer gemini-ish OR map all owned when none match.
+	withModelsRouter(t, &modelsTestRouter{
+		models: []string{"gpt-4o", "claude-sonnet-4-20250514"},
+	})
+	req := auth.ProxyAuthFromRequest(
+		httptest.NewRequest("GET", "/v1beta/models", nil),
+		&auth.ProxyAuthContext{Token: "test", Source: "global", Policy: auth.EmptyDownstreamRoutingPolicy},
+	)
+	rec := httptest.NewRecorder()
+	HandleGeminiModelsList(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	models, _ := m["models"].([]any)
+	if len(models) != 2 {
+		t.Fatalf("expected all owned models mapped when no gemini names, got %d", len(models))
 	}
 	first := models[0].(map[string]any)
-	if _, ok := first["name"]; !ok {
-		t.Error("missing name field")
-	}
-	if _, ok := first["supportedGenerationMethods"]; !ok {
-		t.Error("missing supportedGenerationMethods")
+	if first["name"] != "models/claude-sonnet-4-20250514" && first["name"] != "models/gpt-4o" {
+		t.Errorf("unexpected mapped name %v", first["name"])
 	}
 }
 
@@ -109,6 +230,37 @@ func TestHandleGeminiModelsList_Unauthorized(t *testing.T) {
 
 	if rec.Code != 401 {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestBuildGeminiModelsResponse_Shape(t *testing.T) {
+	resp := buildGeminiModelsResponse([]string{"gemini-2.5-pro", "models/gemini-2.5-flash", "  "})
+	models, _ := resp["models"].([]map[string]any)
+	if len(models) != 2 {
+		t.Fatalf("expected 2 models (blank dropped), got %d", len(models))
+	}
+	if models[0]["name"] != "models/gemini-2.5-pro" {
+		t.Errorf("name = %v", models[0]["name"])
+	}
+	if models[0]["displayName"] != "Gemini 2.5 Pro" {
+		t.Errorf("displayName = %v", models[0]["displayName"])
+	}
+	if models[1]["name"] != "models/gemini-2.5-flash" {
+		t.Errorf("name = %v", models[1]["name"])
+	}
+}
+
+func TestSelectGeminiListModels(t *testing.T) {
+	mixed := selectGeminiListModels([]string{"gpt-4o", "gemini-2.5-pro", "claude-x"})
+	if len(mixed) != 1 || mixed[0] != "gemini-2.5-pro" {
+		t.Fatalf("mixed filter = %v", mixed)
+	}
+	all := selectGeminiListModels([]string{"gpt-4o", "claude-x"})
+	if len(all) != 2 {
+		t.Fatalf("no-gemini should return all owned, got %v", all)
+	}
+	if len(selectGeminiListModels(nil)) != 0 {
+		t.Fatal("nil input should yield empty")
 	}
 }
 
