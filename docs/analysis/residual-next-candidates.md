@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.23)
+# Residual next candidates (post v0.8.23 → v0.8.24)
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.23 shipped** (#366 residual honesty, #367 admin account secret redact, #368 RR/stable soft-filter demotion). Prior **v0.8.22**: #355–#359.  
+**Context**: **v0.8.23 shipped** (#366–#368). Active residual wave: **Milestone 33 / v0.8.24** (#375 route/search secret redact, #376 site metadata URL guard, #377 residual honesty).  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -43,14 +43,24 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-SOFT | Weighted soft-filter empty → next priority | **present** (#358/#362) | Weighted path skips soft-empty priority layer and tries next; failover-isolation note | Done for weighted soft-filter | P0-585 empty-filter fallback residual separate |
 | SEC-ADMIN | Remaining admin secret surfaces | **present-with-residual** (#367/#372) | Account list redacts accessToken/apiToken + passwordCipher strip; token list drops join secrets. Residual: create/update/rebind may still echo once; intentional credential export | Done for list/overview | Residual intentional export / create-once |
 | REL-SOFT-RR | RR/stable_first soft-filter priority demotion | **present** (#368/#370) | RR/stable_first/least_* share priority-layer strict soft-filter demotion with weighted | Done | Global full-set fallback when all layers soft-empty (P0-585 residual) |
+| SEC-ROUTE | Routes/search admin secret dumps | residual → active | Route channels embed accessToken/apiToken; search SELECT * leaks token/access_token | Milestone 33 / #375 | Secret leakage via admin routes/search |
+| SEC-SITEURL | Site URL metadata/link-local SSRF | residual → active | Site create accepts any URL after canonicalize including 169.254.169.254 | Milestone 33 / #376 | First-hop SSRF to cloud metadata |
 
+
+## Active wave (Milestone 33 / v0.8.24)
+
+| Issue | Role | Notes |
+|------:|------|-------|
+| [#375](https://github.com/TokenDanceLab/metapi-go/issues/375) | security | redact secrets from routes channels + search |
+| [#376](https://github.com/TokenDanceLab/metapi-go/issues/376) | security | reject site URL metadata / link-local targets |
+| [#377](https://github.com/TokenDanceLab/metapi-go/issues/377) | docs | residual honesty + MASTER flip post v0.8.23 |
 
 ## Recommended sequencing (v0.8.24+)
 
-1. **Shipped in v0.8.23**: #366–#368 (PRs #369/#370/#372) — residual honesty · admin account secret redact · RR/stable soft-filter demotion. Prior v0.8.22: #355–#359. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter priority demotion.
-2. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
-3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+1. **Shipped in v0.8.23**: #366–#368. **v0.8.24 board**: #375–#377 — no fake WS/sticky/update-center.
+2. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter demotion.
+3. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
+4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
