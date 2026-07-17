@@ -774,7 +774,24 @@ func (h *accountTokensHandler) getGroups(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	groups, err := service.GetTokenGroups(h.db, accountID)
+	accessToken := strings.TrimSpace(row.Account.AccessToken)
+	adapter := platform.GetAdapter(row.Site.Platform)
+	proxyCfg := service.BuildPlatformProxyConfig(h.cfg, &row.Account, &row.Site)
+	platformUserID := service.ResolvePlatformUserIDPtr(&row.Account)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	groups, err := service.GetTokenGroups(
+		ctx,
+		h.db,
+		accountID,
+		adapter,
+		row.Site.URL,
+		accessToken,
+		platformUserID,
+		proxyCfg,
+	)
 	if err != nil {
 		slog.Error("Failed to load token groups", "err", err, "account_id", accountID)
 		writeError(w, http.StatusInternalServerError, "Failed to load token groups")

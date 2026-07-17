@@ -681,11 +681,30 @@ func GetDefaultTokenForAccount(db *sqlx.DB, accountID int64) (*store.AccountToke
 	return &token, nil
 }
 
-// GetTokenGroups fetches token groups from the database.
-// TODO(P4): call adapter.getUserGroups() on the upstream site instead of querying local DB.
-// TS accountTokens.ts:939-944 calls adapter.getUserGroups() — the Go version currently returns
-// what is locally cached, which may differ from server-side group management on some platforms.
-func GetTokenGroups(db *sqlx.DB, accountID int64) ([]string, error) {
+// NormalizeTokenGroups trims, de-duplicates, and ensures a non-empty result.
+// When every input is blank, returns ["default"].
+func NormalizeTokenGroups(groups []string) []string {
+	seen := make(map[string]struct{}, len(groups))
+	out := make([]string, 0, len(groups))
+	for _, group := range groups {
+		trimmed := strings.TrimSpace(group)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return []string{"default"}
+	}
+	return out
+}
+
+// GetLocalTokenGroups returns distinct token groups stored for the account.
+func GetLocalTokenGroups(db *sqlx.DB, accountID int64) ([]string, error) {
 	var groups []string
 	err := db.Select(&groups,
 		db.Rebind("SELECT DISTINCT COALESCE(token_group, 'default') FROM account_tokens WHERE account_id = ?"),
@@ -694,10 +713,43 @@ func GetTokenGroups(db *sqlx.DB, accountID int64) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(groups) == 0 {
-		return []string{"default"}, nil
+	return NormalizeTokenGroups(groups), nil
+}
+
+// GetTokenGroups prefers platform.GetUserGroups for session accounts when an
+// adapter and access token are available. Falls back to local DISTINCT
+// token_group on adapter nil, missing access token, upstream error, or empty
+// upstream result. Upstream errors are swallowed so local groups remain usable.
+func GetTokenGroups(
+	ctx context.Context,
+	db *sqlx.DB,
+	accountID int64,
+	adapter platform.PlatformAdapter,
+	baseURL, accessToken string,
+	platformUserID *int,
+	proxy *platform.ProxyConfig,
+) ([]string, error) {
+	accessToken = strings.TrimSpace(accessToken)
+	if adapter != nil && accessToken != "" {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		upstream, err := adapter.GetUserGroups(ctx, baseURL, accessToken, platformUserID, proxy)
+		if err == nil {
+			hasValue := false
+			for _, group := range upstream {
+				if strings.TrimSpace(group) != "" {
+					hasValue = true
+					break
+				}
+			}
+			if hasValue {
+				return NormalizeTokenGroups(upstream), nil
+			}
+		}
+		// nil adapter path is handled below; upstream error/empty → local fallback
 	}
-	return groups, nil
+	return GetLocalTokenGroups(db, accountID)
 }
 
 // DeleteTokenByID deletes a token by ID with upstream-first strategy.
