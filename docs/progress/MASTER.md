@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27)** (2026-07-18)
+**Latest release**: **[v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27)** (2026-07-18) — remains latest until M38 release gate
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 37 (v0.8.27) — next residual wave TBD |
+| Active milestone | [Milestone 38 — Enterprise residual SSRF/client harden v0.8.28](https://github.com/TokenDanceLab/metapi-go/milestone/38) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -39,16 +39,20 @@
 | Enterprise residual **v0.8.25** | ✅ | #382–#384 (PRs #385/#386/#387); tag **v0.8.25** |
 | M35 residual review / follow-ons | ✅ closed | #388 synthesis · #389/#396 endpoint early reject · #390/#395 multi-route regression |
 | Enterprise residual polish **v0.8.26** | ✅ closed | #397–#400 (PRs #401–#404/#406); tag **v0.8.26** |
-| Enterprise residual security polish **v0.8.27** | ✅ | #407–#410 (PRs #411–#414); tag **v0.8.27** |
+| Enterprise residual security polish **v0.8.27** | ✅ closed | #407–#410 (PRs #411–#414); tag **v0.8.27** |
+| Enterprise residual SSRF/client harden **v0.8.28** | 🔄 active | Milestone 38 · board **#416–#418** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.27; next residual only with ACs |
+| [#416](https://github.com/TokenDanceLab/metapi-go/issues/416) | security P0 | SEC-REDIR: share rejectCrossOriginRedirect on probe/harness/defaultUpstreamClient |
+| [#417](https://github.com/TokenDanceLab/metapi-go/issues/417) | security P1 | SEC-MONITOR: clear meta_monitor_auth cookie on admin logout / session clear |
+| [#418](https://github.com/TokenDanceLab/metapi-go/issues/418) | docs | Residual honesty post v0.8.27 (M38 board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 **M35/M36/M37 closed**: do not re-list #388–#390, #397–#400, or #407–#410 as active work (landed on master with v0.8.27).
+**Latest release**: stays **v0.8.27** until M38 release gate; do not claim v0.8.28 until tag.
 
 
 ## Residual releases (pointer only)
@@ -90,7 +94,7 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Close Milestone 37: #407 opaque monitor session · #408 OldToken constant-time · #409 Claude max_tokens · #410 residual honesty. Latest release **v0.8.27**.
+1. Land M38 board **#416–#418**: SEC-REDIR bare clients CheckRedirect (#416 P0) · SEC-MONITOR logout cookie clear (#417) · residual honesty (#418). Latest release stays **v0.8.27** until release gate.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish; further dialect context_length enforce.
 4. Keep MASTER slim; docs map at `docs/README.md`.
