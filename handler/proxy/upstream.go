@@ -282,11 +282,11 @@ func dispatchSelectedUpstream(
 		attemptBody, forcedStream := applyUpstreamStreamPreference(attemptBody, selected.Site.Platform, path, sitePref)
 		effectiveStream := ctx.IsStream || forcedStream
 		// OpenAI chat stream: ensure final SSE usage chunk via stream_options.include_usage (#345 / P0-555 residual).
-		attemptBody = applyUpstreamStreamIncludeUsage(attemptBody, selected.Site.Platform, path, effectiveStream)
+		attemptBody, expectStreamUsage := applyUpstreamStreamIncludeUsage(attemptBody, selected.Site.Platform, path, effectiveStream)
 		finished, pending, cont := dispatchEndpointAttemptWithContinue(
 			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 			path, contentType, attemptBody, firstByteTimeoutMs,
-			retry, maxRetries, isLast, disableCrossProtocolFallback, effectiveStream, requestID,
+			retry, maxRetries, isLast, disableCrossProtocolFallback, effectiveStream, expectStreamUsage, requestID,
 		)
 		if finished {
 			return true, nil
@@ -411,23 +411,27 @@ func applyUpstreamStreamPreference(bodyBytes []byte, sitePlatform, upstreamPath 
 // chat/completions and legacy /v1/completions stream bodies so upstream SSE emits a final usage chunk (P0-555 residual / #345/#350).
 // Platform-safe: skips non-chat endpoints and platforms known to reject stream_options (codex/sub2api).
 // Does not invent tokens; only asks the provider to include usage when streaming.
-func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPath string, isStream bool) []byte {
+//
+// The bool is true when the outbound stream body is expected to carry usage via include_usage
+// (we injected it, or the client already set include_usage=true on an accepting path). Callers
+// use that flag to warn once if the stream ends without extracted usage (#400 / P0-555 residual).
+func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPath string, isStream bool) ([]byte, bool) {
 	if !isStream || len(bodyBytes) == 0 {
-		return bodyBytes
+		return bodyBytes, false
 	}
 	if !acceptsOpenAIStreamIncludeUsagePath(upstreamPath) {
-		return bodyBytes
+		return bodyBytes, false
 	}
 	if rejectsOpenAIStreamOptions(sitePlatform) {
-		return bodyBytes
+		return bodyBytes, false
 	}
 	var body map[string]any
 	if err := json.Unmarshal(bodyBytes, &body); err != nil {
-		return bodyBytes
+		return bodyBytes, false
 	}
 	// Only when this attempt is streaming (client or forced).
 	if !jsonTruthyBool(body["stream"]) && !isStream {
-		return bodyBytes
+		return bodyBytes, false
 	}
 	opts, _ := body["stream_options"].(map[string]any)
 	if opts == nil {
@@ -442,7 +446,8 @@ func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPat
 	}
 	if jsonTruthyBool(opts["include_usage"]) {
 		// Already requested; leave other stream_options keys intact without rewrite.
-		return bodyBytes
+		// Still expect a final usage chunk from upstream.
+		return bodyBytes, true
 	}
 	opts["include_usage"] = true
 	next := make(map[string]any, len(body)+1)
@@ -452,9 +457,39 @@ func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPat
 	next["stream_options"] = opts
 	out, err := json.Marshal(next)
 	if err != nil {
-		return bodyBytes
+		return bodyBytes, false
 	}
-	return out
+	return out, true
+}
+
+// shouldWarnMissingStreamUsage reports whether a completed/partial stream that requested
+// include_usage still lacks usable token counts. Never invents tokens — only detects absence.
+func shouldWarnMissingStreamUsage(expectIncludeUsage bool, usage ParsedUsage) bool {
+	if !expectIncludeUsage {
+		return false
+	}
+	if !usage.Found {
+		return true
+	}
+	// Found but all zero: provider emitted a usage object without counts (still residual).
+	return usage.PromptTokens == 0 && usage.CompletionTokens == 0 && usage.TotalTokens == 0 &&
+		usage.CacheReadTokens == 0 && usage.CacheCreationTokens == 0 && usage.ReasoningTokens == 0
+}
+
+// warnMissingStreamUsageAfterIncludeUsage logs once per call site (one success/partial end path).
+// model/path identify the request; tokens are never invented here.
+func warnMissingStreamUsageAfterIncludeUsage(model, path string, usage ParsedUsage) {
+	if !shouldWarnMissingStreamUsage(true, usage) {
+		return
+	}
+	slog.Warn("stream ended without usage after include_usage",
+		"model", model,
+		"path", path,
+		"usage_found", usage.Found,
+		"prompt_tokens", usage.PromptTokens,
+		"completion_tokens", usage.CompletionTokens,
+		"total_tokens", usage.TotalTokens,
+	)
 }
 
 // acceptsOpenAIStreamIncludeUsagePath reports OpenAI-compatible paths that honor
@@ -521,7 +556,7 @@ func dispatchEndpointAttempt(
 	finished, pending, _ := dispatchEndpointAttemptWithContinue(
 		w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 		upstreamPath, contentType, bodyBytes, firstByteTimeoutMs,
-		retry, maxRetries, true, true, ctx != nil && ctx.IsStream, requestID,
+		retry, maxRetries, true, true, ctx != nil && ctx.IsStream, false, requestID,
 	)
 	if !recordFailure {
 		return finished, pending
@@ -549,6 +584,7 @@ func dispatchEndpointAttemptWithContinue(
 	isLastEndpoint bool,
 	disableCrossProtocolFallback bool,
 	effectiveStream bool,
+	expectStreamUsage bool,
 	requestID string,
 ) (finished bool, nextPending *pendingUpstreamFailure, cont bool) {
 	if requestID == "" {
@@ -670,6 +706,11 @@ func dispatchEndpointAttemptWithContinue(
 			defer resp.Body.Close()
 			streamUsage = handleStreamUpstream(w, r, resp, latencyMs)
 		}()
+		// Observability only: include_usage was on the outbound body but SSE had no usable tokens (#400).
+		// Still record zeros / unknown — never invent tokens.
+		if expectStreamUsage {
+			warnMissingStreamUsageAfterIncludeUsage(upstreamModel, upstreamPath, streamUsage)
+		}
 		recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, streamUsage)
 		writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, streamUsage, retry, requestID)
 		observeProxyTerminal(ctx, shared.OutcomeSuccess, true, time.Duration(latencyMs)*time.Millisecond)
