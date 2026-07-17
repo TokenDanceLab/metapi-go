@@ -77,6 +77,14 @@ func newMockRouter() *mockRouter {
 	}
 }
 
+func (m *mockRouter) GetAvailableModels(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockRouter) ExplainSelection(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error) {
+	return routing.RouteDecisionExplanation{}, nil
+}
+
 func (m *mockRouter) SelectChannel(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -221,9 +229,9 @@ func injectAuthManaged(token string, supportedModels []string) func(http.Handler
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			pac := &auth.ProxyAuthContext{
-				Token:  token,
-				Source: "managed",
-				KeyID:  &id,
+				Token:   token,
+				Source:  "managed",
+				KeyID:   &id,
 				KeyName: "test-managed-key",
 				Policy: auth.DownstreamRoutingPolicy{
 					SupportedModels:        supportedModels,
@@ -253,9 +261,9 @@ func makeChannel(id int64, upstreamURL string, actualModel string) *routing.Sele
 		},
 		Site: store.Site{
 			ID:       id,
-			Name:    fmt.Sprintf("site-%d", id),
-			URL:     upstreamURL,
-			Status:  "active",
+			Name:     fmt.Sprintf("site-%d", id),
+			URL:      upstreamURL,
+			Status:   "active",
 			Platform: "openai",
 		},
 		TokenValue:  "test-upstream-token",
@@ -476,9 +484,9 @@ func TestChannelRetry(t *testing.T) {
 func TestStickySession(t *testing.T) {
 	mockUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSONHelper(w, 200, map[string]any{
-			"id":      "chatcmpl-sticky",
-			"object":  "chat.completion",
-			"model":   "gpt-4",
+			"id":     "chatcmpl-sticky",
+			"object": "chat.completion",
+			"model":  "gpt-4",
 			"choices": []map[string]any{
 				{
 					"index":   0,
@@ -615,9 +623,9 @@ func TestDownstreamAuth(t *testing.T) {
 	// Use real ProxyAuth middleware with the seeded DB.
 	mockUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeJSONHelper(w, 200, map[string]any{
-			"id":      "chatcmpl-auth",
-			"object":  "chat.completion",
-			"model":   "gpt-4",
+			"id":     "chatcmpl-auth",
+			"object": "chat.completion",
+			"model":  "gpt-4",
 			"choices": []map[string]any{
 				{
 					"index":   0,
@@ -736,9 +744,9 @@ func TestModelMatching(t *testing.T) {
 		json.Unmarshal(body, &reqBody)
 
 		writeJSONHelper(w, 200, map[string]any{
-			"id":      "chatcmpl-model",
-			"object":  "chat.completion",
-			"model":   reqBody["model"],
+			"id":     "chatcmpl-model",
+			"object": "chat.completion",
+			"model":  reqBody["model"],
 			"choices": []map[string]any{
 				{
 					"index":   0,
@@ -971,9 +979,9 @@ func TestRateLimit(t *testing.T) {
 		// Simulate processing time.
 		time.Sleep(50 * time.Millisecond)
 		writeJSONHelper(w, 200, map[string]any{
-			"id":      fmt.Sprintf("chatcmpl-%d", requestCount.Load()),
-			"object":  "chat.completion",
-			"model":   "gpt-4",
+			"id":     fmt.Sprintf("chatcmpl-%d", requestCount.Load()),
+			"object": "chat.completion",
+			"model":  "gpt-4",
 			"choices": []map[string]any{
 				{
 					"index":   0,
@@ -1072,9 +1080,9 @@ func TestNonStreamingWithStreamFalse(t *testing.T) {
 			t.Log("stream field present in upstream body")
 		}
 		writeJSONHelper(w, 200, map[string]any{
-			"id":      "chatcmpl-ns",
-			"object":  "chat.completion",
-			"model":   "gpt-4",
+			"id":     "chatcmpl-ns",
+			"object": "chat.completion",
+			"model":  "gpt-4",
 			"choices": []map[string]any{
 				{
 					"index":   0,
