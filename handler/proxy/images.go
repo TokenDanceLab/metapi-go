@@ -23,6 +23,7 @@ func HandleImagesGenerations(w http.ResponseWriter, r *http.Request) {
 
 // HandleImagesEdits handles POST /v1/images/edits.
 // Supports multipart/form-data and JSON body. Model defaults to "gpt-image-1".
+// Multipart is parsed in PrepareCtx and forwarded via CloneMultipartBody in dispatchUpstream.
 func HandleImagesEdits(w http.ResponseWriter, r *http.Request) {
 	EnsureMultipartBufferParser()
 
@@ -34,21 +35,6 @@ func HandleImagesEdits(w http.ResponseWriter, r *http.Request) {
 	})
 	if errResp != nil {
 		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
-		return
-	}
-
-	// For multipart image edits, return stub until full image edit forwarding is implemented.
-	if IsMultipartRequest(r) {
-		_ = ctx.RequestedModel
-		stubResp := map[string]any{
-			"created": 0,
-			"data": []map[string]any{
-				{
-					"url": "https://example.com/edited-image.png",
-				},
-			},
-		}
-		writeJSON(w, 200, stubResp) // TODO: full multipart upstream forwarding
 		return
 	}
 
