@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1187,5 +1188,48 @@ func TestRoutes_ReorderAndListOrder(t *testing.T) {
 	}
 	if resp["success"] != false {
 		t.Fatalf("expected success=false with failed item, got %#v", resp)
+	}
+}
+
+func TestRouteChannelAccountPublic_OmitsSecrets(t *testing.T) {
+	ch := map[string]any{
+		"accountId":     int64(7),
+		"username":      "u",
+		"accessToken":   "sk-access-secret-ABCDEF",
+		"apiToken":      "sk-api-secret-XYZ12345",
+		"balance":       1.5,
+		"accountStatus": "active",
+	}
+	got := routeChannelAccountPublic(ch)
+	if _, ok := got["accessToken"]; ok {
+		t.Fatalf("accessToken present: %#v", got["accessToken"])
+	}
+	if _, ok := got["apiToken"]; ok {
+		t.Fatalf("apiToken present: %#v", got["apiToken"])
+	}
+	if got["accessTokenMasked"] == nil || got["apiTokenMasked"] == nil {
+		t.Fatalf("expected masked fields: %#v", got)
+	}
+	if s, _ := got["accessTokenMasked"].(string); strings.Contains(s, "sk-access-secret") {
+		t.Fatalf("mask leaked secret: %q", s)
+	}
+}
+
+func TestRedactSearchSecrets(t *testing.T) {
+	acc := map[string]any{"accessToken": "sk-acc-ABCDEFGH", "apiToken": "sk-api-ABCDEFGH", "username": "x"}
+	redactSearchAccountSecrets(acc)
+	if _, ok := acc["accessToken"]; ok {
+		t.Fatal("accessToken not removed")
+	}
+	if _, ok := acc["apiToken"]; ok {
+		t.Fatal("apiToken not removed")
+	}
+	tok := map[string]any{"token": "sk-token-ABCDEFGH", "name": "n"}
+	redactSearchTokenSecrets(tok)
+	if _, ok := tok["token"]; ok {
+		t.Fatal("token not removed")
+	}
+	if tok["tokenMasked"] == nil {
+		t.Fatal("tokenMasked missing")
 	}
 }
