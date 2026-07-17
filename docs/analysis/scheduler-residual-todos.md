@@ -14,7 +14,7 @@ Four background schedulers still carry TODOs that look like product work. Operat
 | Scheduler | File | Interval | What currently runs | Residual / silent gap | Multi-instance |
 |-----------|------|----------|---------------------|------------------------|----------------|
 | Sub2API refresh | `scheduler/sub2api_refresh.go` | 60s (min 60s) | Lease + SQL scan of active `sub2api` accounts; logs `scanned=N, refreshed=0, failed=0` | Does **not** parse `extraConfig.sub2apiAuth`; does **not** filter due tokens; does **not** call `refreshSub2ApiManagedSessionSingleflight` or any upstream refresh. Concurrency constant unused. | `runWithSchedulerLease` (PG advisory lock / process-local mutex). Only one instance runs the empty pass. |
-| Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + load cooling candidates (SQL) + load active candidates (SQL stub) + merge/filter/prioritize + probe via global model-probe scheduler when registered | Active path is **not** wired through `proxyChannelCoordinator.getActiveChannelIds()` (TS). SQL `LIMIT 50` approximation may differ from coordinator-active set. Probe is real only if model-probe is registered; otherwise probe is skipped with debug log. | Lease serializes sweeps across PG instances. In-flight / last-started maps are **process-local**. |
+| Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + load cooling candidates (SQL) + load active candidates (coordinator provider when wired, else SQL stub) + merge/filter/prioritize + probe via global model-probe scheduler when registered | Active path prefers optional `SetActiveChannelIDsProvider` → `ProxyChannelCoordinator.GetActiveChannelIDs` (#273). Residual only when provider is **unset**: SQL `LIMIT 50` approximation. Probe is real only if model-probe is registered; otherwise probe is skipped with debug log. | Lease serializes sweeps across PG instances. In-flight / last-started maps and coordinator active set are **process-local**. |
 | Site announcement | `scheduler/site_announcement.go` | 15m (min 10s) | Lease + enumerate active sites + log count | **No** platform adapter calls, **no** `site_announcements` writes, **no** notifications/events. Admin `POST /api/site-announcements/sync` already has real `syncSiteAnnouncements`; this ticker does not call it. | Lease serializes residual scan. No shared announcement write from this path (because none occur). |
 | Update center | `scheduler/update_center.go` | 15m (min 10s) | Lease + log line | **No** remote registry/helper poll, **no** version persistence, **no** deploy/rollback. Admin status/check are local stubs (`0.0.0`); deploy/rollback are 501 residuals (`residual-update-center.md`). | Lease serializes residual log. No cluster-wide "last checked" state. |
 
@@ -57,7 +57,9 @@ Four background schedulers still carry TODOs that look like product work. Operat
 
 1. Ticker + immediate first sweep; `sweepInFlight` serialization; scheduler lease.
 2. `loadCoolingCandidates`: real SQL over `route_channels` with non-null future `cooldown_until`.
-3. `loadActiveCandidates`: SQL of enabled channels with null cooldown (`LIMIT 50`) — **not** coordinator-backed.
+3. `loadActiveCandidates` (#273):
+   - If `SetActiveChannelIDsProvider` is registered (boot wires `ProxyChannelCoordinator.GetActiveChannelIDs` from `app.ConfigureProxyUpstream`), resolve model names for those IDs via SQL (`enabled` + active account/site; null cooldown preferred, source_model channels still included).
+   - If provider is **nil**, residual SQL of enabled channels with null cooldown (`LIMIT 50`).
 4. Merge (cooling wins), due-filter via process-local maps, prioritize, cap batch=4.
 5. `probeCandidate`: if global model-probe scheduler is registered, call `probeOne`; else debug-skip (no fake success).
 
@@ -65,9 +67,9 @@ Four background schedulers still carry TODOs that look like product work. Operat
 
 | TODO site | Honest status |
 |-----------|---------------|
-| wire active candidate loading via `proxyChannelCoordinator` | **Partial / not TS-parity** — SQL stub runs and can feed probes, but ignores process-local coordinator active set |
+| wire active candidate loading via `proxyChannelCoordinator` | **Wired when proxy upstream boots** (`scheduler.SetActiveChannelIDsProvider` → `coord.GetActiveChannelIDs`, #273). Residual SQL `LIMIT 50` remains only when provider is unset (tests / pre-boot). Process-local leases still mean multi-instance active sets are not shared. |
 
-**Not a pure no-op**: cooling load + optional model probes can perform real work. The residual is **active-candidate source fidelity**, not "entire scheduler is dead".
+**Not a pure no-op**: cooling load + optional model probes can perform real work. Remaining honesty gap is multi-instance coordinator state, not missing boot wiring.
 
 ### 3. `SiteAnnouncementScheduler` (`site_announcement.go`)
 

@@ -15,6 +15,7 @@ import (
 	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -26,6 +27,8 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 	if db == nil {
 		proxyhandler.SetUpstreamConfig(nil)
 		setTokenRouteDecisionRuntime(nil, nil)
+		// Clear channel-recovery active-ID hook on failed/cleared reconfigure (#273).
+		scheduler.SetActiveChannelIDsProvider(nil)
 		return fmt.Errorf("proxy upstream: database is not initialized")
 	}
 	coord := proxy.NewProxyChannelCoordinator(cfg)
@@ -58,6 +61,15 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 		LogProxy: func(ctx context.Context, entry proxy.ProxyLogEntry) error {
 			return proxyhandler.InsertProxyLog(ctx, store.GetDB(), entry)
 		},
+	})
+	// Channel recovery active candidates follow coordinator leases (#273).
+	// Normalize nil→empty so an empty lease set does not look "unset".
+	scheduler.SetActiveChannelIDsProvider(func() []int64 {
+		ids := coord.GetActiveChannelIDs()
+		if ids == nil {
+			return []int64{}
+		}
+		return ids
 	})
 	// Remember router for ModelProbeScheduler health recording (#170).
 	// Wire global scheduler if already started (reconfigure / test paths).
