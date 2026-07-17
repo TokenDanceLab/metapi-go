@@ -8,6 +8,12 @@ import (
 )
 
 // RegisterUpdateCenterRoutes registers all /api/update-center routes.
+//
+// Residual honesty (#197 / #283):
+//   - status/check are local stubs (never invent updateAvailable=true)
+//   - config is echo-only (no durable helper registry config product)
+//   - deploy/rollback/task stream are honest 501 residuals (no stub task ids / fake SSE)
+// See docs/analysis/residual-update-center.md.
 func RegisterUpdateCenterRoutes(r chi.Router) {
 	handler := &updateCenterHandler{}
 
@@ -21,30 +27,36 @@ func RegisterUpdateCenterRoutes(r chi.Router) {
 
 type updateCenterHandler struct{}
 
-// GET /api/update-center/status
-// Local status only — remote version discovery is residual.
-func (h *updateCenterHandler) status(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+// localUpdateCenterStatus is the honest local-only payload for status/check.
+// Never set updateAvailable=true without a real remote registry/helper client.
+func localUpdateCenterStatus() map[string]any {
+	return map[string]any{
 		"currentVersion":  "0.0.0",
 		"latestVersion":   "0.0.0",
 		"updateAvailable": false,
 		"lastCheckedAt":   nil,
-	})
+		// residual field makes the stub explicit for operators/UI (#283).
+		"residual": "local stub only; no remote registry/helper polling or version discovery in Go",
+	}
+}
+
+// GET /api/update-center/status
+// Local status only — remote version discovery is residual (#283).
+// Never invents updateAvailable=true or a fake lastCheckedAt.
+func (h *updateCenterHandler) status(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, localUpdateCenterStatus())
 }
 
 // POST /api/update-center/check
-// Local check only — no remote registry polling yet.
+// Local check only — no remote registry polling (#283).
+// Same payload as status; does not start deploy tasks or invent "update available".
 func (h *updateCenterHandler) check(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"currentVersion":  "0.0.0",
-		"latestVersion":   "0.0.0",
-		"updateAvailable": false,
-		"lastCheckedAt":   nil,
-	})
+	writeJSON(w, http.StatusOK, localUpdateCenterStatus())
 }
 
 // PUT /api/update-center/config
-// Accepts and echoes config for UI round-trip; deploy/rollback remain residual.
+// Accepts and echoes config for UI round-trip; not persisted as a product config store.
+// Deploy/rollback remain residual 501 regardless of echoed values.
 func (h *updateCenterHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Enabled             *bool   `json:"enabled"`
@@ -76,6 +88,8 @@ func (h *updateCenterHandler) saveConfig(w http.ResponseWriter, r *http.Request)
 			"imageRepository":     coalesceStr(body.ImageRepository, ""),
 			"defaultDeploySource": coalesceStr(body.DefaultDeploySource, "docker-hub-tag"),
 		},
+		// Echo-only: this handler does not persist helper/registry product config (#283).
+		"residual": "config echo only; not persisted as update-center product config; deploy/rollback remain residual",
 	})
 }
 
