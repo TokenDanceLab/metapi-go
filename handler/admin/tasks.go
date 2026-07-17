@@ -30,7 +30,12 @@ type BackgroundTaskLogEntry struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-// BackgroundTask is the in-memory admin task registry entry (camelCase JSON).
+// BackgroundTask is a process-local admin task registry entry (camelCase JSON).
+//
+// Residual (#236): this is NOT a distributed/shared job record. The id is only
+// meaningful inside the process that created it; multi-instance deployments do
+// not share BackgroundTask state (no Redis/DB job store). See
+// docs/analysis/background-tasks-multi-instance-residual.md.
 type BackgroundTask struct {
 	ID         string                   `json:"id"`
 	Type       string                   `json:"type"`
@@ -69,7 +74,14 @@ var (
 	backgroundCleanupOnce sync.Once
 )
 
-// RegisterTasksRoutes registers all /api/tasks routes.
+// RegisterTasksRoutes registers process-local /api/tasks routes.
+//
+// Residual (#236): list/get only observe tasks created in THIS process via
+// StartBackgroundTask. jobId/taskId are not shared across multi-instance
+// replicas; sticky LB to one admin instance (or accept poll 404/degradation)
+// is the operational workaround. No durable multi-instance registry is
+// implemented here — see docs/analysis/background-tasks-multi-instance-residual.md.
+// Related: clear-cache multi-instance cache residual in settings_maintenance.go.
 func RegisterTasksRoutes(r chi.Router, db *sqlx.DB) {
 	handler := &tasksHandler{db: db}
 	r.Get("/api/tasks", handler.listTasks)
@@ -115,8 +127,19 @@ func (h *tasksHandler) getTask(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// StartBackgroundTask queues a background job in the in-memory registry.
-// When dedupeKey matches a pending/running task, that task is reused.
+// StartBackgroundTask queues a background job in the process-local in-memory
+// registry and returns a snapshot of the task (id usable as jobId/taskId).
+//
+// When dedupeKey matches a pending/running task in THIS process, that task is
+// reused. Dedupe does not coordinate across instances.
+//
+// Residual (#236): registry, TTL, logs, and ids are process-local only. Clients
+// that start work on one replica and poll /api/tasks on another will not see
+// the job. This is intentional honesty — do not treat the id as cluster-wide.
+// Operators: sticky admin LB, single admin replica, or accept degradation.
+// Docs: docs/analysis/background-tasks-multi-instance-residual.md.
+// Related residual: settings clear-cache only invalidates this process's caches
+// (handler/admin/settings_maintenance.go).
 func StartBackgroundTask(opts BackgroundTaskStartOptions, runner func() (any, error)) (task *BackgroundTask, reused bool) {
 	ensureBackgroundTaskCleanup()
 	now := time.Now().UTC()
