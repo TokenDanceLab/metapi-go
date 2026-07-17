@@ -94,7 +94,7 @@ type tokenRoutesHandler struct {
 // ---- List Lite ----
 // GET /api/routes/lite
 func (h *tokenRoutesHandler) listLite(w http.ResponseWriter, r *http.Request) {
-	rows := queryRows(h.db, "SELECT id, model_pattern, display_name, display_icon, route_mode, routing_strategy, enabled FROM token_routes ORDER BY sort_order ASC, id ASC")
+	rows := queryRows(h.db, "SELECT id, model_pattern, display_name, display_icon, route_mode, routing_strategy, enabled, context_length FROM token_routes ORDER BY sort_order ASC, id ASC")
 	type srcRow struct {
 		GroupRouteID  int64 `db:"group_route_id"`
 		SourceRouteID int64 `db:"source_route_id"`
@@ -136,6 +136,7 @@ func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request)
 			"sourceRouteIds":      []int64{},
 			"modelMapping":        route["modelMapping"],
 			"routingStrategy":     route["routingStrategy"],
+			"contextLength":       route["contextLength"],
 			"enabled":             route["enabled"],
 			"channelCount":        channelCount,
 			"enabledChannelCount": enabledCount,
@@ -227,8 +228,11 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		DisplayIcon     *string `json:"displayIcon"`
 		SourceRouteIds  []int64 `json:"sourceRouteIds"`
 		RoutingStrategy *string `json:"routingStrategy"`
-		ModelMapping    any     `json:"modelMapping"`
-		Enabled         *bool   `json:"enabled"`
+		// ContextLength is optional route metadata (tokens). NULL/omit/0 means unknown;
+		// not enforced at proxy runtime in this wave (admin surface + /v1/models residual).
+		ContextLength any   `json:"contextLength"`
+		ModelMapping  any   `json:"modelMapping"`
+		Enabled       *bool `json:"enabled"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
@@ -279,11 +283,13 @@ func (h *tokenRoutesHandler) createRoute(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+	contextLength := normalizeContextLengthOrNull(body.ContextLength)
+
 	id, err := execInsertID(h.db,
-		`INSERT INTO token_routes (model_pattern, display_name, display_icon, route_mode, model_mapping, routing_strategy, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO token_routes (model_pattern, display_name, display_icon, route_mode, model_mapping, routing_strategy, context_length, enabled, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		modelPattern, strOrNull(&displayName), strOrNull(body.DisplayIcon), routeMode,
-		modelMapping, routingStrategy, enabled, now, now,
+		modelMapping, routingStrategy, contextLength, enabled, now, now,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "创建路由失败"})
@@ -364,6 +370,11 @@ func (h *tokenRoutesHandler) updateRoute(w http.ResponseWriter, r *http.Request)
 	if v, ok := body["modelMapping"]; ok {
 		mappingJSON, _ := json.Marshal(v)
 		h.db.Exec(h.db.Rebind("UPDATE token_routes SET model_mapping = ?, updated_at = ? WHERE id = ?"), string(mappingJSON), now, id)
+	}
+	// contextLength: present key updates (including explicit null/0 clear → NULL).
+	// Metadata only — no proxy max-token enforcement is wired from this field yet.
+	if v, ok := body["contextLength"]; ok {
+		h.db.Exec(h.db.Rebind("UPDATE token_routes SET context_length = ?, updated_at = ? WHERE id = ?"), normalizeContextLengthOrNull(v), now, id)
 	}
 
 	// Update source route IDs for explicit_group
@@ -1166,6 +1177,55 @@ func uniquePositiveInt64(values []int64) []int64 {
 		out = append(out, v)
 	}
 	return out
+}
+
+// normalizeContextLengthOrNull parses admin camelCase contextLength.
+// Contract: null / omit (caller) / "" / 0 / negative → NULL (unknown, no enforcement).
+// Positive integers (or numeric strings) are stored as token window metadata only.
+func normalizeContextLengthOrNull(input any) any {
+	if input == nil {
+		return nil
+	}
+	switch v := input.(type) {
+	case float64:
+		if v <= 0 {
+			return nil
+		}
+		return int64(v)
+	case float32:
+		if v <= 0 {
+			return nil
+		}
+		return int64(v)
+	case int:
+		if v <= 0 {
+			return nil
+		}
+		return int64(v)
+	case int64:
+		if v <= 0 {
+			return nil
+		}
+		return v
+	case json.Number:
+		i, err := v.Int64()
+		if err != nil || i <= 0 {
+			return nil
+		}
+		return i
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		i, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || i <= 0 {
+			return nil
+		}
+		return i
+	default:
+		return nil
+	}
 }
 
 func strOrNull(s *string) any {

@@ -42,7 +42,8 @@ Implications:
 
 Residual / future hardening:
 
-- Prefer `token_routes.context_length` (SC2 additive column) over built-in defaults when set; today `knownModelContextLength` still supplies family defaults/heuristics only.
+- Admin CRUD for route metadata: `POST/PUT /api/routes` accept camelCase `contextLength`; list/summary/lite echo it when set (`#320`). Stored on `token_routes.context_length` (SC2). **Metadata only** — no proxy max-token truncation/enforcement is wired from this field yet.
+- Prefer `token_routes.context_length` over built-in defaults when set in `/v1/models`; today `knownModelContextLength` still supplies family defaults/heuristics only (route-level not consumed by models listing yet).
 - Optionally merge per-site discovered context metadata from platform model refresh.
 - Route-ID-aware listing when policy has only `AllowedRouteIDs` (currently empty until joined).
 
