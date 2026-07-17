@@ -97,10 +97,14 @@ type channelRuntimeState struct {
 // Both are conditional: only activate when the downstream request has a valid sticky
 // session key AND the channel's account uses session-scoped credentials.
 type ProxyChannelCoordinator struct {
-	// stickyBindings is process-local only (in-memory map). Multi-instance LB without
-	// instance affinity silently loses sticky preference — behavioral degradation, not
-	// data corruption. Redis/DB sticky is out of scope; see
-	// docs/analysis/sticky-session-multi-instance-residual.md.
+	// stickyBindings is process-local only (in-memory map + TTL).
+	// Multi-instance LB without instance affinity silently loses sticky preference —
+	// behavioral degradation, not data corruption (fallback = normal channel selection).
+	// v0.8.x product path: stay process-local + LB session affinity / sticky cookie ops
+	// guidance. Redis sticky map (TTL, fail-open like sharedcount) needs a dedicated
+	// Milestone + tests; DB sticky is not recommended. This map does not share channel
+	// concurrency leases or channel-recovery active sets across instances.
+	// See docs/analysis/sticky-session-multi-instance-residual.md (#237, #282).
 	stickyBindings map[string]StickyEntry
 	channelStates  map[int64]*channelRuntimeState
 	// nextLeaseID is allocated with atomic ops so createTrackedLease never needs
