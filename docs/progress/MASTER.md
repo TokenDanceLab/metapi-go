@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26)** (2026-07-18) — remains latest until M37 release gate
+**Latest release**: **[v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 37 — Enterprise residual security polish v0.8.27](https://github.com/TokenDanceLab/metapi-go/milestone/37) |
+| Active milestone | closed Milestone 37 (v0.8.27) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -39,26 +39,23 @@
 | Enterprise residual **v0.8.25** | ✅ | #382–#384 (PRs #385/#386/#387); tag **v0.8.25** |
 | M35 residual review / follow-ons | ✅ closed | #388 synthesis · #389/#396 endpoint early reject · #390/#395 multi-route regression |
 | Enterprise residual polish **v0.8.26** | ✅ closed | #397–#400 (PRs #401–#404/#406); tag **v0.8.26** |
-| Enterprise residual security polish **v0.8.27** | 🔄 active | Milestone 37 · board **#407–#410** |
+| Enterprise residual security polish **v0.8.27** | ✅ | #407–#410 (PRs #411–#414); tag **v0.8.27** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#407](https://github.com/TokenDanceLab/metapi-go/issues/407) | security P0 | SEC-MONITOR: opaque monitor session (no live AUTH_TOKEN cookie) + constant-time compare |
-| [#408](https://github.com/TokenDanceLab/metapi-go/issues/408) | security P0 | Constant-time compare for admin token change OldToken |
-| [#409](https://github.com/TokenDanceLab/metapi-go/issues/409) | proxy P1 | CTX-520: enforce max_tokens vs context_length on Claude `/v1/messages` |
-| [#410](https://github.com/TokenDanceLab/metapi-go/issues/410) | docs | Residual honesty post v0.8.26 (M37 board) |
+| — | — | Board clean after v0.8.27; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35/M36 closed**: do not re-list #388–#390 or #397–#400 as active work (landed on master with v0.8.26).
-**Latest release**: stays **v0.8.26** until M37 release gate; do not claim v0.8.27 until tag.
+**M35/M36/M37 closed**: do not re-list #388–#390, #397–#400, or #407–#410 as active work (landed on master with v0.8.27).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27) | 37 | opaque monitor session · OldToken constant-time · Claude max_tokens vs context_length · residual honesty |
 | [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) | 36 | IsValidAPIEndpointURL metadata parity · max_tokens vs context_length reject · stream missing-usage warn · residual honesty |
 | [v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25) | 34 | IsValidHTTPURL metadata harden · routes N+1 batch · residual honesty |
 | [v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24) | 33 | routes/search secret redact · site metadata URL guard · residual honesty |
@@ -87,15 +84,15 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.26
+gh release view v0.8.27
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land M37 board **#407–#410**: SEC-MONITOR opaque session (#407 P0) · OldToken constant-time (#408 P0) · CTX-520 Claude max_tokens (#409) · residual honesty (#410). Latest release stays **v0.8.26** until release gate.
+1. Close Milestone 37: #407 opaque monitor session · #408 OldToken constant-time · #409 Claude max_tokens · #410 residual honesty. Latest release **v0.8.27**.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish.
+3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish; further dialect context_length enforce.
 4. Keep MASTER slim; docs map at `docs/README.md`.
 
 

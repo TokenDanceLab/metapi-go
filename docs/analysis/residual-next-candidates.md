@@ -1,12 +1,11 @@
-# Residual next candidates (post v0.8.26 / M37)
+# Residual next candidates (post v0.8.27)
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410)  
-**Context**: **v0.8.26 shipped** (#397 residual honesty, #398 IsValidAPIEndpointURL metadata parity, #399 CTX-520 OpenAI max_tokens reject, #400 P0-555 missing-usage warn; PRs #401–#404/#406). Board was clean after M36. **Milestone 37 opened** with security/polish board **#407–#410**. Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515/#409 already-correct in code.  
+**Context**: **v0.8.27 shipped** (#407 opaque monitor session, #408 OldToken constant-time, #409 CTX-520 Claude max_tokens reject, #410 residual honesty; PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Board clean after M37. Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
-**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)  
-**Active wave**: Milestone 37 / **v0.8.27** board **#407–#410** (security polish; latest release remains **v0.8.26** until release gate)
+**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)
 
 ## Purpose
 
@@ -38,9 +37,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | KEY-578 | Per-key outbound proxy | present | `proxy/key_proxy.go` + `downstream_api_keys.proxy_url` | Done (matrix #281) | — |
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
-| CTX-520 | Route contextLength admin + models wire + max_tokens reject | **present-with-residual** (OpenAI shipped #320/#327/#399; Claude residual **active** #409) | Admin CRUD (#320) + OpenAI `/v1/models` prefers positive route `context_length` (max per exposed id) (#327) + proxy rejects OpenAI chat/completions (and legacy completions) `max_tokens` above positive selected-route `context_length` with honest 400 (#399/#404). **Active residual:** Claude `/v1/messages` still out of scope → M37 **#409** (reject when positive context_length and max_tokens > limit; no silent clamp). null/non-positive context_length still skips enforce | M37 #409 Claude path; further dialects only with ACs | OpenAI enforce present; Claude residual active |
-| SEC-MONITOR | Monitor session cookie embeds live AUTH_TOKEN | **residual → active** (#407) | `handler/admin/monitor.go` createSession sets `meta_monitor_auth=<cfg.AuthToken>`; `ensureMonitorAuth` uses non-constant-time compare. Cookie capture yields full admin bearer for all `/api/*` | **M37 P0 #407** — opaque monitor session (or HMAC) + constant-time compare; never put raw AuthToken in cookie | **P0** — cookie theft = full admin token |
-| SEC-AUTH-TIMING | Admin token change OldToken compare | **residual → active** (#408) | `handler/admin/auth_settings.go` compares `OldToken` with `!=` while AdminAuth middleware already uses `subtle.ConstantTimeCompare` | **M37 P0 #408** — constant-time equal-length compare; reject mismatched lengths without leaking timing | Timing side-channel on token rotate path |
+| CTX-520 | Route contextLength admin + models wire + max_tokens reject | **present-with-residual** (OpenAI #320/#327/#399; Claude #409) | Admin CRUD (#320) + OpenAI `/v1/models` prefers positive route `context_length` (max per exposed id) (#327) + proxy rejects OpenAI chat/completions (and legacy completions) `max_tokens` above positive selected-route `context_length` with honest 400 (#399/#404) + Claude `/v1/messages` same reject when positive context_length (#409/#412). Residual: further dialects only with ACs; null/non-positive context_length still skips enforce; no silent clamp | Further dialect polish only with ACs | OpenAI + Claude enforce present; other dialects residual |
+| SEC-MONITOR | Monitor session cookie embeds live AUTH_TOKEN | **present** (#407/#414) | Opaque HMAC-SHA256 monitor session; `ensureMonitorAuth` constant-time compare; cookie scoped `Path=/monitor-proxy/` so capture cannot become full admin bearer | Done for monitor session | Residual: rotate/invalidate on auth_token change if product AC |
+| SEC-AUTH-TIMING | Admin token change OldToken compare | **present** (#408/#411) | `handler/admin/auth_settings.go` uses `subtle.ConstantTimeCompare` on equal-length normalized bytes; mismatched lengths rejected without leaking timing (parity with AdminAuth middleware) | Done for token-change path | Residual other non-constant compares only if product AC |
 | SEC-KEY | Admin downstream-keys plaintext redaction | **present** (#355/#361) | `redactDownstreamKeySecret` on list/summary/overview; `key` omitted, `keyMasked` only | Done for admin list surface | Residual: other admin dumps if any |
 | SEC-HDR | custom_headers deny-list | **present** (#356/#364) | Shared `platform.ApplyCustomHeaders` / deny-list; Bearer after custom on upstream path | Done | Residual novel header names only |
 | SEC-REDIR | RuntimeExecutor CheckRedirect SSRF | **present** (#357/#360) | `rejectCrossOriginRedirect` on RuntimeExecutor client | Done | Residual site-URL SSRF validation only if product AC |
@@ -54,19 +53,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.27+)
+## Recommended sequencing (v0.8.28+)
 
-1. **Shipped in v0.8.26**: #397–#400 (PRs #401–#404/#406) — residual honesty · IsValidAPIEndpointURL metadata parity · CTX-520 OpenAI max_tokens reject · P0-555 stream missing-usage warn. Prior v0.8.25: #382–#384. M35/M36 closed.
-2. **Active M37 board (#407–#410)** — Enterprise residual security polish **v0.8.27** (latest tag stays **v0.8.26** until release gate):
-   1. **#407 SEC-MONITOR (P0)**: opaque monitor session cookie; never embed live `AUTH_TOKEN`; constant-time compare.
-   2. **#408 SEC-AUTH-TIMING (P0)**: constant-time `OldToken` compare on admin token change (parity with AdminAuth middleware).
-   3. **#409 CTX-520 Claude residual (P1)**: enforce max_tokens vs positive route `context_length` on Anthropic `/v1/messages` (honest 400; no silent clamp).
-   4. **#410 docs**: this residual honesty pass + MASTER M37 pointer (no product code).
-3. **SEC-ENDPOINT** fully **present**. **CTX-520** stays **present-with-residual** until #409 lands (OpenAI enforce shipped; Claude active). **P0-555** stays **present-with-residual** (warn shipped; provider-ignore / media / lag / orphan join residual).
-4. **P0-585** residual notes unchanged until load-proof / breaker ACs land.
-5. **Optional product later**: P0-585 load-proof / site-model breaker; deeper billing polish; further dialect context_length enforce (dedicated ACs only).
-6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.27**: #407–#410 (PRs #411–#414) — opaque monitor session · OldToken constant-time · CTX-520 Claude max_tokens reject · residual honesty. Prior v0.8.26: #397–#400. M35/M36/M37 closed.
+2. **SEC-MONITOR** fully **present**. **SEC-AUTH-TIMING** fully **present**. **CTX-520** stays **present-with-residual** (OpenAI + Claude max_tokens reject shipped; further dialects / null-context residual). **P0-555** stays **present-with-residual** (warn shipped; provider-ignore / media / lag / orphan join residual).
+3. **P0-585** residual notes unchanged until load-proof / breaker ACs land.
+4. **Optional product later**: P0-585 load-proof / site-model breaker; deeper billing polish; further dialect context_length enforce (dedicated ACs only).
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -75,19 +69,19 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Inventing update-center deploy/rollback success without a registry.
 - Returning `success:true` for unimplemented admin stream/job queues.
 - Claiming perfect billing accuracy without aggregation proof after #311.
-- Claiming Claude / all-dialect proxy max-token enforcement from `contextLength` without a dedicated product AC (OpenAI chat/completions reject only after #399; Claude via #409).
+- Claiming all-dialect proxy max-token enforcement from `contextLength` without a dedicated product AC (OpenAI chat/completions after #399; Claude `/v1/messages` after #409; further dialects need ACs).
 - Returning full downstream API keys on admin list/summary/overview after #355.
 - Allowing custom_headers to override Authorization/Host/hop-by-hop after #356.
 - Following cross-origin/private RuntimeExecutor redirects after #357.
-- Embedding live `AUTH_TOKEN` in monitor cookies (SEC-MONITOR / #407).
-- Non-constant-time compares on admin token-change paths after AdminAuth already uses constant-time (#408).
+- Embedding live `AUTH_TOKEN` in monitor cookies after #407.
+- Non-constant-time compares on admin token-change paths after #408.
 
 ## Links
 
-- Release: [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) · prior [v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25) · next residual board **v0.8.27+** (no tag until release gate)
-- Milestone: [Enterprise residual security polish v0.8.27](https://github.com/TokenDanceLab/metapi-go/milestone/37) · board **#407–#410**
+- Release: [v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27) · prior [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) · next residual board **v0.8.28+**
+- Milestone: [Enterprise residual security polish v0.8.27](https://github.com/TokenDanceLab/metapi-go/milestone/37) · board **#407–#410** closed
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #407, #408, #409, #410, #397, #398, #399, #400, #401, #402, #403, #404, #406, #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391, #395, #396
+- Related issues: #407, #408, #409, #410, #411, #412, #413, #414, #397, #398, #399, #400, #401, #402, #403, #404, #406, #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391, #395, #396

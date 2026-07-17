@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.27] — 2026-07-18
+
+### Security
+- Monitor session cookie is opaque HMAC (never embeds live `AUTH_TOKEN`); constant-time compare; cookie scoped to `Path=/monitor-proxy/` so theft cannot become full admin bearer (#407 / #414)
+- Admin auth token change: constant-time `OldToken` compare (parity with AdminAuth middleware; reject mismatched lengths without leaking timing) (#408 / #411)
+
+### Fixed
+- Claude `/v1/messages`: reject `max_tokens` above positive selected-route `context_length` with honest 400 `invalid_request_error` (no silent clamp; extends OpenAI #399) (#409 / #412)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 37 post v0.8.26; SEC-MONITOR + SEC-AUTH-TIMING present · CTX-520 Claude path shipped (further dialect residual) · board #407–#410 closed (#410 / #413)
+
 ## [v0.8.26] — 2026-07-18
 
 ### Security
