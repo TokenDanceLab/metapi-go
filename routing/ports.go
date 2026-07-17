@@ -41,8 +41,8 @@ type ChannelLoadSnapshotProvider interface {
 
 // ChannelLoadParams are the parameters for resolving a channel's load snapshot.
 type ChannelLoadParams struct {
-	ChannelID           int64
-	AccountExtraConfig  *string
+	ChannelID            int64
+	AccountExtraConfig   *string
 	AccountOAuthProvider *string
 }
 
@@ -85,13 +85,16 @@ var EmptyDownstreamRoutingPolicy = DownstreamRoutingPolicy{
 
 // SelectedChannel is the result of a successful channel selection.
 type SelectedChannel struct {
-	Channel    store.RouteChannel
-	Account    store.Account
-	Site       store.Site
-	Token      *store.AccountToken
-	TokenValue string
-	TokenName  string
+	Channel     store.RouteChannel
+	Account     store.Account
+	Site        store.Site
+	Token       *store.AccountToken
+	TokenValue  string
+	TokenName   string
 	ActualModel string
+	// ContextLength is the matched token_routes.context_length (tokens).
+	// nil or <=0 means unknown / no max_tokens enforcement on the proxy path.
+	ContextLength *int64
 }
 
 // RouteDecisionExplanation mirrors TS RouteDecisionExplanation.
@@ -110,30 +113,30 @@ type RouteDecisionExplanation struct {
 
 // RouteDecisionCandidate mirrors TS RouteDecisionCandidate.
 type RouteDecisionCandidate struct {
-	ChannelID             int64
-	AccountID             int64
-	Username              string
-	SiteName              string
-	TokenName             string
-	Priority              int64
-	Weight                int64
-	Eligible              bool
-	RecentlyFailed        bool
+	ChannelID              int64
+	AccountID              int64
+	Username               string
+	SiteName               string
+	TokenName              string
+	Priority               int64
+	Weight                 int64
+	Eligible               bool
+	RecentlyFailed         bool
 	AvoidedByRecentFailure bool
-	Probability           float64
-	Reason                string
+	Probability            float64
+	Reason                 string
 }
 
 // RouteRoutingStrategy is the strategy for a route.
 type RouteRoutingStrategy string
 
 const (
-	StrategyWeighted       RouteRoutingStrategy = "weighted"
-	StrategyRoundRobin     RouteRoutingStrategy = "round_robin"
-	StrategyStableFirst    RouteRoutingStrategy = "stable_first"
-	StrategyLeastBusy      RouteRoutingStrategy = "least_busy"
-	StrategyLowestLatency  RouteRoutingStrategy = "lowest_latency"
-	StrategyLowestCost     RouteRoutingStrategy = "lowest_cost"
+	StrategyWeighted      RouteRoutingStrategy = "weighted"
+	StrategyRoundRobin    RouteRoutingStrategy = "round_robin"
+	StrategyStableFirst   RouteRoutingStrategy = "stable_first"
+	StrategyLeastBusy     RouteRoutingStrategy = "least_busy"
+	StrategyLowestLatency RouteRoutingStrategy = "lowest_latency"
+	StrategyLowestCost    RouteRoutingStrategy = "lowest_cost"
 )
 
 // KnownRouteRoutingStrategies lists operator-selectable strategies (#115).
@@ -224,8 +227,8 @@ type PricingReferenceRefreshOptions struct {
 
 // ExplainSelectionOptions configures explain-selection behavior.
 type ExplainSelectionOptions struct {
-	ExcludeChannelIDs           []int64
-	BypassSourceModelCheck      bool
+	ExcludeChannelIDs            []int64
+	BypassSourceModelCheck       bool
 	UseChannelSourceModelForCost bool
 	DownstreamPolicy             DownstreamRoutingPolicy
 }

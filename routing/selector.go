@@ -73,9 +73,9 @@ type ChannelSelectorDB interface {
 
 	// Runtime health
 	LoadRuntimeHealthChannelRows(ctx context.Context, channelIDs []int64) ([]struct {
-		SiteID             int64
-		SourceModel        *string
-		RouteModelPattern  string
+		SiteID            int64
+		SourceModel       *string
+		RouteModelPattern string
 	}, error)
 
 	// Clear channel failure states
@@ -84,13 +84,13 @@ type ChannelSelectorDB interface {
 
 // ChannelSelector implements selectChannel, selectNextChannel, selectPreferredChannel.
 type ChannelSelector struct {
-	db                ChannelSelectorDB
-	cache             *RouteCache
-	configuredMaxSec   int
-	downstreamPolicy   DownstreamRoutingPolicy
-	routingWeights    RoutingWeightsConfig
-	pricingFn         func(siteID, accountID int64, modelName string) *float64
-	fallbackUnitCost  float64
+	db                  ChannelSelectorDB
+	cache               *RouteCache
+	configuredMaxSec    int
+	downstreamPolicy    DownstreamRoutingPolicy
+	routingWeights      RoutingWeightsConfig
+	pricingFn           func(siteID, accountID int64, modelName string) *float64
+	fallbackUnitCost    float64
 	channelLoadProvider ChannelLoadSnapshotProvider
 }
 
@@ -105,12 +105,12 @@ func NewChannelSelector(
 	channelLoadProvider ChannelLoadSnapshotProvider,
 ) *ChannelSelector {
 	return &ChannelSelector{
-		db:                db,
-		cache:             cache,
-		configuredMaxSec:   configuredMaxSec,
-		routingWeights:    routingWeights,
-		pricingFn:         pricingFn,
-		fallbackUnitCost:  fallbackUnitCost,
+		db:                  db,
+		cache:               cache,
+		configuredMaxSec:    configuredMaxSec,
+		routingWeights:      routingWeights,
+		pricingFn:           pricingFn,
+		fallbackUnitCost:    fallbackUnitCost,
 		channelLoadProvider: channelLoadProvider,
 	}
 }
@@ -533,10 +533,10 @@ func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenR
 		}
 
 		candidate := RouteChannelCandidate{
-			Channel:  j.Channel,
-			Account:  j.Account,
-			Site:     j.Site,
-			Token:    j.Token,
+			Channel: j.Channel,
+			Account: j.Account,
+			Site:    j.Site,
+			Token:   j.Token,
 		}
 
 		if j.Channel.OAuthRouteUnitID != nil && *j.Channel.OAuthRouteUnitID > 0 {
@@ -822,12 +822,13 @@ func (s *ChannelSelector) finalizeDispatch(
 	}
 
 	return &SelectedChannel{
-		Channel:     selected.Channel,
-		Account:     dispatchCandidate.Account,
-		Site:        dispatchCandidate.Site,
-		Token:       dispatchCandidate.Token,
-		TokenValue:  tokenValue,
-		TokenName:   tokenName,
-		ActualModel: actualModel,
+		Channel:       selected.Channel,
+		Account:       dispatchCandidate.Account,
+		Site:          dispatchCandidate.Site,
+		Token:         dispatchCandidate.Token,
+		TokenValue:    tokenValue,
+		TokenName:     tokenName,
+		ActualModel:   actualModel,
+		ContextLength: match.Route.ContextLength,
 	}, nil
 }
