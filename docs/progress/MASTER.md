@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27)** (2026-07-18) — remains latest until M38 release gate
+**Latest release**: **[v0.8.28](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.28)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 38 — Enterprise residual SSRF/client harden v0.8.28](https://github.com/TokenDanceLab/metapi-go/milestone/38) |
+| Active milestone | closed Milestone 38 (v0.8.28) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -40,25 +40,24 @@
 | M35 residual review / follow-ons | ✅ closed | #388 synthesis · #389/#396 endpoint early reject · #390/#395 multi-route regression |
 | Enterprise residual polish **v0.8.26** | ✅ closed | #397–#400 (PRs #401–#404/#406); tag **v0.8.26** |
 | Enterprise residual security polish **v0.8.27** | ✅ closed | #407–#410 (PRs #411–#414); tag **v0.8.27** |
-| Enterprise residual SSRF/client harden **v0.8.28** | 🔄 active | Milestone 38 · board **#416–#418** |
+| Enterprise residual SSRF/client harden **v0.8.28** | ✅ closed | #416–#418 (PRs #419–#421); tag **v0.8.28** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#416](https://github.com/TokenDanceLab/metapi-go/issues/416) | security P0 | SEC-REDIR: share rejectCrossOriginRedirect on probe/harness/defaultUpstreamClient |
-| [#417](https://github.com/TokenDanceLab/metapi-go/issues/417) | security P1 | SEC-MONITOR: clear meta_monitor_auth cookie on admin logout / session clear |
-| [#418](https://github.com/TokenDanceLab/metapi-go/issues/418) | docs | Residual honesty post v0.8.27 (M38 board) |
+| — | — | Board clean after v0.8.28; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35/M36/M37 closed**: do not re-list #388–#390, #397–#400, or #407–#410 as active work (landed on master with v0.8.27).
-**Latest release**: stays **v0.8.27** until M38 release gate; do not claim v0.8.28 until tag.
+**M35–M38 closed**: do not re-list #388–#390, #397–#400, #407–#410, or #416–#418 as active work (landed on master with v0.8.28).
+**Latest release**: **v0.8.28** after M38 release gate (docs gate only; do not claim next residual until new board + ACs).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.28](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.28) | 38 | SEC-REDIR bare clients · SEC-MONITOR logout clear · residual honesty |
 | [v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27) | 37 | opaque monitor session · OldToken constant-time · Claude max_tokens vs context_length · residual honesty |
 | [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) | 36 | IsValidAPIEndpointURL metadata parity · max_tokens vs context_length reject · stream missing-usage warn · residual honesty |
 | [v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25) | 34 | IsValidHTTPURL metadata harden · routes N+1 batch · residual honesty |
@@ -88,13 +87,13 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.27
+gh release view v0.8.28
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land M38 board **#416–#418**: SEC-REDIR bare clients CheckRedirect (#416 P0) · SEC-MONITOR logout cookie clear (#417) · residual honesty (#418). Latest release stays **v0.8.27** until release gate.
+1. Close Milestone 38: #416 SEC-REDIR bare clients · #417 SEC-MONITOR logout cookie clear · #418 residual honesty. Latest release **v0.8.28**.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish; further dialect context_length enforce.
 4. Keep MASTER slim; docs map at `docs/README.md`.

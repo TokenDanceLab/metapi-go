@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.28] — 2026-07-18
+
+### Security
+- Share `RejectCrossOriginRedirect` on residual bare clients: channel health probe, channel test harness, and `defaultUpstreamClient` (no longer follow public-origin 302 → private/metadata) (#416 / #420)
+- Admin logout / session clear sets `Max-Age=0` for `meta_monitor_auth` with matching `Path=/monitor-proxy/` (#417 / #421)
+
+### Fixed
+- Residual bare HTTP clients no longer inherit Go default redirect policy when site proxy is absent (#416 / #420)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 38 post v0.8.27; SEC-REDIR bare clients + SEC-MONITOR logout residual shipped · board #416–#418 closed (#418 / #419)
+
 ## [v0.8.27] — 2026-07-18
 
 ### Security
