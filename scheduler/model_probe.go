@@ -103,6 +103,7 @@ func (s *ModelProbeScheduler) Start(ctx context.Context) error {
 
 	if !s.cfg.ModelAvailabilityProbeEnabled {
 		slog.Info("model-probe: disabled (probe not enabled)")
+		SetGlobalModelProbeScheduler(s)
 		return nil
 	}
 
@@ -182,6 +183,38 @@ func (s *ModelProbeScheduler) LastRunSummary() ProbeRunSummary {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lastRunSummary
+}
+
+// TriggerNow runs one probe pass asynchronously (or sync if sync=true).
+// Used by admin /api/models/probe and site probe-now (#154).
+func (s *ModelProbeScheduler) TriggerNow(sync bool) ProbeRunSummary {
+	if s == nil {
+		return ProbeRunSummary{}
+	}
+	if sync {
+		s.runProbe()
+		return s.LastRunSummary()
+	}
+	go s.runProbe()
+	return s.LastRunSummary()
+}
+
+// GlobalModelProbe is the process-wide scheduler instance (optional).
+var globalModelProbeMu sync.Mutex
+var globalModelProbe *ModelProbeScheduler
+
+// SetGlobalModelProbeScheduler registers the running scheduler for admin triggers.
+func SetGlobalModelProbeScheduler(s *ModelProbeScheduler) {
+	globalModelProbeMu.Lock()
+	defer globalModelProbeMu.Unlock()
+	globalModelProbe = s
+}
+
+// GetGlobalModelProbeScheduler returns the registered scheduler (may be nil).
+func GetGlobalModelProbeScheduler() *ModelProbeScheduler {
+	globalModelProbeMu.Lock()
+	defer globalModelProbeMu.Unlock()
+	return globalModelProbe
 }
 
 func (s *ModelProbeScheduler) runProbe() {

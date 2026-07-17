@@ -317,9 +317,26 @@ func (s *ChannelRecoveryScheduler) probeCandidate(dbw *store.DB, candidate recov
 		s.mu.Unlock()
 	}()
 
-	// TODO: Wire actual probeRuntimeModel call
-	// For now, stub: log and record success
-	slog.Debug("channel-recovery: probing candidate",
+	// Prefer shared model probe executor when registered (#154).
+	if mp := GetGlobalModelProbeScheduler(); mp != nil {
+		target := ProbeTarget{
+			ChannelID: candidate.channelID,
+			ModelName: candidate.modelName,
+		}
+		timeoutMs := 15000
+		if s.cfg != nil && s.cfg.ModelAvailabilityProbeTimeoutMs >= 3000 {
+			timeoutMs = s.cfg.ModelAvailabilityProbeTimeoutMs
+		}
+		outcome := mp.probeOne(target, timeoutMs)
+		slog.Debug("channel-recovery: probe complete",
+			"channel_id", candidate.channelID,
+			"model", candidate.modelName,
+			"source", candidate.source,
+			"outcome", outcome,
+		)
+		return
+	}
+	slog.Debug("channel-recovery: no model probe scheduler registered; skip live probe",
 		"channel_id", candidate.channelID,
 		"model", candidate.modelName,
 		"source", candidate.source,

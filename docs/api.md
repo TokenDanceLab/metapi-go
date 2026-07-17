@@ -560,3 +560,19 @@ Forwarded client IP headers are ignored by default. Set `TRUSTED_PROXY_CIDRS` on
 ### GET /api/downstream-keys/:id/export
 
 Admin credential export adapters (openai/cherry/generic). See docs/analysis/credential-export.md.
+
+---
+
+## Proxy files (`/v1/files`)
+
+OpenAI-compatible Files surface (proxy auth required). Forwards to the selected upstream channel; does not persist customer file bytes on MetAPI disk.
+
+| Method | Path | Notes |
+|--------|------|--------|
+| POST | `/v1/files` | Multipart upload (`file` field). |
+| GET | `/v1/files` | List files from upstream. |
+| GET | `/v1/files/{fileId}` | File metadata. |
+| GET | `/v1/files/{fileId}/content` | File content download. |
+| DELETE | `/v1/files/{fileId}` | Delete file. |
+
+Channel selection uses model key: body/multipart `model`, else `?model=`, else `X-Metapi-Files-Model`, else default `gpt-4o`. Residual platforms without a Files API return upstream errors — see `docs/analysis/files-proxy.md`.
