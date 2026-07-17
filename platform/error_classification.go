@@ -81,20 +81,18 @@ func ClassifyUpstreamError(httpStatus int, message string) UpstreamErrorClass {
 		return ClassTransient
 	}
 
-	// Bare HTTP 401 with empty body is treated as expired (legacy auto-relogin /
-	// mark path). Non-empty 401/403 without auth signal stay unknown/auth.
+	// HTTP 401 / "HTTP 401 …" without an explicit credential-expiry phrase is auth
+	// residual only. Marking accounts.status='expired' requires confirmed
+	// invalid/expired credential wording (isStrongTokenExpiredSignal above).
+	// Bare/generic 401 used to mark expired and caused #568 over-expiry flaps.
 	if httpStatus == 401 || containsHTTPStatus(raw, 401) {
 		if text == "" {
+			return ClassAuth
+		}
+		if hasExplicitExpiryOrInvalidCredential(text) {
 			return ClassExpired
 		}
 		if hasAuthFailureSignal(text) || hasAuthTokenReference(text) {
-			// Unauthorized without an explicit expiry phrase is still auth, but
-			// historical IsTokenExpiredError treated 401 as expired once non-auth
-			// exclusions were ruled out. Keep that for empty-adjacent auth 401s.
-			if hasExplicitExpiryOrInvalidCredential(text) || text == "unauthorized" ||
-				strings.Contains(text, "http 401") || strings.Contains(text, "401 unauthorized") {
-				return ClassExpired
-			}
 			return ClassAuth
 		}
 		// 401 with an opaque/non-auth residual body must not mark expired.
@@ -115,27 +113,18 @@ func ClassifyUpstreamError(httpStatus int, message string) UpstreamErrorClass {
 	return ClassUnknown
 }
 
-// IsTokenExpiredError reports whether the signal should be treated as an
-// expired/invalid stored credential for auto-relogin and account marking.
-// Mirrors historical TS isTokenExpiredError() with tighter non-auth guards.
+// IsTokenExpiredError reports whether the signal is a confirmed expired/invalid
+// stored credential. After #298 / #568 hardening this matches mark policy
+// (ClassExpired only). Auto-relogin callers that need broader 401/unauthorized
+// heuristics must use local shouldAttemptAutoRelogin* patterns, not this gate.
+// Mirrors historical TS isTokenExpiredError() with non-auth + generic-401 guards.
 func IsTokenExpiredError(httpStatus int, message string) bool {
-	switch ClassifyUpstreamError(httpStatus, message) {
-	case ClassExpired:
-		return true
-	case ClassAuth:
-		// Auth without clear expiry does not mark accounts expired, but some
-		// callers historically used IsTokenExpiredError for auto-relogin only.
-		// Keep auto-relogin-compatible true only for strong credential signals.
-		text := strings.ToLower(strings.TrimSpace(message))
-		return hasExplicitExpiryOrInvalidCredential(text)
-	default:
-		return false
-	}
+	return ShouldMarkAccountExpired(httpStatus, message)
 }
 
 // ShouldMarkAccountExpired is the guard used before writing accounts.status='expired'.
-// Today it matches IsTokenExpiredError; kept separate so mark policy can tighten later
-// without changing auto-relogin heuristics.
+// Only ClassExpired (confirmed credential invalid/expiry wording) may mark.
+// Generic 401/unauthorized, network, 429, and 5xx must return false.
 func ShouldMarkAccountExpired(httpStatus int, message string) bool {
 	return ClassifyUpstreamError(httpStatus, message) == ClassExpired
 }

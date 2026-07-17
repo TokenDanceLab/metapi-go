@@ -121,11 +121,25 @@ func TestHandleUpstreamFailure_TokenExpiredMarkGuard(t *testing.T) {
 			wantMark:   true,
 		},
 		{
-			name:       "bare 401 empty body marks",
+			name:       "bare 401 empty body does not mark",
 			status:     401,
 			errText:    "",
 			rawErrText: "",
-			wantMark:   true,
+			wantMark:   false,
+		},
+		{
+			name:       "generic 401 unauthorized does not mark",
+			status:     401,
+			errText:    "Unauthorized",
+			rawErrText: "Unauthorized",
+			wantMark:   false,
+		},
+		{
+			name:       "5xx does not mark",
+			status:     502,
+			errText:    "bad gateway",
+			rawErrText: "bad gateway",
+			wantMark:   false,
 		},
 		{
 			name:       "billing 401 does not mark",

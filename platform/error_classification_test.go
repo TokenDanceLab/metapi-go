@@ -40,16 +40,23 @@ func TestClassifyUpstreamError_Matrix(t *testing.T) {
 			wantMark:   true,
 		},
 		{
-			name:       "bare 401 empty body marks (legacy)",
+			name:       "bare 401 empty body is auth not mark (#298)",
 			httpStatus: 401,
 			message:    "",
-			wantClass:  ClassExpired,
-			wantMark:   true,
+			wantClass:  ClassAuth,
+			wantMark:   false,
 		},
 		{
-			name:       "HTTP 401 Unauthorized marks",
+			name:       "HTTP 401 Unauthorized is auth not mark (#298)",
 			httpStatus: 0,
 			message:    "HTTP 401 Unauthorized",
+			wantClass:  ClassAuth,
+			wantMark:   false,
+		},
+		{
+			name:       "401 + jwt expired still marks",
+			httpStatus: 401,
+			message:    "jwt expired",
 			wantClass:  ClassExpired,
 			wantMark:   true,
 		},
@@ -238,6 +245,9 @@ func TestIsTokenExpiredError_NonAuthUpstreamNeverMarks(t *testing.T) {
 		{"timeout", 0, "request timed out"},
 		{"5xx", 502, "bad gateway from upstream"},
 		{"opaque 401", 401, "upstream rejected the request"},
+			{"bare 401 empty", 401, ""},
+			{"HTTP 401 Unauthorized", 0, "HTTP 401 Unauthorized"},
+			{"Unauthorized only", 401, "Unauthorized"},
 		{"bare token word without auth", 0, "input token encoding failed"},
 	}
 	for _, tc := range cases {
@@ -265,8 +275,8 @@ func TestIsTokenExpiredError_PositiveAuthSignals(t *testing.T) {
 		{"access token chinese invalid", 0, "access token无效"},
 		{"访问令牌无效", 0, "访问令牌无效"},
 		{"令牌已过期", 0, "令牌已过期"},
-		{"bare 401", 401, ""},
-		{"HTTP 401 Unauthorized", 0, "HTTP 401 Unauthorized"},
+		{"401 + jwt expired", 401, "jwt expired"},
+		{"401 + invalid access token", 401, "invalid access token"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

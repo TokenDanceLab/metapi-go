@@ -2,6 +2,7 @@ package alert
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -12,18 +13,28 @@ import (
 
 // TokenExpiredParams holds parameters for reportTokenExpired.
 type TokenExpiredParams struct {
-	AccountID int64
-	Username  *string
-	SiteName  *string
-	Detail    string
+	AccountID  int64
+	Username   *string
+	SiteName   *string
+	Detail     string
+	HTTPStatus int // optional; 0 means classify from Detail alone
 }
 
-// ReportTokenExpired reports a token expiration event and marks the account expired.
-// Callers MUST gate with ShouldMarkAccountExpired (ClassExpired only) — not the
-// broader IsTokenExpiredError / auto-relogin heuristic — so 429/5xx/network/billing
-// never force-mark keys (#568 / #298).
-// Mirrors TS reportTokenExpired() with tighter call-site guards.
+// ReportTokenExpired reports a confirmed token expiration event and marks the account expired.
+// Defense-in-depth (#298 / #568): even if a caller forgets ShouldMarkAccountExpired,
+// this function no-ops unless classification confirms ClassExpired. Generic 401,
+// network, 429, and 5xx must never force-mark accounts.status='expired'.
+// Mirrors TS reportTokenExpired() with a hard mark guard.
 func ReportTokenExpired(cfg *config.Config, db *sqlx.DB, params TokenExpiredParams) {
+	if !ShouldMarkAccountExpired(params.HTTPStatus, params.Detail) {
+		slog.Info("ReportTokenExpired skipped: detail is not confirmed credential expiry",
+			"accountID", params.AccountID,
+			"httpStatus", params.HTTPStatus,
+			"detail", params.Detail,
+		)
+		return
+	}
+
 	accountLabel := orID(params.Username, params.AccountID)
 	siteLabel := "unknown-site"
 	if params.SiteName != nil {

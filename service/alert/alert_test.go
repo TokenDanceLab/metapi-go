@@ -94,14 +94,26 @@ func TestIsTokenExpiredError_ChineseTokenPatterns(t *testing.T) {
 }
 
 func TestIsTokenExpiredError_HTTPStatus(t *testing.T) {
-	// HTTP 401 directly
-	if !IsTokenExpiredError(401, "") {
-		t.Error("expected true for HTTP 401 status")
+	// Generic/bare 401 is auth residual after #298 — must NOT mark expired.
+	if IsTokenExpiredError(401, "") {
+		t.Error("bare HTTP 401 empty body must NOT be token expired")
+	}
+	if ShouldMarkAccountExpired(401, "") {
+		t.Error("bare HTTP 401 empty body must NOT mark expired")
+	}
+	if IsTokenExpiredError(0, "HTTP 401 Unauthorized") {
+		t.Error("generic HTTP 401 Unauthorized must NOT be token expired")
+	}
+	if ShouldMarkAccountExpired(0, "HTTP 401 Unauthorized") {
+		t.Error("generic HTTP 401 Unauthorized must NOT mark expired")
 	}
 
-	// HTTP 401 in message
-	if !IsTokenExpiredError(0, "HTTP 401 Unauthorized") {
-		t.Error("expected true for message containing HTTP 401")
+	// Confirmed credential expiry with 401 still marks.
+	if !IsTokenExpiredError(401, "jwt expired") {
+		t.Error("expected true for 401 + jwt expired")
+	}
+	if !ShouldMarkAccountExpired(401, "invalid access token") {
+		t.Error("expected true for 401 + invalid access token")
 	}
 }
 
@@ -400,12 +412,43 @@ func TestShouldMarkAccountExpired_PositiveAuthExpiry(t *testing.T) {
 		{0, "jwt expired"},
 		{0, "token expired"},
 		{0, "invalid access token"},
-		{401, ""}, // bare 401 empty body — legacy expired
+		{0, "access token is invalid"},
+		{401, "jwt expired"},
+		{401, "invalid access token"},
 		{0, "访问令牌无效"},
+		{0, "令牌已过期"},
 	}
 	for _, tc := range positives {
 		if !ShouldMarkAccountExpired(tc.status, tc.msg) {
 			t.Fatalf("ShouldMarkAccountExpired(%d, %q) = false, want true", tc.status, tc.msg)
+		}
+		if !IsTokenExpiredError(tc.status, tc.msg) {
+			t.Fatalf("IsTokenExpiredError(%d, %q) = false, want true", tc.status, tc.msg)
+		}
+	}
+}
+
+func TestShouldMarkAccountExpired_Generic401DoesNotMark(t *testing.T) {
+	// Residual false-positive sources for #568: generic 401 without credential wording.
+	cases := []struct {
+		status int
+		msg    string
+	}{
+		{401, ""},
+		{401, "Unauthorized"},
+		{0, "HTTP 401 Unauthorized"},
+		{401, "upstream rejected the request"},
+		{0, "connection timeout"},
+		{429, "too many requests"},
+		{502, "bad gateway"},
+		{500, "internal server error"},
+	}
+	for _, tc := range cases {
+		if ShouldMarkAccountExpired(tc.status, tc.msg) {
+			t.Fatalf("ShouldMarkAccountExpired(%d, %q) = true, want false", tc.status, tc.msg)
+		}
+		if IsTokenExpiredError(tc.status, tc.msg) {
+			t.Fatalf("IsTokenExpiredError(%d, %q) = true, want false", tc.status, tc.msg)
 		}
 	}
 }
