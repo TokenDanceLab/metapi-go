@@ -55,6 +55,14 @@ Pure helpers in `routing` (no network, no DB):
 - Full cache-split cost golden (0.083057) with and without Claude fallback
 - Platform fallback token divisor
 
+`handler/proxy/billing_cost_test.go` locks the proxy_logs path
+(`EstimateBillingCostFromUsage` → `CalculateModelUsageBreakdown`):
+
+- Claude model with missing ratios → `billing_details.pricing.cache_ratio == 0.1`
+  and `cache_creation_ratio == 1.25`
+- Non-Claude missing → both ratios stay `1.0`
+- `cache_read_cost` / `cache_creation_cost` present when cache tokens > 0
+
 ## Out of scope (this change)
 
 - Full remote pricing catalog fetch / AnyRouter shield cookie path
