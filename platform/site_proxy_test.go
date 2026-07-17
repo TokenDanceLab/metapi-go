@@ -224,6 +224,33 @@ func TestDoWithProxy_RejectsCrossOriginRedirect(t *testing.T) {
 	}
 }
 
+func TestRejectCrossOriginRedirect_MetadataHost(t *testing.T) {
+	// Same scheme so we exercise the host check (not the https→http downgrade).
+	via, err := http.NewRequest(http.MethodGet, "http://api.example.com/v1/models", nil)
+	if err != nil {
+		t.Fatalf("via: %v", err)
+	}
+	toMeta, err := http.NewRequest(http.MethodGet, "http://169.254.169.254/latest/meta-data/", nil)
+	if err != nil {
+		t.Fatalf("toMeta: %v", err)
+	}
+	err = RejectCrossOriginRedirect(toMeta, []*http.Request{via})
+	if err == nil {
+		t.Fatal("expected 169.254 metadata redirect rejection")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin", err)
+	}
+
+	sameHost, err := http.NewRequest(http.MethodGet, "http://api.example.com/v1/chat/completions", nil)
+	if err != nil {
+		t.Fatalf("sameHost: %v", err)
+	}
+	if err = RejectCrossOriginRedirect(sameHost, []*http.Request{via}); err != nil {
+		t.Fatalf("same-host redirect should be allowed: %v", err)
+	}
+}
+
 func TestSupportedProxySchemes(t *testing.T) {
 	schemes := []string{"http", "https", "socks", "socks4", "socks4a", "socks5", "socks5h"}
 	for _, s := range schemes {

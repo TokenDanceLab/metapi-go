@@ -47,10 +47,13 @@ const defaultMaxStreamResponseBytes int64 = 128 << 20
 
 // defaultUpstreamClient is used as a safety fallback when the RuntimeExecutor
 // has not been wired (e.g., during tests). It carries a 90s timeout so a hung
-// upstream never leaks a goroutine. Production deployments should always wire
-// the Executor field via SetUpstreamConfig.
+// upstream never leaks a goroutine, and the shared RejectCrossOriginRedirect
+// policy so a public origin cannot 302 into metadata/loopback when Executor is
+// nil. Production deployments should always wire the Executor field via
+// SetUpstreamConfig.
 var defaultUpstreamClient = &http.Client{
-	Timeout: 90 * time.Second,
+	Timeout:       90 * time.Second,
+	CheckRedirect: platform.RejectCrossOriginRedirect,
 }
 
 // SetUpstreamConfig sets the package-level upstream forwarding dependencies.

@@ -335,6 +335,89 @@ func TestChannelTest_TransportError(t *testing.T) {
 	}
 }
 
+func TestChannelTest_RejectsCrossOriginRedirect(t *testing.T) {
+	// SSRF residual (#416): bare harness client must refuse public-origin 302
+	// to a different host and must not return the redirect target body.
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ssrf":"payload-from-169"}`))
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/latest/meta-data/", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	db, _, r := setupChannelTestHarness(t)
+	// Leave transport nil so doRequest uses the real bare http.Client path.
+	_, _, _, channelID := insertHarnessFixturesAtURL(t, db, source.URL)
+
+	resp := doPostJSON(t, r, "/api/admin/test-channel", map[string]any{
+		"channelId": channelID,
+		"mode":      "models",
+		"timeoutMs": 5000,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", resp.Code, resp.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out["success"] != false {
+		t.Fatalf("expected success=false on cross-origin redirect, got %v", out)
+	}
+	errMsg, _ := out["error"].(string)
+	if !strings.Contains(errMsg, "cross-origin") {
+		t.Fatalf("error = %q, want cross-origin redirect rejection", errMsg)
+	}
+	body, _ := out["truncatedBody"].(string)
+	if strings.Contains(body, "ssrf") || strings.Contains(body, "payload-from-169") {
+		t.Fatalf("redirect target body leaked: %q", body)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called (SSRF)")
+	}
+}
+
+func insertHarnessFixturesAtURL(t *testing.T, db *store.DB, siteURL string) (siteID, accountID, routeID, channelID int64) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	res, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, ?)`, "HarnessRedirectSite", siteURL, "openai", now, now)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	siteID, _ = res.LastInsertId()
+
+	apiTok := "sk-harness-api-token-xyz"
+	res, err = db.Exec(`INSERT INTO accounts (site_id, username, access_token, api_token, status, checkin_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 'active', 0, ?, ?)`, siteID, "harness-user", "session-token", apiTok, now, now)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	accountID, _ = res.LastInsertId()
+
+	res, err = db.Exec(`INSERT INTO token_routes (model_pattern, display_name, route_mode, routing_strategy, enabled, created_at, updated_at)
+		VALUES (?, ?, 'standard', 'weighted', 1, ?, ?)`, "gpt-*", "Harness Redirect Route", now, now)
+	if err != nil {
+		t.Fatalf("insert route: %v", err)
+	}
+	routeID, _ = res.LastInsertId()
+
+	res, err = db.Exec(`INSERT INTO route_channels (route_id, account_id, source_model, priority, weight, enabled)
+		VALUES (?, ?, ?, 10, 10, 1)`, routeID, accountID, "gpt-4o-mini")
+	if err != nil {
+		t.Fatalf("insert channel: %v", err)
+	}
+	channelID, _ = res.LastInsertId()
+	return siteID, accountID, routeID, channelID
+}
+
 type contextDeadlineErr struct{}
 
 func (contextDeadlineErr) Error() string { return "context deadline exceeded" }
