@@ -145,12 +145,64 @@ func TestUpdateCenterTaskStream_Honest501(t *testing.T) {
 func TestUpdateCenterStatusAndCheck_LocalOnly(t *testing.T) {
 	r := setupUpdateCenterTest(t)
 
-	statusResp := doGet(t, r, "/api/update-center/status")
-	if statusResp.Code != http.StatusOK {
-		t.Fatalf("status endpoint=%d body=%s", statusResp.Code, statusResp.Body.String())
+	assertLocalUpdateStatus := func(t *testing.T, label string, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s, want 200", label, rec.Code, rec.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("%s decode: %v body=%s", label, err, rec.Body.String())
+		}
+		if body["updateAvailable"] != false {
+			t.Fatalf("%s updateAvailable=%v, must stay false (no invented remote update)", label, body["updateAvailable"])
+		}
+		if body["currentVersion"] != "0.0.0" || body["latestVersion"] != "0.0.0" {
+			t.Fatalf("%s versions=%v/%v, want local 0.0.0 placeholders", label, body["currentVersion"], body["latestVersion"])
+		}
+		if body["lastCheckedAt"] != nil {
+			t.Fatalf("%s lastCheckedAt=%v, want nil (no fake poll timestamp)", label, body["lastCheckedAt"])
+		}
+		residual, _ := body["residual"].(string)
+		if residual == "" {
+			t.Fatalf("%s expected residual field for local stub honesty: %v", label, body)
+		}
 	}
+
+	statusResp := doGet(t, r, "/api/update-center/status")
+	assertLocalUpdateStatus(t, "status", statusResp)
+
 	checkResp := doPostJSON(t, r, "/api/update-center/check", map[string]any{})
-	if checkResp.Code != http.StatusOK {
-		t.Fatalf("check endpoint=%d body=%s", checkResp.Code, checkResp.Body.String())
+	assertLocalUpdateStatus(t, "check", checkResp)
+}
+
+func TestUpdateCenterConfig_EchoOnlyResidual(t *testing.T) {
+	r := setupUpdateCenterTest(t)
+
+	resp := doPutJSON(t, r, "/api/update-center/config", map[string]any{
+		"enabled":       true,
+		"helperBaseUrl": "http://helper.example",
+		"namespace":     "metapi",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["success"] != true {
+		t.Fatalf("success=%v, want true (echo path)", body["success"])
+	}
+	residual, _ := body["residual"].(string)
+	if residual == "" {
+		t.Fatalf("expected residual field for echo-only config: %v", body)
+	}
+	cfg, _ := body["config"].(map[string]any)
+	if cfg == nil {
+		t.Fatalf("expected config echo: %v", body)
+	}
+	if cfg["enabled"] != true || cfg["helperBaseUrl"] != "http://helper.example" {
+		t.Fatalf("config echo mismatch: %v", cfg)
 	}
 }

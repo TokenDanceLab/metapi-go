@@ -16,7 +16,7 @@ Four background schedulers still carry TODOs that look like product work. Operat
 | Sub2API refresh | `scheduler/sub2api_refresh.go` | 60s (min 60s) | Lease + SQL scan of active `sub2api` accounts; logs `scanned=N, refreshed=0, failed=0` | Does **not** parse `extraConfig.sub2apiAuth`; does **not** filter due tokens; does **not** call `refreshSub2ApiManagedSessionSingleflight` or any upstream refresh. Concurrency constant unused. | `runWithSchedulerLease` (PG advisory lock / process-local mutex). Only one instance runs the empty pass. |
 | Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + cooling SQL + active candidates via optional `SetActiveChannelIDsProvider` (coordinator) or SQL LIMIT 50 residual + probe | Active path prefers provider (#273); residual SQL only when provider **unset**. Empty provider set does not fall back to residual SQL. Probe real only if model-probe registered. | Lease serializes sweeps; in-flight maps process-local. |
 | Site announcement | `scheduler/site_announcement.go` | 15m (min 10s) | Lease + optional `SyncFunc` (wired from admin `SyncSiteAnnouncements` via `SetDefaultSiteAnnouncementSyncFunc` on route register, #272) | When SyncFunc set: real platform adapter + DB writes. When nil: residual scan-only remains for tests/partial boots. | Lease serializes sync/scan. |
-| Update center | `scheduler/update_center.go` | 15m (min 10s) | Lease + log line | **No** remote registry/helper poll, **no** version persistence, **no** deploy/rollback. Admin status/check are local stubs (`0.0.0`); deploy/rollback are 501 residuals (`residual-update-center.md`). | Lease serializes residual log. No cluster-wide "last checked" state. |
+| Update center | `scheduler/update_center.go` | 15m (min 10s) | Lease + residual log line only (#283) | **No** remote registry/helper poll, **no** version persistence, **no** deploy/rollback, **no** `updateAvailable` invention. Admin status/check are local stubs (`0.0.0` / `updateAvailable=false` + `residual`); deploy/rollback/SSE are 501 residuals (`residual-update-center.md`). | Lease serializes residual log. No cluster-wide "last checked" state. |
 
 ## Per-scheduler detail
 
@@ -89,18 +89,19 @@ Log language is intentionally "residual scan", not "sync success".
 
 ### 4. `UpdateCenterScheduler` (`update_center.go`)
 
-**Runs today**
+**Runs today** (#283)
 
-1. Ticker + immediate first run; `inFlight` + lease.
-2. Single info log: residual check, no remote polling.
+1. Ticker + immediate first residual pass; `inFlight` + lease.
+2. Single info log: residual check, no remote polling, no `updateAvailable` invention.
+3. **No** HTTP client, **no** version compare, **no** DB write of last-checked.
 
 **Residual**
 
 | TODO site | Honest status |
 |-----------|---------------|
-| wire actual update-center polling | **Not wired** — pure log-only no-op for product purposes |
+| wire actual update-center polling | **Not wired** — pure log-only no-op for product purposes. Do not add fake poll stubs. |
 
-Related admin residuals (deploy/rollback 501, local status stubs): `docs/analysis/residual-update-center.md`.
+Related admin residuals (status/check local stubs with residual field; deploy/rollback/SSE 501): `docs/analysis/residual-update-center.md` (#197 / #283).
 
 ## Multi-instance notes (shared)
 
@@ -136,7 +137,7 @@ test -f docs/analysis/scheduler-residual-todos.md
 ## Related docs
 
 - `docs/analysis/residual-sub2api-auth.md` — account-path managed auth merge residual
-- `docs/analysis/residual-update-center.md` — admin deploy/rollback / clear-cache honesty
+- `docs/analysis/residual-update-center.md` — admin status/check stubs + deploy/rollback 501 + scheduler log-only (#197 / #283)
 - `docs/analysis/background-tasks-multi-instance-residual.md` — process-local admin task registry
 - `docs/specs/p12-schedulers.md` — intended TS parity (aspirational vs residual above)
 
@@ -147,3 +148,7 @@ Production path: `RegisterSiteAnnouncementsRoutes` installs `SetDefaultSiteAnnou
 ### Update (#273)
 
 Channel recovery active candidates prefer optional `SetActiveChannelIDsProvider` (wired from `ConfigureProxyUpstream` → `ProxyChannelCoordinator.GetActiveChannelIDs`). Nil provider keeps SQL `LIMIT 50` residual fallback. Empty provider set does **not** fall back to residual SQL.
+
+### Update (#283)
+
+Update-center residual honesty hardening: scheduler remains log-only (no remote registry product). Admin status/check expose explicit `residual` and never invent `updateAvailable=true`. Deploy/rollback/SSE stay honest 501. Endpoint table + scheduler behavior documented in `residual-update-center.md`.
