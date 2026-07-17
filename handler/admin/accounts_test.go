@@ -18,7 +18,10 @@ import (
 
 func setupAccountsTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 	t.Helper()
-	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	// Keep the process-lifetime singleton; only clear contents.
+	// Reassigning the package pointer races with async health-refresh runners
+	// that call globalAccountsCache.clear() after StartBackgroundTask (#328).
+	globalAccountsCache.clear()
 
 	db, err := store.Open(store.DialectSQLite, ":memory:", false)
 	if err != nil {
@@ -43,7 +46,8 @@ func setupAccountsTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 
 func setupAccountsPostgresTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 	t.Helper()
-	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	// Same isolation rule as setupAccountsTest: never reassign the global pointer (#328).
+	globalAccountsCache.clear()
 
 	db, r := setupSitesPostgresTest(t)
 	cfg := &config.Config{
@@ -2033,6 +2037,21 @@ func TestAccounts_HealthRefresh_BackgroundDedupe(t *testing.T) {
 	}
 	if secondResult["jobId"] != jobID {
 		t.Fatalf("second jobId = %v, want %q", secondResult["jobId"], jobID)
+	}
+
+	// Drain the shared runner before cleanup so it cannot race the next test's
+	// setupAccountsTest (or a closed fixture DB) while still calling package globals (#328).
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		task := getBackgroundTask(nil, jobID)
+		if task != nil && (task.Status == BackgroundTaskSucceeded || task.Status == BackgroundTaskFailed) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	task := getBackgroundTask(nil, jobID)
+	if task == nil || (task.Status != BackgroundTaskSucceeded && task.Status != BackgroundTaskFailed) {
+		t.Fatalf("background dedupe task did not reach terminal status: %#v", task)
 	}
 }
 
