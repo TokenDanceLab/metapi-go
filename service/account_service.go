@@ -548,7 +548,51 @@ func enrichAccountOverviewRow(account map[string]any) map[string]any {
 	delete(account, "siteUrl")
 	delete(account, "sitePlatform")
 	delete(account, "siteStatus")
+	// List/overview must not return plaintext secrets (#367). Create/update/rebind
+	// responses may still echo once; those paths build maps outside this helper.
+	redactAccountSecrets(account)
 	return account
+}
+
+// redactAccountSecrets removes plaintext credentials from admin list/overview rows.
+// Sets accessTokenMasked / apiTokenMasked when a value was present.
+func redactAccountSecrets(account map[string]any) {
+	if account == nil {
+		return
+	}
+	if v := asString(account["accessToken"]); strings.TrimSpace(v) != "" {
+		account["accessTokenMasked"] = maskSecretTail(v)
+	}
+	delete(account, "accessToken")
+	if v := asString(account["apiToken"]); strings.TrimSpace(v) != "" {
+		account["apiTokenMasked"] = maskSecretTail(v)
+	}
+	delete(account, "apiToken")
+	// Never leak passwordCipher from extraConfig on list surfaces.
+	if ec := asStringPtr(account["extraConfig"]); ec != nil && strings.Contains(*ec, "passwordCipher") {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(*ec), &m); err == nil {
+			if auto, ok := m["autoRelogin"].(map[string]any); ok {
+				delete(auto, "passwordCipher")
+				m["autoRelogin"] = auto
+				if b, err := json.Marshal(m); err == nil {
+					s := string(b)
+					account["extraConfig"] = s
+				}
+			}
+		}
+	}
+}
+
+func maskSecretTail(secret string) string {
+	s := strings.TrimSpace(secret)
+	if s == "" {
+		return ""
+	}
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
 }
 
 func normalizeMapScanValues(m map[string]any) {

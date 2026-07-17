@@ -161,6 +161,9 @@ func ListTokensWithRelations(db *sqlx.DB, accountID *int64) ([]map[string]any, e
 			row["valueStatus"] = vs
 		}
 		delete(row, "token") // Remove plain token
+		// Drop account secrets that were only needed for API-key connection filter (#367).
+		delete(row, "access_token")
+		delete(row, "extra_config")
 		// Add account and site sub-objects
 		row["account"] = map[string]any{
 			"id":       row["account_id_val"],
