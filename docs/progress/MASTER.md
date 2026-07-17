@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.23](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.23)** (2026-07-17)
+**Latest release**: **[v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24)** (2026-07-17)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | **[Milestone 33 — Enterprise residual v0.8.24](https://github.com/TokenDanceLab/metapi-go/milestone/33)** |
+| Active milestone | closed Milestone 33 (v0.8.24) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -34,15 +34,13 @@
 | Enterprise residual **v0.8.21** | ✅ | #350–#351 (PRs #352/#353); tag **v0.8.21** |
 | Enterprise residual **v0.8.22** | ✅ | #355–#359 (PRs #360–#364); tag **v0.8.22** |
 | Enterprise residual **v0.8.23** | ✅ | #366–#368 (PRs #369/#370/#372); tag **v0.8.23** |
-| Enterprise residual **v0.8.24** | 🔄 | Milestone 33 · #375–#377 |
+| Enterprise residual **v0.8.24** | ✅ | #375–#377 (PRs #378/#379/#380); tag **v0.8.24** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#375](https://github.com/TokenDanceLab/metapi-go/issues/375) | security | routes/search admin secret redact |
-| [#376](https://github.com/TokenDanceLab/metapi-go/issues/376) | security | site URL metadata/link-local guard |
-| [#377](https://github.com/TokenDanceLab/metapi-go/issues/377) | docs | residual honesty post v0.8.23 |
+| — | — | Board clean after v0.8.24; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -51,6 +49,7 @@
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24) | 33 | routes/search secret redact · site metadata URL guard · residual honesty |
 | [v0.8.23](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.23) | 32 | admin account secret redact · RR/stable soft-filter demotion · residual honesty |
 | [v0.8.22](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.22) | 31 | admin key redact · custom_headers deny · CheckRedirect · soft-filter priority · residual honesty |
 | [v0.8.21](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.21) | 30 | completions include_usage · residual honesty |
@@ -76,7 +75,7 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.23
+gh release view v0.8.24
 git log --oneline origin/master -10
 ```
 
