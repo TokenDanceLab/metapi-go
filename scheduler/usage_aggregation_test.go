@@ -76,7 +76,8 @@ func runUsageAggregationProjectionLifecycle(t *testing.T, db *store.DB, suffix s
 		t.Fatalf("first ProcessedLogs = %d, want 1", first.ProcessedLogs)
 	}
 
-	insertProjectionProxyLog(t, db, accountID, "error", "gpt-4.1", 80, 0.11, 0, secondLogTime)
+	// #311 writeFailureProxyLog uses status="failed" (legacy "error" is also non-success).
+	insertProjectionProxyLog(t, db, accountID, "failed", "gpt-4.1", 80, 0.11, 0, secondLogTime)
 	second := s.RunProjectionPass()
 	if second == nil {
 		t.Fatal("second projection pass returned nil")
@@ -273,6 +274,70 @@ func insertProjectionProxyLogTokens(
 		t.Fatalf("sqlite proxy log LastInsertId: %v", err)
 	}
 	return id
+}
+
+func TestUsageAggregationProjectsFailedStatusTokens(t *testing.T) {
+	// #319 / #311: writeFailureProxyLog uses status="failed" (not "error").
+	// Aggregation must count non-success rows into failed_calls and still
+	// project effectiveTokenCount into total_tokens (no success-only gate).
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate sqlite: %v", err)
+	}
+
+	suffix := "failed-status-" + strings.ReplaceAll(t.Name(), "/", "-")
+	now := time.Now().UTC().Format(time.RFC3339)
+	seedProjectionCheckpoint(t, db, maxProxyLogID(t, db))
+	siteID := insertProjectionSite(t, db, suffix, now)
+	accountID := insertProjectionAccount(t, db, siteID, suffix, now)
+	t.Cleanup(func() {
+		_, _ = db.Exec("DELETE FROM proxy_logs WHERE account_id = ?", accountID)
+		_, _ = db.Exec("DELETE FROM model_day_usage WHERE site_id = ?", siteID)
+		_, _ = db.Exec("DELETE FROM site_hour_usage WHERE site_id = ?", siteID)
+		_, _ = db.Exec("DELETE FROM site_day_usage WHERE site_id = ?", siteID)
+		_, _ = db.Exec("DELETE FROM sites WHERE id = ?", siteID)
+		seedProjectionCheckpoint(t, db, maxProxyLogID(t, db))
+	})
+
+	successTime := time.Date(2026, 7, 17, 12, 0, 0, 0, time.UTC)
+	failedTime := successTime.Add(5 * time.Minute)
+	const successTokens int64 = 120
+	const failedTokens int64 = 11
+	insertProjectionProxyLog(t, db, accountID, "success", "gpt-4o", successTokens, 0.42, 230, successTime)
+	insertProjectionProxyLog(t, db, accountID, "failed", "gpt-4o", failedTokens, 0.01, 50, failedTime)
+
+	previousDB := store.GetDB()
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(previousDB) })
+
+	s := NewUsageAggregationScheduler(testConfig())
+	pass := s.RunProjectionPass()
+	if pass == nil || pass.ProcessedLogs != 2 {
+		t.Fatalf("projection pass = %#v, want ProcessedLogs=2", pass)
+	}
+
+	day := successTime.Format("2006-01-02")
+	var dayUsage struct {
+		TotalCalls   int   `db:"total_calls"`
+		SuccessCalls int   `db:"success_calls"`
+		FailedCalls  int   `db:"failed_calls"`
+		TotalTokens  int64 `db:"total_tokens"`
+	}
+	if err := db.Get(&dayUsage, `SELECT total_calls, success_calls, failed_calls, total_tokens
+		FROM site_day_usage WHERE site_id = ? AND local_day = ?`, siteID, day); err != nil {
+		t.Fatalf("read site_day_usage: %v", err)
+	}
+	if dayUsage.TotalCalls != 2 || dayUsage.SuccessCalls != 1 || dayUsage.FailedCalls != 1 {
+		t.Fatalf("calls = %+v, want total=2 success=1 failed=1", dayUsage)
+	}
+	wantTokens := successTokens + failedTokens
+	if dayUsage.TotalTokens != wantTokens {
+		t.Fatalf("total_tokens = %d, want %d (success+failed usage)", dayUsage.TotalTokens, wantTokens)
+	}
 }
 
 func TestEffectiveTokenCount(t *testing.T) {

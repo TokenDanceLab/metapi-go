@@ -42,8 +42,25 @@ go test ./handler/proxy ./scheduler -count=1 -run Usage
 - TestNonStreamContentFailurePersistsParsedUsageToFailedProxyLog
 - TestDispatchUpstream_RetryThenSuccessKeepsSameRequestIDInProxyLog (failed+success rows, shared request_id)
 - TestTruncateErrTextBoundsLength
+- TestUsageAggregationProjectsFailedStatusTokens (#319: `status=failed` → failed_calls + total_tokens)
 - Existing stream disconnect / Anthropic cache / aggregation effective-token tests remain green
 
 ## Residual honesty
 
 Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata columns, stream_options policy, media endpoints that never emit usage, multi-instance projection lag, orphan logs without site join.
+
+## Aggregation of failed `proxy_logs` (#319)
+
+**Verdict: present-with-residual** (no product code gap in `scheduler/usage_aggregation.go`).
+
+`applyBatch` is status-agnostic for tokens: every projected row adds `effectiveTokenCount(...)` to day/hour/model `total_tokens`. Call classification is exact-string only:
+
+| `proxy_logs.status` | `success_calls` | `failed_calls` | `total_tokens` |
+|---------------------|-----------------|----------------|----------------|
+| `"success"` | +1 | +0 | +tokens |
+| `"failed"` (#311 `writeFailureProxyLog`) | +0 | +1 | +tokens |
+| other / nil (incl. legacy `"error"`) | +0 | +1 | +tokens |
+
+Zero/unknown usage stays 0 (`effectiveTokenCount` does not invent; #311 cost only when `usage.Found`). This is **not** perfect billing — residuals above still apply (stream_options policy, media endpoints, multi-instance lag, orphans without site join).
+
+Regression: `TestUsageAggregationProjectsFailedStatusTokens` (success + `status=failed` → `failed_calls=1`, `total_tokens=T1+T2`). Lifecycle projection seeds also use `"failed"` for the non-success row.
