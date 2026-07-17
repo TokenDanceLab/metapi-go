@@ -4,6 +4,7 @@
 **Issue**: [#290](https://github.com/TokenDanceLab/metapi-go/issues/290) (inventory origin); reliability wave **#298–#300**  
 **Context**: After Enterprise residual **v0.8.15** (expired-mark guard, cascade isolation, stream/partial usage).  
 **Scope**: inventory only — **no product code** in this document.
+**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
 ## Purpose
 

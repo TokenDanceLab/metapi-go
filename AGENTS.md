@@ -79,16 +79,21 @@ golangci-lint run --timeout=3m        # Lint check
 
 ## Specs & Docs
 
-- `docs/specs/p0-skeleton.md` through `p13-embed-ci.md` — per-phase implementation specs
-- `docs/specs/review/` — cross-reference reviews + audit reports
-- `docs/plan/` — dependency graph + milestones + fix plan
-- `docs/progress/MASTER.md` — current project status
-- `docs/analysis/` — S.U.P.E.R architecture assessment
-- `docs/architecture.md` — as-built Go package map (proxy/transform/routing; not proxycore/protocol)
-- `docs/design/BACKEND.md` — backend design philosophy, dependency rules, forbidden imports (M-BACKEND / B0)
-- `docs/deployment.md` — deployment guide
-- `docs/api.md` — admin API reference
-- `docs/migration.md` — TS→Go migration
+**Map (start here):** [`docs/README.md`](docs/README.md)
+
+| Path | Role |
+|------|------|
+| `docs/progress/MASTER.md` | Slim session index (not a changelog) |
+| `docs/architecture.md` | As-built package map (proxy/transform/routing; not proxycore/protocol) |
+| `docs/design/BACKEND.md` | Backend philosophy, dependency rules, forbidden imports |
+| `docs/design/DESIGN.md` | UI design system SSOT |
+| `docs/analysis/residual-next-candidates.md` | Honest residual queue (what is NOT product yet) |
+| `docs/analysis/original-gap-matrix.md` | Upstream parity evidence |
+| `docs/api.md` / `docs/deployment.md` / `docs/migration.md` | API · deploy · migration |
+| `docs/specs/` | Rewrite-era phase specs (large; historical) |
+| `CHANGELOG.md` | Version narrative |
+
+**Honesty:** Prefer 501 / documented residual over stub theater. Do not claim cluster-wide sticky or WS product without the matching Milestone.
 
 ## Related References
 
