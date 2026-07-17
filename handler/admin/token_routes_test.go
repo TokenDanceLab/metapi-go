@@ -1215,6 +1215,312 @@ func TestRouteChannelAccountPublic_OmitsSecrets(t *testing.T) {
 	}
 }
 
+// TestListRoutes_MultiRouteBatchChannelLoadAndRedaction covers #390:
+// GET /api/routes must group channels correctly across 2+ routes after the
+// #383 batch channel load, and must keep #375 account secret redaction.
+func TestListRoutes_MultiRouteBatchChannelLoadAndRedaction(t *testing.T) {
+	db, r := setupTokenRoutesTest(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	const (
+		secretA = "sk-routeA-access-token-SECRET-1111"
+		secretB = "sk-routeB-access-token-SECRET-2222"
+		apiA    = "sk-routeA-api-token-SECRET-aaaa"
+		apiB    = "sk-routeB-api-token-SECRET-bbbb"
+	)
+
+	// Two independent sites/accounts so secret leakage is unambiguous.
+	siteA, err := db.Exec(
+		`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		 VALUES ('List Site A', 'https://list-a.example.com', 'openai', 'active', ?, ?)`,
+		now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert site A: %v", err)
+	}
+	siteAID, _ := siteA.LastInsertId()
+	siteB, err := db.Exec(
+		`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		 VALUES ('List Site B', 'https://list-b.example.com', 'openai', 'active', ?, ?)`,
+		now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert site B: %v", err)
+	}
+	siteBID, _ := siteB.LastInsertId()
+
+	accA, err := db.Exec(
+		`INSERT INTO accounts (site_id, username, access_token, api_token, status, checkin_enabled, created_at, updated_at)
+		 VALUES (?, 'user-a', ?, ?, 'active', 1, ?, ?)`,
+		siteAID, secretA, apiA, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert account A: %v", err)
+	}
+	accountAID, _ := accA.LastInsertId()
+	accB, err := db.Exec(
+		`INSERT INTO accounts (site_id, username, access_token, api_token, status, checkin_enabled, created_at, updated_at)
+		 VALUES (?, 'user-b', ?, ?, 'active', 1, ?, ?)`,
+		siteBID, secretB, apiB, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert account B: %v", err)
+	}
+	accountBID, _ := accB.LastInsertId()
+
+	tokA, err := db.Exec(
+		`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
+		 VALUES (?, 'token-a', 'sk-token-a', 'ready', 'manual', 1, 1, ?, ?)`,
+		accountAID, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert token A: %v", err)
+	}
+	tokenAID, _ := tokA.LastInsertId()
+	tokB, err := db.Exec(
+		`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
+		 VALUES (?, 'token-b', 'sk-token-b', 'ready', 'manual', 1, 1, ?, ?)`,
+		accountBID, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert token B: %v", err)
+	}
+	tokenBID, _ := tokB.LastInsertId()
+
+	// Two pattern routes + one empty route to prove empty-slice grouping.
+	routeAResp := doPostJSON(t, r, "/api/routes", map[string]any{
+		"modelPattern": "list-route-a-*",
+		"displayName":  "List Route A",
+		"enabled":      true,
+	})
+	if routeAResp.Code != http.StatusOK {
+		t.Fatalf("create route A: %d %s", routeAResp.Code, routeAResp.Body.String())
+	}
+	var routeA map[string]any
+	if err := json.Unmarshal(routeAResp.Body.Bytes(), &routeA); err != nil {
+		t.Fatalf("decode route A: %v", err)
+	}
+	routeAID := int64(routeA["id"].(float64))
+
+	routeBResp := doPostJSON(t, r, "/api/routes", map[string]any{
+		"modelPattern": "list-route-b-*",
+		"displayName":  "List Route B",
+		"enabled":      true,
+	})
+	if routeBResp.Code != http.StatusOK {
+		t.Fatalf("create route B: %d %s", routeBResp.Code, routeBResp.Body.String())
+	}
+	var routeB map[string]any
+	if err := json.Unmarshal(routeBResp.Body.Bytes(), &routeB); err != nil {
+		t.Fatalf("decode route B: %v", err)
+	}
+	routeBID := int64(routeB["id"].(float64))
+
+	routeEmptyResp := doPostJSON(t, r, "/api/routes", map[string]any{
+		"modelPattern": "list-route-empty-*",
+		"displayName":  "List Route Empty",
+		"enabled":      true,
+	})
+	if routeEmptyResp.Code != http.StatusOK {
+		t.Fatalf("create empty route: %d %s", routeEmptyResp.Code, routeEmptyResp.Body.String())
+	}
+	var routeEmpty map[string]any
+	if err := json.Unmarshal(routeEmptyResp.Body.Bytes(), &routeEmpty); err != nil {
+		t.Fatalf("decode empty route: %v", err)
+	}
+	routeEmptyID := int64(routeEmpty["id"].(float64))
+
+	// Route A gets two channels; route B gets one. Models must stay grouped.
+	addA1 := doPostJSON(t, r, "/api/routes/"+itoa(routeAID)+"/channels", map[string]any{
+		"accountId":   accountAID,
+		"tokenId":     tokenAID,
+		"sourceModel": "model-a-1",
+		"priority":    1,
+		"weight":      10,
+	})
+	if addA1.Code != http.StatusOK {
+		t.Fatalf("add channel A1: %d %s", addA1.Code, addA1.Body.String())
+	}
+	addA2 := doPostJSON(t, r, "/api/routes/"+itoa(routeAID)+"/channels", map[string]any{
+		"accountId":   accountAID,
+		"tokenId":     tokenAID,
+		"sourceModel": "model-a-2",
+		"priority":    2,
+		"weight":      20,
+	})
+	if addA2.Code != http.StatusOK {
+		t.Fatalf("add channel A2: %d %s", addA2.Code, addA2.Body.String())
+	}
+	addB1 := doPostJSON(t, r, "/api/routes/"+itoa(routeBID)+"/channels", map[string]any{
+		"accountId":   accountBID,
+		"tokenId":     tokenBID,
+		"sourceModel": "model-b-1",
+		"priority":    3,
+		"weight":      30,
+	})
+	if addB1.Code != http.StatusOK {
+		t.Fatalf("add channel B1: %d %s", addB1.Code, addB1.Body.String())
+	}
+
+	listResp := doGet(t, r, "/api/routes")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list routes: %d %s", listResp.Code, listResp.Body.String())
+	}
+	rawBody := listResp.Body.String()
+	// Full JSON body must never contain plaintext secrets (#375).
+	for _, secret := range []string{secretA, secretB, apiA, apiB} {
+		if strings.Contains(rawBody, secret) {
+			t.Fatalf("list response leaked secret %q", secret)
+		}
+	}
+
+	var listed []map[string]any
+	if err := json.Unmarshal(listResp.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	byID := make(map[int64]map[string]any, len(listed))
+	for _, item := range listed {
+		byID[int64(item["id"].(float64))] = item
+	}
+	gotA, okA := byID[routeAID]
+	gotB, okB := byID[routeBID]
+	gotEmpty, okEmpty := byID[routeEmptyID]
+	if !okA || !okB || !okEmpty {
+		t.Fatalf("missing routes in list: a=%v b=%v empty=%v listed=%d", okA, okB, okEmpty, len(listed))
+	}
+
+	channelsOf := func(route map[string]any) []map[string]any {
+		t.Helper()
+		raw, ok := route["channels"].([]any)
+		if !ok {
+			// Some encoders may already decode as []map via typed helpers; tolerate both.
+			if typed, ok2 := route["channels"].([]map[string]any); ok2 {
+				return typed
+			}
+			t.Fatalf("channels missing/wrong type for route %v: %#v", route["id"], route["channels"])
+		}
+		out := make([]map[string]any, 0, len(raw))
+		for _, c := range raw {
+			m, ok := c.(map[string]any)
+			if !ok {
+				t.Fatalf("channel item not object: %#v", c)
+			}
+			out = append(out, m)
+		}
+		return out
+	}
+
+	chansA := channelsOf(gotA)
+	chansB := channelsOf(gotB)
+	chansEmpty := channelsOf(gotEmpty)
+	if len(chansA) != 2 {
+		t.Fatalf("route A channel count = %d, want 2: %#v", len(chansA), chansA)
+	}
+	if len(chansB) != 1 {
+		t.Fatalf("route B channel count = %d, want 1: %#v", len(chansB), chansB)
+	}
+	if len(chansEmpty) != 0 {
+		t.Fatalf("empty route channel count = %d, want 0: %#v", len(chansEmpty), chansEmpty)
+	}
+
+	modelsA := map[string]bool{}
+	for _, ch := range chansA {
+		// Grouping: every channel must belong to route A.
+		if int64(ch["routeId"].(float64)) != routeAID {
+			t.Fatalf("route A channel has routeId=%v, want %d", ch["routeId"], routeAID)
+		}
+		if int64(ch["accountId"].(float64)) != accountAID {
+			t.Fatalf("route A channel accountId=%v, want %d", ch["accountId"], accountAID)
+		}
+		model, _ := ch["sourceModel"].(string)
+		modelsA[model] = true
+
+		acc, ok := ch["account"].(map[string]any)
+		if !ok {
+			t.Fatalf("route A channel missing account: %#v", ch)
+		}
+		if _, ok := acc["accessToken"]; ok {
+			t.Fatalf("route A channel leaked accessToken: %#v", acc["accessToken"])
+		}
+		if _, ok := acc["apiToken"]; ok {
+			t.Fatalf("route A channel leaked apiToken: %#v", acc["apiToken"])
+		}
+		if acc["username"] != "user-a" {
+			t.Fatalf("route A username = %v, want user-a", acc["username"])
+		}
+		if masked, _ := acc["accessTokenMasked"].(string); masked == "" || strings.Contains(masked, secretA) {
+			t.Fatalf("route A accessTokenMasked invalid: %q", masked)
+		}
+		if masked, _ := acc["apiTokenMasked"].(string); masked == "" || strings.Contains(masked, apiA) {
+			t.Fatalf("route A apiTokenMasked invalid: %q", masked)
+		}
+	}
+	if !modelsA["model-a-1"] || !modelsA["model-a-2"] {
+		t.Fatalf("route A models = %v, want model-a-1 and model-a-2", modelsA)
+	}
+
+	chB := chansB[0]
+	if int64(chB["routeId"].(float64)) != routeBID {
+		t.Fatalf("route B channel routeId=%v, want %d", chB["routeId"], routeBID)
+	}
+	if int64(chB["accountId"].(float64)) != accountBID {
+		t.Fatalf("route B channel accountId=%v, want %d", chB["accountId"], accountBID)
+	}
+	if chB["sourceModel"] != "model-b-1" {
+		t.Fatalf("route B sourceModel = %v, want model-b-1", chB["sourceModel"])
+	}
+	accBMap, ok := chB["account"].(map[string]any)
+	if !ok {
+		t.Fatalf("route B channel missing account: %#v", chB)
+	}
+	if _, ok := accBMap["accessToken"]; ok {
+		t.Fatalf("route B channel leaked accessToken: %#v", accBMap["accessToken"])
+	}
+	if _, ok := accBMap["apiToken"]; ok {
+		t.Fatalf("route B channel leaked apiToken: %#v", accBMap["apiToken"])
+	}
+	if accBMap["username"] != "user-b" {
+		t.Fatalf("route B username = %v, want user-b", accBMap["username"])
+	}
+	if masked, _ := accBMap["accessTokenMasked"].(string); masked == "" || strings.Contains(masked, secretB) {
+		t.Fatalf("route B accessTokenMasked invalid: %q", masked)
+	}
+	if masked, _ := accBMap["apiTokenMasked"].(string); masked == "" || strings.Contains(masked, apiB) {
+		t.Fatalf("route B apiTokenMasked invalid: %q", masked)
+	}
+
+	// Cross-check GET /api/routes/{id}/channels stays redacted and matches grouping.
+	for _, tc := range []struct {
+		routeID int64
+		wantN   int
+		secret  string
+		apiTok  string
+	}{
+		{routeAID, 2, secretA, apiA},
+		{routeBID, 1, secretB, apiB},
+		{routeEmptyID, 0, "", ""},
+	} {
+		chResp := doGet(t, r, "/api/routes/"+itoa(tc.routeID)+"/channels")
+		if chResp.Code != http.StatusOK {
+			t.Fatalf("get channels route %d: %d %s", tc.routeID, chResp.Code, chResp.Body.String())
+		}
+		body := chResp.Body.String()
+		if tc.secret != "" && strings.Contains(body, tc.secret) {
+			t.Fatalf("route %d channels leaked access secret", tc.routeID)
+		}
+		if tc.apiTok != "" && strings.Contains(body, tc.apiTok) {
+			t.Fatalf("route %d channels leaked api secret", tc.routeID)
+		}
+		var chans []map[string]any
+		if err := json.Unmarshal(chResp.Body.Bytes(), &chans); err != nil {
+			t.Fatalf("decode channels route %d: %v", tc.routeID, err)
+		}
+		if len(chans) != tc.wantN {
+			t.Fatalf("route %d channels count = %d, want %d", tc.routeID, len(chans), tc.wantN)
+		}
+	}
+}
+
 func TestRedactSearchSecrets(t *testing.T) {
 	acc := map[string]any{"accessToken": "sk-acc-ABCDEFGH", "apiToken": "sk-api-ABCDEFGH", "username": "x"}
 	redactSearchAccountSecrets(acc)
