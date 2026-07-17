@@ -18,6 +18,10 @@ const (
 	ActionStop             AttemptFailureAction = "stop"
 )
 
+// DefaultMaxRefreshAuthSuccesses caps successful RefreshAuth calls per channel
+// before the conductor fails over with a channel-scoped exclude.
+const DefaultMaxRefreshAuthSuccesses = 1
+
 // AttemptResult is the result of an attempt callback.
 type AttemptResult struct {
 	OK           bool
@@ -37,20 +41,27 @@ type AttemptInput struct {
 
 // ConductorDependencies are the injected dependencies for DefaultProxyConductor.
 type ConductorDependencies struct {
-	SelectChannel     func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
-	SelectNextChannel func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
+	SelectChannel          func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
+	SelectNextChannel      func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
 	PreviewSelectedChannel func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
-	RefreshAuth       func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
+	RefreshAuth            func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
 		Status       int
 		RawErrorText string
 	}) (*routing.SelectedChannel, error)
+	// MaxAttempts is the hard total attempt budget covering same-channel retries,
+	// auth refresh retries, and cross-channel failover. Values <= 0 resolve via
+	// GetProxyMaxChannelAttempts (minimum 1). Prefer wiring config.ProxyMaxChannelAttempts.
+	MaxAttempts int
+	// MaxRefreshAuthSuccesses caps successful RefreshAuth calls per selected channel
+	// before failover. Values <= 0 use DefaultMaxRefreshAuthSuccesses.
+	MaxRefreshAuthSuccesses int
 }
 
 // ExecuteInput is the input for the Execute method.
 type ExecuteInput struct {
-	RequestedModel   string
-	DownstreamPolicy routing.DownstreamRoutingPolicy
-	Attempt          func(ctx context.Context, input AttemptInput) (AttemptResult, error)
+	RequestedModel    string
+	DownstreamPolicy  routing.DownstreamRoutingPolicy
+	Attempt           func(ctx context.Context, input AttemptInput) (AttemptResult, error)
 	OnTerminalFailure func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
 		Status       int
 		RawErrorText string
@@ -70,12 +81,22 @@ type ExecuteResult struct {
 
 // DefaultProxyConductor implements action-based retry for non-surface flows.
 type DefaultProxyConductor struct {
-	deps ConductorDependencies
+	deps                    ConductorDependencies
+	maxAttempts             int
+	maxRefreshAuthSuccesses int
 }
 
 // NewDefaultProxyConductor creates a new conductor.
 func NewDefaultProxyConductor(deps ConductorDependencies) *DefaultProxyConductor {
-	return &DefaultProxyConductor{deps: deps}
+	maxRefresh := deps.MaxRefreshAuthSuccesses
+	if maxRefresh <= 0 {
+		maxRefresh = DefaultMaxRefreshAuthSuccesses
+	}
+	return &DefaultProxyConductor{
+		deps:                    deps,
+		maxAttempts:             GetProxyMaxChannelAttempts(deps.MaxAttempts),
+		maxRefreshAuthSuccesses: maxRefresh,
+	}
 }
 
 // PreviewSelectedChannel returns the selected channel without executing a request.
@@ -90,23 +111,14 @@ func (c *DefaultProxyConductor) PreviewSelectedChannel(
 	return c.deps.SelectChannel(ctx, requestedModel, downstreamPolicy)
 }
 
-// maxSameChannelRetries caps transient same-channel retries (timeout-like only)
-// before the conductor fails over to a different channel. Without this bound a
-// single channel can starve healthy same-site siblings forever.
-const maxSameChannelRetries = 1
-
 // Execute runs the action-based retry conductor loop.
 //
-// Failover exclude scope is channel-local only: each failed attempt appends the
-// selected channel ID to excludeChannelIDs. Same-site sibling channels are NOT
-// excluded and remain eligible for SelectNextChannel unless they are themselves
-// in the exclude list or filtered by routing policy (cooldown / breaker /
-// credential-scoped usage-limit). See docs/analysis/failover-isolation.md.
+// Hard budget: attempts never exceed maxAttempts (same-channel + refresh + failover).
+// RefreshAuth successes are capped per channel; nil/error RefreshAuth fails over.
 func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput) (ExecuteResult, error) {
-	// Request-local exclude list: channel IDs only (never site-wide).
 	excludeChannelIDs := make([]int64, 0)
 	attempts := 0
-	sameChannelRetries := 0
+	refreshAuthSuccesses := 0
 
 	selected, err := c.deps.SelectChannel(ctx, input.RequestedModel, input.DownstreamPolicy)
 	if err != nil {
@@ -139,6 +151,18 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 			}, nil
 		}
 
+		// Budget covers every finished attempt (success already returned above).
+		if attempts >= c.maxAttempts {
+			return ExecuteResult{
+				OK:           false,
+				Reason:       "failed",
+				Selected:     selected,
+				Status:       result.Status,
+				RawErrorText: result.RawErrorText,
+				Attempts:     attempts,
+			}, nil
+		}
+
 		action := failureActionOf(result)
 
 		if isTerminalFailure(action) {
@@ -161,37 +185,25 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 		}
 
 		if shouldRetrySameChannel(action) {
-			if sameChannelRetries < maxSameChannelRetries {
-				sameChannelRetries++
-				continue
-			}
-			// Exhausted same-channel budget → failover to a sibling (channel-scoped exclude).
-			action = ActionFailover
+			continue
 		}
 
-		if shouldRefreshAuth(action) && c.deps.RefreshAuth != nil {
-			refreshed, refreshErr := c.deps.RefreshAuth(ctx, selected, struct {
-				Status       int
-				RawErrorText string
-			}{Status: result.Status, RawErrorText: result.RawErrorText})
-			if refreshErr == nil && refreshed != nil {
-				selected = refreshed
-				sameChannelRetries = 0
-				continue
+		if shouldRefreshAuth(action) {
+			canRefresh := c.deps.RefreshAuth != nil && refreshAuthSuccesses < c.maxRefreshAuthSuccesses
+			if canRefresh {
+				refreshed, refreshErr := c.deps.RefreshAuth(ctx, selected, struct {
+					Status       int
+					RawErrorText string
+				}{Status: result.Status, RawErrorText: result.RawErrorText})
+				if refreshErr == nil && refreshed != nil {
+					selected = refreshed
+					refreshAuthSuccesses++
+					continue
+				}
 			}
-			// Auth refresh failed → fall through to failover so siblings can absorb.
-			action = ActionFailover
-		}
-
-		if shouldFailover(action) {
-			// Channel-scoped only: never expand to site/account sibling IDs here.
-			excludeChannelIDs = appendExcludedChannelID(excludeChannelIDs, selected.Channel.ID)
-			next, nextErr := c.deps.SelectNextChannel(
-				ctx,
-				input.RequestedModel,
-				excludeChannelIDs,
-				input.DownstreamPolicy,
-			)
+			// nil RefreshAuth, refresh error/nil result, or refresh success cap → failover.
+			next, nextErr, nextExclude := c.failover(ctx, input, selected, excludeChannelIDs)
+			excludeChannelIDs = nextExclude
 			if nextErr != nil || next == nil {
 				return ExecuteResult{
 					OK:           false,
@@ -203,7 +215,25 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 				}, nextErr
 			}
 			selected = next
-			sameChannelRetries = 0
+			refreshAuthSuccesses = 0
+			continue
+		}
+
+		if shouldFailover(action) {
+			next, nextErr, nextExclude := c.failover(ctx, input, selected, excludeChannelIDs)
+			excludeChannelIDs = nextExclude
+			if nextErr != nil || next == nil {
+				return ExecuteResult{
+					OK:           false,
+					Reason:       "failed",
+					Selected:     selected,
+					Status:       result.Status,
+					RawErrorText: result.RawErrorText,
+					Attempts:     attempts,
+				}, nextErr
+			}
+			selected = next
+			refreshAuthSuccesses = 0
 			continue
 		}
 
@@ -220,46 +250,41 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 	return ExecuteResult{OK: false, Reason: "failed", Attempts: attempts}, nil
 }
 
-// appendExcludedChannelID appends a failed channel ID for request-local failover.
-// Scope is intentionally channel-only: same-site siblings must remain selectable
-// unless product policy (credential-scoped usage-limit / site breaker) says otherwise.
-func appendExcludedChannelID(exclude []int64, channelID int64) []int64 {
-	if channelID <= 0 {
-		return exclude
+func (c *DefaultProxyConductor) failover(
+	ctx context.Context,
+	input ExecuteInput,
+	selected *routing.SelectedChannel,
+	excludeChannelIDs []int64,
+) (*routing.SelectedChannel, error, []int64) {
+	excludeChannelIDs = append(excludeChannelIDs, selected.Channel.ID)
+	if c.deps.SelectNextChannel == nil {
+		return nil, nil, excludeChannelIDs
 	}
-	for _, id := range exclude {
-		if id == channelID {
-			return exclude
-		}
-	}
-	return append(exclude, channelID)
+	next, nextErr := c.deps.SelectNextChannel(
+		ctx,
+		input.RequestedModel,
+		excludeChannelIDs,
+		input.DownstreamPolicy,
+	)
+	return next, nextErr, excludeChannelIDs
 }
 
 // failureActionOf determines the action for a failed attempt.
 // Uses HTTP status classification matching TS behavior:
-//   - >= 500: failover (exclude this channel only; siblings remain eligible)
-//   - 408/425 + timeout-like text: retry_same_channel (bounded)
-//   - 408/425/429 otherwise: failover (rate-limit / systemic pressure → try sibling)
-//   - 401/403: refresh_auth (then failover if refresh fails)
+//   - >= 500: failover
+//   - 408/429 + retryable pattern: retry_same_channel
+//   - 408/429: failover
+//   - 401/403: refresh_auth
 //   - Other: terminal
-//
-// Note: ShouldRetryProxyRequest treats 408/429 as always retryable for *surface*
-// channel switching. The conductor must not use that helper for same-channel
-// decisions — doing so pinned forever on one channel and starved same-site siblings.
 func failureActionOf(result AttemptResult) AttemptFailureAction {
 	if result.Status >= 500 {
 		return ActionFailover
 	}
-	if result.Status == 408 || result.Status == 425 {
-		// Transient timeout-like errors may succeed on the same channel once.
-		if matchesAnyPattern(retryableTimeoutPatterns, result.RawErrorText) {
+	if result.Status == 408 || result.Status == 429 || result.Status == 425 {
+		// If error text matches certain patterns, retry same channel
+		if ShouldRetryProxyRequest(result.Status, result.RawErrorText) {
 			return ActionRetrySameChannel
 		}
-		return ActionFailover
-	}
-	if result.Status == 429 {
-		// Rate-limit is channel/credential local pressure: failover to siblings,
-		// do not pin the same channel (and never exclude the whole site here).
 		return ActionFailover
 	}
 	if result.Status == 401 || result.Status == 403 {
