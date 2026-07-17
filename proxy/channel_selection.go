@@ -15,6 +15,7 @@ type TokenRouterInterface interface {
 	SelectChannel(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
 	SelectNextChannel(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
 	SelectPreferredChannel(ctx context.Context, requestedModel string, preferredChannelID int64, policy routing.DownstreamRoutingPolicy, excludeChannelIDs []int64) (*routing.SelectedChannel, error)
+	ExplainSelection(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error)
 	RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64) error
 	RecordFailure(ctx context.Context, channelID int64, failureCtx routing.SiteRuntimeFailureContext, actualAccountID *int64) error
 }
@@ -36,7 +37,7 @@ type ChannelSelectionInput struct {
 
 // Tester header constants.
 const (
-	TesterRequestHeader     = "x-metapi-tester-request"
+	TesterRequestHeader       = "x-metapi-tester-request"
 	TesterForcedChannelHeader = "x-metapi-tester-forced-channel-id"
 )
 

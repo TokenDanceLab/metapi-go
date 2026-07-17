@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/service"
@@ -764,45 +766,90 @@ func (h *tokenRoutesHandler) routeDecision(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "model 不能为空"})
 		return
 	}
-
-	// Stub: decision engine not yet wired
+	cfg := proxyhandler.GetUpstreamConfig()
+	if cfg == nil || cfg.Router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "message": "token router is not configured"})
+		return
+	}
+	decision, err := cfg.Router.ExplainSelection(r.Context(), model, nil, routing.EmptyDownstreamRoutingPolicy)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
-		"decision": map[string]any{},
+		"decision": decision,
 	})
 }
 
 // POST /api/routes/decision/batch
 func (h *tokenRoutesHandler) routeDecisionBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Models []string `json:"models"`
+	}
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+	cfg := proxyhandler.GetUpstreamConfig()
+	if cfg == nil || cfg.Router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "message": "token router is not configured"})
+		return
+	}
+	if len(body.Models) > 50 {
+		body.Models = body.Models[:50]
+	}
+	out := map[string]any{}
+	for _, model := range body.Models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		decision, err := cfg.Router.ExplainSelection(r.Context(), model, nil, routing.EmptyDownstreamRoutingPolicy)
+		if err != nil {
+			out[model] = map[string]any{"error": err.Error()}
+			continue
+		}
+		out[model] = decision
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"decisions": map[string]any{},
+		"decisions": out,
 	})
 }
 
 // POST /api/routes/decision/by-route/batch
 func (h *tokenRoutesHandler) routeDecisionByRouteBatch(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":   true,
-		"decisions": map[string]any{},
-	})
+	h.routeDecisionBatch(w, r)
 }
 
 // POST /api/routes/decision/route-wide/batch
 func (h *tokenRoutesHandler) routeDecisionRouteWideBatch(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":   true,
-		"decisions": map[string]any{},
-	})
+	h.routeDecisionBatch(w, r)
 }
 
 // POST /api/routes/decision/refresh
 func (h *tokenRoutesHandler) routeDecisionRefresh(w http.ResponseWriter, r *http.Request) {
+	cfg := proxyhandler.GetUpstreamConfig()
+	if cfg == nil || cfg.Router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"success": false, "message": "token router is not configured"})
+		return
+	}
+	jobID := fmt.Sprintf("decision-refresh-%d", time.Now().UTC().UnixNano())
+	router := cfg.Router
+	db := h.db
+	go func() {
+		var patterns []string
+		_ = db.Select(&patterns, "SELECT model_pattern FROM token_routes WHERE enabled = TRUE ORDER BY id ASC LIMIT 20")
+		for _, p := range patterns {
+			_, _ = router.ExplainSelection(context.Background(), strings.TrimSpace(p), nil, routing.EmptyDownstreamRoutingPolicy)
+		}
+	}()
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"success": true,
 		"queued":  true,
 		"reused":  false,
-		"jobId":   "stub-decision-refresh",
+		"jobId":   jobID,
 		"status":  "pending",
 		"message": "已开始后台刷新路由选中概率，可稍后返回查看",
 	})

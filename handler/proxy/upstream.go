@@ -63,6 +63,11 @@ func getUpstreamConfig() *UpstreamConfig {
 	return upstreamCfg
 }
 
+// GetUpstreamConfig returns the package-level upstream config for admin/tooling.
+func GetUpstreamConfig() *UpstreamConfig {
+	return getUpstreamConfig()
+}
+
 // dispatchUpstream forwards a proxy request to the selected upstream channel.
 // Implements the spec's 10-step Handler pattern.
 func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
