@@ -11,11 +11,14 @@ import (
 )
 
 // WindowCounter increments a named key inside a sliding/fixed window and returns
-// the post-increment count. Used for multi-instance RPM admission (#118).
+// the post-increment count. Used for multi-instance RPM/TPM admission (#118, #245).
 type WindowCounter interface {
 	// Incr increments key by 1 within window and returns the new count.
 	// Implementations may approximate sliding windows with fixed TTL buckets.
 	Incr(ctx context.Context, key string, window time.Duration) (count int64, err error)
+	// IncrBy increments key by delta within window and returns the new total.
+	// Used for TPM token reservations (#245). delta<=0 returns the current total.
+	IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (count int64, err error)
 	// Get returns the current count without incrementing.
 	Get(ctx context.Context, key string) (count int64, err error)
 }
@@ -28,7 +31,13 @@ type MemoryCounter struct {
 }
 
 type memWindow struct {
-	times []int64 // unix ms
+	times  []int64    // unix ms — unit Incr events (RPM)
+	points []memPoint // weighted IncrBy events (TPM)
+}
+
+type memPoint struct {
+	atMs  int64
+	delta int64
 }
 
 func NewMemoryCounter() *MemoryCounter {
@@ -59,6 +68,38 @@ func (m *MemoryCounter) Incr(ctx context.Context, key string, window time.Durati
 	}
 	w.times = append(w.times, nowMs)
 	return int64(len(w.times)), nil
+}
+
+func (m *MemoryCounter) IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (int64, error) {
+	_ = ctx
+	if window <= 0 {
+		window = time.Minute
+	}
+	nowMs := m.now().UnixMilli()
+	start := nowMs - window.Milliseconds()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	w := m.keys[key]
+	if w == nil {
+		w = &memWindow{}
+		m.keys[key] = w
+	}
+	// prune
+	i := 0
+	for i < len(w.points) && w.points[i].atMs < start {
+		i++
+	}
+	if i > 0 {
+		w.points = append([]memPoint(nil), w.points[i:]...)
+	}
+	if delta > 0 {
+		w.points = append(w.points, memPoint{atMs: nowMs, delta: delta})
+	}
+	var sum int64
+	for _, p := range w.points {
+		sum += p.delta
+	}
+	return sum, nil
 }
 
 func (m *MemoryCounter) Get(ctx context.Context, key string) (int64, error) {
@@ -190,6 +231,34 @@ func (r *RedisCounter) Incr(ctx context.Context, key string, window time.Duratio
 		}
 		count = n
 		if n == 1 {
+			ms := strconv.FormatInt(window.Milliseconds(), 10)
+			if err := redisDo(conn, "PEXPIRE", key, ms); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return count, err
+}
+
+func (r *RedisCounter) IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (int64, error) {
+	if window <= 0 {
+		window = time.Minute
+	}
+	if delta <= 0 {
+		// No reservation — read current total without changing TTL.
+		return r.Get(ctx, key)
+	}
+	var count int64
+	err := r.withConn(ctx, func(conn net.Conn) error {
+		// Fixed-window approximation: INCRBY + PEXPIRE when this is the first write
+		// in the window (post-increment equals delta ⇒ key was absent/0).
+		n, err := redisDoInt(conn, "INCRBY", key, strconv.FormatInt(delta, 10))
+		if err != nil {
+			return err
+		}
+		count = n
+		if n == delta {
 			ms := strconv.FormatInt(window.Milliseconds(), 10)
 			if err := redisDo(conn, "PEXPIRE", key, ms); err != nil {
 				return err
