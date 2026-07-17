@@ -73,6 +73,9 @@ func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 // If a local mapping exists and UpstreamVideoID differs from the public path id,
 // the upstream path uses UpstreamVideoID. When the mapping is missing, the
 // client-provided id is passed through — no store-gated 404 theater.
+//
+// Sticky pin (#253): when the mapping has ChannelID > 0, force preferred channel
+// selection so the request hits the same upstream account/site as create.
 func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 	publicID := chi.URLParam(r, "id")
 	if publicID == "" {
@@ -80,7 +83,8 @@ func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamID := resolveVideoUpstreamID(publicID)
+	task := GetProxyVideoTaskByPublicID(publicID)
+	upstreamID := resolveVideoUpstreamIDFromTask(publicID, task)
 
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "videos",
@@ -91,6 +95,7 @@ func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
 		return
 	}
+	applyVideoTaskStickyPin(ctx, task)
 
 	dispatchUpstream(w, r, ctx)
 }
@@ -100,6 +105,9 @@ func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 // Clears any local mapping for the public id, then always dispatches DELETE to
 // upstream (mapping is optional rewrite aid, not a hard gate). Prefer honest
 // upstream status over a local-only 204 residual.
+//
+// Sticky pin (#253): resolve mapping before delete so channel preference and
+// path rewrite still apply for this request.
 func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 	publicID := chi.URLParam(r, "id")
 	if publicID == "" {
@@ -107,7 +115,8 @@ func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamID := resolveVideoUpstreamID(publicID)
+	task := GetProxyVideoTaskByPublicID(publicID)
+	upstreamID := resolveVideoUpstreamIDFromTask(publicID, task)
 	// Best-effort local cleanup whether or not a mapping existed.
 	DeleteProxyVideoTaskByPublicID(publicID)
 
@@ -120,6 +129,7 @@ func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
 		return
 	}
+	applyVideoTaskStickyPin(ctx, task)
 
 	dispatchUpstream(w, r, ctx)
 }
@@ -128,7 +138,10 @@ func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 // When a mapping exists with a non-empty UpstreamVideoID different from publicID,
 // that upstream id is used; otherwise publicID is passed through unchanged.
 func resolveVideoUpstreamID(publicID string) string {
-	task := GetProxyVideoTaskByPublicID(publicID)
+	return resolveVideoUpstreamIDFromTask(publicID, GetProxyVideoTaskByPublicID(publicID))
+}
+
+func resolveVideoUpstreamIDFromTask(publicID string, task *ProxyVideoTask) string {
 	if task == nil {
 		return publicID
 	}
@@ -136,6 +149,26 @@ func resolveVideoUpstreamID(publicID string) string {
 		return task.UpstreamVideoID
 	}
 	return publicID
+}
+
+// applyVideoTaskStickyPin forces preferred channel selection when the mapping
+// recorded a channel at create time (#253). Also seeds RequestedModel from the
+// mapping when the client omitted model (typical for GET/DELETE).
+func applyVideoTaskStickyPin(ctx *Ctx, task *ProxyVideoTask) {
+	if ctx == nil || task == nil {
+		return
+	}
+	if ctx.RequestedModel == "" {
+		if task.RequestedModel != "" {
+			ctx.RequestedModel = task.RequestedModel
+		} else if task.ActualModel != "" {
+			ctx.RequestedModel = task.ActualModel
+		}
+	}
+	if task.ChannelID > 0 {
+		ch := task.ChannelID
+		ctx.ForcedChannelID = &ch
+	}
 }
 
 // SaveProxyVideoTask saves a video task mapping to the process-local cache and

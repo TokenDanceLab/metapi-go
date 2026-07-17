@@ -108,6 +108,7 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 				DownstreamPolicy:  downstreamPolicy,
 				ExcludeChannelIDs: excludeChannelIDs,
 				RetryCount:        retry,
+				ForcedChannelID:   ctx.ForcedChannelID,
 			},
 		)
 		if err != nil || selected == nil {

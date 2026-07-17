@@ -39,11 +39,22 @@ on success POST /v1/videos:
   body.id = publicID
 ```
 
+## Sticky pin (#253)
+
+When a mapping has `ChannelID > 0`, GET/DELETE set `Ctx.ForcedChannelID` so
+`SelectProxyChannelForAttempt` uses `SelectPreferredChannel` (no cross-channel
+fallback). `RequestedModel` is seeded from the mapping when the client omits
+`model` (typical for GET/DELETE). Path rewrite still uses `UpstreamVideoID`.
+
+`SiteURL` / `TokenValue` on the mapping remain informational — selection still
+goes through the router preferred-channel path (token/site come from channel
+resolution), not a raw URL override.
+
 ## What is still residual (not claimed)
 
-1. **No sticky site/token restore from mapping** — GET/DELETE still use normal channel selection; mapping fields SiteURL/TokenValue are stored for future pin work only.
+1. **Raw site URL / token override** — mapping stores SiteURL/TokenValue but does not bypass router with a direct HTTP client pin.
 2. **Stub mode** — unconfigured upstream + stub does not rewrite publicId (no selected channel).
-3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave.
+3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave (see `videos-proxy-retention-residual.md`).
 4. **TokenValue in DB** — same sensitivity as process memory mapping; operators must protect DB backups.
 
 ## Tests
