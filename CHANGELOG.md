@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.3] — 2026-07-17
+
+### Added
+- Admin residual stubs wave (milestone 12):
+  - sub2api managed auth merge on account update/rebind (#194 / #202)
+  - Real account health-refresh via balance probe (#195 / #199)
+  - OAuth start/rebind CSRF state tokens (server-stored, TTL) (#196 / #200)
+  - Honest update-center deploy/rollback residuals + real clear-cache invalidation (#197 / #201)
+
 ## [v0.8.2] — 2026-07-17
 
 ### Added

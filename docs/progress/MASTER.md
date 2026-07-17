@@ -76,7 +76,7 @@
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | Polish | v0.8.1 #168–#171 landed |
 | P4 adapters | Milestone 11 closed · **#182–#185** · tag **[v0.8.2](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.2)** |
-| Residual stubs | Milestone 12 · issues **#194–#197** (sub2api auth / health-refresh / OAuth state / update-center) |
+| Residual stubs | Milestone 12 · **#194–#197 closed** (PRs #199–#202); tag **v0.8.3** |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -171,6 +171,7 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. **Admin residual stubs v0.8.3** (milestone 12): #194 sub2api auth · #195 health-refresh · #196 OAuth state · #197 update-center/clear-cache (WFs in flight)
-2. Shared-Postgres site create flake hardening if still observed on master
-3. Continue product backlog P0/P1; frontend flake observability
+1. Tag **v0.8.3** (admin residual stubs complete)
+2. Optional: expired API-key recovery model refresh; multi-instance cache/job coordination
+3. Shared-Postgres site create flake hardening if still observed
+4. Continue product backlog P0/P1; frontend flake observability
