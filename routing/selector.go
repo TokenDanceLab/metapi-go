@@ -928,12 +928,13 @@ func (s *ChannelSelector) finalizeDispatch(
 	}
 
 	return &SelectedChannel{
-		Channel:     selected.Channel,
-		Account:     dispatchCandidate.Account,
-		Site:        dispatchCandidate.Site,
-		Token:       dispatchCandidate.Token,
-		TokenValue:  tokenValue,
-		TokenName:   tokenName,
-		ActualModel: actualModel,
+		Channel:       selected.Channel,
+		Account:       dispatchCandidate.Account,
+		Site:          dispatchCandidate.Site,
+		Token:         dispatchCandidate.Token,
+		TokenValue:    tokenValue,
+		TokenName:     tokenName,
+		ActualModel:   actualModel,
+		ContextLength: match.Route.ContextLength,
 	}, nil
 }
