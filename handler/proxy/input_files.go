@@ -1,6 +1,7 @@
 package proxyhandler
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -8,6 +9,13 @@ import (
 // Extract OpenAI-shaped input_file / file references from request bodies.
 // Resolution/upload remains residual: TS inlines local file refs; Go proxies
 // durable files via /v1/files and does not invent a local multi-tenant vault.
+
+// ErrInputFileResolveResidual is returned by ResolveInputFile to make the
+// residual explicit: no local multi-tenant vault, no silent empty success.
+// Use the /v1/files proxy or pass upstream-native file_id / file_url.
+var ErrInputFileResolveResidual = errors.New(
+	"input file resolve is residual: use /v1/files proxy or upstream file_id/file_url (no local vault)",
+)
 
 // InputFile represents an input file reference.
 type InputFile struct {
@@ -41,11 +49,12 @@ func ParseInputFiles(body map[string]any) []InputFile {
 }
 
 // ResolveInputFile resolves an input file to its content.
-// Residual stub — no local vault / no durable fetch in this wave.
+// Residual: there is no local vault / durable fetch. Returns
+// ErrInputFileResolveResidual so callers cannot mistake this for success.
 // Callers should use /v1/files proxy or upstream-native file_id/file_url.
 func ResolveInputFile(file InputFile) ([]byte, error) {
 	_ = file
-	return nil, nil
+	return nil, ErrInputFileResolveResidual
 }
 
 func collectInputFilesFromValue(out *[]InputFile, v any) {
