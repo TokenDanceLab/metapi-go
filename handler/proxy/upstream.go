@@ -502,8 +502,10 @@ func dispatchEndpointAttemptWithContinue(
 				return false, nil, true
 			}
 			// Terminal for this channel attempt.
-			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
-			if retry < maxRetries && proxy.ShouldRetryProxyRequest(408, err.Error()) {
+			errText := err.Error()
+			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, errText)
+			writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, http.StatusRequestTimeout, effectiveStream, ParsedUsage{Source: usageSourceUnknown}, retry, requestID, errText)
+			if retry < maxRetries && proxy.ShouldRetryProxyRequest(408, errText) {
 				return false, jsonPendingUpstreamFailure(http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error"), false
 			}
 			writeJSONErrorWithRequest(w, http.StatusRequestTimeout, "Upstream first-byte timeout", "upstream_error", requestID)
@@ -517,7 +519,9 @@ func dispatchEndpointAttemptWithContinue(
 			// Network error may still be protocol-local; allow next endpoint without poison.
 			return false, nil, true
 		}
-		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, err.Error())
+		errText := err.Error()
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, 0, errText)
+		writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, http.StatusBadGateway, effectiveStream, ParsedUsage{Source: usageSourceUnknown}, retry, requestID, errText)
 		if retry < maxRetries {
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Upstream request failed", "upstream_error"), false
 		}
@@ -538,7 +542,9 @@ func dispatchEndpointAttemptWithContinue(
 				if !isLastEndpoint && !disableCrossProtocolFallback {
 					return false, nil, true
 				}
-				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+				errText := readErr.Error()
+				recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, errText)
+				writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, http.StatusBadGateway, true, ParsedUsage{Source: usageSourceUnknown}, retry, requestID, errText)
 				if retry < maxRetries {
 					return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 				}
@@ -550,7 +556,10 @@ func dispatchEndpointAttemptWithContinue(
 			if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
 				return false, nil, true
 			}
+			// Best-effort usage from error JSON bodies (some gateways still include usage).
+			failUsage := ParseUsageFromBody(respBody)
 			recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+			writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, true, failUsage, retry, requestID, truncateErrText(rawErrText))
 			if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
 				return false, bufferedPendingUpstreamFailure(resp, respBody), false
 			}
@@ -579,7 +588,9 @@ func dispatchEndpointAttemptWithContinue(
 		if !isLastEndpoint && !disableCrossProtocolFallback {
 			return false, nil, true
 		}
-		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, readErr.Error())
+		errText := readErr.Error()
+		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, http.StatusBadGateway, errText)
+		writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, http.StatusBadGateway, false, ParsedUsage{Source: usageSourceUnknown}, retry, requestID, errText)
 		if retry < maxRetries {
 			return false, jsonPendingUpstreamFailure(http.StatusBadGateway, "Failed to read upstream response", "upstream_error"), false
 		}
@@ -592,7 +603,11 @@ func dispatchEndpointAttemptWithContinue(
 		if shouldContinueEndpointFallback(resp.StatusCode, rawErrText, isLastEndpoint, disableCrossProtocolFallback) {
 			return false, nil, true
 		}
+		// Non-stream HTTP errors: retain any usage object in the error body
+		// (measurable under-count residual after #300 disconnect partial).
+		failUsage := ParseUsageFromBody(respBody)
 		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, resp.StatusCode, rawErrText)
+		writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, failUsage, retry, requestID, truncateErrText(rawErrText))
 		if retry < maxRetries && proxy.ShouldRetryProxyRequest(resp.StatusCode, rawErrText) {
 			return false, bufferedPendingUpstreamFailure(resp, respBody), false
 		}
@@ -615,7 +630,10 @@ func dispatchEndpointAttemptWithContinue(
 		if shouldContinueEndpointFallback(failure.Status, failure.Reason, isLastEndpoint, disableCrossProtocolFallback) {
 			return false, nil, true
 		}
+		// Content failures often still carry real usage (keyword match / empty-
+		// content edge cases with non-zero tokens). Persist failed row + tokens.
 		recordUpstreamFailure(r.Context(), cfg, selected, upstreamModel, failure.Status, failure.Reason)
+		writeFailureProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, failure.Status, false, usage, retry, requestID, failure.Reason)
 		if retry < maxRetries && proxy.ShouldRetryProxyRequest(failure.Status, failure.Reason) {
 			return false, jsonPendingUpstreamFailure(failure.Status, "Upstream returned an error response", "upstream_error"), false
 		}
@@ -899,6 +917,126 @@ func writeSuccessProxyLog(
 		UsageSource:        source,
 	}
 	logProxy(ctx, cfg, entry)
+}
+
+// writeFailureProxyLog persists a failed attempt into proxy_logs so stats /
+// usage aggregation do not silently under-count tokens when upstream still
+// reported usage on error or content-detected failure paths.
+// Matches SurfaceFailureToolkit status="failed" semantics.
+// Does not invent tokens: zeros + usage_source=unknown when usage.Found is false.
+func writeFailureProxyLog(
+	ctx context.Context,
+	cfg *UpstreamConfig,
+	selected *routing.SelectedChannel,
+	proxyCtx *Ctx,
+	upstreamModel string,
+	upstreamPath string,
+	latencyMs int64,
+	httpStatus int,
+	isStream bool,
+	usage ParsedUsage,
+	retryCount int,
+	requestID string,
+	errText string,
+) {
+	if cfg == nil || selected == nil {
+		return
+	}
+	if requestID == "" {
+		requestID = proxy.RequestIDFromContext(ctx)
+	}
+	requestedModel := ""
+	var keyID *int64
+	clientFamily, clientAppID, clientAppName, clientConfidence := "", "", "", ""
+	if proxyCtx != nil {
+		requestedModel = proxyCtx.RequestedModel
+		if proxyCtx.Auth != nil {
+			keyID = proxyCtx.Auth.KeyID
+		}
+		clientFamily = proxyCtx.ClientCtx.ClientKind
+		clientAppID = proxyCtx.ClientCtx.ClientAppID
+		clientAppName = proxyCtx.ClientCtx.ClientAppName
+		clientConfidence = proxyCtx.ClientCtx.ClientConfidence
+	}
+	if requestedModel == "" {
+		requestedModel = upstreamModel
+	}
+	modelActual := upstreamModel
+	routeID := selected.Channel.RouteID
+	var routeIDPtr *int64
+	if routeID != 0 {
+		routeIDPtr = &routeID
+	}
+	channelID := selected.Channel.ID
+	accountID := selected.Account.ID
+	source := usage.Source
+	if source == "" {
+		if usage.Found {
+			source = usageSourceUpstream
+		} else {
+			source = usageSourceUnknown
+		}
+	}
+	platformName := ""
+	if selected.Site.Platform != "" {
+		platformName = selected.Site.Platform
+	}
+	// Only attach cost when usage was found; avoid inventing spend on pure
+	// network/timeout failures with zero tokens.
+	var estimatedCost float64
+	var billingDetails any
+	if usage.Found {
+		billing := EstimateBillingCostFromUsage(upstreamModel, platformName, usage)
+		estimatedCost = billing.EstimatedCost
+		billingDetails = billing.BillingDetails
+	}
+	errMsg := strings.TrimSpace(errText)
+	var errPtr *string
+	if errMsg != "" {
+		errPtr = &errMsg
+	}
+	entry := proxy.ProxyLogEntry{
+		RouteID:            routeIDPtr,
+		ChannelID:          &channelID,
+		AccountID:          &accountID,
+		DownstreamAPIKeyID: keyID,
+		ModelRequested:     requestedModel,
+		ModelActual:        &modelActual,
+		Status:             "failed",
+		HTTPStatus:         httpStatus,
+		IsStream:           boolPtr(isStream),
+		FirstByteLatencyMs: int64Ptr(latencyMs),
+		LatencyMs:          latencyMs,
+		PromptTokens:       int64Ptr(usage.PromptTokens),
+		CompletionTokens:   int64Ptr(usage.CompletionTokens),
+		TotalTokens:        int64Ptr(usage.TotalTokens),
+		EstimatedCost:      estimatedCost,
+		BillingDetails:     billingDetails,
+		ClientFamily:       clientFamily,
+		ClientAppID:        clientAppID,
+		ClientAppName:      clientAppName,
+		ClientConfidence:   clientConfidence,
+		ErrorMessage:       errPtr,
+		RetryCount:         retryCount,
+		RequestID:          requestID,
+		UpstreamPath:       &upstreamPath,
+		UsageSource:        source,
+	}
+	logProxy(ctx, cfg, entry)
+}
+
+// truncateErrText bounds proxy_logs.error_message size for large upstream bodies.
+func truncateErrText(s string) string {
+	const maxErrRunes = 2000
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= maxErrRunes {
+		return s
+	}
+	return string(r[:maxErrRunes]) + "..."
 }
 
 func isProxyStubEnabled() bool {
