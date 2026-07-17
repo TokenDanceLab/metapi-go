@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -60,6 +61,9 @@ func (a *App) OnClose() {
 func (a *App) Start() error {
 	addr := fmt.Sprintf("%s:%d", a.Config.ListenHost, a.Config.Port)
 	a.Server = newHTTPServer(addr, a.Router)
+	// Honest residual registration for Responses WS (#217). Noop transport is OK;
+	// must be called from boot so capability is not a silent uncalled stub.
+	a.WireResponsesWebsocketTransport()
 
 	// Channel to capture listen errors
 	errCh := make(chan error, 1)
@@ -106,6 +110,16 @@ func newHTTPServer(addr string, handler http.Handler) *http.Server {
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}
+}
+
+// WireResponsesWebsocketTransport registers the Responses WebSocket residual on
+// a.Server. Safe no-op when Server is nil. Called from Start; tests may call
+// directly after assigning Server.
+func (a *App) WireResponsesWebsocketTransport() {
+	if a == nil || a.Server == nil {
+		return
+	}
+	proxyhandler.EnsureResponsesWebsocketTransport(a.Server, proxyhandler.WebSocketConfig{})
 }
 
 // Shutdown performs a graceful shutdown of the HTTP server with the given context.

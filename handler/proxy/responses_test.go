@@ -102,6 +102,24 @@ func TestHandleResponsesGet426(t *testing.T) {
 	if rec.Code != 426 {
 		t.Errorf("expected 426, got %d: %s", rec.Code, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), "WebSocket upgrade required") {
+		t.Errorf("body = %s", rec.Body.String())
+	}
+}
+
+func TestHandleResponsesGet426_WebsocketUpgradeIs501Residual(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/responses", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	rec := httptest.NewRecorder()
+	HandleResponsesGet426(rec, req)
+
+	if rec.Code != 501 {
+		t.Fatalf("expected 501 residual, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "response.completed") {
+		t.Error("must not invent WS completion payloads")
+	}
 }
 
 // ---- HandleResponsesAliasPost ----
@@ -145,6 +163,18 @@ func TestHandleResponsesAliasGet426_Valid(t *testing.T) {
 
 	if rec.Code != 426 {
 		t.Errorf("expected 426, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleResponsesAliasGet426_WebsocketUpgradeIs501Residual(t *testing.T) {
+	req := httptest.NewRequest("GET", "/responses", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	rec := httptest.NewRecorder()
+	HandleResponsesAliasGet426(rec, req)
+
+	if rec.Code != 501 {
+		t.Fatalf("expected 501 residual, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

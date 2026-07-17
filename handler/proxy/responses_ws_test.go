@@ -2,9 +2,83 @@ package proxyhandler
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+// ---- EnsureResponsesWebsocketTransport residual registration ----
+
+func TestEnsureResponsesWebsocketTransport_RegistersResidual(t *testing.T) {
+	ResetResponsesWebsocketTransportForTest()
+	if ResponsesWebsocketTransportRegistered() {
+		t.Fatal("expected unregistered before Ensure")
+	}
+
+	srv := &http.Server{}
+	EnsureResponsesWebsocketTransport(srv, WebSocketConfig{})
+
+	if !ResponsesWebsocketTransportRegistered() {
+		t.Fatal("expected residual registration after EnsureResponsesWebsocketTransport")
+	}
+	if ResponsesWebsocketResidualStatus != "not_implemented" {
+		t.Errorf("status = %q, want not_implemented", ResponsesWebsocketResidualStatus)
+	}
+	if !strings.Contains(ResponsesWebsocketResidualDoc, "responses-websocket-residual") {
+		t.Errorf("doc pointer = %q", ResponsesWebsocketResidualDoc)
+	}
+}
+
+func TestIsWebsocketUpgradeRequest(t *testing.T) {
+	t.Parallel()
+
+	upgrade := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	upgrade.Header.Set("Upgrade", "websocket")
+	upgrade.Header.Set("Connection", "keep-alive, Upgrade")
+	if !IsWebsocketUpgradeRequest(upgrade) {
+		t.Error("expected upgrade request")
+	}
+
+	plain := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	if IsWebsocketUpgradeRequest(plain) {
+		t.Error("plain GET must not look like upgrade")
+	}
+
+	upgradeOnly := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	upgradeOnly.Header.Set("Upgrade", "websocket")
+	if IsWebsocketUpgradeRequest(upgradeOnly) {
+		t.Error("Upgrade without Connection: upgrade must not match")
+	}
+
+	if IsWebsocketUpgradeRequest(nil) {
+		t.Error("nil request must be false")
+	}
+}
+
+func TestHandleResponsesWebsocketUpgradeResidual_501(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	rec := httptest.NewRecorder()
+
+	HandleResponsesWebsocketUpgradeResidual(rec, req)
+
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("status = %d, want 501 body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "not implemented") {
+		t.Errorf("body should mention not implemented: %s", body)
+	}
+	if !strings.Contains(body, ResponsesWebsocketResidualDoc) {
+		t.Errorf("body should point at residual doc: %s", body)
+	}
+	// Must not invent fake completion payloads on residual path.
+	if strings.Contains(body, "response.completed") || strings.Contains(body, "chat.completion") {
+		t.Errorf("residual must not emit fake completions: %s", body)
+	}
+}
 
 // ---- ParseResponsesWSMessage ----
 

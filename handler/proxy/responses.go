@@ -27,8 +27,14 @@ func HandleResponses(w http.ResponseWriter, r *http.Request, downstreamPath stri
 	dispatchUpstream(w, r, ctx)
 }
 
-// HandleResponsesGet426 returns 426 WebSocket upgrade required for GET /v1/responses.
+// HandleResponsesGet426 handles GET /v1/responses.
+// Plain GET → 426 Upgrade Required. WebSocket upgrade attempt → 501 residual
+// (no Codex WS runtime; see EnsureResponsesWebsocketTransport).
 func HandleResponsesGet426(w http.ResponseWriter, r *http.Request) {
+	if IsWebsocketUpgradeRequest(r) {
+		HandleResponsesWebsocketUpgradeResidual(w, r)
+		return
+	}
 	path := r.URL.Path
 	writeJSONError(w, 426,
 		fmt.Sprintf("WebSocket upgrade required for GET %s", path),
@@ -45,11 +51,16 @@ func HandleResponsesAliasPost(w http.ResponseWriter, r *http.Request) {
 	HandleResponses(w, r, downstreamPath)
 }
 
-// HandleResponsesAliasGet426 returns 426 for GET /responses and /responses/*.
+// HandleResponsesAliasGet426 handles GET /responses and /responses/*.
+// Unknown alias → 404. Upgrade attempt → 501 residual. Plain GET → 426.
 func HandleResponsesAliasGet426(w http.ResponseWriter, r *http.Request) {
 	downstreamPath := resolveAliasedResponsesPath(r.URL.Path)
 	if downstreamPath == "" {
 		writeJSONError(w, 404, "Unknown /responses alias path", "invalid_request_error")
+		return
+	}
+	if IsWebsocketUpgradeRequest(r) {
+		HandleResponsesWebsocketUpgradeResidual(w, r)
 		return
 	}
 	writeJSONError(w, 426,
