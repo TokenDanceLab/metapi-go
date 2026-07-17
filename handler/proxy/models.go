@@ -1,8 +1,12 @@
 package proxyhandler
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/auth"
@@ -12,6 +16,16 @@ import (
 // Clients that special-case owned_by (e.g. Hermes llama.cpp detection) treat this
 // as a generic OpenAI-compatible gateway, not llamacpp.
 const modelsOwnedBy = "metapi"
+
+// AvailableModelsSource is implemented by routers that can list MetAPI-owned models
+// from enabled token_routes (notably routing.TokenRouter.GetAvailableModels).
+// Channel-selection-only mocks may omit this method; listing then uses the
+// documented last-resort catalog (see resolveOwnedModelCatalog).
+type AvailableModelsSource interface {
+	GetAvailableModels(ctx context.Context) ([]string, error)
+}
+
+var emptyModelsCatalogLogOnce sync.Once
 
 // HandleModels handles GET /v1/models.
 // Returns model list in OpenAI or Claude format based on request headers.
@@ -26,7 +40,7 @@ func HandleModels(w http.ResponseWriter, r *http.Request) {
 	wantsClaude := r.Header.Get("anthropic-version") != "" || r.Header.Get("x-api-key") != ""
 
 	// Build model list (MetAPI-owned listing; see docs/analysis/models-response-shape.md)
-	models := getAvailableModels(authCtx.Policy)
+	models := getAvailableModels(r.Context(), authCtx.Policy)
 	now := time.Now().UTC()
 
 	if wantsClaude {
@@ -99,27 +113,20 @@ func buildClaudeModelsResponse(models []string, now time.Time) map[string]any {
 	}
 }
 
-// getAvailableModels returns the list of available model names.
-// This is the MetAPI-owned listing path (not a live upstream /v1/models proxy).
-// Stub: returns common model names until tokenRouter-backed listing is wired here.
-func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
-	// Stub model list. In production, this queries the tokenRouter.
-	models := []string{
-		"gpt-4o",
-		"gpt-4o-mini",
-		"gpt-4-turbo",
-		"gpt-3.5-turbo",
-		"claude-sonnet-4-20250514",
-		"claude-3-5-sonnet-latest",
-		"gemini-2.5-pro",
-		"gemini-2.5-flash",
-	}
+// getAvailableModels returns the list of available model names for this caller.
+// This is the MetAPI-owned listing path (not a live upstream /v1/models proxy):
+// resolveOwnedModelCatalog loads route-backed names when TokenRouter is wired,
+// then downstream routing policy filters the catalog.
+func getAvailableModels(ctx context.Context, policy auth.DownstreamRoutingPolicy) []string {
+	models := resolveOwnedModelCatalog(ctx)
 	if len(policy.SupportedModels) == 0 && len(policy.AllowedRouteIDs) == 0 {
 		if policy.DenyAllWhenEmpty {
 			return []string{}
 		}
 		return models
 	}
+	// SupportedModels empty but AllowedRouteIDs set: keep empty until listing can
+	// join route IDs (AllowedRouteIDs is enforced at channel selection today).
 	if len(policy.SupportedModels) == 0 {
 		return []string{}
 	}
@@ -131,6 +138,93 @@ func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
 		}
 	}
 	return filtered
+}
+
+// resolveOwnedModelCatalog loads the MetAPI-owned model name catalog.
+//
+// Priority:
+//  1. UpstreamConfig.Router implementing AvailableModelsSource (TokenRouter.GetAvailableModels)
+//  2. Last-resort stub catalog when METAPI_ENABLE_PROXY_STUB is on (unit tests),
+//     or when a channel-selection router is present but does not implement listing
+//     (e2e / selection mocks that only wire SelectChannel*)
+//  3. Empty list with a one-shot warning when no router is configured in production
+//
+// This never scrapes live upstream /v1/models.
+func resolveOwnedModelCatalog(ctx context.Context) []string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cfg := getUpstreamConfig()
+	if src := availableModelsSourceFromConfig(cfg); src != nil {
+		models, err := src.GetAvailableModels(ctx)
+		if err != nil {
+			slog.Warn("getAvailableModels: router listing failed; returning empty catalog", "err", err)
+			return []string{}
+		}
+		return normalizeModelCatalog(models)
+	}
+	// Router is wired for channel selection but does not expose listing (common in
+	// selection-only test doubles). Prefer a stable last-resort catalog over empty
+	// so OpenAI clients still receive a shape-compatible owned list.
+	if cfg != nil && cfg.Router != nil {
+		return lastResortStubCatalog()
+	}
+	if isProxyStubEnabled() {
+		return lastResortStubCatalog()
+	}
+	emptyModelsCatalogLogOnce.Do(func() {
+		slog.Warn("getAvailableModels: no AvailableModelsSource wired; returning empty model list")
+	})
+	return []string{}
+}
+
+// availableModelsSourceFromConfig returns the optional listing capability on the
+// configured TokenRouter. Kept as a thin UpstreamConfig accessor so models listing
+// does not require expanding proxy.TokenRouterInterface (channel-selection surface).
+func availableModelsSourceFromConfig(cfg *UpstreamConfig) AvailableModelsSource {
+	if cfg == nil || cfg.Router == nil {
+		return nil
+	}
+	src, _ := cfg.Router.(AvailableModelsSource)
+	return src
+}
+
+// lastResortStubCatalog is used only when route-backed listing is unavailable
+// (proxy stub tests / selection-only mocks). Production with TokenRouter uses
+// GetAvailableModels instead.
+func lastResortStubCatalog() []string {
+	return []string{
+		"gpt-4o",
+		"gpt-4o-mini",
+		"gpt-4-turbo",
+		"gpt-3.5-turbo",
+		"claude-sonnet-4-20250514",
+		"claude-3-5-sonnet-latest",
+		"gemini-2.5-pro",
+		"gemini-2.5-flash",
+	}
+}
+
+// normalizeModelCatalog drops blanks, de-duplicates, and sorts for stable responses.
+func normalizeModelCatalog(models []string) []string {
+	if len(models) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(models))
+	out := make([]string, 0, len(models))
+	for _, m := range models {
+		name := strings.TrimSpace(m)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // knownModelContextLength returns a published context window for well-known models

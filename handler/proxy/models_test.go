@@ -1,12 +1,83 @@
 package proxyhandler
 
 import (
+	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/proxy"
+	"github.com/tokendancelab/metapi-go/routing"
 )
+
+// modelsTestRouter is a channel-selection router that implements
+// AvailableModelsSource for /v1/models unit tests.
+type modelsTestRouter struct {
+	models []string
+	err    error
+}
+
+func (r *modelsTestRouter) SelectChannel(context.Context, string, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *modelsTestRouter) SelectNextChannel(context.Context, string, []int64, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *modelsTestRouter) SelectPreferredChannel(context.Context, string, int64, routing.DownstreamRoutingPolicy, []int64) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *modelsTestRouter) RecordSuccess(context.Context, int64, float64, float64, *string, *int64) error {
+	return nil
+}
+func (r *modelsTestRouter) RecordFailure(context.Context, int64, routing.SiteRuntimeFailureContext, *int64) error {
+	return nil
+}
+
+func (r *modelsTestRouter) GetAvailableModels(context.Context) ([]string, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	out := make([]string, len(r.models))
+	copy(out, r.models)
+	return out, nil
+}
+
+// selectionOnlyRouter satisfies TokenRouterInterface without AvailableModelsSource.
+type selectionOnlyRouter struct{}
+
+func (r *selectionOnlyRouter) SelectChannel(context.Context, string, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *selectionOnlyRouter) SelectNextChannel(context.Context, string, []int64, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *selectionOnlyRouter) SelectPreferredChannel(context.Context, string, int64, routing.DownstreamRoutingPolicy, []int64) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *selectionOnlyRouter) RecordSuccess(context.Context, int64, float64, float64, *string, *int64) error {
+	return nil
+}
+func (r *selectionOnlyRouter) RecordFailure(context.Context, int64, routing.SiteRuntimeFailureContext, *int64) error {
+	return nil
+}
+
+// Ensure compile-time interface compliance.
+var (
+	_ proxy.TokenRouterInterface = (*modelsTestRouter)(nil)
+	_ AvailableModelsSource      = (*modelsTestRouter)(nil)
+	_ proxy.TokenRouterInterface = (*selectionOnlyRouter)(nil)
+)
+
+func withModelsRouter(t *testing.T, router proxy.TokenRouterInterface) {
+	t.Helper()
+	prev := getUpstreamConfig()
+	SetUpstreamConfig(&UpstreamConfig{Router: router})
+	t.Cleanup(func() {
+		SetUpstreamConfig(prev)
+	})
+}
 
 // ---- matchModelPattern ----
 
@@ -206,10 +277,12 @@ func TestBuildClaudeModelsResponse_Empty(t *testing.T) {
 
 // ---- getAvailableModels ----
 
-func TestGetAvailableModels(t *testing.T) {
-	models := getAvailableModels(auth.EmptyDownstreamRoutingPolicy)
+func TestGetAvailableModels_LastResortStubWhenUnwired(t *testing.T) {
+	// TestMain enables METAPI_ENABLE_PROXY_STUB; nil upstream uses last-resort catalog.
+	SetUpstreamConfig(nil)
+	models := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
 	if len(models) == 0 {
-		t.Error("expected non-empty model list")
+		t.Error("expected non-empty model list from last-resort stub catalog")
 	}
 	// Check known models
 	known := map[string]bool{}
@@ -227,9 +300,62 @@ func TestGetAvailableModels(t *testing.T) {
 	}
 }
 
+func TestGetAvailableModels_UsesRouterCatalog(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{
+		models: []string{"router-model-b", "router-model-a", "router-model-a", "  "},
+	})
+	got := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
+	if len(got) != 2 {
+		t.Fatalf("router catalog = %v, want 2 unique sorted models", got)
+	}
+	if got[0] != "router-model-a" || got[1] != "router-model-b" {
+		t.Fatalf("router catalog = %v, want sorted [router-model-a router-model-b]", got)
+	}
+}
+
+func TestGetAvailableModels_RouterErrorReturnsEmpty(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{err: errors.New("db down")})
+	got := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
+	if len(got) != 0 {
+		t.Fatalf("router error should yield empty catalog, got %v", got)
+	}
+}
+
+func TestGetAvailableModels_SelectionOnlyRouterFallsBackToStub(t *testing.T) {
+	// selectionOnlyRouter does not implement AvailableModelsSource.
+	withModelsRouter(t, &selectionOnlyRouter{})
+	got := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
+	if len(got) == 0 {
+		t.Fatal("selection-only router should fall back to last-resort stub catalog")
+	}
+	known := false
+	for _, m := range got {
+		if m == "gpt-4o" {
+			known = true
+			break
+		}
+	}
+	if !known {
+		t.Fatalf("expected stub gpt-4o in selection-only fallback, got %v", got)
+	}
+}
+
+func TestGetAvailableModels_EmptyWhenNoRouterAndStubDisabled(t *testing.T) {
+	t.Setenv("METAPI_ENABLE_PROXY_STUB", "0")
+	SetUpstreamConfig(nil)
+	got := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
+	if len(got) != 0 {
+		t.Fatalf("production nil-router without stub should return empty, got %v", got)
+	}
+}
+
 func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{
+		models: []string{"gpt-4o", "claude-sonnet-4-20250514", "gemini-2.5-pro"},
+	})
+
 	denyAll := auth.DownstreamRoutingPolicy{DenyAllWhenEmpty: true}
-	if got := getAvailableModels(denyAll); len(got) != 0 {
+	if got := getAvailableModels(context.Background(), denyAll); len(got) != 0 {
 		t.Fatalf("deny-all policy returned %v, want empty", got)
 	}
 
@@ -237,7 +363,7 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		SupportedModels:  []string{"gpt-4o"},
 		DenyAllWhenEmpty: true,
 	}
-	got := getAvailableModels(supported)
+	got := getAvailableModels(context.Background(), supported)
 	if len(got) != 1 || got[0] != "gpt-4o" {
 		t.Fatalf("supported policy returned %v, want [gpt-4o]", got)
 	}
@@ -246,7 +372,7 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		SupportedModels:  []string{"claude-*"},
 		DenyAllWhenEmpty: true,
 	}
-	got = getAvailableModels(wildcard)
+	got = getAvailableModels(context.Background(), wildcard)
 	if len(got) == 0 {
 		t.Fatal("wildcard supported policy returned empty, want Claude models")
 	}
@@ -260,8 +386,36 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		AllowedRouteIDs:  []int64{1},
 		DenyAllWhenEmpty: true,
 	}
-	if got := getAvailableModels(routeOnly); len(got) != 0 {
+	if got := getAvailableModels(context.Background(), routeOnly); len(got) != 0 {
 		t.Fatalf("route-only policy returned %v, want empty until route-aware model listing is available", got)
+	}
+}
+
+func TestHandleModels_UsesRouterCatalog(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{models: []string{"custom-route-model"}})
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "test",
+		Source: "global",
+		Policy: auth.EmptyDownstreamRoutingPolicy,
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 1 {
+		t.Fatalf("expected 1 model from router, got %#v", data)
+	}
+	first := data[0].(map[string]any)
+	if first["id"] != "custom-route-model" {
+		t.Fatalf("id = %v, want custom-route-model", first["id"])
+	}
+	if first["owned_by"] != modelsOwnedBy {
+		t.Fatalf("owned_by = %v", first["owned_by"])
 	}
 }
 
