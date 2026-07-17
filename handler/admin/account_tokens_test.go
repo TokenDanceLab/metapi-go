@@ -803,6 +803,7 @@ func TestTokens_SyncAccount(t *testing.T) {
 	db, r := setupTokensTest(t)
 	_, accountID := tokenFixture(t, db, r)
 
+	// Default fixture site platform is openai, which has no upstream token list.
 	resp := doPostJSON(t, r, "/api/account-tokens/sync/"+itoa(accountID), nil)
 	if resp.Code != http.StatusOK {
 		t.Fatalf("sync: %d %s", resp.Code, resp.Body.String())
@@ -814,7 +815,10 @@ func TestTokens_SyncAccount(t *testing.T) {
 		t.Error("expected success=true")
 	}
 	if result["status"] != "skipped" {
-		t.Errorf("expected status='skipped' (stub), got %v", result["status"])
+		t.Errorf("expected status='skipped', got %v", result["status"])
+	}
+	if result["reason"] != "no_upstream_tokens" && result["reason"] != "unsupported_platform" {
+		t.Errorf("expected skip reason no_upstream_tokens/unsupported_platform, got %v", result["reason"])
 	}
 }
 
