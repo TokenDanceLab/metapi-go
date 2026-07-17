@@ -5,10 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
-## [Unreleased]
+## [v0.8.1] — 2026-07-17
 
 ### Fixed
-- Bump Go toolchain to 1.26.5 to clear GO-2026-5856 (crypto/tls ECH) vulncheck.
+- Go 1.26.5 toolchain; vulncheck green (GO-2026-5856) (#168)
+
+### Added
+- Live  listing via TokenRouter.GetAvailableModels (#169)
+- Boot-wired ModelProbeScheduler probe executor + health recorder (#170)
+- Route decision admin APIs wired to ExplainSelection (#171)
 
 ## [v0.8.0] — 2026-07-17
 
