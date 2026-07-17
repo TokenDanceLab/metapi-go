@@ -77,7 +77,8 @@
 | Polish | v0.8.1 #168–#171 landed |
 | P4 adapters | Milestone 11 closed · **#182–#185** · tag **[v0.8.2](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.2)** |
 | Residual stubs | Milestone 12 closed · tag **[v0.8.3](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.3)** |
-| Polish v0.8.4 | Milestone 13 · **#204–#207 closed** (PRs #208–#212); tag **v0.8.4** |
+| Polish v0.8.4 | Milestone 13 closed · tag **[v0.8.4](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.4)** |
+| Residual v0.8.5 | Milestone 14 · **#214–#217** (presets / gemini models / cache invalidate / responses WS) |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -172,6 +173,6 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Tag **v0.8.4** (Enterprise polish complete)
-2. Optional: multi-instance cache/job coordination; Responses WebSocket full transport
+1. **Enterprise residual v0.8.5** (milestone 14): #214 site init presets · #215 Gemini models list · #216 site cache invalidation · #217 Responses WS residual
+2. Optional multi-instance job coordination beyond in-process tasks
 3. Continue product backlog P0/P1; frontend flake observability
