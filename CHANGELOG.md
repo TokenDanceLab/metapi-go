@@ -5,6 +5,14 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.11] — 2026-07-17
+
+### Added
+- DB-backed durable admin BackgroundTask store (cross-instance list/get) (#265 / #267)
+
+### Fixed
+- Frontend CI EnvironmentTeardownError flake hardening (#266 / #268)
+
 ## [v0.8.10] — 2026-07-17
 
 ### Added
