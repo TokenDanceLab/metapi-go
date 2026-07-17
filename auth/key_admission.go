@@ -12,7 +12,8 @@ import (
 
 // KeyAdmissionLimiter is an in-process sliding-window RPM/TPM gate for
 // managed downstream keys (learn #116). Default unlimited when limits are nil/<=0.
-// Multi-instance deployments need shared state (#118) — this is process-local.
+// Multi-instance deployments optionally share RPM/TPM via WindowCounter (#118, #245).
+// Snapshot() remains process-local (residual).
 type KeyAdmissionLimiter struct {
 	mu   sync.Mutex
 	keys map[int64]*keyWindow
@@ -21,6 +22,10 @@ type KeyAdmissionLimiter struct {
 	// sharedRPM is optional multi-instance counter (#118). nil = memory-only.
 	// Fail-open: Redis errors fall back to local window.
 	sharedRPM sharedcount.WindowCounter
+	// sharedTPM is optional multi-instance token counter (#245). nil = memory-only.
+	// Typically the same RedisCounter instance as sharedRPM.
+	// Fail-open: Redis errors fall back to local tokenEvents.
+	sharedTPM sharedcount.WindowCounter
 }
 
 type keyWindow struct {
@@ -57,22 +62,38 @@ func (l *KeyAdmissionLimiter) SetSharedRPMCounter(c sharedcount.WindowCounter) {
 	l.sharedRPM = c
 }
 
-// ConfigureSharedAdmissionFromRedisURL enables Redis-backed RPM counting when url is non-empty.
+// SetSharedTPMCounter wires an optional multi-instance token counter (#245).
+// Pass nil to clear (memory-only). Safe to call at process startup.
+// May reuse the same WindowCounter instance as SetSharedRPMCounter.
+func (l *KeyAdmissionLimiter) SetSharedTPMCounter(c sharedcount.WindowCounter) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sharedTPM = c
+}
+
+// ConfigureSharedAdmissionFromRedisURL enables Redis-backed RPM+TPM counting when url is non-empty.
+// Both counters share one RedisCounter instance (distinct key namespaces).
 // On parse/dial setup failure, logs and keeps memory-only. Runtime Redis errors fail open.
 func ConfigureSharedAdmissionFromRedisURL(redisURL string) {
 	redisURL = strings.TrimSpace(redisURL)
 	if redisURL == "" {
 		GlobalKeyAdmission.SetSharedRPMCounter(nil)
+		GlobalKeyAdmission.SetSharedTPMCounter(nil)
 		return
 	}
 	rc, err := sharedcount.NewRedisCounter(redisURL)
 	if err != nil {
 		slog.Warn("redis admission: disabled (bad REDIS_URL)", "error", err)
 		GlobalKeyAdmission.SetSharedRPMCounter(nil)
+		GlobalKeyAdmission.SetSharedTPMCounter(nil)
 		return
 	}
 	GlobalKeyAdmission.SetSharedRPMCounter(rc)
-	slog.Info("redis admission: shared RPM counter enabled")
+	GlobalKeyAdmission.SetSharedTPMCounter(rc)
+	slog.Info("redis admission: shared RPM+TPM counters enabled")
 }
 
 // ResetKeyAdmissionForTest clears the global limiter state.
@@ -128,13 +149,13 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 	usedTPM := sumTokens(w.tokenEvents)
 
 	// Optional multi-instance RPM (#118). Fail-open on errors.
-	sharedCounted := false
+	sharedRPMCounted := false
 	if rpmLimit > 0 && l.sharedRPM != nil {
 		n, err := l.sharedRPM.Incr(context.Background(), rpmSharedKey(keyID), time.Minute)
 		if err != nil {
 			slog.Debug("redis admission: fail-open on error", "key_id", keyID, "error", err)
 		} else {
-			sharedCounted = true
+			sharedRPMCounted = true
 			usedRPM = n
 			if n > rpmLimit {
 				return AdmissionDecision{
@@ -148,7 +169,7 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 		}
 	}
 
-	if !sharedCounted && rpmLimit > 0 && usedRPM >= rpmLimit {
+	if !sharedRPMCounted && rpmLimit > 0 && usedRPM >= rpmLimit {
 		retry := retryAfterMs(w.reqTimes, nowMs)
 		return AdmissionDecision{
 			Allowed:    false,
@@ -158,7 +179,29 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 			UsedTPM:    usedTPM,
 		}
 	}
-	if tpmLimit > 0 && estimatedTokens > 0 && usedTPM+estimatedTokens > tpmLimit {
+
+	// Optional multi-instance TPM (#245). Fail-open on errors.
+	sharedTPMCounted := false
+	if tpmLimit > 0 && estimatedTokens > 0 && l.sharedTPM != nil {
+		n, err := l.sharedTPM.IncrBy(context.Background(), tpmSharedKey(keyID), estimatedTokens, time.Minute)
+		if err != nil {
+			slog.Debug("redis admission tpm: fail-open on error", "key_id", keyID, "error", err)
+		} else {
+			sharedTPMCounted = true
+			usedTPM = n
+			if n > tpmLimit {
+				return AdmissionDecision{
+					Allowed:    false,
+					Reason:     "over_tpm",
+					RetryAfter: time.Second,
+					UsedRPM:    usedRPM,
+					UsedTPM:    usedTPM,
+				}
+			}
+		}
+	}
+
+	if !sharedTPMCounted && tpmLimit > 0 && estimatedTokens > 0 && usedTPM+estimatedTokens > tpmLimit {
 		retry := retryAfterTokenMs(w.tokenEvents, nowMs)
 		return AdmissionDecision{
 			Allowed:    false,
@@ -169,15 +212,23 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 		}
 	}
 
-	// reserve
+	// reserve (process-local residual for Snapshot)
 	w.reqTimes = append(w.reqTimes, nowMs)
 	if estimatedTokens > 0 && tpmLimit > 0 {
 		w.tokenEvents = append(w.tokenEvents, tokenEvent{atMs: nowMs, tokens: estimatedTokens})
 	}
+	outRPM := usedRPM
+	if !sharedRPMCounted {
+		outRPM = usedRPM + 1
+	}
+	outTPM := usedTPM
+	if !sharedTPMCounted {
+		outTPM = usedTPM + max64z(estimatedTokens, 0)
+	}
 	return AdmissionDecision{
 		Allowed: true,
-		UsedRPM: usedRPM + 1,
-		UsedTPM: usedTPM + max64z(estimatedTokens, 0),
+		UsedRPM: outRPM,
+		UsedTPM: outTPM,
 	}
 }
 
@@ -273,4 +324,8 @@ func max64z(v, floor int64) int64 {
 
 func rpmSharedKey(keyID int64) string {
 	return "metapi:rpm:" + formatInt64(keyID)
+}
+
+func tpmSharedKey(keyID int64) string {
+	return "metapi:tpm:" + formatInt64(keyID)
 }
