@@ -1,16 +1,17 @@
 # Original MetAPI Gap Matrix (metapi-go evidence)
 
-> Snapshot date: 2026-07-16  
-> Branch base: `feat/gap-inventory` (G1 sources/taxonomy)  
-> Issue: [#9 G2](https://github.com/tokendancelab/metapi-go/issues/9)  
+> Snapshot date: 2026-07-16 (G2 inventory)  
+> **Matrix evidence refreshed: 2026-07-17** (post v0.8.12 / toward v0.8.13 — docs-only #281)  
+> Branch base: `feat/gap-inventory` (G1 sources/taxonomy); refresh on `docs/p90-gap-matrix-refresh`  
+> Issue: [#9 G2](https://github.com/tokendancelab/metapi-go/issues/9) · refresh [#281](https://github.com/TokenDanceLab/metapi-go/issues/281)  
 > Sources: `docs/analysis/original-gap-sources.md`  
 > Taxonomy: `docs/analysis/original-gap-taxonomy.md`
 
 ```
 ████████████████████████████████████████████████████████████████
-█  THIS ROUND DOES NOT IMPLEMENT FIXES.                        █
-█  Docs-only inventory of original MetAPI gaps vs metapi-go.   █
-█  No Go/TS product edits, no behavior changes.                █
+█  G2 was docs-only inventory (no product fixes in that round).█
+█  2026-07-17 refresh only updates status/evidence for shipped █
+█  surfaces — still no product code in this docs PR.           █
 ████████████████████████████████████████████████████████████████
 ```
 
@@ -48,26 +49,26 @@
 | 580 | Gemini official chat rejects tool history without thought_signature | feature-protocol | partial | Only aggregate field `ThoughtSignatures []string` in `transform/gemini/generate_content/compatibility.go` `GeminiAggregateState`; no request-side injection/preservation of tool-history `thought_signature` for official Gemini chat found | P1 | yes |
 | 581 | PR: Fix Gemini official tool-history thought signatures | feature-protocol | partial | Same as #580 — stream state can collect signatures (`ThoughtSignatures`), but native bridge fix for official tool history is incomplete vs PR intent | P1 | yes |
 | 590 | Cannot adjust route order | feature-routing | partial | Routes listed `ORDER BY id ASC` in `handler/admin/token_routes.go` `listLite`/`listSummary` — no route-level order column/API. Channel priority reorder exists: `PUT /api/channels/batch` `batchUpdateChannels` updates `route_channels.priority` | P2 | yes |
-| 594 | Per-site max concurrency / request control | feature-routing | missing | Only **session-scoped channel** concurrency: `config.ProxySessionChannelConcurrencyLimit`, `proxy/session.go` `channelConcurrencyLimit` / `AcquireChannelLease`. No per-site max concurrent requests field on `sites` schema or site service | P2 | yes |
-| 591 | Add `/v1/rerank` endpoint | feature-protocol | missing | `handler/proxy/router.go` `RegisterProxyRoutes` has chat/messages/completions/responses/models/embeddings/images/videos/search/files — **no** `rerank` route or handler | P1 | yes |
+| 594 | Per-site max concurrency / request control | feature-routing | present | Schema: `sites.max_concurrency` (`store/schema.go` `Site.MaxConcurrency`, additive `store/additive.go` `sc2_002_site_max_concurrency`). Limiter: `proxy/site_concurrency.go` `SiteConcurrencyLimiter` (0 = unlimited; saturate → skip site, no cascade). Wired in `handler/proxy/upstream.go` + admin create/update `handler/admin/sites.go` / `handler/admin/payloads/sites.go`; tests `proxy/site_concurrency_test.go`, `handler/proxy/upstream_test.go` `TestSiteConcurrencySaturateSkipsWithoutFailure`, `handler/admin/sites_test.go` `TestSites_MaxConcurrencyRoundTrip`. Orthogonal to session channel leases in `proxy/session.go` | P2 | no |
+| 591 | Add `/v1/rerank` endpoint | feature-protocol | present | `handler/proxy/rerank.go` `HandleRerank` (`POST` passthrough `/v1/rerank`, model required, stream rejected); registered `handler/proxy/router.go` `RegisterProxyRoutes` → `r.Post("/rerank", HandleRerank)`; metrics path `handler/shared/metrics.go`; tests `handler/proxy/rerank_test.go` + router path coverage; contract `docs/analysis/rerank-endpoint.md` | P1 | no |
 | 583 | Key grouping / tags | feature-keys | present | `downstream_api_keys.group_name` CRUD: `handler/admin/downstream_keys.go` create/update/batch groupName; schema `store/schema.go` `DownstreamAPIKey`; tests `handler/admin/downstream_keys_test.go` | P2 | no |
 | 579 | Downstream key binds multiple keys or multiple sites | feature-keys | partial | Multi-site constraint surface present: `allowed_route_ids`, `excluded_site_ids`, `supported_models`, `site_weight_multipliers` in `auth/downstream.go` + `handler/admin/downstream_keys.go`. No multi-credential / multi-key binding inside one downstream key record | P2 | yes |
-| 578 | Per-key outbound proxy | feature-keys | missing | Downstream key schema/API has no proxy fields (`store/schema.go` `DownstreamAPIKey`). Proxy exists at **site** (`sites.proxy_url`) and **account** (`extraConfig.proxyUrl` via `handler/admin/accounts.go` / `web/pages/Accounts.tsx`) only | P2 | yes |
+| 578 | Per-key outbound proxy | feature-keys | present | Schema: `downstream_api_keys.proxy_url` (`store/schema.go`, additive `store/additive.go` `sc2_001_downstream_proxy_url`). Precedence helper `proxy/key_proxy.go` `ApplyKeyProxyOverride` / `ResolveKeyProxyURL` (key > account > site > system > direct). Auth load + middleware: `auth/downstream.go`, `auth/context.go`, `auth/proxy.go`. Dialer wiring `handler/proxy/upstream.go`; admin CRUD `handler/admin/downstream_keys.go`. Tests `proxy/key_proxy_test.go`, `auth/proxy_test.go` | P2 | no |
 | 570 | Create named custom routes + attach arbitrary channels | feature-routing | present | `POST /api/routes` `handler/admin/token_routes.go` `createRoute` inserts `token_routes` (`model_pattern`, `display_name`, `route_mode`, …); channel attach `POST /api/routes/:id/channels`; group sources `route_group_sources` | P2 | no |
 | 549 | Session stickiness | feature-routing | present | `proxy/session.go` `ProxyChannelCoordinator` `BuildStickySessionKey` / `BindStickyChannel` / `GetStickyChannelID`; config `ProxyStickySessionEnabled`/`ProxyStickySessionTtlMs`; e2e `e2e/e2e_test.go` `TestStickySession`; selection tests `proxy/channel_selection_test.go` sticky preference | P2 | no |
 | 547 | Per-key weight for load balancing | feature-keys | partial | Channel weight: `route_channels.weight` (`store/schema.go`, `handler/admin/token_routes.go`). Downstream **site** multipliers: `site_weight_multipliers` + `routing` `TestSiteWeightMultipliers`. No dedicated per-downstream-key weight scalar independent of site multipliers | P2 | yes |
 | 520 | PR: model context_length + manual model deletion | feature-admin-ux | partial | Manual models: `handler/admin/accounts.go` manual model insert/update paths + tests `handler/admin/accounts_test.go`. **No** `context_length` / `contextLength` field in Go schema, handlers, or web API types (only mentioned in gap docs) | P2 | yes |
 | 584 | PR: site custom header override priority | feature-protocol | partial | Site custom headers applied with `req.Header.Set` in `platform/site_proxy.go` `SiteProxy.Do` / `DoWithProxy` (always overwrite same-name). Reserved-header filter: `service/account_service.go` `filterPlatformCustomHeaders`. No opt-in “override priority” flag / request-header precedence policy as in upstream PR | P2 | yes |
-| 588 | PR: pattern-group channels auto-sync after rebuild | feature-routing | missing | `service/site_service.go` `RebuildRoutesBestEffort` is explicit **stub** (`TODO(P4)`). Admin `POST /api/routes/rebuild` exists (`handler/admin/token_routes.go` `rebuildRoutes`) but auto-sync of pattern/group channels after topology change is not implemented | P2 | yes |
-| 526 | Existing route groups do not auto-add channels for new sites | feature-routing | missing | Same rebuild stub; `route_group_sources` is manual membership only (`handler/admin/token_routes.go` insert/delete sources). No auto-include on site/account create | P2 | yes |
-| 559 | Regex route groups miss newly added matching sites | feature-routing | missing | Same as #526/#588 — pattern matching at select time exists in routing matcher, but group membership does not auto-refresh for new matching sites | P2 | yes |
+| 588 | PR: pattern-group channels auto-sync after rebuild | feature-routing | present | Real rebuild: `service/route_rebuild.go` `RebuildRoutesBestEffort` → `RebuildTokenRoutesFromAvailability` (process mutex; rebuilds automatic pattern/exact channels from exact-route sources + `token_model_availability` / model availability; preserves `manual_override`; invalidates routing cache). Create path `PopulateRouteChannelsByModelPattern`. Hooks: account mutations `handler/admin/accounts.go`, maintenance `handler/admin/settings_maintenance.go`, admin rebuild `handler/admin/token_routes.go`. Spec note `docs/specs/p7-token-router.md` FE-GROUP-REBUILD. Tests `service/route_rebuild_test.go`. `explicit_group` membership stays on `route_group_sources` and expands at select time (by design) | P2 | no |
+| 526 | Existing route groups do not auto-add channels for new sites | feature-routing | present | Same rebuild path as #588: after account/site topology or model availability changes, pattern routes recompose automatic channels so new matching sites/accounts appear. Admin `POST /api/routes/rebuild` + best-effort hooks. `explicit_group` still uses source-route membership (`route_group_sources`) rather than materializing its own channel rows | P2 | no |
+| 559 | Regex route groups miss newly added matching sites | feature-routing | present | Same as #526/#588 — `MatchesModelPattern` during rebuild collects newly available models/sites into pattern routes; residual risk is only if operators skip rebuild hooks (best-effort paths log and continue) | P2 | no |
 | 550 | PR: newapi cookie check-in + downstream key defaults | ops-checkin | present | `platform/newapi.go` `Checkin` + `shouldFallbackToCookieCheckin` + cookie check-in path `tryCookieCheckin`; tests `platform/newapi_test.go` `TestShouldFallbackToCookieCheckin`. Downstream key defaults handled in admin create path (`handler/admin/downstream_keys.go`) | P3 | no |
 | 586 | ByteDance coding-plan stuck on v1 instead of v3 → 401 | feature-protocol | present | `proxy/endpoint_flow.go` `BuildUpstreamURL` + `hasVersionedBasePath` / `stripLeadingVersionSegment` preserves `/api/v3` base: tests `proxy/endpoint_flow_test.go` `https://ark.cn-beijing.volces.com/api/v3` → `.../api/v3/chat/completions`. Platform detect: `service/site_detect.go` bytedance/volcengine | P1 | no |
 | 577 | AnyRouter check-in and model list broken | ops-checkin | partial | `platform/anyrouter.go` embeds `NewApiAdapter` (inherits Checkin/GetModels); token APIs intentionally disabled. Runtime “broken check-in/model list” needs live AnyRouter verification → residual risk | P3 | yes |
 | 571 | Codex OAuth cannot call gpt-5.5 | feature-protocol | unknown-needs-runtime | Codex OAuth provider: `service/oauth/codex.go`; model discovery status types `service/oauth/account.go`; quota path references `gpt-5.4` in `service/oauth/quota.go`. No hard block of gpt-5.5 found statically; needs runtime OAuth+model probe | P1 | yes |
 | 569 | Connection create missing proxy configuration | feature-admin-ux | present | Account update payload `proxyUrl`: `handler/admin/payloads/accounts.go`, `handler/admin/accounts.go` merge into `extraConfig`; UI edit form `web/pages/Accounts.tsx` `proxyUrl` field + display. Create/update tests `handler/admin/accounts_test.go` `TestAccounts_Update_ProxyURL` | P4 | no |
 | 555 | Token usage statistics inaccurate | bug-correctness | partial | Aggregation pipeline: `scheduler/usage_aggregation.go` → `site_day_usage` / `model_day_usage`; dashboard reads `handler/admin/stats.go` (`SUM(total_tokens)`, model day usage). Accuracy of stream/partial/error token extraction still needs runtime audit | P0 | yes |
-| 496 | Claude cache pricing wrong when cache_ratio missing (fallback 1.0) | bug-correctness | partial | Schema/UI: `proxy_logs.billing_details`, `web/api.ts` `cacheRatio`, `web/pages/ProxyLogs.tsx` display. No Go cost builder found that applies `cache_ratio` with non-1.0 fallback when missing (`proxy/surface.go` has `EstimatedCost`/`BillingDetails` fields only) | P0 | yes |
+| 496 | Claude cache pricing wrong when cache_ratio missing (fallback 1.0) | bug-correctness | present | Cost builder: `routing/pricing_cost.go` `ResolveCacheRatio` / `DefaultCacheRatioForModel` — Claude missing → **0.1**, cache_creation → **1.25**; non-Claude keeps historical 1.0; explicit 0 preserved. Proxy path: `handler/proxy/billing_cost.go` `EstimateBillingCostFromUsage` → `CalculateModelUsageBreakdown`. Tests `routing/pricing_cost_test.go`, `handler/proxy/billing_cost_test.go`. Analysis `docs/analysis/cache-ratio-pricing.md`. UI still shows `billing_details.cacheRatio` on proxy logs | P0 | no |
 | 529 | Drag-and-drop reorder | feature-admin-ux | present | Route **channel** drag: `web/pages/TokenRoutes.tsx` + `@dnd-kit` (`web/pages/token-routes/RouteCard*.tsx`, `priorityRail.ts`) → `api.batchUpdateChannels` priorities. Import drag is file-drop only (`ImportExport.tsx`) | P4 | no |
 | 538 | Hermes/Codex multi-turn `/v1/responses` reasoning item needs content | feature-protocol | partial | Responses surface: `handler/proxy/router.go` `/responses`, transform reasoning parsers `transform/shared/chatFormatsCore.go` `parseResponsesReasoning` / `ResponsesReasoningByIndex`; compact sanitize `transform/openai/responses/compact.go`. No dedicated fix ensuring multi-turn reasoning items always carry required `content` for Hermes/Codex second turn | P1 | yes |
 
@@ -133,16 +134,18 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 9 | 10 |
-| partial | 13 | 33 |
-| missing | 6 | 9 |
+| present | 16 | 17 |
+| partial | 12 | 32 |
+| missing | 0 | 3 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (9): **#582, #573, #583, #570, #549, #550, #586, #569, #529**.  
-Mandatory missing (6): **#594, #591, #578, #588, #526, #559**.  
-Mandatory partial (13): **#568, #585, #580, #581, #590, #579, #547, #520, #584, #577, #555, #496, #538**.  
+Mandatory present (16): **#582, #573, #583, #570, #549, #550, #586, #569, #529, #594, #591, #578, #588, #526, #559, #496**.  
+Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559 shipped)*.  
+Mandatory partial (12): **#568, #585, #580, #581, #590, #579, #547, #520, #584, #577, #555, #538**.  
 Mandatory unknown (1): **#571**.
+
+Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.
 
 ---
 
@@ -152,7 +155,7 @@ Mandatory unknown (1): **#571**.
 
 | Debt | Area | Evidence | Notes | Backlog? |
 | --- | --- | --- | --- | --- |
-| Route rebuild stub | routing/ops | `service/site_service.go` `RebuildRoutesBestEffort` empty body + `TODO(P4)`; `handler/admin/edge_cases_test.go` documents stub concurrency | Blocks #588/#526/#559 class work | yes |
+| Route rebuild (resolved) | routing/ops | `service/route_rebuild.go` real `RebuildRoutesBestEffort` / `RebuildTokenRoutesFromAvailability`; tests + admin hooks | Was empty stub at G2; closed by FE-GROUP-REBUILD / #588 family — keep row only as historical pointer | no |
 | Session lease goroutines | proxy session | `proxy/session.go` `createTrackedLease`: expiry `go func` + keepalive ticker `go func` per lease | Correctness/perf under high session churn; ensure `doneCh` always closes | yes |
 | Client disconnect cancel | proxy HTTP | No `CloseNotify` / request-context cancel wiring found in `handler/proxy/*` or `proxy` executor paths that aborts upstream when client disconnects mid-stream (e2e shutdown tests client-side only) | Risk: upstream work continues after client gone; reasoning models waste quota | yes |
 | RWMutex alias / cache locks | routing concurrency | `routing/weights.go` `type sync_RWMutex = sync.RWMutex`; real `sync.RWMutex` used in `routing/cache.go`, `config`, admin caches | Not a no-op stub; keep as concurrency review point when extending stable-first state | no (monitor) |
@@ -162,10 +165,11 @@ Mandatory unknown (1): **#571**.
 
 ## Planning notes for later waves
 
-1. **Do not implement fixes in this round** — matrix is input to issue filing / wave planning only.
-2. Highest leverage product gaps from mandatory set: rebuild auto-sync (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), Gemini `thought_signature` (**#580/#581**), cache_ratio pricing (**#496**), cascade/failover hardening (**#585/#568**).
-3. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
-4. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
+1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
+2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
+3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade/failover hardening (**#585/#568**), route **order** (**#590**), multi-key binding (**#579**), usage/stats accuracy (**#555**), multi-turn responses content (**#538**).
+4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
+5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 
 ---
 

@@ -1,6 +1,7 @@
 # Original MetAPI Gap Backlog (G3)
 
 > Snapshot date: 2026-07-16  
+> **Matrix evidence refreshed: 2026-07-17** for shipped surfaces (post v0.8.12 / toward v0.8.13) — see `docs/analysis/original-gap-matrix.md` (#281). Historical G3 issue shells below are unchanged.  
 > Source matrix: `docs/analysis/original-gap-matrix.md` (G2 #9)  
 > Issue: [#10 G3](https://github.com/TokenDanceLab/metapi-go/issues/10)  
 > Scope: **docs + GitHub backlog issues only** — no product implementation in this wave.
@@ -50,6 +51,12 @@ Not filed as G3 backlog issues:
 | Upstream numbers covered | 22 (incl. #580+#581 pair) |
 | Epics with filed issues | 5 of 6 (Ops-checkin empty at P0/P1) |
 
+> **2026-07-17 matrix refresh note (does not refile G3 issues):** several deferred / filed rows are now **present** in code (matrix SSOT):  
+> - **present**: #591 `/v1/rerank`, #594 site max concurrency, #578 per-key `proxy_url`, #588/#526/#559 rebuild, #496 Claude `cache_ratio`  
+> - still **partial** (examples): #579 multi-key binding, #590 route order, #520 context_length product depth, failover/stats residual rows  
+> Mandatory matrix **missing** count: **0** (was 6). All-rows **missing**: **3** (#534, #514, #292).  
+> G3 issue shells (#36–#56) remain historical tracking records; close/update individual issues in their own product PRs when AC is accepted.
+
 Verify:
 
 ```bash
@@ -97,7 +104,7 @@ Downstream/account key lifecycle, quota, and sync correctness.
 | Upstream | Title | status | Pri |
 | ---: | --- | --- | --- |
 | 579 | Downstream key multi-key / multi-site binding | partial | P2 |
-| 578 | Per-key outbound proxy | missing | P2 |
+| 578 | Per-key outbound proxy | present | P2 |
 | 547 | Per-key weight for load balancing | partial | P2 |
 | 360 | Split sites across different downstream keys | partial | P2 |
 
@@ -110,7 +117,7 @@ Proxy/protocol compatibility (OpenAI / Anthropic / Gemini / Codex / Responses).
 | Upstream | Title | Matrix status | Pri | metapi-go issue |
 | ---: | --- | --- | --- | ---: |
 | 580 / 581 | Gemini tool-history `thought_signature` | partial | P1 | [#47](https://github.com/TokenDanceLab/metapi-go/issues/47) |
-| 591 | Add `/v1/rerank` endpoint | missing | P1 | [#48](https://github.com/TokenDanceLab/metapi-go/issues/48) |
+| 591 | Add `/v1/rerank` endpoint | present | P1 | [#48](https://github.com/TokenDanceLab/metapi-go/issues/48) |
 | 571 | Codex OAuth gpt-5.5 support | unknown-needs-runtime | P1 | [#49](https://github.com/TokenDanceLab/metapi-go/issues/49) |
 | 538 | Multi-turn `/v1/responses` reasoning content | partial | P1 | [#50](https://github.com/TokenDanceLab/metapi-go/issues/50) |
 | 531 | Anthropic→OpenAI skill-call anomaly | partial | P1 | [#51](https://github.com/TokenDanceLab/metapi-go/issues/51) |
@@ -182,7 +189,7 @@ Usage aggregation, token counting, and billing/cost correctness.
 | Upstream | Title | Matrix status | Pri | metapi-go issue |
 | ---: | --- | --- | --- | ---: |
 | 555 | Token usage statistics inaccurate | partial | P0 | [#42](https://github.com/TokenDanceLab/metapi-go/issues/42) |
-| 496 | Claude `cache_ratio` pricing fallback wrong | partial | P0 | [#43](https://github.com/TokenDanceLab/metapi-go/issues/43) |
+| 496 | Claude `cache_ratio` pricing fallback wrong | present | P0 | [#43](https://github.com/TokenDanceLab/metapi-go/issues/43) |
 | 491 | Some requests do not count tokens | partial | P0 | [#44](https://github.com/TokenDanceLab/metapi-go/issues/44) |
 
 ### AC themes (shared)
@@ -202,10 +209,10 @@ Not filed in G3 (priority below P0/high-P1). Keep for F0 / feature-complete / re
 | Upstream | Title | status |
 | ---: | --- | --- |
 | 590 | Cannot adjust route order | partial |
-| 594 | Per-site max concurrency / request control | missing |
-| 588 | Pattern-group channels auto-sync after rebuild | missing |
-| 526 | Existing route groups do not auto-add new sites | missing |
-| 559 | Regex route groups miss newly added matching sites | missing |
+| 594 | Per-site max concurrency / request control | present |
+| 588 | Pattern-group channels auto-sync after rebuild | present |
+| 526 | Existing route groups do not auto-add new sites | present |
+| 559 | Regex route groups miss newly added matching sites | present |
 | 572 | Passthrough endpoint order; skip providers on endpoint failure | partial |
 | 566 | `MATCH_MAX_LATENCY_DELTA_MS` too small → actual_cost fallback | unknown-needs-runtime |
 | 514 | Multi-tier ctx sizes per model to switch channels | missing |
@@ -219,7 +226,7 @@ Not filed in G3 (priority below P0/high-P1). Keep for F0 / feature-complete / re
 
 | Debt | Area | Suggested owner lane |
 | --- | --- | --- |
-| Route rebuild stub (`RebuildRoutesBestEffort`) | routing/ops | feature / schema |
+| Route rebuild (resolved — see matrix #588 family) | routing/ops | was feature / schema; now present in `service/route_rebuild.go` |
 | Session lease goroutines lifecycle | proxy session | reliability / backend-arch |
 | Client disconnect cancel to upstream | proxy HTTP | reliability |
 | Proxy surface stubs guardrails | proxy handlers | reliability |
