@@ -14,8 +14,8 @@ Four background schedulers still carry TODOs that look like product work. Operat
 | Scheduler | File | Interval | What currently runs | Residual / silent gap | Multi-instance |
 |-----------|------|----------|---------------------|------------------------|----------------|
 | Sub2API refresh | `scheduler/sub2api_refresh.go` | 60s (min 60s) | Lease + SQL scan of active `sub2api` accounts; logs `scanned=N, refreshed=0, failed=0` | Does **not** parse `extraConfig.sub2apiAuth`; does **not** filter due tokens; does **not** call `refreshSub2ApiManagedSessionSingleflight` or any upstream refresh. Concurrency constant unused. | `runWithSchedulerLease` (PG advisory lock / process-local mutex). Only one instance runs the empty pass. |
-| Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + load cooling candidates (SQL) + load active candidates (coordinator provider when wired, else SQL stub) + merge/filter/prioritize + probe via global model-probe scheduler when registered | Active path prefers optional `SetActiveChannelIDsProvider` → `ProxyChannelCoordinator.GetActiveChannelIDs` (#273). Residual only when provider is **unset**: SQL `LIMIT 50` approximation. Probe is real only if model-probe is registered; otherwise probe is skipped with debug log. | Lease serializes sweeps across PG instances. In-flight / last-started maps and coordinator active set are **process-local**. |
-| Site announcement | `scheduler/site_announcement.go` | 15m (min 10s) | Lease + enumerate active sites + log count | **No** platform adapter calls, **no** `site_announcements` writes, **no** notifications/events. Admin `POST /api/site-announcements/sync` already has real `syncSiteAnnouncements`; this ticker does not call it. | Lease serializes residual scan. No shared announcement write from this path (because none occur). |
+| Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + cooling SQL + active candidates via optional `SetActiveChannelIDsProvider` (coordinator) or SQL LIMIT 50 residual + probe | Active path prefers provider (#273); residual SQL only when provider **unset**. Empty provider set does not fall back to residual SQL. Probe real only if model-probe registered. | Lease serializes sweeps; in-flight maps process-local. |
+| Site announcement | `scheduler/site_announcement.go` | 15m (min 10s) | Lease + optional `SyncFunc` (wired from admin `SyncSiteAnnouncements` via `SetDefaultSiteAnnouncementSyncFunc` on route register, #272) | When SyncFunc set: real platform adapter + DB writes. When nil: residual scan-only remains for tests/partial boots. | Lease serializes sync/scan. |
 | Update center | `scheduler/update_center.go` | 15m (min 10s) | Lease + log line | **No** remote registry/helper poll, **no** version persistence, **no** deploy/rollback. Admin status/check are local stubs (`0.0.0`); deploy/rollback are 501 residuals (`residual-update-center.md`). | Lease serializes residual log. No cluster-wide "last checked" state. |
 
 ## Per-scheduler detail
@@ -139,3 +139,11 @@ test -f docs/analysis/scheduler-residual-todos.md
 - `docs/analysis/residual-update-center.md` — admin deploy/rollback / clear-cache honesty
 - `docs/analysis/background-tasks-multi-instance-residual.md` — process-local admin task registry
 - `docs/specs/p12-schedulers.md` — intended TS parity (aspirational vs residual above)
+
+### Update (#272)
+
+Production path: `RegisterSiteAnnouncementsRoutes` installs `SetDefaultSiteAnnouncementSyncFunc` → `admin.SyncSiteAnnouncements`. Residual scan only when `SyncFunc` is nil.
+
+### Update (#273)
+
+Channel recovery active candidates prefer optional `SetActiveChannelIDsProvider` (wired from `ConfigureProxyUpstream` → `ProxyChannelCoordinator.GetActiveChannelIDs`). Nil provider keeps SQL `LIMIT 50` residual fallback. Empty provider set does **not** fall back to residual SQL.
