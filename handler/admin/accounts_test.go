@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/service/alert"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -58,10 +59,12 @@ func setupAccountFixture(t *testing.T, r chi.Router) (int64, int64) {
 	site := newSiteFixture(t, r, "Fixture Site", "https://api.openai.com")
 	siteID := int64(site["id"].(float64))
 
-	// Create an account
+	// Create an account (skip upstream verify for generic fixtures).
 	body := map[string]any{
-		"siteId":      siteID,
-		"accessToken": "sk-fixture-token",
+		"siteId":         siteID,
+		"accessToken":    "sk-fixture-token",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -71,6 +74,62 @@ func setupAccountFixture(t *testing.T, r chi.Router) (int64, int64) {
 	json.Unmarshal(resp.Body.Bytes(), &m)
 	accountID := int64(m["id"].(float64))
 	return siteID, accountID
+}
+
+func newOpenAIModelsServer(t *testing.T, expectedToken string, models []string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if expectedToken != "" && r.Header.Get("Authorization") != "Bearer "+expectedToken {
+			http.Error(w, `{"error":"bad token"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		items := make([]map[string]any, 0, len(models))
+		for _, m := range models {
+			items = append(items, map[string]any{"id": m})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": items})
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func newSessionVerifyServer(t *testing.T, expectedToken, username string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/user/self":
+			if r.Header.Get("Authorization") != "Bearer "+expectedToken {
+				http.Error(w, `{"success":false,"message":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"id":         7,
+					"username":   username,
+					"quota":      1_000_000,
+					"used_quota": 0,
+				},
+			})
+		case "/api/user/token":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data":    []any{},
+			})
+		case "/v1/models":
+			http.Error(w, `{"error":"not an apikey"}`, http.StatusUnauthorized)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
 }
 
 func setupAccountFixtureWithSite(t *testing.T, db *store.DB, r chi.Router, siteName, url string) (int64, int64) {
@@ -268,13 +327,24 @@ func TestAccounts_UpdateClearsSnapshotCache(t *testing.T) {
 
 func TestAccounts_Create(t *testing.T) {
 	_, r, _ := setupAccountsTest(t)
-	site := newSiteFixture(t, r, "CreateSite", "https://api.openai.com")
+	server := newOpenAIModelsServer(t, "sk-test-create-token-12345", []string{"gpt-4o-mini"})
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "CreateSite",
+		"url":      server.URL,
+		"platform": "openai",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	json.Unmarshal(siteResp.Body.Bytes(), &site)
 	siteID := int64(site["id"].(float64))
 
 	body := map[string]any{
-		"siteId":      siteID,
-		"accessToken": "sk-test-create-token-12345",
-		"username":    "testuser",
+		"siteId":         siteID,
+		"accessToken":    "sk-test-create-token-12345",
+		"username":       "testuser",
+		"credentialMode": "apikey",
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -286,8 +356,221 @@ func TestAccounts_Create(t *testing.T) {
 	if created["id"] == nil {
 		t.Error("expected id in response")
 	}
-	if created["tokenType"] != "auto" {
-		t.Errorf("expected tokenType='auto', got %v", created["tokenType"])
+	if created["tokenType"] != "apikey" {
+		t.Errorf("expected tokenType='apikey', got %v", created["tokenType"])
+	}
+	if created["apiTokenFound"] != true {
+		t.Errorf("expected apiTokenFound=true, got %v", created["apiTokenFound"])
+	}
+	if created["modelCount"] != float64(1) {
+		t.Errorf("expected modelCount=1, got %v", created["modelCount"])
+	}
+}
+
+func TestAccounts_Create_RejectsUnknownToken(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Force VerifyToken unknown: no usable session/user and no models.
+		if r.URL.Path == "/api/user/self" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"success": false, "message": "nope"})
+			return
+		}
+		if r.URL.Path == "/v1/models" {
+			http.Error(w, `{"error":"bad token"}`, http.StatusUnauthorized)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(upstream.Close)
+
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "Reject Unknown",
+		"url":      upstream.URL,
+		"platform": "anyrouter",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	json.Unmarshal(siteResp.Body.Bytes(), &site)
+	siteID := int64(site["id"].(float64))
+
+	resp := doPostJSON(t, r, "/api/accounts", map[string]any{
+		"siteId":      siteID,
+		"accessToken": "invalid-token",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	if result["success"] != false {
+		t.Fatalf("success = %v, want false", result["success"])
+	}
+	if result["requiresVerification"] != true {
+		t.Fatalf("requiresVerification = %v, want true", result["requiresVerification"])
+	}
+	msg, _ := result["message"].(string)
+	if !strings.Contains(msg, "Token 验证失败") {
+		t.Fatalf("message = %q, want verify failure", msg)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM accounts WHERE site_id = ?", siteID).Scan(&count); err != nil {
+		t.Fatalf("count accounts: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("created %d accounts, want 0", count)
+	}
+}
+
+func TestAccounts_Create_EnrichesUsernameFromUserInfo(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	server := newSessionVerifyServer(t, "session-token-xyz", "detected-user")
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "Session Enrich",
+		"url":      server.URL,
+		"platform": "anyrouter",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	json.Unmarshal(siteResp.Body.Bytes(), &site)
+	siteID := int64(site["id"].(float64))
+
+	resp := doPostJSON(t, r, "/api/accounts", map[string]any{
+		"siteId":      siteID,
+		"accessToken": "session-token-xyz",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create account: %d %s", resp.Code, resp.Body.String())
+	}
+	var created map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &created)
+	if created["tokenType"] != "session" {
+		t.Fatalf("tokenType = %v, want session", created["tokenType"])
+	}
+	if created["usernameDetected"] != true {
+		t.Fatalf("usernameDetected = %v, want true", created["usernameDetected"])
+	}
+	if created["username"] != "detected-user" {
+		t.Fatalf("username = %v, want detected-user", created["username"])
+	}
+
+	var username string
+	if err := db.QueryRow("SELECT username FROM accounts WHERE id = ?", int64(created["id"].(float64))).Scan(&username); err != nil {
+		t.Fatalf("read username: %v", err)
+	}
+	if username != "detected-user" {
+		t.Fatalf("stored username = %q, want detected-user", username)
+	}
+}
+
+func TestAccounts_Create_APIKeySkipModelFetch(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	upstreamCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalls++
+		http.Error(w, "should not be called", http.StatusInternalServerError)
+	}))
+	t.Cleanup(server.Close)
+
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "Skip Model Fetch",
+		"url":      server.URL,
+		"platform": "openai",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	json.Unmarshal(siteResp.Body.Bytes(), &site)
+	siteID := int64(site["id"].(float64))
+
+	resp := doPostJSON(t, r, "/api/accounts", map[string]any{
+		"siteId":         siteID,
+		"accessToken":    "sk-skip-verify",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create account: %d %s", resp.Code, resp.Body.String())
+	}
+	if upstreamCalls != 0 {
+		t.Fatalf("upstreamCalls = %d, want 0", upstreamCalls)
+	}
+	var created map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &created)
+	if created["tokenType"] != "apikey" {
+		t.Fatalf("tokenType = %v, want apikey", created["tokenType"])
+	}
+
+	var accessToken string
+	var apiToken *string
+	if err := db.QueryRow("SELECT access_token, api_token FROM accounts WHERE id = ?", int64(created["id"].(float64))).Scan(&accessToken, &apiToken); err != nil {
+		t.Fatalf("read tokens: %v", err)
+	}
+	if accessToken != "" {
+		t.Fatalf("access_token = %q, want empty for apikey", accessToken)
+	}
+	if apiToken == nil || *apiToken != "sk-skip-verify" {
+		t.Fatalf("api_token = %v, want sk-skip-verify", apiToken)
+	}
+}
+
+func TestAccounts_Create_InvalidAccessTokenFailClosed(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	// NewAPI-style adapters treat HTTP failures as "unknown" rather than
+	// propagating the body message; create must still fail closed.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"success":false,"message":"无权进行此操作，access token 无效"}`, http.StatusForbidden)
+	}))
+	t.Cleanup(upstream.Close)
+
+	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":     "Fail Closed",
+		"url":      upstream.URL,
+		"platform": "anyrouter",
+	})
+	if siteResp.Code != http.StatusOK {
+		t.Fatalf("create site: %d %s", siteResp.Code, siteResp.Body.String())
+	}
+	var site map[string]any
+	json.Unmarshal(siteResp.Body.Bytes(), &site)
+	siteID := int64(site["id"].(float64))
+
+	resp := doPostJSON(t, r, "/api/accounts", map[string]any{
+		"siteId":      siteID,
+		"accessToken": "bad-session",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	if result["requiresVerification"] != true {
+		t.Fatalf("requiresVerification = %v, want true", result["requiresVerification"])
+	}
+	msg, _ := result["message"].(string)
+	if !strings.Contains(msg, "Token 验证失败") && !strings.Contains(msg, "重新绑定账号") {
+		t.Fatalf("message = %q, want verify failure or rebind hint", msg)
+	}
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM accounts WHERE site_id = ?", siteID).Scan(&count); err != nil {
+		t.Fatalf("count accounts: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("created %d accounts, want 0", count)
+	}
+}
+
+func TestAccounts_Create_AppendsRebindHintOnVerifyError(t *testing.T) {
+	// Directly exercise the response path used when VerifyToken returns a
+	// concrete invalid-access-token error (TS parity).
+	msg := alert.AppendSessionTokenRebindHint("无权进行此操作，access token 无效")
+	if !strings.Contains(msg, "重新绑定账号") {
+		t.Fatalf("message = %q, want rebind hint", msg)
 	}
 }
 
@@ -314,9 +597,11 @@ func TestAccounts_Postgres_CreateUpdateManualModelsAndBatch(t *testing.T) {
 	siteID := int64(site["id"].(float64))
 
 	createResp := doPostJSON(t, r, "/api/accounts", map[string]any{
-		"siteId":      siteID,
-		"accessToken": "pg-account-token",
-		"username":    "pg-user-" + suffix,
+		"siteId":         siteID,
+		"accessToken":    "pg-account-token",
+		"username":       "pg-user-" + suffix,
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("postgres create account: expected 200, got %d: %s", createResp.Code, createResp.Body.String())
@@ -377,6 +662,7 @@ func TestAccounts_Postgres_CreateAnyRouterAPIKeyWithoutUsernameReturnsID(t *test
 		"accessToken":    "pg-anyrouter-api-key-" + suffix,
 		"credentialMode": "apikey",
 		"checkinEnabled": true,
+		"skipModelFetch": true,
 	})
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("postgres create AnyRouter API-key account: %d %s", createResp.Code, createResp.Body.String())
@@ -437,9 +723,11 @@ func TestAccounts_Create_BatchAPIKeys(t *testing.T) {
 	siteID := int64(site["id"].(float64))
 
 	body := map[string]any{
-		"siteId":       siteID,
-		"accessTokens": []string{"batch-key-1", "batch-key-2", "batch-key-3"},
-		"username":     "batchuser",
+		"siteId":         siteID,
+		"accessTokens":   []string{"batch-key-1", "batch-key-2", "batch-key-3"},
+		"username":       "batchuser",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -469,9 +757,11 @@ func TestAccounts_Create_BatchAPIKeysTrimsAndFiltersBlankTokens(t *testing.T) {
 	siteID := int64(site["id"].(float64))
 
 	body := map[string]any{
-		"siteId":       siteID,
-		"accessTokens": []string{" batch-key-1 ", "   ", "\t", "batch-key-2"},
-		"username":     "batchuser",
+		"siteId":         siteID,
+		"accessTokens":   []string{" batch-key-1 ", "   ", "\t", "batch-key-2"},
+		"username":       "batchuser",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -488,7 +778,8 @@ func TestAccounts_Create_BatchAPIKeysTrimsAndFiltersBlankTokens(t *testing.T) {
 	}
 
 	var tokens []string
-	if err := db.Select(&tokens, "SELECT access_token FROM accounts WHERE site_id = ? ORDER BY id", siteID); err != nil {
+	// API-key create stores the secret on api_token and clears access_token.
+	if err := db.Select(&tokens, "SELECT api_token FROM accounts WHERE site_id = ? ORDER BY id", siteID); err != nil {
 		t.Fatalf("read created tokens: %v", err)
 	}
 	if len(tokens) != 2 || tokens[0] != "batch-key-1" || tokens[1] != "batch-key-2" {
@@ -520,6 +811,7 @@ func TestAccounts_Create_WithCredentialMode(t *testing.T) {
 		"siteId":         siteID,
 		"accessToken":    "anyrouter-api-token-test",
 		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -553,6 +845,7 @@ func TestAccounts_Create_APIKeyCannotEnableCheckin(t *testing.T) {
 		"accessToken":    "anyrouter-api-token-create-checkin",
 		"credentialMode": "apikey",
 		"checkinEnabled": true,
+		"skipModelFetch": true,
 	}
 	resp := doPostJSON(t, r, "/api/accounts", body)
 	if resp.Code != http.StatusOK {
@@ -895,7 +1188,6 @@ func TestAccounts_RebindSession_DBWriteFailureReturnsError(t *testing.T) {
 
 // ---- Update Account ----
 
-
 func TestAccounts_List_ExpiredStatusNotHealthy(t *testing.T) {
 	db, r, _ := setupAccountsTest(t)
 	_, accountID := setupAccountFixtureWithSite(t, db, r, "ExpiredHealthSite", "https://api.openai.com")
@@ -1082,6 +1374,7 @@ func TestAccounts_UpdateAPIKeyMirrorsAccessTokenWhenAPITokenUnchanged(t *testing
 		"siteId":         siteID,
 		"accessToken":    "old-anyrouter-api-key",
 		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("create apikey account: %d %s", createResp.Code, createResp.Body.String())
@@ -1122,6 +1415,7 @@ func TestAccounts_UpdateAPIKeyPreservesExplicitDifferentAPIToken(t *testing.T) {
 		"siteId":         siteID,
 		"accessToken":    "old-anyrouter-api-key",
 		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("create apikey account: %d %s", createResp.Code, createResp.Body.String())
@@ -1162,6 +1456,7 @@ func TestAccounts_UpdateAPIKeyCannotEnableCheckin(t *testing.T) {
 		"siteId":         siteID,
 		"accessToken":    "anyrouter-api-key-checkin",
 		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if createResp.Code != http.StatusOK {
 		t.Fatalf("create apikey account: %d %s", createResp.Code, createResp.Body.String())

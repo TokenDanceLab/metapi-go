@@ -520,12 +520,14 @@ func TestEdge_DuplicateAccountCreation(t *testing.T) {
 	// So duplicate accounts with same accessToken will succeed.
 	// This is a potential data integrity issue for credential import.
 	body := map[string]any{
-		"siteId":      siteID,
-		"accessToken": "dup-token-test",
+		"siteId":         siteID,
+		"accessToken":    "dup-token-test",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	rec1 := doPostJSON(t, r, "/api/accounts", body)
 	if rec1.Code != http.StatusOK {
-		t.Fatalf("first account: %d", rec1.Code)
+		t.Fatalf("first account: %d %s", rec1.Code, rec1.Body.String())
 	}
 
 	rec2 := doPostJSON(t, r, "/api/accounts", body)

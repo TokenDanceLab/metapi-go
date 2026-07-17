@@ -16,8 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
-	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/handler/admin"
+	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -58,21 +58,21 @@ func TestShutdownUnderStreamingLoad(t *testing.T) {
 	dbPath := dataDir + "/shutdown_test.db"
 
 	cfg := &config.Config{
-		AuthToken:                    adminToken,
-		ProxyToken:                   proxyToken,
-		AccountCredentialSecret:      "test-cred-secret-shutdown",
-		DbType:                       "sqlite",
-		DbUrl:                        dbPath,
-		DataDir:                      dataDir,
-		ProxyMaxChannelAttempts:      3,
-		ProxyStickySessionEnabled:    false,
-		ProxyStickySessionTtlMs:      30000,
-		TokenRouterCacheTtlMs:        1500,
+		AuthToken:                        adminToken,
+		ProxyToken:                       proxyToken,
+		AccountCredentialSecret:          "test-cred-secret-shutdown",
+		DbType:                           "sqlite",
+		DbUrl:                            dbPath,
+		DataDir:                          dataDir,
+		ProxyMaxChannelAttempts:          3,
+		ProxyStickySessionEnabled:        false,
+		ProxyStickySessionTtlMs:          30000,
+		TokenRouterCacheTtlMs:            1500,
 		TokenRouterFailureCooldownMaxSec: 60,
-		RoutingFallbackUnitCost:      1,
-		RequestBodyLimit:             20 * 1024 * 1024,
-		ListenHost:                   "127.0.0.1",
-		Port:                         0, // OS-assigned port
+		RoutingFallbackUnitCost:          1,
+		RequestBodyLimit:                 20 * 1024 * 1024,
+		ListenHost:                       "127.0.0.1",
+		Port:                             0, // OS-assigned port
 	}
 	config.Set(cfg)
 
@@ -214,8 +214,10 @@ func TestShutdownUnderStreamingLoad(t *testing.T) {
 	siteID := int64(siteResp["id"].(float64))
 
 	accountRec := doAdminPost(t, r, "/api/accounts", adminToken, map[string]any{
-		"siteId":      siteID,
-		"accessToken": "sk-shutdown-upstream-token",
+		"siteId":         siteID,
+		"accessToken":    "sk-shutdown-upstream-token",
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if accountRec.Code < 200 || accountRec.Code > 299 {
 		t.Fatalf("create account: expected 200/201, got %d: %s", accountRec.Code, accountRec.Body.String())
@@ -223,16 +225,11 @@ func TestShutdownUnderStreamingLoad(t *testing.T) {
 
 	var accountResp map[string]any
 	json.Unmarshal(accountRec.Body.Bytes(), &accountResp)
-	accountID := int64(accountResp["id"].(float64))
-
-	tokenRec := doAdminPost(t, r, "/api/account-tokens", adminToken, map[string]any{
-		"accountId": int(accountID),
-		"name":      "shutdown-token",
-		"token":     "sk-shutdown-upstream-token",
-	})
-	if tokenRec.Code < 200 || tokenRec.Code > 299 {
-		t.Fatalf("create account_token: expected 200/201, got %d: %s", tokenRec.Code, tokenRec.Body.String())
+	if _, ok := accountResp["id"].(float64); !ok {
+		t.Fatalf("create account: missing id: %v", accountResp)
 	}
+
+	// API-key accounts store credentials on the account row; skip account-tokens.
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 4: Send 10 concurrent streaming requests
@@ -524,17 +521,18 @@ func TestShutdownRejectsNewConnections(t *testing.T) {
 
 	accountRec := doAdminPost(t, r, "/api/accounts", "admin-reject-token", map[string]any{
 		"siteId": siteID, "accessToken": "sk-reject",
+		"credentialMode": "apikey", "skipModelFetch": true,
 	})
 	if accountRec.Code < 200 || accountRec.Code > 299 {
 		t.Fatalf("create account failed: %d", accountRec.Code)
 	}
 	var accountResp map[string]any
 	json.Unmarshal(accountRec.Body.Bytes(), &accountResp)
-	accountID := int64(accountResp["id"].(float64))
+	if _, ok := accountResp["id"].(float64); !ok {
+		t.Fatalf("create account: missing id: %v", accountResp)
+	}
 
-	doAdminPost(t, r, "/api/account-tokens", "admin-reject-token", map[string]any{
-		"accountId": int(accountID), "name": "reject-token", "token": "sk-reject",
-	})
+	// API-key accounts store credentials on the account row; skip account-tokens.
 
 	// Start real HTTP server.
 	ts := httptest.NewUnstartedServer(r)

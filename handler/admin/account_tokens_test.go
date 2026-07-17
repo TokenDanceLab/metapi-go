@@ -234,19 +234,21 @@ func TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete(t *testing.T) {
 	}
 	siteID := int64(site["id"].(float64))
 
-	accountResp := doPostJSON(t, r, "/api/accounts", map[string]any{
-		"siteId":      siteID,
-		"accessToken": "pg-session-token-" + suffix,
-		"username":    "pg-token-user-" + suffix,
-	})
-	if accountResp.Code != http.StatusOK {
-		t.Fatalf("postgres create account: %d %s", accountResp.Code, accountResp.Body.String())
+	// Insert session-mode account directly so token management APIs remain available
+	// without depending on live upstream VerifyToken.
+	now := time.Now().UTC().Format(time.RFC3339)
+	extraConfig := `{"credentialMode":"session"}`
+	username := "pg-token-user-" + suffix
+	var accountID int64
+	err := db.QueryRow(
+		db.Rebind(`INSERT INTO accounts (site_id, username, access_token, status, is_pinned, sort_order,
+		 checkin_enabled, extra_config, created_at, updated_at)
+		 VALUES (?, ?, ?, 'active', FALSE, 0, TRUE, ?, ?, ?) RETURNING id`),
+		siteID, username, "pg-session-token-"+suffix, extraConfig, now, now,
+	).Scan(&accountID)
+	if err != nil {
+		t.Fatalf("postgres insert session account: %v", err)
 	}
-	var account map[string]any
-	if err := json.Unmarshal(accountResp.Body.Bytes(), &account); err != nil {
-		t.Fatalf("unmarshal account: %v", err)
-	}
-	accountID := int64(account["id"].(float64))
 
 	createResp := doPostJSON(t, r, "/api/account-tokens", map[string]any{
 		"accountId": accountID,

@@ -20,6 +20,7 @@ import (
 	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/service"
+	"github.com/tokendancelab/metapi-go/service/alert"
 	balanceService "github.com/tokendancelab/metapi-go/service/balance"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -195,23 +196,30 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 				}
 			}
 
-			accountID, err := h.createSingleAccount(body, site, credentialMode, token, username)
+			created, err := h.createSingleAccount(r.Context(), body, site, credentialMode, token, username)
 			if err != nil {
 				slog.Error("Batch account creation failed", "err", err, "index", i)
-				items = append(items, map[string]any{
+				item := map[string]any{
 					"index":   i,
 					"status":  "failed",
-					"message": "Account creation failed",
-				})
+					"message": err.Error(),
+				}
+				var verifyErr *accountCreateError
+				if errors.As(err, &verifyErr) {
+					item["message"] = verifyErr.Message
+					item["requiresVerification"] = verifyErr.RequiresVerification
+				}
+				items = append(items, item)
 			} else {
 				createdCount++
 				items = append(items, map[string]any{
-					"index":    i,
-					"status":   "created",
-					"id":       accountID,
-					"username": coalesceStr(username, ""),
-					"queued":   false,
-					"message":  nil,
+					"index":      i,
+					"status":     "created",
+					"id":         created.ID,
+					"username":   coalesceStr(created.Username, ""),
+					"queued":     false,
+					"message":    nil,
+					"modelCount": created.ModelCount,
 				})
 			}
 		}
@@ -244,19 +252,32 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Single token creation
-	accountID, err := h.createSingleAccount(body, site, credentialMode, requestedTokens[0], body.Username)
+	created, err := h.createSingleAccount(r.Context(), body, site, credentialMode, requestedTokens[0], body.Username)
 	if err != nil {
 		slog.Error("Account creation failed", "err", err)
+		message := err.Error()
+		requiresVerification := false
+		var verifyErr *accountCreateError
+		if errors.As(err, &verifyErr) {
+			message = verifyErr.Message
+			requiresVerification = verifyErr.RequiresVerification
+			if credentialMode != service.CredentialModeAPIKey {
+				message = alert.AppendSessionTokenRebindHint(message)
+			}
+		} else if credentialMode != service.CredentialModeAPIKey {
+			message = alert.AppendSessionTokenRebindHint(message)
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{
-			"success": false,
-			"message": "Account creation failed",
+			"success":              false,
+			"requiresVerification": requiresVerification,
+			"message":              message,
 		})
 		return
 	}
 
 	// Fetch created account
 	var account store.Account
-	h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), accountID)
+	h.db.Get(&account, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), created.ID)
 
 	caps := service.BuildCapabilitiesForAccount(&account)
 	routing.InvalidateCache()
@@ -267,56 +288,208 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 		"username":         account.Username,
 		"accessToken":      account.AccessToken,
 		"status":           account.Status,
-		"tokenType":        string(credentialMode),
+		"tokenType":        created.TokenType,
 		"credentialMode":   string(service.ResolveStoredCredentialMode(&account)),
 		"capabilities":     caps,
-		"modelCount":       0,
-		"apiTokenFound":    account.APIToken != nil,
-		"usernameDetected": false,
+		"modelCount":       created.ModelCount,
+		"apiTokenFound":    created.APITokenFound,
+		"usernameDetected": created.UsernameDetected,
 		"queued":           false,
 	})
 }
 
-func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload, site store.Site, credentialMode service.AccountCredentialMode, accessToken string, username *string) (int64, error) {
+// accountCreateError is returned when create fails closed on token verification.
+type accountCreateError struct {
+	Message              string
+	RequiresVerification bool
+}
+
+func (e *accountCreateError) Error() string {
+	if e == nil {
+		return "account create failed"
+	}
+	return e.Message
+}
+
+// createAccountOutcome holds metadata from a successful createSingleAccount call.
+type createAccountOutcome struct {
+	ID               int64
+	Username         *string
+	TokenType        string
+	ModelCount       int
+	APITokenFound    bool
+	UsernameDetected bool
+}
+
+func (h *accountsHandler) createSingleAccount(ctx context.Context, body payloads.AccountCreatePayload, site store.Site, credentialMode service.AccountCredentialMode, rawAccessToken string, username *string) (*createAccountOutcome, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
-
-	sortOrder, _ := service.GetNextAccountSortOrder(h.db)
-
-	checkinEnabled := true
-	if credentialMode == service.CredentialModeAPIKey {
-		checkinEnabled = false
-	} else if body.CheckinEnabled != nil {
-		checkinEnabled = *body.CheckinEnabled
+	rawAccessToken = strings.TrimSpace(rawAccessToken)
+	if rawAccessToken == "" {
+		return nil, &accountCreateError{Message: "请填写 Token", RequiresVerification: false}
 	}
 
-	accessTokenVal := accessToken
-	apiTokenVal := body.APIToken
-	if credentialMode == service.CredentialModeAPIKey && (apiTokenVal == nil || strings.TrimSpace(*apiTokenVal) == "") {
-		apiTokenVal = &accessTokenVal
+	adp := platform.GetAdapter(site.Platform)
+	if adp == nil {
+		return nil, &accountCreateError{
+			Message:              "platform not supported: " + site.Platform,
+			RequiresVerification: false,
+		}
 	}
 
-	// Stub: Verify token against upstream (P4 adapter)
-	// For now, just create the account row
+	skipModelFetch := body.SkipModelFetch != nil && *body.SkipModelFetch
+	proxyCfg := service.BuildPlatformProxyConfig(h.cfg, nil, &site)
+
+	resolvedUsername := strings.TrimSpace(coalesceStr(username, ""))
+	usernameProvided := resolvedUsername != ""
+	accessTokenVal := rawAccessToken
+	apiTokenVal := ""
+	if body.APIToken != nil {
+		apiTokenVal = strings.TrimSpace(*body.APIToken)
+	}
+	var tokenType string
+	verifiedModels := []string{}
+
+	verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	switch credentialMode {
+	case service.CredentialModeAPIKey:
+		if skipModelFetch {
+			// Explicit skip: accept as API-key without upstream model verify.
+			tokenType = "apikey"
+			accessTokenVal = ""
+			if apiTokenVal == "" {
+				apiTokenVal = rawAccessToken
+			}
+		} else {
+			models, err := adp.GetModels(verifyCtx, site.URL, rawAccessToken, body.PlatformUserID, proxyCfg)
+			if err != nil {
+				return nil, &accountCreateError{
+					Message:              "API Key 验证失败：" + err.Error(),
+					RequiresVerification: true,
+				}
+			}
+			for _, m := range models {
+				m = strings.TrimSpace(m)
+				if m != "" {
+					verifiedModels = append(verifiedModels, m)
+				}
+			}
+			if len(verifiedModels) == 0 {
+				return nil, &accountCreateError{
+					Message:              "API Key 验证失败：未获取到可用模型",
+					RequiresVerification: true,
+				}
+			}
+			tokenType = "apikey"
+			accessTokenVal = ""
+			if apiTokenVal == "" {
+				apiTokenVal = rawAccessToken
+			}
+		}
+	default:
+		// auto / session: require platform.VerifyToken success (fail closed).
+		result, err := adp.VerifyToken(verifyCtx, site.URL, rawAccessToken, body.PlatformUserID, proxyCfg)
+		if err != nil {
+			return nil, &accountCreateError{
+				Message:              err.Error(),
+				RequiresVerification: true,
+			}
+		}
+		if result == nil || result.TokenType == "" || result.TokenType == "unknown" {
+			return nil, &accountCreateError{
+				Message:              "Token 验证失败，请先点击“验证 Token”，验证成功后再绑定账号",
+				RequiresVerification: true,
+			}
+		}
+		tokenType = result.TokenType
+
+		if credentialMode == service.CredentialModeSession && tokenType != "session" {
+			return nil, &accountCreateError{
+				Message:              "当前凭证是 API Key，请切换到 API Key 模式，或改用 Session Token",
+				RequiresVerification: false,
+			}
+		}
+
+		if tokenType == "session" {
+			if resolvedUsername == "" && result.UserInfo != nil {
+				if u := strings.TrimSpace(result.UserInfo.Username); u != "" {
+					resolvedUsername = u
+				} else if u := strings.TrimSpace(result.UserInfo.DisplayName); u != "" {
+					resolvedUsername = u
+				}
+			}
+			if apiTokenVal == "" && strings.TrimSpace(result.APIToken) != "" {
+				apiTokenVal = strings.TrimSpace(result.APIToken)
+			}
+			accessTokenVal = rawAccessToken
+		} else if tokenType == "apikey" {
+			accessTokenVal = ""
+			if apiTokenVal == "" {
+				apiTokenVal = rawAccessToken
+			}
+			for _, m := range result.Models {
+				m = strings.TrimSpace(m)
+				if m != "" {
+					verifiedModels = append(verifiedModels, m)
+				}
+			}
+		}
+	}
+
+	// Resolve platform user id (explicit body wins; else guess from username).
+	var resolvedPlatformUserID *int
+	if body.PlatformUserID != nil {
+		resolvedPlatformUserID = body.PlatformUserID
+	} else if guessed := service.GuessPlatformUserIdFromUsername(&resolvedUsername); guessed > 0 {
+		id := int(guessed)
+		resolvedPlatformUserID = &id
+	}
+
+	resolvedCredentialMode := service.CredentialModeSession
+	if tokenType == "apikey" {
+		resolvedCredentialMode = service.CredentialModeAPIKey
+	}
+
+	checkinEnabled := false
+	if tokenType == "session" {
+		checkinEnabled = true
+		if body.CheckinEnabled != nil {
+			checkinEnabled = *body.CheckinEnabled
+		}
+	}
 
 	extraConfig := map[string]any{
-		"credentialMode": string(credentialMode),
+		"credentialMode": string(resolvedCredentialMode),
 	}
-	if body.PlatformUserID != nil {
-		extraConfig["platformUserId"] = *body.PlatformUserID
+	if resolvedPlatformUserID != nil {
+		extraConfig["platformUserId"] = *resolvedPlatformUserID
 	}
 	// Store tokenExpiresAt for session-mode accounts
-	if body.TokenExpiresAt != nil && credentialMode == service.CredentialModeSession {
+	if body.TokenExpiresAt != nil && resolvedCredentialMode == service.CredentialModeSession {
 		extraConfig["tokenExpiresAt"] = *body.TokenExpiresAt
 	}
-
-	status := "active"
+	// Preserve skipModelFetch intent for residual docs / future init queues.
+	if skipModelFetch {
+		extraConfig["skipModelFetch"] = true
+	}
 
 	extraConfigStr := service.MarshalExtraConfig(extraConfig)
 
-	isPinned := false
-	if body.SkipModelFetch != nil {
-		_ = *body.SkipModelFetch
+	var usernameVal *string
+	if resolvedUsername != "" {
+		u := resolvedUsername
+		usernameVal = &u
 	}
+	var apiTokenPtr *string
+	if apiTokenVal != "" {
+		t := apiTokenVal
+		apiTokenPtr = &t
+	}
+
+	sortOrder, _ := service.GetNextAccountSortOrder(h.db)
+	status := "active"
+	isPinned := false
 
 	var id int64
 	err := h.db.QueryRowx(
@@ -324,13 +497,21 @@ func (h *accountsHandler) createSingleAccount(body payloads.AccountCreatePayload
 		 checkin_enabled, extra_config, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id`),
-		site.ID, username, accessTokenVal, apiTokenVal, status, isPinned, sortOrder,
+		site.ID, usernameVal, accessTokenVal, apiTokenPtr, status, isPinned, sortOrder,
 		checkinEnabled, extraConfigStr, now, now,
 	).Scan(&id)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return id, nil
+
+	return &createAccountOutcome{
+		ID:               id,
+		Username:         usernameVal,
+		TokenType:        tokenType,
+		ModelCount:       len(verifiedModels),
+		APITokenFound:    apiTokenPtr != nil,
+		UsernameDetected: !usernameProvided && usernameVal != nil,
+	}, nil
 }
 
 // ---- Login Account ----

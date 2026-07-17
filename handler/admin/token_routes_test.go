@@ -165,48 +165,37 @@ func TestTokenRoutes_Postgres_CreateUpdateChannelAndDelete(t *testing.T) {
 		_, _ = db.Exec("DELETE FROM sites WHERE url = ?", siteURL)
 	})
 
-	siteResp := doPostJSON(t, r, "/api/sites", map[string]any{
-		"name":     "PG Routes " + suffix,
-		"url":      siteURL,
-		"platform": "openai",
-	})
-	if siteResp.Code != http.StatusOK {
-		t.Fatalf("postgres create site: %d %s", siteResp.Code, siteResp.Body.String())
+	now := time.Now().UTC().Format(time.RFC3339)
+	// Seed site/account/token via SQL to avoid shared-PG /api/sites flake and VerifyToken.
+	var siteID int64
+	if err := db.QueryRow(
+		db.Rebind(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		 VALUES (?, ?, 'openai', 'active', ?, ?) RETURNING id`),
+		"PG Routes "+suffix, siteURL, now, now,
+	).Scan(&siteID); err != nil {
+		t.Fatalf("postgres insert site: %v", err)
 	}
-	var site map[string]any
-	if err := json.Unmarshal(siteResp.Body.Bytes(), &site); err != nil {
-		t.Fatalf("unmarshal site: %v", err)
-	}
-	siteID := int64(site["id"].(float64))
 
-	accountResp := doPostJSON(t, r, "/api/accounts", map[string]any{
-		"siteId":      siteID,
-		"accessToken": "pg-route-session-" + suffix,
-		"username":    "pg-route-user-" + suffix,
-	})
-	if accountResp.Code != http.StatusOK {
-		t.Fatalf("postgres create account: %d %s", accountResp.Code, accountResp.Body.String())
+	extraConfig := `{"credentialMode":"session"}`
+	username := "pg-route-user-" + suffix
+	var accountID int64
+	if err := db.QueryRow(
+		db.Rebind(`INSERT INTO accounts (site_id, username, access_token, status, is_pinned, sort_order,
+		 checkin_enabled, extra_config, created_at, updated_at)
+		 VALUES (?, ?, ?, 'active', FALSE, 0, TRUE, ?, ?, ?) RETURNING id`),
+		siteID, username, "pg-route-session-"+suffix, extraConfig, now, now,
+	).Scan(&accountID); err != nil {
+		t.Fatalf("postgres insert session account: %v", err)
 	}
-	var account map[string]any
-	if err := json.Unmarshal(accountResp.Body.Bytes(), &account); err != nil {
-		t.Fatalf("unmarshal account: %v", err)
-	}
-	accountID := int64(account["id"].(float64))
 
-	tokenResp := doPostJSON(t, r, "/api/account-tokens", map[string]any{
-		"accountId": accountID,
-		"token":     "sk-pg-route-token-" + suffix,
-		"isDefault": true,
-	})
-	if tokenResp.Code != http.StatusOK {
-		t.Fatalf("postgres create token: %d %s", tokenResp.Code, tokenResp.Body.String())
+	var tokenID int64
+	if err := db.QueryRow(
+		db.Rebind(`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
+		 VALUES (?, 'default', ?, 'ready', 'manual', TRUE, TRUE, ?, ?) RETURNING id`),
+		accountID, "sk-pg-route-token-"+suffix, now, now,
+	).Scan(&tokenID); err != nil {
+		t.Fatalf("postgres insert token: %v", err)
 	}
-	var tokenResult map[string]any
-	if err := json.Unmarshal(tokenResp.Body.Bytes(), &tokenResult); err != nil {
-		t.Fatalf("unmarshal token: %v", err)
-	}
-	token := tokenResult["token"].(map[string]any)
-	tokenID := int64(token["id"].(float64))
 
 	routeResp := doPostJSON(t, r, "/api/routes", map[string]any{
 		"modelPattern": "pg-route-" + suffix + "-*",
