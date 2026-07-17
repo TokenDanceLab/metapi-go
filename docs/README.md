@@ -47,12 +47,13 @@ docs/
 4. **`docs/specs/` is heavy rewrite history** — do not treat as day-to-day runbook.
 5. **One Issue per topic**; close duplicates the same day.
 
-## Active residual lanes (v0.8.16)
+## Active residual lanes (v0.8.22)
 
-See Milestone [Enterprise residual v0.8.16](https://github.com/TokenDanceLab/metapi-go/milestone/25):
+See Milestone [Enterprise residual v0.8.22](https://github.com/TokenDanceLab/metapi-go/milestone/31):
 
-- Protocol: Gemini `thought_signature`, multi-turn Responses content
-- Observability: usage accuracy follow-up
+- Security: admin key redaction (#355), custom_headers deny-list (#356), RuntimeExecutor redirect SSRF (#357)
+- Reliability: weighted soft-filter empty → next priority layer (#358)
+- Docs: residual honesty board (#359)
 - Explicit non-goals until dedicated Milestone: full Responses WS product, Redis sticky product, update-center remote deploy
 
 ## Hygiene rules (short)
