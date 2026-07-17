@@ -993,11 +993,17 @@ func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Res
 	for {
 		select {
 		case <-r.Context().Done():
+			// Client disconnect / request cancel: still return any usage already
+			// extracted from earlier SSE events (best-effort partial). Do not
+			// invent tokens when upstream never emitted a usage event.
 			slog.Info("SSE downstream context ended",
 				"err", r.Context().Err(),
 				"latency_ms", latencyMs,
 				"streamed_bytes", streamedBytes,
 			)
+			if result := analyzer.Result(); result.Usage.Found {
+				return result.Usage
+			}
 			return empty
 		default:
 		}
@@ -1022,15 +1028,22 @@ func handleStreamUpstream(w http.ResponseWriter, r *http.Request, resp *http.Res
 
 			sawStreamBytes = true
 			if len(chunk) > 0 {
+				// Extract usage before downstream write so client disconnect
+				// on the final usage-bearing chunk still counts tokens.
+				analyzer.Push(chunk)
 				if _, writeErr := w.Write(chunk); writeErr != nil {
 					slog.Warn("SSE downstream write failed",
 						"err", writeErr,
 						"latency_ms", latencyMs,
 						"streamed_bytes", streamedBytes,
 					)
-					break
+					// Downstream gone: keep any usage already extracted (including
+					// the chunk that failed to write). Never invent tokens.
+					if result := analyzer.Result(); result.Usage.Found {
+						return result.Usage
+					}
+					return empty
 				}
-				analyzer.Push(chunk)
 				streamedBytes += int64(len(chunk))
 			}
 			if flusher != nil {

@@ -28,6 +28,7 @@
 | Pricing / `estimated_cost` | Still 0 on write; cache_ratio pricing is #43. |
 | Multipart / non-chat surfaces | Share the same dispatch path, so usage is counted when upstream returns a parseable usage object; media endpoints that omit usage remain zero. |
 | Aggregation lag | Projected stats still depend on the usage aggregation scheduler reading newly inserted rows. |
+| Stream/partial under-count audit | Follow-up in `docs/analysis/stream-usage-token-audit.md` (#300 / #555 partial): Anthropic cache inclusion, SSE cache merge, Gemini thoughts, client-disconnect retention. |
 
 ## Tests
 

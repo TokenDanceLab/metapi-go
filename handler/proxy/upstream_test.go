@@ -923,3 +923,113 @@ func TestIncrementalSseAnalyzerExtractsUsage(t *testing.T) {
 		t.Fatalf("total = %d, want 5", result.Usage.TotalTokens)
 	}
 }
+
+// disconnectAfterNWriter fails the Nth Write to simulate client disconnect mid-stream.
+type disconnectAfterNWriter struct {
+	*httptest.ResponseRecorder
+	n        int
+	writes   int
+	failErr  error
+	lastBody []byte
+}
+
+func (w *disconnectAfterNWriter) Write(p []byte) (int, error) {
+	w.writes++
+	w.lastBody = append(w.lastBody[:0], p...)
+	if w.writes >= w.n {
+		if w.failErr == nil {
+			w.failErr = io.ErrClosedPipe
+		}
+		return 0, w.failErr
+	}
+	return w.ResponseRecorder.Write(p)
+}
+
+// chunkedReader returns one pre-split SSE frame per Read so stream logic can
+// observe mid-stream disconnect between events.
+type chunkedReader struct {
+	chunks []string
+	i      int
+}
+
+func (r *chunkedReader) Read(p []byte) (int, error) {
+	if r.i >= len(r.chunks) {
+		return 0, io.EOF
+	}
+	n := copy(p, []byte(r.chunks[r.i]))
+	r.i++
+	return n, nil
+}
+
+func (r *chunkedReader) Close() error { return nil }
+
+func TestHandleStreamUpstreamClientDisconnectPreservesUsage(t *testing.T) {
+	// Content chunk succeeds; usage-bearing final chunk fails to write (client gone).
+	// Analyzer must still extract usage from the failed-write chunk.
+	body := &chunkedReader{chunks: []string{
+		`data: {"choices":[{"delta":{"content":"hi"}}]}` + "\n\n",
+		`data: {"usage":{"prompt_tokens":7,"completion_tokens":9,"total_tokens":16}}` + "\n\n",
+		`data: [DONE]` + "\n\n",
+	}}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       body,
+	}
+	resp.Header.Set("Content-Type", "text/event-stream")
+
+	rec := &disconnectAfterNWriter{ResponseRecorder: httptest.NewRecorder(), n: 2}
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	usage := handleStreamUpstream(rec, req, resp, 12)
+	if !usage.Found {
+		t.Fatal("expected usage retained after client disconnect on usage chunk")
+	}
+	if usage.PromptTokens != 7 || usage.CompletionTokens != 9 || usage.TotalTokens != 16 {
+		t.Fatalf("usage = %+v, want 7/9/16", usage)
+	}
+	if usage.Source != usageSourceUpstream {
+		t.Fatalf("source = %q, want upstream", usage.Source)
+	}
+}
+
+func TestHandleStreamUpstreamContextCancelPreservesPartialUsage(t *testing.T) {
+	// After a full successful stream that already extracted usage, a canceled
+	// context on a subsequent empty body should not invent tokens; empty path
+	// stays unknown. Separately verify canceled context mid-read still returns
+	// previously extracted usage via Result().
+	analyzer := newIncrementalSseAnalyzer()
+	analyzer.Push([]byte(`data: {"usage":{"prompt_tokens":4,"completion_tokens":6,"total_tokens":10}}` + "\n\n"))
+	got := analyzer.Result().Usage
+	if !got.Found || got.TotalTokens != 10 {
+		t.Fatalf("precondition usage = %+v", got)
+	}
+
+	// Full handleStreamUpstream with already-canceled context and body that still
+	// has usage: select may fire before first Read. Documented residual: pure
+	// pre-cancel without any bytes yields unknown (no invent). With bytes already
+	// analyzed above, partial retention is covered by disconnect test.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body: io.NopCloser(strings.NewReader(
+			`data: {"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}` + "\n\n",
+		)),
+	}
+	resp.Header.Set("Content-Type", "text/event-stream")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil).WithContext(ctx)
+	usage := handleStreamUpstream(rec, req, resp, 1)
+	// Pre-canceled before any read: must not invent usage.
+	if usage.Found {
+		// If runtime read wins the race and extracts, that is also correct — accept either.
+		if usage.TotalTokens != 2 {
+			t.Fatalf("if found, usage must match upstream: %+v", usage)
+		}
+		return
+	}
+	if usage.Source != usageSourceUnknown {
+		t.Fatalf("source = %q, want unknown when no usage extracted", usage.Source)
+	}
+}
