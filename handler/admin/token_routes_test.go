@@ -362,6 +362,155 @@ func TestTokenRoutes_ManualChannelSurvivesRebuild(t *testing.T) {
 
 // TestTokenRoutes_PartialUpdatePreservesModelMapping covers intentional modelMapping
 // updates and ensures unrelated partial updates do not clear mapping or channels.
+func TestTokenRoutes_ContextLengthCreateUpdateListRoundTrip(t *testing.T) {
+	db, r := setupTokenRoutesTest(t)
+
+	// Create with positive contextLength metadata.
+	create := doPostJSON(t, r, "/api/routes", map[string]any{
+		"modelPattern":  "ctx-meta-*",
+		"displayName":   "Context Meta Route",
+		"contextLength": 128000,
+		"enabled":       true,
+	})
+	if create.Code != http.StatusOK {
+		t.Fatalf("create status = %d, want 200 body=%s", create.Code, create.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	routeID := int64(created["id"].(float64))
+	if got := int64(created["contextLength"].(float64)); got != 128000 {
+		t.Fatalf("create contextLength = %v, want 128000", created["contextLength"])
+	}
+
+	// Full list (SELECT *) echoes camelCase contextLength.
+	list := doGet(t, r, "/api/routes")
+	if list.Code != http.StatusOK {
+		t.Fatalf("list status = %d body=%s", list.Code, list.Body.String())
+	}
+	var listItems []map[string]any
+	if err := json.Unmarshal(list.Body.Bytes(), &listItems); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	found := false
+	for _, item := range listItems {
+		if int64(item["id"].(float64)) == routeID {
+			found = true
+			if got := int64(item["contextLength"].(float64)); got != 128000 {
+				t.Fatalf("list contextLength = %v, want 128000", item["contextLength"])
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("route %d missing from /api/routes list", routeID)
+	}
+
+	// Summary + lite surfaces must also expose contextLength.
+	summary := doGet(t, r, "/api/routes/summary")
+	if summary.Code != http.StatusOK {
+		t.Fatalf("summary status = %d body=%s", summary.Code, summary.Body.String())
+	}
+	var summaryItems []map[string]any
+	if err := json.Unmarshal(summary.Body.Bytes(), &summaryItems); err != nil {
+		t.Fatalf("decode summary: %v", err)
+	}
+	found = false
+	for _, item := range summaryItems {
+		if int64(item["id"].(float64)) == routeID {
+			found = true
+			if got := int64(item["contextLength"].(float64)); got != 128000 {
+				t.Fatalf("summary contextLength = %v, want 128000", item["contextLength"])
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("route %d missing from /api/routes/summary", routeID)
+	}
+
+	lite := doGet(t, r, "/api/routes/lite")
+	if lite.Code != http.StatusOK {
+		t.Fatalf("lite status = %d body=%s", lite.Code, lite.Body.String())
+	}
+	var liteItems []map[string]any
+	if err := json.Unmarshal(lite.Body.Bytes(), &liteItems); err != nil {
+		t.Fatalf("decode lite: %v", err)
+	}
+	found = false
+	for _, item := range liteItems {
+		if int64(item["id"].(float64)) == routeID {
+			found = true
+			if got := int64(item["contextLength"].(float64)); got != 128000 {
+				t.Fatalf("lite contextLength = %v, want 128000", item["contextLength"])
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("route %d missing from /api/routes/lite", routeID)
+	}
+
+	// Update to a different positive value.
+	upd := doPutJSON(t, r, "/api/routes/"+itoa(routeID), map[string]any{
+		"contextLength": 200000,
+	})
+	if upd.Code != http.StatusOK {
+		t.Fatalf("update status = %d body=%s", upd.Code, upd.Body.String())
+	}
+	var updated map[string]any
+	if err := json.Unmarshal(upd.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update: %v", err)
+	}
+	if got := int64(updated["contextLength"].(float64)); got != 200000 {
+		t.Fatalf("update contextLength = %v, want 200000", updated["contextLength"])
+	}
+
+	var dbVal *int64
+	if err := db.Get(&dbVal, `SELECT context_length FROM token_routes WHERE id = ?`, routeID); err != nil {
+		t.Fatalf("db get context_length: %v", err)
+	}
+	if dbVal == nil || *dbVal != 200000 {
+		t.Fatalf("db context_length = %v, want 200000", dbVal)
+	}
+
+	// Explicit null clears to unknown (NULL) — metadata only, no runtime enforcement.
+	clear := doPutJSON(t, r, "/api/routes/"+itoa(routeID), map[string]any{
+		"contextLength": nil,
+	})
+	if clear.Code != http.StatusOK {
+		t.Fatalf("clear status = %d body=%s", clear.Code, clear.Body.String())
+	}
+	var cleared map[string]any
+	if err := json.Unmarshal(clear.Body.Bytes(), &cleared); err != nil {
+		t.Fatalf("decode clear: %v", err)
+	}
+	if cleared["contextLength"] != nil {
+		t.Fatalf("cleared contextLength = %#v, want null", cleared["contextLength"])
+	}
+	dbVal = nil
+	if err := db.Get(&dbVal, `SELECT context_length FROM token_routes WHERE id = ?`, routeID); err != nil {
+		t.Fatalf("db get cleared context_length: %v", err)
+	}
+	if dbVal != nil {
+		t.Fatalf("db context_length after clear = %v, want NULL", *dbVal)
+	}
+
+	// Create without field leaves NULL.
+	create2 := doPostJSON(t, r, "/api/routes", map[string]any{
+		"modelPattern": "ctx-omit-*",
+		"enabled":      true,
+	})
+	if create2.Code != http.StatusOK {
+		t.Fatalf("create2 status = %d body=%s", create2.Code, create2.Body.String())
+	}
+	var created2 map[string]any
+	if err := json.Unmarshal(create2.Body.Bytes(), &created2); err != nil {
+		t.Fatalf("decode create2: %v", err)
+	}
+	if created2["contextLength"] != nil {
+		t.Fatalf("omitted create contextLength = %#v, want null", created2["contextLength"])
+	}
+}
+
 func TestTokenRoutes_PartialUpdatePreservesModelMapping(t *testing.T) {
 	db, r := setupTokenRoutesTest(t)
 	routeID, accountID, tokenID := seedRouteChannelRefs(t, db)
