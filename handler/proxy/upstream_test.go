@@ -1399,3 +1399,28 @@ func TestApplyUpstreamStreamIncludeUsage_SkipCodexSub2API(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyUpstreamStreamIncludeUsage_CompletionsPath(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"model":"gpt-3.5-turbo-instruct","stream":true,"prompt":"hi"}`)
+	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/completions", true)
+	var body map[string]any
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	opts, ok := body["stream_options"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stream_options on completions path, got %#v", body["stream_options"])
+	}
+	if opts["include_usage"] != true {
+		t.Fatalf("include_usage = %#v", opts["include_usage"])
+	}
+	// nested suffix
+	out2 := applyUpstreamStreamIncludeUsage(in, "openai", "/proxy/v1/completions", true)
+	if err := json.Unmarshal(out2, &body); err != nil {
+		t.Fatalf("unmarshal2: %v", err)
+	}
+	if body["stream_options"].(map[string]any)["include_usage"] != true {
+		t.Fatalf("suffix path failed: %#v", body)
+	}
+}
