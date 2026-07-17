@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.24] — 2026-07-17
+
+### Security
+- Admin routes channel list/get + `POST /api/search` redact plaintext `accessToken`/`apiToken`/`token` (masked only) (#375 / #378)
+- Site create/update + API endpoint upsert reject cloud metadata / link-local URLs (`169.254.0.0/16`, IPv6 link-local, `metadata.google.internal`); RFC1918 + localhost still allowed (#376 / #379)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 33 post v0.8.23; SEC-ROUTE + SEC-SITEURL → present (#377 / #380)
+
 ## [v0.8.23] — 2026-07-17
 
 ### Security

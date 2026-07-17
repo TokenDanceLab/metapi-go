@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.23 → v0.8.24)
+# Residual next candidates (post v0.8.24)
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.23 shipped** (#366–#368). Active residual wave: **Milestone 33 / v0.8.24** (#375 route/search secret redact, #376 site metadata URL guard, #377 residual honesty).  
+**Context**: **v0.8.24 shipped** (#375 route/search secret redact, #376 site metadata URL guard, #377 residual honesty). Prior **v0.8.23**: #366–#368.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -43,21 +43,13 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-SOFT | Weighted soft-filter empty → next priority | **present** (#358/#362) | Weighted path skips soft-empty priority layer and tries next; failover-isolation note | Done for weighted soft-filter | P0-585 empty-filter fallback residual separate |
 | SEC-ADMIN | Remaining admin secret surfaces | **present-with-residual** (#367/#372) | Account list redacts accessToken/apiToken + passwordCipher strip; token list drops join secrets. Residual: create/update/rebind may still echo once; intentional credential export | Done for list/overview | Residual intentional export / create-once |
 | REL-SOFT-RR | RR/stable_first soft-filter priority demotion | **present** (#368/#370) | RR/stable_first/least_* share priority-layer strict soft-filter demotion with weighted | Done | Global full-set fallback when all layers soft-empty (P0-585 residual) |
-| SEC-ROUTE | Routes/search admin secret dumps | residual → active | Route channels embed accessToken/apiToken; search SELECT * leaks token/access_token | Milestone 33 / #375 | Secret leakage via admin routes/search |
-| SEC-SITEURL | Site URL metadata/link-local SSRF | residual → active | Site create accepts any URL after canonicalize including 169.254.169.254 | Milestone 33 / #376 | First-hop SSRF to cloud metadata |
+| SEC-ROUTE | Routes/search admin secret dumps | **present** (#375/#378) | Route channel `account` uses `routeChannelAccountPublic` (masked); search accounts/tokens redacted | Done | Residual: create-once / export paths intentional |
+| SEC-SITEURL | Site URL metadata/link-local SSRF | **present** (#376/#379) | `IsForbiddenSiteTargetURL` blocks 169.254/16, IPv6 link-local, metadata hostnames on create/update/endpoint upsert | Done | RFC1918/localhost intentionally allowed |
 
 
-## Active wave (Milestone 33 / v0.8.24)
+## Recommended sequencing (v0.8.25+)
 
-| Issue | Role | Notes |
-|------:|------|-------|
-| [#375](https://github.com/TokenDanceLab/metapi-go/issues/375) | security | redact secrets from routes channels + search |
-| [#376](https://github.com/TokenDanceLab/metapi-go/issues/376) | security | reject site URL metadata / link-local targets |
-| [#377](https://github.com/TokenDanceLab/metapi-go/issues/377) | docs | residual honesty + MASTER flip post v0.8.23 |
-
-## Recommended sequencing (v0.8.24+)
-
-1. **Shipped in v0.8.23**: #366–#368. **v0.8.24 board**: #375–#377 — no fake WS/sticky/update-center.
+1. **Shipped in v0.8.24**: #375–#377 (PRs #378/#379/#380) — routes/search secret redact · site metadata URL guard · residual honesty. Prior v0.8.23: #366–#368.
 2. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter demotion.
 3. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
 4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
@@ -78,7 +70,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.23](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.23) · prior [v0.8.22](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.22)
+- Release: [v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24) · prior [v0.8.23](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.23)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
