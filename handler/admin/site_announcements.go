@@ -14,12 +14,18 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/platform"
+	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/service/notify"
 )
 
 // RegisterSiteAnnouncementsRoutes registers all /api/site-announcements routes.
+// Also wires the background SiteAnnouncementScheduler to real SyncSiteAnnouncements
+// (#272). Routes register before StartBackgroundServices, so the package-level
+// default is installed for NewSiteAnnouncementScheduler to pick up.
 func RegisterSiteAnnouncementsRoutes(r chi.Router, db *sqlx.DB) {
+	wireSiteAnnouncementSchedulerSync()
+
 	handler := &siteAnnouncementsHandler{db: db}
 
 	r.Get("/api/site-announcements", handler.listAnnouncements)
@@ -29,12 +35,31 @@ func RegisterSiteAnnouncementsRoutes(r chi.Router, db *sqlx.DB) {
 	r.Post("/api/site-announcements/sync", handler.syncAnnouncements)
 }
 
+// wireSiteAnnouncementSchedulerSync injects admin SyncSiteAnnouncements into the
+// scheduler package without creating an app→admin import cycle (admin already
+// imports scheduler; app cannot import admin).
+func wireSiteAnnouncementSchedulerSync() {
+	scheduler.SetDefaultSiteAnnouncementSyncFunc(func(db *sqlx.DB) scheduler.SiteAnnouncementSyncResult {
+		result := SyncSiteAnnouncements(db, nil)
+		return scheduler.SiteAnnouncementSyncResult{
+			ScannedSites:  result.ScannedSites,
+			Inserted:      result.Inserted,
+			Updated:       result.Updated,
+			Unsupported:   result.Unsupported,
+			Notifications: result.Notifications,
+			Events:        result.Events,
+			Failed:        result.Failed,
+		}
+	})
+}
+
 type siteAnnouncementsHandler struct {
 	db *sqlx.DB
 }
 
-// siteAnnouncementSyncResult mirrors the TS syncSiteAnnouncements result shape.
-type siteAnnouncementSyncResult struct {
+// SiteAnnouncementSyncResult mirrors the TS syncSiteAnnouncements result shape.
+// Used by the admin HTTP task path and by SiteAnnouncementScheduler via SyncSiteAnnouncements.
+type SiteAnnouncementSyncResult struct {
 	ScannedSites  int                          `json:"scannedSites"`
 	Inserted      int                          `json:"inserted"`
 	Updated       int                          `json:"updated"`
@@ -42,10 +67,11 @@ type siteAnnouncementSyncResult struct {
 	Notifications int                          `json:"notifications"`
 	Events        int                          `json:"events"`
 	Failed        int                          `json:"failed"`
-	FailedSites   []siteAnnouncementFailedSite `json:"failedSites"`
+	FailedSites   []SiteAnnouncementFailedSite `json:"failedSites"`
 }
 
-type siteAnnouncementFailedSite struct {
+// SiteAnnouncementFailedSite is one site that failed during announcement sync.
+type SiteAnnouncementFailedSite struct {
 	SiteID   int64  `json:"siteId"`
 	SiteName string `json:"siteName"`
 	Message  string `json:"message"`
@@ -231,7 +257,7 @@ func (h *siteAnnouncementsHandler) syncAnnouncements(w http.ResponseWriter, r *h
 		Title:     title,
 		DedupeKey: dedupeKey,
 	}, func() (any, error) {
-		result := syncSiteAnnouncements(db, siteID)
+		result := SyncSiteAnnouncements(db, siteID)
 		return result, nil
 	})
 
@@ -243,9 +269,12 @@ func (h *siteAnnouncementsHandler) syncAnnouncements(w http.ResponseWriter, r *h
 	})
 }
 
-func syncSiteAnnouncements(db *sqlx.DB, siteID *int64) siteAnnouncementSyncResult {
-	result := siteAnnouncementSyncResult{
-		FailedSites: []siteAnnouncementFailedSite{},
+// SyncSiteAnnouncements fetches announcements for active sites (or one site)
+// via platform adapters and upserts site_announcements. Exported so the
+// background SiteAnnouncementScheduler can reuse this path without HTTP (#272).
+func SyncSiteAnnouncements(db *sqlx.DB, siteID *int64) SiteAnnouncementSyncResult {
+	result := SiteAnnouncementSyncResult{
+		FailedSites: []SiteAnnouncementFailedSite{},
 	}
 
 	type siteRow struct {
@@ -266,7 +295,7 @@ func syncSiteAnnouncements(db *sqlx.DB, siteID *int64) siteAnnouncementSyncResul
 	if err != nil {
 		slog.Error("site-announcement sync: failed to query sites", "error", err)
 		result.Failed++
-		result.FailedSites = append(result.FailedSites, siteAnnouncementFailedSite{
+		result.FailedSites = append(result.FailedSites, SiteAnnouncementFailedSite{
 			SiteID:   0,
 			SiteName: "",
 			Message:  err.Error(),
@@ -291,7 +320,7 @@ func syncSiteAnnouncements(db *sqlx.DB, siteID *int64) siteAnnouncementSyncResul
 		anns, annErr := adapter.GetSiteAnnouncements(ctx, site.URL, accessToken, nil, nil)
 		if annErr != nil {
 			result.Failed++
-			result.FailedSites = append(result.FailedSites, siteAnnouncementFailedSite{
+			result.FailedSites = append(result.FailedSites, SiteAnnouncementFailedSite{
 				SiteID:   site.ID,
 				SiteName: site.Name,
 				Message:  annErr.Error(),
@@ -365,7 +394,7 @@ func syncSiteAnnouncements(db *sqlx.DB, siteID *int64) siteAnnouncementSyncResul
 			)
 			if insertErr != nil {
 				result.Failed++
-				result.FailedSites = append(result.FailedSites, siteAnnouncementFailedSite{
+				result.FailedSites = append(result.FailedSites, SiteAnnouncementFailedSite{
 					SiteID:   site.ID,
 					SiteName: site.Name,
 					Message:  insertErr.Error(),
