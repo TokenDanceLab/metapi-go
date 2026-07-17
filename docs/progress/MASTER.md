@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 29 (v0.8.20) — next residual wave TBD |
+| Active milestone | **[Milestone 30 — Enterprise residual v0.8.21](https://github.com/TokenDanceLab/metapi-go/milestone/30)** |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -33,12 +33,14 @@
 | Enterprise residual **v0.8.18** | ✅ | #327–#329 · tag v0.8.18 |
 | Enterprise residual **v0.8.19** | ✅ | #334–#336 · tag v0.8.19 |
 | Enterprise residual **v0.8.20** | ✅ | #345–#346 (PRs #347/#348); tag **v0.8.20** |
+| Enterprise residual **v0.8.21** | 🔄 | Milestone 30 · #350–#351 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.20; next residual only with ACs |
+| [#350](https://github.com/TokenDanceLab/metapi-go/issues/350) | proxy | legacy `/v1/completions` stream include_usage (P0-555 follow-up) |
+| [#351](https://github.com/TokenDanceLab/metapi-go/issues/351) | docs | residual honesty refresh post v0.8.20 |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -77,9 +79,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
-3. Keep MASTER slim; docs map at `docs/README.md`.
+1. Close Milestone 30: #350 completions include_usage · #351 residual honesty.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
