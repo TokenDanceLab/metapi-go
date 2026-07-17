@@ -137,9 +137,9 @@ func TestMonitorLdohProxy_RequiresSessionAndCookie(t *testing.T) {
 		t.Fatalf("must not fake success for missing session: %s", rec.Body.String())
 	}
 
-	// Session present but cookie not configured → 400 plain text
+	// Session present but LDOH cookie not configured → 400 plain text
 	req2 := httptest.NewRequest(http.MethodGet, "/monitor-proxy/ldoh/", nil)
-	req2.AddCookie(&http.Cookie{Name: monitorAuthCookie, Value: cfg.AuthToken})
+	req2.AddCookie(&http.Cookie{Name: monitorAuthCookie, Value: deriveMonitorSessionToken(cfg.AuthToken)})
 	rec2 := httptest.NewRecorder()
 	r.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusBadRequest {

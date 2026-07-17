@@ -1,6 +1,10 @@
 package admin
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -35,6 +39,19 @@ type monitorHandler struct {
 const ldohCookieSettingKey = "monitor_ldoh_cookie"
 const monitorAuthCookie = "meta_monitor_auth"
 const ldohBaseURL = "https://ldoh.105117.xyz"
+
+// monitorCookiePath is scoped to the iframe proxy surface only.
+// Path=/ is intentionally avoided so a stolen cookie cannot be presented
+// to other same-origin endpoints. Iframe + "open proxy" targets are both
+// under /monitor-proxy/, so this does not break the embed flow.
+const monitorCookiePath = "/monitor-proxy/"
+
+// monitorSessionMaxAge matches the previous 2h cookie lifetime.
+const monitorSessionMaxAge = 7200
+
+// monitorSessionPurpose is the fixed HMAC message. Changing it rotates all
+// outstanding monitor cookies without touching AuthToken itself.
+const monitorSessionPurpose = "metapi-monitor-session-v1"
 
 // GET /api/monitor/config
 func (h *monitorHandler) getConfig(w http.ResponseWriter, r *http.Request) {
@@ -123,10 +140,21 @@ func (h *monitorHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/monitor/session
+// Mints an opaque monitor-proxy cookie derived from AuthToken via HMAC.
+// The raw AUTH_TOKEN is never written into the cookie value: cookie theft
+// must not yield a usable admin Bearer credential for /api/*.
 func (h *monitorHandler) createSession(w http.ResponseWriter, r *http.Request) {
-	// Set HttpOnly cookie for iframe proxy auth
-	w.Header().Set("Set-Cookie",
-		monitorAuthCookie+"="+h.cfg.AuthToken+"; Path=/; HttpOnly; SameSite=Lax; Max-Age=7200")
+	session := deriveMonitorSessionToken(h.cfg.AuthToken)
+	cookie := &http.Cookie{
+		Name:     monitorAuthCookie,
+		Value:    session,
+		Path:     monitorCookiePath,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   monitorSessionMaxAge,
+		Secure:   isMonitorHTTPS(r),
+	}
+	http.SetCookie(w, cookie)
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -226,7 +254,44 @@ func (h *monitorHandler) ldohProxy(w http.ResponseWriter, r *http.Request) {
 
 func (h *monitorHandler) ensureMonitorAuth(r *http.Request) bool {
 	cookies := parseCookieHeader(r.Header.Get("Cookie"))
-	return cookies[monitorAuthCookie] == h.cfg.AuthToken
+	got := cookies[monitorAuthCookie]
+	if got == "" {
+		return false
+	}
+	// Never accept the raw AuthToken as a monitor session.
+	if subtle.ConstantTimeCompare([]byte(got), []byte(h.cfg.AuthToken)) == 1 {
+		return false
+	}
+	expected := deriveMonitorSessionToken(h.cfg.AuthToken)
+	if len(got) != len(expected) {
+		// Length mismatch: still run a dummy compare to keep timing flat-ish,
+		// then deny.
+		_ = subtle.ConstantTimeCompare([]byte(expected), []byte(expected))
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(expected)) == 1
+}
+
+// deriveMonitorSessionToken returns an opaque, AuthToken-bound session value.
+// HMAC-SHA256(key=AuthToken, msg=purpose) means:
+//   - cookie value is never the live AUTH_TOKEN
+//   - AuthToken rotation automatically invalidates outstanding cookies
+//   - no server-side session store is required
+func deriveMonitorSessionToken(authToken string) string {
+	mac := hmac.New(sha256.New, []byte(authToken))
+	_, _ = mac.Write([]byte(monitorSessionPurpose))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+// isMonitorHTTPS reports whether the request arrived over TLS (directly or
+// via a reverse proxy that sets X-Forwarded-Proto). Cookie.Secure is set
+// when true; deployments that terminate TLS elsewhere should forward that
+// header so the Secure flag is applied.
+func isMonitorHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 func parseCookieHeader(raw string) map[string]string {
