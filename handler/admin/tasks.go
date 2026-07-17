@@ -145,7 +145,7 @@ func StartBackgroundTask(opts BackgroundTaskStartOptions, runner func() (any, er
 		if existingID, ok := backgroundDedupeIDs[dedupeKey]; ok {
 			if existing := backgroundTasks[existingID]; existing != nil &&
 				(existing.Status == BackgroundTaskPending || existing.Status == BackgroundTaskRunning) {
-				cp := *existing
+				cp := snapshotBackgroundTask(existing)
 				return &cp, true
 			}
 			delete(backgroundDedupeIDs, dedupeKey)
@@ -191,7 +191,7 @@ func StartBackgroundTask(opts BackgroundTaskStartOptions, runner func() (any, er
 
 	go runBackgroundTask(taskID, title, dedupeKey, runner)
 
-	cp := *task
+	cp := snapshotBackgroundTask(task)
 	return &cp, false
 }
 
@@ -248,14 +248,15 @@ func getBackgroundTask(db *sqlx.DB, id string) *BackgroundTask {
 	backgroundTasksMu.Lock()
 	cleanupExpiredBackgroundTasksLocked(time.Now())
 	task, ok := backgroundTasks[id]
-	backgroundTasksMu.Unlock()
 	if ok {
-		cp := *task
-		if cp.Logs == nil {
-			cp.Logs = []BackgroundTaskLogEntry{}
-		}
+		// Snapshot under the lock: runBackgroundTask mutates Status/Result/Error
+		// while HTTP get/list may observe the same *BackgroundTask concurrently.
+		// Copying after Unlock races with Result assignment (DATA RACE under -race).
+		cp := snapshotBackgroundTask(task)
+		backgroundTasksMu.Unlock()
 		return &cp
 	}
+	backgroundTasksMu.Unlock()
 	// Cold DB fallback (#265)
 	return loadBackgroundTaskDB(db, id)
 }
@@ -273,10 +274,7 @@ func listBackgroundTasks(db *sqlx.DB, limit int) []BackgroundTask {
 	seen := make(map[string]bool)
 	var all []BackgroundTask
 	for _, task := range backgroundTasks {
-		cp := *task
-		if cp.Logs == nil {
-			cp.Logs = []BackgroundTaskLogEntry{}
-		}
+		cp := snapshotBackgroundTask(task)
 		all = append(all, cp)
 		seen[cp.ID] = true
 	}
@@ -454,6 +452,24 @@ func strOrEmpty(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// snapshotBackgroundTask returns a value copy safe for callers outside
+// backgroundTasksMu. Logs are slice-copied so later appends on the live task
+// do not race readers. Callers must hold backgroundTasksMu when task is live.
+func snapshotBackgroundTask(task *BackgroundTask) BackgroundTask {
+	if task == nil {
+		return BackgroundTask{Logs: []BackgroundTaskLogEntry{}}
+	}
+	cp := *task
+	if cp.Logs == nil {
+		cp.Logs = []BackgroundTaskLogEntry{}
+	} else {
+		logs := make([]BackgroundTaskLogEntry, len(cp.Logs))
+		copy(logs, cp.Logs)
+		cp.Logs = logs
+	}
+	return cp
 }
 
 // ---- Global DB setter for free functions ----
