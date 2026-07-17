@@ -235,9 +235,11 @@ func TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete(t *testing.T) {
 	siteID := int64(site["id"].(float64))
 
 	accountResp := doPostJSON(t, r, "/api/accounts", map[string]any{
-		"siteId":      siteID,
-		"accessToken": "pg-session-token-" + suffix,
-		"username":    "pg-token-user-" + suffix,
+		"siteId":         siteID,
+		"accessToken":    "pg-session-token-" + suffix,
+		"username":       "pg-token-user-" + suffix,
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if accountResp.Code != http.StatusOK {
 		t.Fatalf("postgres create account: %d %s", accountResp.Code, accountResp.Body.String())

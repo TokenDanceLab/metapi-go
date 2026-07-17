@@ -346,7 +346,7 @@ func (h *accountsHandler) createSingleAccount(ctx context.Context, body payloads
 	if body.APIToken != nil {
 		apiTokenVal = strings.TrimSpace(*body.APIToken)
 	}
-	tokenType := "unknown"
+	var tokenType string
 	verifiedModels := []string{}
 
 	verifyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)

@@ -180,9 +180,11 @@ func TestTokenRoutes_Postgres_CreateUpdateChannelAndDelete(t *testing.T) {
 	siteID := int64(site["id"].(float64))
 
 	accountResp := doPostJSON(t, r, "/api/accounts", map[string]any{
-		"siteId":      siteID,
-		"accessToken": "pg-route-session-" + suffix,
-		"username":    "pg-route-user-" + suffix,
+		"siteId":         siteID,
+		"accessToken":    "pg-route-session-" + suffix,
+		"username":       "pg-route-user-" + suffix,
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	})
 	if accountResp.Code != http.StatusOK {
 		t.Fatalf("postgres create account: %d %s", accountResp.Code, accountResp.Body.String())
