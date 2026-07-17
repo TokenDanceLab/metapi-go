@@ -17,7 +17,7 @@ var tableColumnCount = map[string]int{
 	"CheckinLog":                     6,
 	"ModelAvailability":              7,
 	"TokenModelAvailability":         6,
-	"TokenRoute":                     13,
+	"TokenRoute":                     14,
 	"RouteGroupSource":               3,
 	"OAuthRouteUnit":                 8,
 	"OAuthRouteUnitMember":           16,
