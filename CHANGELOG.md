@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.15] — 2026-07-17
+
+### Fixed
+- Gate `ReportTokenExpired` / checkin-balance mark paths with `ShouldMarkAccountExpired` (no bare/generic 401 over-expiry) (#298 / #301)
+- Channel-scoped cascade isolation: 429 fails over, same-channel timeout budget, multi-channel same-site isolation tests (#299 / #302)
+- Preserve stream/partial usage on client disconnect when usage was already extracted (#300 / #303)
+
+### Docs / Honesty
+- Failover isolation residual notes for #585 (#299)
+- Gap matrix rows for #568 present + #585/#555 partial evidence refresh (via #301/#302/#303)
+
 ## [v0.8.14] — 2026-07-17
 
 ### Docs / Honesty
