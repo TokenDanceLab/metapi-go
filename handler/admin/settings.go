@@ -1,16 +1,31 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 )
+
+const (
+	systemProxyTestProbeURL = "https://www.gstatic.com/generate_204"
+	systemProxyTestTimeout  = 15 * time.Second
+)
+
+// systemProxyTestTransport lets tests inject a fake RoundTripper so the
+// system-proxy probe can be exercised without a real network or proxy.
+// Production code leaves this nil and uses platform.DoWithProxy.
+var systemProxyTestTransport http.RoundTripper
 
 // RegisterSettingsRoutes registers all /api/settings routes (runtime, brand-list, system-proxy/test).
 func RegisterSettingsRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
@@ -655,12 +670,11 @@ func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) 
 
 // GET /api/settings/brand-list
 func (h *settingsHandler) brandList(w http.ResponseWriter, r *http.Request) {
-	// Stub: return known brands
-	brands := []string{"new-api", "one-api", "veloera", "lobechat", "openwebui"}
-	writeJSON(w, http.StatusOK, map[string]any{"brands": brands})
+	writeJSON(w, http.StatusOK, map[string]any{"brands": platform.ListRegisteredPlatformNames()})
 }
 
 // POST /api/settings/system-proxy/test
+// Probes https://www.gstatic.com/generate_204 through the given (or saved) proxy.
 func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		ProxyUrl *string `json:"proxyUrl"`
@@ -670,12 +684,14 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	proxyURL := h.cfg.SystemProxyUrl
+	rawProxyURL := h.cfg.SystemProxyUrl
 	if body.ProxyUrl != nil {
-		proxyURL = strings.TrimSpace(*body.ProxyUrl)
+		rawProxyURL = strings.TrimSpace(*body.ProxyUrl)
+	} else {
+		rawProxyURL = strings.TrimSpace(rawProxyURL)
 	}
 
-	if proxyURL == "" {
+	if rawProxyURL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success": false,
 			"message": "请先填写系统代理地址",
@@ -683,15 +699,173 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Stub: actual proxy testing would require HTTP client
+	normalizedProxyURL := normalizeSystemProxyURL(rawProxyURL)
+	if normalizedProxyURL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": "系统代理地址无效，请填写合法的 http(s)/socks 代理 URL",
+		})
+		return
+	}
+
+	result, err := probeSystemProxy(r.Context(), normalizedProxyURL)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":    true,
-		"proxyUrl":   proxyURL,
-		"reachable":  true,
-		"ok":         true,
-		"statusCode": 204,
-		"latencyMs":  100,
+		"proxyUrl":   normalizedProxyURL,
+		"probeUrl":   result.probeURL,
+		"finalUrl":   result.finalURL,
+		"reachable":  result.reachable,
+		"ok":         result.ok,
+		"statusCode": result.statusCode,
+		"latencyMs":  result.latencyMs,
 	})
+}
+
+type systemProxyProbeResult struct {
+	reachable  bool
+	ok         bool
+	statusCode int
+	latencyMs  int
+	probeURL   string
+	finalURL   string
+}
+
+func probeSystemProxy(ctx context.Context, proxyURL string) (systemProxyProbeResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, systemProxyTestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, systemProxyTestProbeURL, nil)
+	if err != nil {
+		return systemProxyProbeResult{}, fmt.Errorf("系统代理测试失败：%v", err)
+	}
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("User-Agent", "metapi-system-proxy-tester/1.0")
+
+	started := time.Now()
+	resp, err := doSystemProxyProbe(ctx, req, proxyURL)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return systemProxyProbeResult{}, fmt.Errorf("系统代理测试超时（%ds）", int(systemProxyTestTimeout.Seconds()))
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			return systemProxyProbeResult{}, fmt.Errorf("系统代理测试超时（%ds）", int(systemProxyTestTimeout.Seconds()))
+		}
+		return systemProxyProbeResult{}, errors.New(describeSystemProxyTestFailure(err))
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+
+	latencyMs := int(time.Since(started).Milliseconds())
+	if latencyMs < 1 {
+		latencyMs = 1
+	}
+
+	finalURL := systemProxyTestProbeURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+
+	return systemProxyProbeResult{
+		reachable:  true,
+		ok:         resp.StatusCode >= 200 && resp.StatusCode < 300,
+		statusCode: resp.StatusCode,
+		latencyMs:  latencyMs,
+		probeURL:   systemProxyTestProbeURL,
+		finalURL:   finalURL,
+	}, nil
+}
+
+func doSystemProxyProbe(ctx context.Context, req *http.Request, proxyURL string) (*http.Response, error) {
+	if systemProxyTestTransport != nil {
+		// Tests inject a RoundTripper; still honor the request context.
+		return systemProxyTestTransport.RoundTrip(req.WithContext(ctx))
+	}
+	return platform.DoWithProxy(ctx, req, &platform.ProxyConfig{ProxyURL: proxyURL})
+}
+
+// normalizeSystemProxyURL validates and normalizes http(s)/socks proxy URLs.
+// Returns "" when the value is empty or not a supported proxy URL.
+func normalizeSystemProxyURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "http", "https", "socks", "socks4", "socks4a", "socks5", "socks5h":
+	default:
+		return ""
+	}
+	// Drop default trailing slash so stored/returned values stay stable.
+	out := parsed.String()
+	for strings.HasSuffix(out, "/") {
+		out = strings.TrimSuffix(out, "/")
+	}
+	return out
+}
+
+func describeSystemProxyTestFailure(err error) string {
+	if err == nil {
+		return "系统代理测试失败：未知错误"
+	}
+
+	// Walk nested causes (matches TS extractNestedErrorMessages) and prefer a
+	// concrete detail over a generic outer "fetch failed".
+	messages := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		msg := strings.TrimSpace(current.Error())
+		if msg == "" {
+			continue
+		}
+		if _, ok := seen[msg]; ok {
+			continue
+		}
+		seen[msg] = struct{}{}
+		messages = append(messages, msg)
+	}
+	detail := "未知错误"
+	for _, msg := range messages {
+		if msg != "fetch failed" {
+			detail = msg
+			break
+		}
+	}
+	if detail == "未知错误" && len(messages) > 0 {
+		detail = messages[0]
+	}
+
+	lower := strings.ToLower(detail)
+	switch {
+	case strings.Contains(lower, "connection refused") || strings.Contains(detail, "ECONNREFUSED"):
+		return "系统代理测试失败：连接被拒绝，请检查代理地址、端口和本地代理程序是否已启动"
+	case strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded") ||
+		strings.Contains(detail, "ETIMEDOUT") || strings.Contains(lower, "i/o timeout"):
+		return "系统代理测试失败：连接超时，请检查代理服务或当前网络是否可用"
+	case strings.Contains(detail, "ENOTFOUND") || strings.Contains(detail, "EAI_AGAIN") ||
+		strings.Contains(lower, "no such host") || strings.Contains(lower, "server misbehaving"):
+		return "系统代理测试失败：域名解析失败，请检查网络或代理的 DNS 配置"
+	case strings.Contains(detail, "ECONNRESET") || strings.Contains(lower, "connection reset"):
+		return "系统代理测试失败：连接被对端重置，请检查代理链路是否稳定"
+	case strings.Contains(detail, "407") || strings.Contains(lower, "proxy authentication"):
+		return "系统代理测试失败：代理要求认证，请检查用户名、密码或代理配置"
+	case strings.Contains(lower, "unsupported proxy scheme") || strings.Contains(lower, "invalid proxy url"):
+		return "系统代理测试失败：代理地址无效，请填写合法的 http(s)/socks 代理 URL"
+	default:
+		return "系统代理测试失败：" + detail
+	}
 }
 
 func extractClientIP(r *http.Request) string {

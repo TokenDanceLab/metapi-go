@@ -7,38 +7,38 @@ import (
 
 // PLATFORM_ALIASES maps user-facing platform names to canonical identifiers.
 var PlatformAliases = map[string]string{
-	"anyrouter":      "anyrouter",
-	"wong-gongyi":    "new-api",
-	"vo-api":         "new-api",
-	"super-api":      "new-api",
-	"rix-api":        "new-api",
-	"neo-api":        "new-api",
-	"newapi":         "new-api",
-	"new api":        "new-api",
-	"new-api":        "new-api",
-	"oneapi":         "one-api",
-	"one api":        "one-api",
-	"one-api":        "one-api",
-	"onehub":         "one-hub",
-	"one-hub":        "one-hub",
-	"donehub":        "done-hub",
-	"done-hub":       "done-hub",
-	"veloera":        "veloera",
-	"sub2api":        "sub2api",
-	"openai":         "openai",
-	"codex":          "codex",
-	"chatgpt-codex":  "codex",
-	"chatgpt codex":  "codex",
-	"anthropic":      "claude",
-	"claude":         "claude",
-	"gemini":         "gemini",
-	"gemini-cli":     "gemini-cli",
-	"antigravity":    "antigravity",
-	"anti-gravity":   "antigravity",
-	"google":         "gemini",
-	"cliproxyapi":    "cliproxyapi",
-	"cpa":            "cliproxyapi",
-	"cli-proxy-api":  "cliproxyapi",
+	"anyrouter":     "anyrouter",
+	"wong-gongyi":   "new-api",
+	"vo-api":        "new-api",
+	"super-api":     "new-api",
+	"rix-api":       "new-api",
+	"neo-api":       "new-api",
+	"newapi":        "new-api",
+	"new api":       "new-api",
+	"new-api":       "new-api",
+	"oneapi":        "one-api",
+	"one api":       "one-api",
+	"one-api":       "one-api",
+	"onehub":        "one-hub",
+	"one-hub":       "one-hub",
+	"donehub":       "done-hub",
+	"done-hub":      "done-hub",
+	"veloera":       "veloera",
+	"sub2api":       "sub2api",
+	"openai":        "openai",
+	"codex":         "codex",
+	"chatgpt-codex": "codex",
+	"chatgpt codex": "codex",
+	"anthropic":     "claude",
+	"claude":        "claude",
+	"gemini":        "gemini",
+	"gemini-cli":    "gemini-cli",
+	"antigravity":   "antigravity",
+	"anti-gravity":  "antigravity",
+	"google":        "gemini",
+	"cliproxyapi":   "cliproxyapi",
+	"cpa":           "cliproxyapi",
+	"cli-proxy-api": "cliproxyapi",
 }
 
 // registry holds all platform adapters in detection order.
@@ -154,4 +154,42 @@ func DetectPlatform(rawURL string) PlatformAdapter {
 // ListAdapters returns all registered adapters (for diagnostics).
 func ListAdapters() []PlatformAdapter {
 	return append([]PlatformAdapter{}, registry...)
+}
+
+// ListRegisteredPlatformNames returns the canonical platform names currently
+// present in the adapter registry. Names follow orderedPlatformNames when
+// possible so callers (e.g. settings brand-list) get a stable order.
+func ListRegisteredPlatformNames() []string {
+	byName := make(map[string]struct{}, len(registry))
+	for _, a := range registry {
+		if a == nil {
+			continue
+		}
+		name := strings.TrimSpace(a.PlatformName())
+		if name == "" {
+			continue
+		}
+		byName[name] = struct{}{}
+	}
+
+	names := make([]string, 0, len(byName))
+	seen := make(map[string]struct{}, len(byName))
+	for _, name := range orderedPlatformNames {
+		if _, ok := byName[name]; !ok {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	// Include any adapters not listed in orderedPlatformNames (future-proof).
+	for name := range byName {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
 }

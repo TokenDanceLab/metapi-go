@@ -416,6 +416,35 @@ func TestListAdapters_Copy(t *testing.T) {
 	}
 }
 
+func TestListRegisteredPlatformNames(t *testing.T) {
+	InitRegistry()
+
+	names := ListRegisteredPlatformNames()
+	if len(names) < 14 {
+		t.Fatalf("expected at least 14 registered platform names, got %d: %v", len(names), names)
+	}
+
+	// Stable order matches orderedPlatformNames for known adapters.
+	expectedPrefix := []string{"openai", "codex", "claude", "gemini"}
+	for i, want := range expectedPrefix {
+		if i >= len(names) || names[i] != want {
+			t.Fatalf("names[%d] = %q, want %q (full=%v)", i, names[i], want, names)
+		}
+	}
+
+	// No duplicates.
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name == "" {
+			t.Fatal("empty platform name in list")
+		}
+		if seen[name] {
+			t.Fatalf("duplicate platform name %q", name)
+		}
+		seen[name] = true
+	}
+}
+
 // --- Helper ---
 
 func indexOfString(slice []string, target string) int {
