@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.8] — 2026-07-17
+
+### Added
+- Durable `proxy_video_tasks` dual-write for video publicId mapping (multi-instance / restart) (#244 / #251)
+- TPM multi-instance Redis sharing via sharedcount (fail-open, mirrors RPM) (#245 / #249)
+
+### Docs / Honesty
+- Scheduler silent TODO residual inventory (sub2api / channel-recovery / announcement / update-center) (#246 / #250)
+
 ## [v0.8.7] — 2026-07-17
 
 ### Added
