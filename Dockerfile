@@ -7,7 +7,7 @@ COPY web ./
 RUN npm run build:web
 
 # Stage 2: Go build
-FROM golang:1.26.4-alpine AS build
+FROM golang:1.26.5-alpine AS build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
