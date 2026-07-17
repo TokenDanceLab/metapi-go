@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | next residual wave after v0.8.16 (open when needed) |
+| Active milestone | [Milestone 26 — Enterprise residual v0.8.17](https://github.com/TokenDanceLab/metapi-go/milestone/26) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -30,10 +30,15 @@
 | M-FEATURE + competitive learn | ✅ | Gap #38–#56 · learn #110–#121 |
 | Enterprise residual **v0.8.15** | ✅ | #298–#300 · tag v0.8.15 |
 | Enterprise residual **v0.8.16** | ✅ | #309–#311 (PRs #313/#314/#315); tag **v0.8.16** |
+| Enterprise residual **v0.8.17** | 🔄 | Milestone 26 · #318–#320 |
 
 ## Active work
 
-v0.8.16 product Issues **closed**. Next wave: residual-next-candidates partials (#585 load-proof residual, #555 aggregation deeper, multi-key #579) — open Issues only when starting work.
+| Issue | Track | Title |
+|------:|:------|:------|
+| [#318](https://github.com/TokenDanceLab/metapi-go/issues/318) | docs | residual honesty refresh post v0.8.16 |
+| [#319](https://github.com/TokenDanceLab/metapi-go/issues/319) | observability | project failed proxy_logs tokens into usage aggregates (#555) |
+| [#320](https://github.com/TokenDanceLab/metapi-go/issues/320) | product | token_routes.context_length admin/API surface honesty (#520) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -64,18 +69,17 @@ v0.8.16 product Issues **closed**. Next wave: residual-next-candidates partials 
 ## Quick status commands
 
 ```bash
-gh issue list --milestone "Enterprise residual v0.8.16" --state open
+gh issue list --milestone "Enterprise residual v0.8.17" --state open
 gh pr list --state open
-gh release view v0.8.15
+gh release view v0.8.16
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Tag **v0.8.16** (this release) — Milestone 25 closed.
-2. Next residual wave only with clear ACs: #585 load residual, #555 aggregation, optional #579 multi-key.
-3. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-4. Keep MASTER slim; docs map at `docs/README.md`.
+1. Land **v0.8.17** Milestone 26: #318 docs honesty · #319 usage aggregation · #320 context_length surface.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance

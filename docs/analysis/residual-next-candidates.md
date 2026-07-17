@@ -1,9 +1,9 @@
-# Residual next candidates (post v0.8.15)
+# Residual next candidates (post v0.8.16)
 
 **Date**: 2026-07-17  
-**Issue**: [#290](https://github.com/TokenDanceLab/metapi-go/issues/290) (inventory origin); reliability wave **#298–#300**  
-**Context**: After Enterprise residual **v0.8.15** (expired-mark guard, cascade isolation, stream/partial usage).  
-**Scope**: inventory only — **no product code** in this document.
+**Issue**: [#318](https://github.com/TokenDanceLab/metapi-go/issues/318) (this refresh); inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290)  
+**Context**: After Enterprise residual **v0.8.16** (protocol + usage residual **#309–#311**: Gemini thought_signature wire, Responses multi-turn content sanitize, failure `proxy_logs` retain usage).  
+**Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
 ## Purpose
@@ -27,7 +27,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
 | P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302) | Channel-scoped exclude, 429 failover, same-channel timeout budget, isolation tests; residual site/model breaker + production multi-channel load proof | Optional load-test / breaker polish | Medium residual |
-| P0-555 | Token usage statistics inaccurate | **partial** (audit #300/#303) | Client disconnect keeps extracted stream usage; aggregation pipeline still needs broader error/partial coverage | Observability follow-up | Billing/ops trust |
+| P0-555 | Token usage statistics inaccurate | **partial** (#300/#303 stream partial; **#311** failure logs) | Client disconnect keeps extracted stream usage; **#311** failure `proxy_logs` retain usage on error paths; aggregation still needs to project failed-row tokens into aggregates — follow-up **#319** | Observability wave **#319** (v0.8.17) | Billing/ops trust |
 | P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
 | ROUTE-590 | Route list drag reorder | **present** (v0.8.13) | `token_routes.sort_order` + `PUT /api/routes/reorder` (#284/#288); list `ORDER BY sort_order, id` | Done — matrix row should flip present on next refresh | — |
@@ -37,13 +37,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
 
-## Recommended sequencing (v0.8.16+)
+## Recommended sequencing (v0.8.17+)
 
-1. **Docs honesty**: flip matrix #590 → present; keep residual inventory honest after v0.8.15.
-2. **Protocol partials** largely present (P1-580 request-side + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-3. **Observability follow-up** on P0-555 aggregation / non-stream paths (beyond disconnect partial).
-4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Docs honesty** (#318): residual inventory + MASTER pointers after v0.8.16 so inventory matches shipped **#309–#311**.
+2. **Observability** (#319 / P0-555): project failed `proxy_logs` usage into aggregation (`failed_calls` + tokens); do not invent tokens when unknown.
+3. **Product surface honesty** (#320): `token_routes.context_length` admin/API JSON round-trip; document non-goal if no runtime max-token enforcement.
+4. **Protocol partials** already **present** on master (P1-580 request-side + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -51,11 +52,12 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming cluster-wide sticky while bindings remain process-local.
 - Inventing update-center deploy/rollback success without a registry.
 - Returning `success:true` for unimplemented admin stream/job queues.
+- Claiming perfect billing accuracy without aggregation proof after #311.
 
 ## Links
 
-- Release: [v0.8.15](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.15)
+- Release: [v0.8.16](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.16)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300
+- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320
