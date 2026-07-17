@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.6] — 2026-07-17
+
+### Fixed
+- Videos GET/DELETE honest upstream passthrough without empty local-store 404 theater (#225 / #231)
+
+### Added / Tests
+- Downstream key maxCost/maxRequests clear-to-NULL API tests (#226 / #233)
+- Claude cache_ratio 0.1 / cache_creation_ratio 1.25 assertions on proxy billing details (#227 / #230)
+- ParseInputFiles extracts OpenAI input_file/file body refs (#228 / #232)
+
 ## [v0.8.5] — 2026-07-17
 
 ### Added

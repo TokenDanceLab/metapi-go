@@ -79,7 +79,7 @@
 | Residual stubs | Milestone 12 closed · tag **[v0.8.3](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.3)** |
 | Polish v0.8.4 | Milestone 13 closed · tag **[v0.8.4](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.4)** |
 | Residual v0.8.5 | Milestone 14 closed · tag **[v0.8.5](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.5)** |
-| Residual v0.8.6 | Milestone 15 · **#225–#228** (videos / quota clear tests / Claude billing / input_files parse) |
+| Residual v0.8.6 | Milestone 15 · **#225–#228 closed** (PRs #229–#233); tag **v0.8.6** |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -174,6 +174,6 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. **Enterprise residual v0.8.6** (milestone 15): #225 videos passthrough · #226 quota clear tests · #227 Claude billing assert · #228 input_files parse
-2. Optional: multi-instance job coordination; full Responses WS product
+1. Tag **v0.8.6** (Enterprise residual complete)
+2. Optional: multi-instance job coordination; full Responses WS product; video publicId rewrite mapping
 3. Continue product backlog P0/P1; frontend flake observability
