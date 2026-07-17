@@ -11,8 +11,12 @@ import (
 )
 
 // RegisterTestRoutes registers all /api/test routes.
-// Sync proxy/chat probes alias the forced-channel harness (#119 / #185).
-// Stream and async job surfaces return honest 501 residuals (no fake success).
+//
+// Residual honesty (#185 / #291):
+//   - sync proxy/chat probes alias the forced-channel harness when a channel/site is forced
+//   - stream + async job create surfaces return honest 501 residuals (no fake SSE/job success)
+//   - job status/cancel return 404 (no in-process /api/test job registry; never invent stub-job ids)
+// See docs/analysis/admin-channel-test-harness.md and docs/analysis/p4-admin-test-routes.md.
 func RegisterTestRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
 	handler := &testHandler{
 		channel: &channelTestHandler{db: db, cfg: cfg},
@@ -65,29 +69,33 @@ func (h *testHandler) proxyTest(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/test/proxy/stream
+// SSE proxy stream matrix is residual — honest 501 (never invents fake stream chunks).
 func (h *testHandler) proxyTestStream(w http.ResponseWriter, r *http.Request) {
 	writeNotImplementedResidual(w,
 		"Proxy stream test is not implemented in Go",
-		"SSE /api/test/proxy/stream matrix; use non-stream POST /api/test/proxy with channelId/siteId or POST /api/admin/test-channel",
+		"SSE /api/test/proxy/stream matrix is residual; no fake stream success theater; use non-stream POST /api/test/proxy with channelId/siteId/forcedChannelId or POST /api/admin/test-channel",
 	)
 }
 
 // POST /api/test/proxy/jobs
+// Async proxy job queue is residual — honest 501 (never invents stub-job ids).
 func (h *testHandler) proxyTestJob(w http.ResponseWriter, r *http.Request) {
 	writeNotImplementedResidual(w,
 		"Proxy test job queue is not implemented in Go",
-		"async /api/test/proxy/jobs; use sync POST /api/test/proxy or POST /api/admin/test-channel",
+		"async /api/test/proxy/jobs queue is residual; no job registry or stub-job ids; use sync POST /api/test/proxy or POST /api/admin/test-channel",
 	)
 }
 
 // GET /api/test/proxy/jobs/:jobId
+// No in-process proxy test job registry — honest 404 (not a fake completed job).
 func (h *testHandler) proxyTestJobStatus(w http.ResponseWriter, r *http.Request) {
-	writeJobNotFound(w)
+	writeJobNotFound(w, "proxy")
 }
 
 // DELETE /api/test/proxy/jobs/:jobId
+// No in-process proxy test job registry — honest 404 (not a fake cancel success).
 func (h *testHandler) proxyTestJobCancel(w http.ResponseWriter, r *http.Request) {
-	writeJobNotFound(w)
+	writeJobNotFound(w, "proxy")
 }
 
 // POST /api/test/chat
@@ -97,29 +105,33 @@ func (h *testHandler) chatTest(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/test/chat/stream
+// SSE chat stream is residual — honest 501 (never invents fake stream chunks).
 func (h *testHandler) chatTestStream(w http.ResponseWriter, r *http.Request) {
 	writeNotImplementedResidual(w,
 		"Chat stream test is not implemented in Go",
-		"SSE /api/test/chat/stream; use non-stream POST /api/test/chat with channelId/siteId or POST /api/admin/test-channel",
+		"SSE /api/test/chat/stream is residual; no fake stream success theater; use non-stream POST /api/test/chat with channelId/siteId/forcedChannelId or POST /api/admin/test-channel",
 	)
 }
 
 // POST /api/test/chat/jobs
+// Async chat job queue is residual — honest 501 (never invents stub-job ids).
 func (h *testHandler) chatTestJob(w http.ResponseWriter, r *http.Request) {
 	writeNotImplementedResidual(w,
 		"Chat test job queue is not implemented in Go",
-		"async /api/test/chat/jobs; use sync POST /api/test/chat or POST /api/admin/test-channel",
+		"async /api/test/chat/jobs queue is residual; no job registry or stub-job ids; use sync POST /api/test/chat or POST /api/admin/test-channel",
 	)
 }
 
 // GET /api/test/chat/jobs/:jobId
+// No in-process chat test job registry — honest 404 (not a fake completed job).
 func (h *testHandler) chatTestJobStatus(w http.ResponseWriter, r *http.Request) {
-	writeJobNotFound(w)
+	writeJobNotFound(w, "chat")
 }
 
 // DELETE /api/test/chat/jobs/:jobId
+// No in-process chat test job registry — honest 404 (not a fake cancel success).
 func (h *testHandler) chatTestJobCancel(w http.ResponseWriter, r *http.Request) {
-	writeJobNotFound(w)
+	writeJobNotFound(w, "chat")
 }
 
 func (h *testHandler) handleSyncProbe(w http.ResponseWriter, r *http.Request, surface string) {
@@ -131,9 +143,11 @@ func (h *testHandler) handleSyncProbe(w http.ResponseWriter, r *http.Request, su
 
 	req, ok := mapFlexibleToChannelTest(body)
 	if !ok {
+		// Full path/multipart/routing matrix without a forced channel is residual.
+		// Do not invent a successful probe when no channel/site is forced.
 		writeNotImplementedResidual(w,
 			strings.ToUpper(surface[:1])+surface[1:]+" test requires channelId, siteId, or forcedChannelId for the forced-channel harness",
-			"full /api/test/"+surface+" path/multipart/routing matrix without a forced channel; provide channelId/siteId/forcedChannelId or use POST /api/admin/test-channel",
+			"full /api/test/"+surface+" path/multipart/routing matrix without a forced channel is residual; provide channelId/siteId/forcedChannelId or use POST /api/admin/test-channel",
 		)
 		return
 	}
@@ -249,6 +263,8 @@ func contentToPrompt(raw json.RawMessage) string {
 	return ""
 }
 
+// writeNotImplementedResidual returns HTTP 501 with success:false.
+// Never use this helper to invent fake success, stream chunks, or job ids (#291).
 func writeNotImplementedResidual(w http.ResponseWriter, message, residual string) {
 	writeJSON(w, http.StatusNotImplemented, map[string]any{
 		"success":  false,
@@ -257,13 +273,15 @@ func writeNotImplementedResidual(w http.ResponseWriter, message, residual string
 	})
 }
 
-func writeJobNotFound(w http.ResponseWriter) {
-	// Honest empty job surface: no in-process job registry for /api/test/* yet.
+// writeJobNotFound is the honest empty job surface for /api/test/*/jobs/:jobId.
+// There is no in-process job registry for these routes; never invent stub-job success (#291).
+func writeJobNotFound(w http.ResponseWriter, surface string) {
 	writeJSON(w, http.StatusNotFound, map[string]any{
 		"success": false,
 		"error": map[string]any{
 			"message": "job not found",
 			"type":    "not_found",
 		},
+		"residual": "no in-process /api/test/" + surface + " job queue or job registry; POST jobs returns 501; use sync POST /api/test/" + surface + " or POST /api/admin/test-channel",
 	})
 }
