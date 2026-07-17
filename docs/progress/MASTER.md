@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25)** (2026-07-17) — remains until release gate for v0.8.26
+**Latest release**: **[v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 36 — Enterprise residual polish v0.8.26](https://github.com/TokenDanceLab/metapi-go/milestone/36) |
+| Active milestone | closed Milestone 36 (v0.8.26) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -38,25 +38,23 @@
 | Enterprise residual **v0.8.24** | ✅ | #375–#377 (PRs #378/#379/#380); tag **v0.8.24** |
 | Enterprise residual **v0.8.25** | ✅ | #382–#384 (PRs #385/#386/#387); tag **v0.8.25** |
 | M35 residual review / follow-ons | ✅ closed | #388 synthesis · #389/#396 endpoint early reject · #390/#395 multi-route regression |
-| Enterprise residual polish **v0.8.26** | 🔄 active | Milestone 36 · board **#397–#400** |
+| Enterprise residual polish **v0.8.26** | ✅ | #397–#400 (PRs #401–#404); tag **v0.8.26** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#397](https://github.com/TokenDanceLab/metapi-go/issues/397) | docs | Residual honesty post M35 + v0.8.26 board |
-| [#398](https://github.com/TokenDanceLab/metapi-go/issues/398) | security | `IsValidAPIEndpointURL` metadata/link-local validator parity |
-| [#399](https://github.com/TokenDanceLab/metapi-go/issues/399) | proxy | CTX-520 reject max_tokens above positive route context_length |
-| [#400](https://github.com/TokenDanceLab/metapi-go/issues/400) | observability | P0-555 warn when stream ends without usage after include_usage inject |
+| — | — | Board clean after v0.8.26; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35 closed**: do not re-list #388–#390 as active work (landed on master with #395/#396).
+**M35/M36 closed**: do not re-list #388–#390 or #397–#400 as active work (landed on master).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) | 36 | IsValidAPIEndpointURL metadata parity · max_tokens vs context_length reject · stream missing-usage warn · residual honesty |
 | [v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25) | 34 | IsValidHTTPURL metadata harden · routes N+1 batch · residual honesty |
 | [v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24) | 33 | routes/search secret redact · site metadata URL guard · residual honesty |
 | [v0.8.23](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.23) | 32 | admin account secret redact · RR/stable soft-filter demotion · residual honesty |
@@ -84,13 +82,13 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.25
+gh release view v0.8.26
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land M36 board **#397–#400**: residual honesty (#397) · endpoint validator parity (#398) · CTX-520 max_tokens reject (#399) · P0-555 missing-usage warn (#400). Latest release stays **v0.8.25** until release gate.
+1. Close Milestone 36: #397 residual honesty · #398 endpoint validator parity · #399 CTX-520 max_tokens reject · #400 P0-555 missing-usage warn. Latest release **v0.8.26**.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish.
 4. Keep MASTER slim; docs map at `docs/README.md`.

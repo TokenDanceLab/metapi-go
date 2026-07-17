@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.26] — 2026-07-18
+
+### Security
+- `IsValidAPIEndpointURL` rejects cloud metadata / link-local targets (aligned with `IsForbiddenSiteTargetURL` / `IsValidHTTPURL`); any caller is safe by default (#398 / #403)
+
+### Fixed
+- OpenAI chat/completions (and legacy completions): reject `max_tokens` above positive selected-route `context_length` with honest 400 `invalid_request_error` (no silent clamp; Claude out of scope) (#399 / #404)
+- OpenAI chat/completions stream: `slog.Warn` once when stream ends without usable usage after `stream_options.include_usage` (injected or client-provided); never invent token counts (#400 / #401)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 36 post M35 / v0.8.25; SEC-ENDPOINT fully present · CTX-520 max_tokens reject shipped · P0-555 missing-usage warn residual note (#397 / #402)
+
 ## [v0.8.25] — 2026-07-17
 
 ### Security
