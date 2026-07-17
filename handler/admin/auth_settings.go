@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -69,7 +70,10 @@ func (h *authSettingsHandler) changeToken(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if body.OldToken != h.cfg.AuthToken {
+	// Constant-time compare (matches AdminAuth middleware). Reject unequal
+	// lengths after a dummy compare so length mismatches do not short-circuit
+	// before crypto/subtle.ConstantTimeCompare.
+	if !constantTimeTokenEqual(body.OldToken, h.cfg.AuthToken) {
 		writeJSON(w, http.StatusForbidden, map[string]any{
 			"success": false,
 			"message": "旧 Token 验证失败",
@@ -98,6 +102,18 @@ func (h *authSettingsHandler) changeToken(w http.ResponseWriter, r *http.Request
 		"success": true,
 		"message": "Token 已更新",
 	})
+}
+
+// constantTimeTokenEqual compares a and b as UTF-8 bytes in constant time when
+// lengths match. Mismatched lengths return false after a dummy compare so the
+// early-reject path still exercises ConstantTimeCompare.
+func constantTimeTokenEqual(a, b string) bool {
+	ab, bb := []byte(a), []byte(b)
+	if len(ab) != len(bb) {
+		_ = subtle.ConstantTimeCompare(ab, ab)
+		return false
+	}
+	return subtle.ConstantTimeCompare(ab, bb) == 1
 }
 
 func jsonQuote(s string) string {
