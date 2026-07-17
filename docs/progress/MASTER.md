@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.19](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.19)** (2026-07-17)
+**Latest release**: **[v0.8.20](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.20)** (2026-07-17)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | **[Milestone 29 — Enterprise residual v0.8.20](https://github.com/TokenDanceLab/metapi-go/milestone/29)** |
+| Active milestone | closed Milestone 29 (v0.8.20) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -31,15 +31,14 @@
 | Enterprise residual **v0.8.16** | ✅ | #309–#311 · tag v0.8.16 |
 | Enterprise residual **v0.8.17** | ✅ | #318–#320 · tag v0.8.17 |
 | Enterprise residual **v0.8.18** | ✅ | #327–#329 · tag v0.8.18 |
-| Enterprise residual **v0.8.19** | ✅ | #334–#336 (PRs #337/#339/#343); tag **v0.8.19** |
-| Enterprise residual **v0.8.20** | 🔄 | Milestone 29 · #345–#346 |
+| Enterprise residual **v0.8.19** | ✅ | #334–#336 · tag v0.8.19 |
+| Enterprise residual **v0.8.20** | ✅ | #345–#346 (PRs #347/#348); tag **v0.8.20** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#345](https://github.com/TokenDanceLab/metapi-go/issues/345) | proxy | OpenAI chat stream `stream_options.include_usage` inject (P0-555 residual) |
-| [#346](https://github.com/TokenDanceLab/metapi-go/issues/346) | docs | residual honesty refresh post v0.8.19 |
+| — | — | Board clean after v0.8.20; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -48,12 +47,12 @@
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.20](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.20) | 29 | stream include_usage · residual honesty |
 | [v0.8.19](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.19) | 28 | residual honesty · healthPersist race · P0-585 cascade honesty |
 | [v0.8.18](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.18) | 27 | models contextLength wire · admin race isolation · residual honesty |
 | [v0.8.17](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.17) | 26 | Residual honesty · failed usage aggregates · route contextLength admin |
 | [v0.8.16](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.16) | 25 | Gemini thought_signature · Responses multi-turn · failure usage logs |
-| [v0.8.15](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.15) | 24 | Expired-mark guard · cascade isolation · stream usage partial |
-| older | 11–23 | See GitHub Releases / `CHANGELOG.md` |
+| older | 11–24 | See GitHub Releases / `CHANGELOG.md` |
 
 ## Architecture entry points
 
@@ -72,16 +71,15 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.19
+gh release view v0.8.20
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Close Milestone 29: #345 stream include_usage · #346 residual honesty.
-2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
-4. Keep MASTER slim; docs map at `docs/README.md`.
+1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+3. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
