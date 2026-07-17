@@ -23,6 +23,8 @@ func NormalizeSiteAPIEndpointBaseUrl(raw string) string {
 }
 
 // IsValidAPIEndpointURL checks whether a normalized URL is a valid http(s) URL.
+// Also rejects cloud metadata / link-local targets via IsForbiddenSiteTargetURL
+// so any future caller is safe by default (#398 / parity with #382).
 func IsValidAPIEndpointURL(raw string) bool {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -32,7 +34,13 @@ func IsValidAPIEndpointURL(raw string) bool {
 	if err != nil {
 		return false
 	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if IsForbiddenSiteTargetURL(trimmed) {
+		return false
+	}
+	return true
 }
 
 // IsValidProxyURL checks whether a string is a valid http(s)/socks proxy URL.

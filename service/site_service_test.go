@@ -396,6 +396,32 @@ func TestIsValidAPIEndpointURL_Invalid(t *testing.T) {
 	}
 }
 
+func TestIsValidAPIEndpointURL_RejectsMetadata(t *testing.T) {
+	forbid := []string{
+		"http://169.254.169.254/latest/meta-data",
+		"https://169.254.169.254/",
+		"http://metadata.google.internal/",
+		"http://[fe80::1]/",
+	}
+	for _, u := range forbid {
+		if IsValidAPIEndpointURL(u) {
+			t.Errorf("expected invalid for metadata URL %q", u)
+		}
+	}
+	allow := []string{
+		"https://api.openai.com/v1",
+		"http://10.0.0.5:8080",
+		"http://192.168.1.10",
+		"http://127.0.0.1:4000",
+		"http://localhost:8080",
+	}
+	for _, u := range allow {
+		if !IsValidAPIEndpointURL(u) {
+			t.Errorf("expected valid for %q", u)
+		}
+	}
+}
+
 func TestIsValidProxyURL_Valid(t *testing.T) {
 	tests := []string{"http://proxy:8080", "https://proxy:8443", "socks5://proxy:1080", "socks5h://proxy:1080"}
 	for _, url := range tests {
