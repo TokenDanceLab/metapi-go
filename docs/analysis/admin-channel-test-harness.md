@@ -94,6 +94,22 @@ Always HTTP **200** for a completed probe attempt (including upstream 4xx/5xx/ti
 | No auth header echo | Response does not include request Authorization |
 | Timeout floor/ceiling | 1s–60s |
 
+## Related `/api/test/*` aliases (#185 / #291)
+
+Sync admin test routes reuse this harness when a channel/site is forced. Stream and async job surfaces stay residual.
+
+| Method | Path | Status | Behavior | Invents? |
+|--------|------|--------|----------|----------|
+| POST | `/api/test/proxy` | **200** / **400** / **404** / **501** | Forced id → harness; else **501** residual matrix | **No** fake probe without forced channel |
+| POST | `/api/test/chat` | **200** / **400** / **404** / **501** | Same as proxy | **No** fake chat success without forced channel |
+| POST | `/api/test/proxy/stream` | **501** | SSE matrix residual | **No** fake stream chunks |
+| POST | `/api/test/chat/stream` | **501** | SSE residual | **No** fake stream chunks |
+| POST | `/api/test/proxy/jobs` | **501** | Async job queue residual | **No** `stub-job` |
+| POST | `/api/test/chat/jobs` | **501** | Async job queue residual | **No** `stub-job` |
+| GET/DELETE | `/api/test/{proxy,chat}/jobs/{jobId}` | **404** | No in-process job registry | **No** fake complete/cancel |
+
+Details: `docs/analysis/p4-admin-test-routes.md` · code: `handler/admin/test.go`.
+
 ## Out of scope
 
 - End-user unauthenticated console
@@ -101,6 +117,7 @@ Always HTTP **200** for a completed probe attempt (including upstream 4xx/5xx/ti
 - Browser extension permissions / all-api-hub client shape
 - Background health probing (see #114 / `scheduler/model_probe.go`)
 - Large SPA redesign (optional thin button is a follow-up)
+- Working `/api/test/*/stream` SSE matrix or `/api/test/*/jobs` async queues (honest 501/404 residuals only; see #291)
 
 ## Tests
 

@@ -236,19 +236,20 @@ func TestTestRoutes_StreamAndJobsHonest501(t *testing.T) {
 	_, _, r := setupTestRoutes(t)
 
 	cases := []struct {
-		method string
-		path   string
-		body   any
-		want   int
+		method          string
+		path            string
+		body            any
+		want            int
+		residualSnippet string
 	}{
-		{http.MethodPost, "/api/test/proxy/stream", map[string]any{"forcedChannelId": 1}, http.StatusNotImplemented},
-		{http.MethodPost, "/api/test/chat/stream", map[string]any{"channelId": 1}, http.StatusNotImplemented},
-		{http.MethodPost, "/api/test/proxy/jobs", map[string]any{"forcedChannelId": 1}, http.StatusNotImplemented},
-		{http.MethodPost, "/api/test/chat/jobs", map[string]any{"channelId": 1}, http.StatusNotImplemented},
-		{http.MethodGet, "/api/test/proxy/jobs/any", nil, http.StatusNotFound},
-		{http.MethodGet, "/api/test/chat/jobs/any", nil, http.StatusNotFound},
-		{http.MethodDelete, "/api/test/proxy/jobs/any", nil, http.StatusNotFound},
-		{http.MethodDelete, "/api/test/chat/jobs/any", nil, http.StatusNotFound},
+		{http.MethodPost, "/api/test/proxy/stream", map[string]any{"forcedChannelId": 1}, http.StatusNotImplemented, "no fake stream success theater"},
+		{http.MethodPost, "/api/test/chat/stream", map[string]any{"channelId": 1}, http.StatusNotImplemented, "no fake stream success theater"},
+		{http.MethodPost, "/api/test/proxy/jobs", map[string]any{"forcedChannelId": 1}, http.StatusNotImplemented, "no job registry or stub-job ids"},
+		{http.MethodPost, "/api/test/chat/jobs", map[string]any{"channelId": 1}, http.StatusNotImplemented, "no job registry or stub-job ids"},
+		{http.MethodGet, "/api/test/proxy/jobs/any", nil, http.StatusNotFound, "no in-process /api/test/proxy job queue"},
+		{http.MethodGet, "/api/test/chat/jobs/any", nil, http.StatusNotFound, "no in-process /api/test/chat job queue"},
+		{http.MethodDelete, "/api/test/proxy/jobs/any", nil, http.StatusNotFound, "no in-process /api/test/proxy job queue"},
+		{http.MethodDelete, "/api/test/chat/jobs/any", nil, http.StatusNotFound, "no in-process /api/test/chat job queue"},
 	}
 
 	for _, tc := range cases {
@@ -275,9 +276,22 @@ func TestTestRoutes_StreamAndJobsHonest501(t *testing.T) {
 			if out["success"] == true {
 				t.Fatalf("fake success on residual path: %v", out)
 			}
-			if tc.want == http.StatusNotImplemented {
-				if residual, _ := out["residual"].(string); residual == "" {
-					t.Fatalf("expected residual: %v", out)
+			// Never invent stub job ids on residual job surfaces.
+			if _, ok := out["jobId"]; ok {
+				t.Fatalf("invented jobId on residual path: %v", out)
+			}
+			if residual, _ := out["residual"].(string); residual == "" {
+				t.Fatalf("expected residual: %v", out)
+			} else if !strings.Contains(residual, tc.residualSnippet) {
+				t.Fatalf("residual=%q missing %q", residual, tc.residualSnippet)
+			}
+			if tc.want == http.StatusNotFound {
+				errObj, _ := out["error"].(map[string]any)
+				if errObj == nil {
+					t.Fatalf("expected error object on job 404: %v", out)
+				}
+				if msg, _ := errObj["message"].(string); msg != "job not found" {
+					t.Fatalf("error.message=%v", errObj["message"])
 				}
 			}
 		})

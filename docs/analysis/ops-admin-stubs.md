@@ -22,6 +22,7 @@ Replace remaining admin ops stubs that previously returned fake success:
 2. **LDOH reverse proxy** needs a valid operator-provided `ld_auth_session` cookie and a prior `POST /api/monitor/session`. Upstream network failures return `502`, never fake `success:true`.
 3. **Background task registry** is process-local (in-memory), matching the TS service model. Multi-instance deployments do not share task state.
 4. **Announcement sync** is best-effort per site: unsupported platforms increment `unsupported`; adapter/network failures are recorded in `failedSites` inside the task result rather than inventing a queued success without work.
+5. **Admin test harness residuals (#291)** — `/api/test/{proxy,chat}/stream` and `/api/test/{proxy,chat}/jobs` stay honest **501**; job get/cancel stay **404** with no stub-job registry. See `docs/analysis/admin-channel-test-harness.md` and `docs/analysis/p4-admin-test-routes.md`.
 
 ## Tests
 
