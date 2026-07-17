@@ -1,6 +1,6 @@
 # Failover Isolation (R1 / #25, upstream #585)
 
-**Date:** 2026-07-16  
+**Date:** 2026-07-17 · honesty #336  
 **Lane:** reliability  
 **SSOT code:** `routing/cooldown.go`, `routing/round_robin.go`, `routing/runtime_health.go`, `routing/router.go` (`RecordFailure`), `routing/selector.go`, `proxy/conductor.go`, `proxy/retry_policy.go`, `proxy/failure_judge.go`
 
@@ -74,6 +74,20 @@ Code evidence:
 - `proxy/channel_selection.go` — `ChannelSelectionInput.ExcludeChannelIDs` docs
 - `proxy/retry_policy.go` — `ShouldAbortSameSiteEndpointFallback` scope note
 - `routing/router.go` `RecordFailure` — non-usage-limit writes `affectedChannelIDs = []int64{channelID}`
+
+## Honesty status (v0.8.18+ / #336)
+
+| Claim | Status |
+|:------|:-------|
+| Channel-scoped request exclude (not site-wide) | **present** (#299 / conductor tests) |
+| 429 fails over; timeout same-channel budget then failover | **present** |
+| Sibling channels not fail-counted from peer failure | **present** (`RecordFailure` write scope) |
+| Site/model breaker can filter **all** channels on site/model | **intentional residual** (systemic protection, not cascade bug) |
+| Empty recent-failure/breaker filters fall back to full candidate set | **intentional residual** (starvation prevention) |
+| Production multi-channel load proof under fleet traffic | **not present** — unit/integration only |
+| Product "remove breakers" or invent site-wide exclude | **non-goal** without dedicated Milestone ACs |
+
+Inventory row: residual-next-candidates **P0-585** remains **partial**.
 
 ## Residual cascade (still intentional / partial)
 
