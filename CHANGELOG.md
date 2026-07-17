@@ -5,6 +5,19 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.18] — 2026-07-17
+
+### Added
+- OpenAI `/v1/models` prefers positive `token_routes.context_length` (max per exposed model id) over `knownModelContextLength` heuristics; production load path SELECTs the column (#327 / #332)
+
+### Fixed
+- Admin test isolation: stop reassigning `globalAccountsCache` pointer; drain background health-refresh runners before registry reset (DATA RACE under full `-race` suite) (#328 / #331)
+- Race-safe `healthPersistTimer` clear under `healthStateMu` (ConfigureProxyUpstream / site runtime health debounce) (#327 gate)
+
+### Docs / Honesty
+- Residual inventory + MASTER pointers for Milestone 27 (#329 / #330)
+- CTX-520 residual: models wire present; still no proxy max-token enforcement
+
 ## [v0.8.17] — 2026-07-17
 
 ### Added
