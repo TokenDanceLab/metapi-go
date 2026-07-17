@@ -207,10 +207,10 @@ func dispatchSelectedUpstream(
 	if requestID == "" {
 		requestID = proxy.RequestIDFromContext(r.Context())
 	}
-	// Optional max_tokens vs route context_length (issue #399 / CTX-520).
-	// Enforce only on OpenAI chat/completions (+ legacy completions) when the
-	// selected route publishes a positive context_length and the body includes
-	// max_tokens above that limit. Never silent-clamp.
+	// Optional max_tokens vs route context_length (issue #399 / #409 / CTX-520).
+	// Enforce on OpenAI chat/completions (+ legacy completions) and Anthropic
+	// /v1/messages when the selected route publishes a positive context_length
+	// and the body includes max_tokens above that limit. Never silent-clamp.
 	if ctx != nil && selected != nil && shouldEnforceMaxTokensOnPath(upstreamPath) {
 		if err := enforceMaxTokensAgainstContextLength(ctx.Body, selected.ContextLength); err != nil {
 			writeJSONErrorWithRequest(w, http.StatusBadRequest, err.Error(), "invalid_request_error", requestID)

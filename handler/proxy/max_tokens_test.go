@@ -151,7 +151,9 @@ func TestShouldEnforceMaxTokensOnPath(t *testing.T) {
 		"/chat/completions":                true,
 		"/v1/completions":                  true,
 		"/completions":                     true,
-		"/v1/messages":                     false,
+		"/v1/messages":                     true,
+		"/messages":                        true,
+		"/v1/messages/count_tokens":        false,
 		"/v1/responses":                    false,
 		"/v1/embeddings":                   false,
 		"/v1beta/models/x:generateContent": false,
@@ -355,5 +357,206 @@ func TestCompletions_MaxTokensOverContextLengthReturns400(t *testing.T) {
 	}
 	if upstreamHits != 0 {
 		t.Fatalf("upstream was called; expected rejection before forward")
+	}
+}
+
+func TestClaudeMessages_MaxTokensOverContextLengthReturns400(t *testing.T) {
+	// Issue #409: Claude /v1/messages must reject max_tokens above positive route context_length.
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"should-not-reach"}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(1024)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "claude-sonnet-4-20250514",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/messages",
+		`{"model":"claude-sonnet-4-20250514","max_tokens":2048,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleClaudeMessages(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "max_tokens") || !strings.Contains(body, "context_length") {
+		t.Fatalf("body = %q, want clear max_tokens/context_length error", body)
+	}
+	if !strings.Contains(body, "invalid_request_error") {
+		t.Fatalf("body = %q, want invalid_request_error", body)
+	}
+	if upstreamHits != 0 {
+		t.Fatalf("upstream was called %d times; expected 0 (must not silent-forward)", upstreamHits)
+	}
+}
+
+func TestClaudeMessages_MaxTokensAtContextLengthPassesThrough(t *testing.T) {
+	upstreamHits := 0
+	var sawMaxTokens any
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		sawMaxTokens = payload["max_tokens"]
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"msg_ok","type":"message","role":"assistant","content":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(2048)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "claude-sonnet-4-20250514",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/messages",
+		`{"model":"claude-sonnet-4-20250514","max_tokens":2048,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleClaudeMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+	// No silent clamp: original max_tokens must be forwarded unchanged.
+	if sawMaxTokens != float64(2048) {
+		t.Fatalf("upstream max_tokens = %v (%T), want 2048 (no clamp)", sawMaxTokens, sawMaxTokens)
+	}
+}
+
+func TestClaudeMessages_MaxTokensUnderContextLengthPassesThrough(t *testing.T) {
+	upstreamHits := 0
+	var sawMaxTokens any
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		sawMaxTokens = payload["max_tokens"]
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"msg_ok","type":"message","role":"assistant","content":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(8192)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "claude-sonnet-4-20250514",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/messages",
+		`{"model":"claude-sonnet-4-20250514","max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleClaudeMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+	if sawMaxTokens != float64(100) {
+		t.Fatalf("upstream max_tokens = %v (%T), want 100 (no clamp)", sawMaxTokens, sawMaxTokens)
+	}
+}
+
+func TestClaudeMessages_NoContextLengthDoesNotEnforce(t *testing.T) {
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"msg_ok","type":"message","role":"assistant","content":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:     store.RouteChannel{ID: 1, Enabled: true},
+			Account:     store.Account{ID: 1, Status: "active"},
+			Site:        store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+			TokenValue:  "upstream-token",
+			ActualModel: "claude-sonnet-4-20250514",
+			// ContextLength nil → no enforce
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/messages",
+		`{"model":"claude-sonnet-4-20250514","max_tokens":999999,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleClaudeMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+}
+
+func TestClaudeMessages_ZeroContextLengthDoesNotEnforce(t *testing.T) {
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"msg_ok","type":"message","role":"assistant","content":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(0)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "claude-sonnet-4-20250514",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/messages",
+		`{"model":"claude-sonnet-4-20250514","max_tokens":999999,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleClaudeMessages(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
 	}
 }

@@ -22,9 +22,9 @@ func (e maxTokensOverContextError) Error() string {
 }
 
 // enforceMaxTokensAgainstContextLength rejects max_tokens above a positive
-// route context_length for OpenAI chat/completions-style bodies.
+// route context_length for OpenAI chat/completions-style and Anthropic messages bodies.
 //
-// Policy (issue #399 / CTX-520):
+// Policy (issue #399 / #409 / CTX-520):
 //   - enforce only when context_length > 0
 //   - enforce only when max_tokens is present and parseable as an integer
 //   - skip when max_tokens is omitted, null, or unparseable
@@ -46,15 +46,16 @@ func enforceMaxTokensAgainstContextLength(body map[string]any, contextLength *in
 	return nil
 }
 
-// shouldEnforceMaxTokensOnPath is true for OpenAI chat/completions (+ legacy completions).
-// Claude native messages keep optional residual (max_tokens is required there and often
-// means output budget only); this wave only enforces the OpenAI-shaped surfaces named in #399.
+// shouldEnforceMaxTokensOnPath is true for OpenAI chat/completions (+ legacy completions)
+// and Anthropic Claude /v1/messages (issue #409). count_tokens and other surfaces stay out.
 func shouldEnforceMaxTokensOnPath(downstreamPath string) bool {
 	p := strings.ToLower(strings.TrimSpace(downstreamPath))
 	switch {
 	case strings.HasSuffix(p, "/chat/completions"):
 		return true
 	case p == "/v1/completions" || p == "/completions" || strings.HasSuffix(p, "/v1/completions"):
+		return true
+	case p == "/v1/messages" || p == "/messages" || strings.HasSuffix(p, "/v1/messages"):
 		return true
 	default:
 		return false
