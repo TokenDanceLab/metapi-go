@@ -19,6 +19,10 @@ type ParsedUsage struct {
 	TotalTokens         int64
 	CacheReadTokens     int64
 	CacheCreationTokens int64
+	// ReasoningTokens captures Gemini thoughtsTokenCount / OpenAI reasoning_tokens
+	// when reported separately. Not persisted as its own proxy_logs column; it is
+	// folded into CompletionTokens / TotalTokens when total is missing.
+	ReasoningTokens int64
 	// Source is "upstream" when any token field was present, otherwise "unknown".
 	Source string
 	Found  bool
@@ -35,7 +39,11 @@ func (u ParsedUsage) ToUsageSummary() *proxy.UsageSummary {
 
 // ParseUsageFromBody extracts token usage from a non-stream JSON response body.
 // Supports OpenAI (prompt_tokens/completion_tokens/total_tokens), Anthropic
-// (input_tokens/output_tokens), and Gemini (usageMetadata.*TokenCount).
+// (input_tokens/output_tokens + cache_*_input_tokens), Gemini
+// (usageMetadata.*TokenCount including thoughtsTokenCount), and nested
+// Responses / message_start shapes.
+//
+// Does not invent usage when upstream omitted token fields.
 func ParseUsageFromBody(body []byte) ParsedUsage {
 	body = trimJSONNoise(body)
 	if len(body) == 0 {
@@ -89,6 +97,21 @@ func mergeUsagePreferLater(prev, next ParsedUsage) ParsedUsage {
 	} else if !prev.Found {
 		out.CompletionTokens = next.CompletionTokens
 	}
+	if next.CacheReadTokens > 0 {
+		out.CacheReadTokens = next.CacheReadTokens
+	} else if !prev.Found {
+		out.CacheReadTokens = next.CacheReadTokens
+	}
+	if next.CacheCreationTokens > 0 {
+		out.CacheCreationTokens = next.CacheCreationTokens
+	} else if !prev.Found {
+		out.CacheCreationTokens = next.CacheCreationTokens
+	}
+	if next.ReasoningTokens > 0 {
+		out.ReasoningTokens = next.ReasoningTokens
+	} else if !prev.Found {
+		out.ReasoningTokens = next.ReasoningTokens
+	}
 	// Recompute total from merged prompt+completion unless the later event
 	// provides an explicit total that covers both sides (total >= sum).
 	sum := out.PromptTokens + out.CompletionTokens
@@ -132,12 +155,7 @@ func extractUsageFromValue(v any) ParsedUsage {
 		}
 	}
 
-	if out.Found && out.TotalTokens == 0 && (out.PromptTokens > 0 || out.CompletionTokens > 0) {
-		out.TotalTokens = out.PromptTokens + out.CompletionTokens
-	}
-	if out.Found {
-		out.Source = usageSourceUpstream
-	}
+	finalizeParsedUsage(&out)
 	return out
 }
 
@@ -145,7 +163,8 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 	if out == nil || usage == nil {
 		return
 	}
-	// OpenAI-style
+
+	// OpenAI chat.completions style
 	if n, ok := asInt64(usage["prompt_tokens"]); ok {
 		out.PromptTokens = n
 		out.Found = true
@@ -159,7 +178,10 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		out.Found = true
 	}
 
-	// Anthropic-style
+	// Anthropic + OpenAI Responses style (input/output).
+	// Note: Anthropic input_tokens is the *non-cached* input portion; cache
+	// fields are exclusive and must be added for total prompt accounting.
+	// OpenAI Responses input_tokens already includes cached_tokens (subset).
 	if n, ok := asInt64(usage["input_tokens"]); ok {
 		out.PromptTokens = n
 		out.Found = true
@@ -168,17 +190,55 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		out.CompletionTokens = n
 		out.Found = true
 	}
-	// Optional Anthropic cache fields.
+
+	// Anthropic exclusive cache fields (not subsets of input_tokens).
+	sawAnthropicCacheKeys := false
 	if cacheRead, ok := asInt64(usage["cache_read_input_tokens"]); ok {
 		out.CacheReadTokens = cacheRead
 		out.Found = true
+		sawAnthropicCacheKeys = true
 	}
 	if cacheCreate, ok := asInt64(usage["cache_creation_input_tokens"]); ok {
 		out.CacheCreationTokens = cacheCreate
 		out.Found = true
+		sawAnthropicCacheKeys = true
 	}
-	if out.PromptTokens == 0 && (out.CacheReadTokens > 0 || out.CacheCreationTokens > 0) {
-		out.PromptTokens = out.CacheReadTokens + out.CacheCreationTokens
+	if sawAnthropicCacheKeys {
+		// input_tokens (if present) is non-cached; expand prompt to include cache
+		// so total_tokens and billing breakdown billable-prompt math stay correct.
+		// When input_tokens was omitted (0) and only cache fields exist, this still
+		// yields prompt = cache_read + cache_creation.
+		out.PromptTokens = out.PromptTokens + out.CacheReadTokens + out.CacheCreationTokens
+	}
+
+	// OpenAI prompt_tokens_details.cached_tokens / input_tokens_details.cached_tokens
+	// are subsets of prompt/input tokens — record for cache pricing, do not add again.
+	if details, ok := usage["prompt_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["cached_tokens"]); ok {
+			out.CacheReadTokens = n
+			out.Found = true
+		}
+	}
+	if details, ok := usage["input_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["cached_tokens"]); ok {
+			out.CacheReadTokens = n
+			out.Found = true
+		}
+	}
+
+	// OpenAI completion_tokens_details.reasoning_tokens is typically already inside
+	// completion_tokens / total_tokens. Record only; do not double-count when total present.
+	if details, ok := usage["completion_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["reasoning_tokens"]); ok {
+			out.ReasoningTokens = n
+			out.Found = true
+		}
+	}
+	if details, ok := usage["output_tokens_details"].(map[string]any); ok {
+		if n, ok := asInt64(details["reasoning_tokens"]); ok {
+			out.ReasoningTokens = n
+			out.Found = true
+		}
 	}
 
 	// Gemini-style
@@ -194,9 +254,41 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		out.TotalTokens = n
 		out.Found = true
 	}
+	// thoughtsTokenCount is usually included in totalTokenCount when total is present.
+	// When total is omitted, fold thoughts into completion so stats do not under-count.
+	// Do not fold OpenAI reasoning_tokens the same way: those are already inside
+	// completion_tokens when reported.
+	if n, ok := asInt64(usage["thoughtsTokenCount"]); ok {
+		out.ReasoningTokens = n
+		out.Found = true
+		if _, hasTotal := asInt64(usage["totalTokenCount"]); !hasTotal && n > 0 {
+			out.CompletionTokens += n
+		}
+	}
+}
 
-	// OpenAI Responses API sometimes uses input_tokens/output_tokens inside usage.
-	// Already covered by Anthropic keys above.
+func finalizeParsedUsage(out *ParsedUsage) {
+	if out == nil || !out.Found {
+		if out != nil && out.Source == "" {
+			out.Source = usageSourceUnknown
+		}
+		return
+	}
+
+	if out.TotalTokens == 0 && (out.PromptTokens > 0 || out.CompletionTokens > 0) {
+		out.TotalTokens = out.PromptTokens + out.CompletionTokens
+	}
+	// If total is present but still less than prompt+completion (partial upstream),
+	// prefer the explicit split sum rather than inventing beyond reported fields.
+	// Common after Anthropic cache fields expand prompt beyond a stale total.
+	if out.TotalTokens > 0 {
+		sum := out.PromptTokens + out.CompletionTokens
+		if sum > out.TotalTokens {
+			out.TotalTokens = sum
+		}
+	}
+
+	out.Source = usageSourceUpstream
 }
 
 func asInt64(v any) (int64, bool) {
