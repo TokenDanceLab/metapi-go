@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -18,6 +20,38 @@ const (
 	channelRecoveryCooldownRecheckMs = 30_000     // 30s for cooldown
 	channelRecoveryActiveRecheckMs   = 5 * 60_000 // 5min for active
 )
+
+// Optional process-local provider of coordinator-active channel IDs.
+// Wired from app.ConfigureProxyUpstream to ProxyChannelCoordinator.GetActiveChannelIDs
+// without importing proxy (avoids scheduler↔proxy cycles). #273
+var (
+	activeChannelIDsProviderMu sync.RWMutex
+	activeChannelIDsProvider   func() []int64
+)
+
+// SetActiveChannelIDsProvider registers (or clears with nil) the active-channel ID source
+// used by ChannelRecoveryScheduler.loadActiveCandidates.
+func SetActiveChannelIDsProvider(fn func() []int64) {
+	activeChannelIDsProviderMu.Lock()
+	defer activeChannelIDsProviderMu.Unlock()
+	activeChannelIDsProvider = fn
+}
+
+// GetActiveChannelIDsFromProvider returns IDs from the registered provider.
+// Returns nil when no provider is registered.
+func GetActiveChannelIDsFromProvider() []int64 {
+	fn := getActiveChannelIDsProvider()
+	if fn == nil {
+		return nil
+	}
+	return fn()
+}
+
+func getActiveChannelIDsProvider() func() []int64 {
+	activeChannelIDsProviderMu.RLock()
+	defer activeChannelIDsProviderMu.RUnlock()
+	return activeChannelIDsProvider
+}
 
 // ChannelRecoveryScheduler periodically sweeps channels that are in cooldown
 // or active to probe if they have recovered.
@@ -124,14 +158,8 @@ func (s *ChannelRecoveryScheduler) runSweepLocked(dbw *store.DB) {
 
 	// Query cooling channels (SQL-backed; real candidate list).
 	coolingCandidates := s.loadCoolingCandidates(dbw)
-	// Residual honesty (#246): active candidates are loaded via a simplified SQL
-	// stub (enabled route_channels with null cooldown), NOT via
-	// proxyChannelCoordinator.getActiveChannelIds() as the TS path does.
-	// That means process-local routing/coordinator state is ignored; the SQL
-	// list is an approximation and may include channels the coordinator would
-	// not treat as "active for recovery".
-	// TODO residual (partial): wire active candidate loading via
-	// proxyChannelCoordinator when that surface is shared with this package.
+	// Active candidates prefer ProxyChannelCoordinator via optional provider
+	// hook (#273). When unset, residual SQL LIMIT 50 approximation remains.
 	activeCandidates := s.loadActiveCandidates(dbw)
 
 	merged := s.mergeCandidates(coolingCandidates, activeCandidates)
@@ -201,10 +229,17 @@ func (s *ChannelRecoveryScheduler) loadCoolingCandidates(dbw *store.DB) []recove
 }
 
 func (s *ChannelRecoveryScheduler) loadActiveCandidates(dbw *store.DB) []recoveryCandidate {
-	// Residual (#246): SQL approximation of "active" channels (enabled + no
-	// cooldown + active account/site). Not wired to proxyChannelCoordinator.
-	// LIMIT 50 is a local guard, not TS coordinator semantics. Not a silent
-	// no-op — rows are returned and may be probed — but selection is residual.
+	// Prefer coordinator-active IDs when app has wired the optional provider (#273).
+	// Presence of the provider (not the slice contents) selects this path so an
+	// empty active-lease set does not fall back to the residual SQL scan.
+	if fn := getActiveChannelIDsProvider(); fn != nil {
+		return s.loadActiveCandidatesFromIDs(dbw, fn())
+	}
+
+	// Residual fallback (#246/#273): SQL approximation of "active" channels
+	// (enabled + no cooldown + active account/site) when no coordinator
+	// provider is registered. LIMIT 50 is a local guard, not coordinator
+	// semantics. Honest residual only when the optional hook is unset.
 	var candidates []recoveryCandidate
 
 	rows, err := dbw.Query(`
@@ -231,6 +266,65 @@ func (s *ChannelRecoveryScheduler) loadActiveCandidates(dbw *store.DB) []recover
 		}
 		if c.modelName != "" {
 			candidates = append(candidates, c)
+		}
+	}
+	return candidates
+}
+
+// loadActiveCandidatesFromIDs resolves model names for coordinator-provided channel IDs.
+// Includes enabled channels with active account/site. Null cooldown is preferred;
+// channels that still have a source_model are included even when cooldown is set.
+func (s *ChannelRecoveryScheduler) loadActiveCandidatesFromIDs(dbw *store.DB, ids []int64) []recoveryCandidate {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	query, args, err := sqlx.In(`
+		SELECT rc.id, COALESCE(rc.source_model, '') as source_model
+		FROM route_channels rc
+		INNER JOIN accounts a ON rc.account_id = a.id
+		INNER JOIN sites st ON a.site_id = st.id
+		WHERE rc.id IN (?)
+		  AND rc.enabled = TRUE
+		  AND a.status = 'active'
+		  AND st.status = 'active'
+		  AND (
+		    rc.cooldown_until IS NULL
+		    OR (rc.source_model IS NOT NULL AND TRIM(rc.source_model) != '')
+		  )
+	`, ids)
+	if err != nil {
+		slog.Error("channel-recovery: failed to build active candidate query", "error", err)
+		return nil
+	}
+
+	rows, err := dbw.Query(query, args...)
+	if err != nil {
+		slog.Error("channel-recovery: failed to load active candidates from provider IDs", "error", err)
+		return nil
+	}
+	defer rows.Close()
+
+	// Preserve provider order where possible.
+	byID := make(map[int64]recoveryCandidate, len(ids))
+	for rows.Next() {
+		var c recoveryCandidate
+		c.source = "active"
+		if err := rows.Scan(&c.channelID, &c.modelName); err != nil {
+			continue
+		}
+		c.modelName = strings.TrimSpace(c.modelName)
+		if c.modelName != "" {
+			byID[c.channelID] = c
+		}
+	}
+
+	candidates := make([]recoveryCandidate, 0, len(byID))
+	seen := make(map[int64]bool, len(byID))
+	for _, id := range ids {
+		if c, ok := byID[id]; ok && !seen[id] {
+			candidates = append(candidates, c)
+			seen[id] = true
 		}
 	}
 	return candidates

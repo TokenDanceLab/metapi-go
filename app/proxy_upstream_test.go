@@ -15,6 +15,7 @@ import (
 	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -40,6 +41,7 @@ func TestConfigureProxyUpstreamWiresRealSQLiteRouter(t *testing.T) {
 	cfg := testProxyConfig(t)
 	t.Cleanup(func() {
 		proxyhandler.SetUpstreamConfig(nil)
+		scheduler.SetActiveChannelIDsProvider(nil)
 		_ = store.CloseDatabase()
 	})
 	config.Set(cfg)
@@ -171,5 +173,42 @@ func TestProxyRoutingStoreSelectsSeededChannel(t *testing.T) {
 	}
 	if selected.Channel.ID != channelID || selected.TokenValue != "seed-token" || selected.Site.URL != "https://example.invalid" {
 		t.Fatalf("selected = %+v", selected)
+	}
+}
+
+func TestConfigureProxyUpstreamWiresActiveChannelIDsProvider(t *testing.T) {
+	_ = store.CloseDatabase()
+	scheduler.SetActiveChannelIDsProvider(nil)
+
+	// Unset path / failed reconfigure clears the provider.
+	if err := ConfigureProxyUpstream(testProxyConfig(t)); err == nil {
+		t.Fatal("expected ConfigureProxyUpstream to fail without DB")
+	}
+	if got := scheduler.GetActiveChannelIDsFromProvider(); got != nil {
+		t.Fatalf("provider should be cleared when DB missing, got %v", got)
+	}
+
+	cfg := testProxyConfig(t)
+	// Register after TempDir so CloseDatabase runs before TempDir cleanup (Windows file lock).
+	t.Cleanup(func() {
+		proxyhandler.SetUpstreamConfig(nil)
+		scheduler.SetActiveChannelIDsProvider(nil)
+		_ = store.CloseDatabase()
+	})
+	config.Set(cfg)
+	if err := store.EnsureRuntimeDatabase(cfg); err != nil {
+		t.Fatalf("EnsureRuntimeDatabase: %v", err)
+	}
+	if err := ConfigureProxyUpstream(cfg); err != nil {
+		t.Fatalf("ConfigureProxyUpstream: %v", err)
+	}
+
+	// Provider is registered and returns a non-nil empty slice when no leases exist.
+	ids := scheduler.GetActiveChannelIDsFromProvider()
+	if ids == nil {
+		t.Fatal("expected non-nil provider after ConfigureProxyUpstream")
+	}
+	if len(ids) != 0 {
+		t.Fatalf("expected empty active IDs with no leases, got %v", ids)
 	}
 }
