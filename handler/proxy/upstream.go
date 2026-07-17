@@ -623,6 +623,8 @@ func dispatchEndpointAttemptWithContinue(
 	}
 	recordUpstreamSuccess(r.Context(), cfg, selected, upstreamModel, latencyMs, usage)
 	writeSuccessProxyLog(r.Context(), cfg, selected, ctx, upstreamModel, upstreamPath, latencyMs, resp.StatusCode, false, usage, retry, requestID)
+	// Videos create (#235): map upstream id → publicId before the client sees the body.
+	respBody = maybeRewriteVideosCreateResponse(ctx, selected, upstreamPath, respBody)
 	relayBufferedUpstreamResponse(w, resp, respBody)
 	observeProxyTerminal(ctx, shared.OutcomeSuccess, false, time.Duration(latencyMs)*time.Millisecond)
 	return true, nil, false

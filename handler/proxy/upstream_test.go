@@ -3,6 +3,7 @@ package proxyhandler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -538,9 +539,27 @@ func TestVideosCreateMultipartForwardsFormToUpstream(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "vid_123") {
-		t.Fatalf("body = %q, want upstream response", body)
+	// Create rewrites upstream id → publicId (#235); raw upstream id must not leak.
+	bodyStr := rec.Body.String()
+	if strings.Contains(bodyStr, "vid_123") {
+		t.Fatalf("body = %q, must not expose raw upstream id after publicId rewrite", bodyStr)
 	}
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, bodyStr)
+	}
+	publicID, _ := out["id"].(string)
+	if publicID == "" || !strings.HasPrefix(publicID, "video_") {
+		t.Fatalf("public id = %q, want video_*", publicID)
+	}
+	task := GetProxyVideoTaskByPublicID(publicID)
+	if task == nil {
+		t.Fatalf("expected mapping for publicId %q", publicID)
+	}
+	if task.UpstreamVideoID != "vid_123" {
+		t.Fatalf("UpstreamVideoID = %q, want vid_123", task.UpstreamVideoID)
+	}
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(publicID) })
 }
 
 func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
