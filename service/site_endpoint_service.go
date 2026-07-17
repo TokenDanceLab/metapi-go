@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net"
 	"net/url"
 	"strings"
 )
@@ -62,4 +63,44 @@ func IsValidHTTPURL(raw string) bool {
 		return false
 	}
 	return parsed.Scheme == "http" || parsed.Scheme == "https"
+}
+
+// IsForbiddenSiteTargetURL reports whether a site/endpoint URL must be rejected
+// as a first-hop SSRF risk to cloud metadata / link-local targets (#376).
+// RFC1918 private and localhost remain allowed for lab/docker operators.
+func IsForbiddenSiteTargetURL(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		return false
+	}
+	lower := strings.ToLower(host)
+	switch lower {
+	case "metadata.google.internal", "metadata", "instance-data":
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Hostname: only block well-known metadata names above.
+		return false
+	}
+	// Link-local IPv4 169.254.0.0/16 (includes AWS/GCP/Azure metadata 169.254.169.254).
+	if ip4 := ip.To4(); ip4 != nil {
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		return false
+	}
+	// Link-local IPv6 fe80::/10
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	return false
 }

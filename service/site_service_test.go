@@ -523,3 +523,30 @@ func TestNormalizeNullable_Nil(t *testing.T) {
 		t.Errorf("expected nil for nil input, got %v", result)
 	}
 }
+
+func TestIsForbiddenSiteTargetURL(t *testing.T) {
+	forbid := []string{
+		"http://169.254.169.254/latest/meta-data",
+		"https://169.254.169.254/",
+		"http://metadata.google.internal/",
+		"http://[fe80::1]/",
+	}
+	allow := []string{
+		"https://api.openai.com/v1",
+		"http://10.0.0.5:8080",
+		"http://192.168.1.10",
+		"http://127.0.0.1:4000",
+		"http://localhost:8080",
+		"",
+	}
+	for _, u := range forbid {
+		if !IsForbiddenSiteTargetURL(u) {
+			t.Errorf("expected forbidden: %q", u)
+		}
+	}
+	for _, u := range allow {
+		if IsForbiddenSiteTargetURL(u) {
+			t.Errorf("expected allowed: %q", u)
+		}
+	}
+}

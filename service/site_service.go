@@ -100,6 +100,9 @@ func UpsertSiteAPIEndpoints(tx *sqlx.Tx, siteID int64, endpoints []store.SiteAPI
 		if normalizedURL == "" {
 			continue
 		}
+		if IsForbiddenSiteTargetURL(normalizedURL) {
+			return fmt.Errorf("site api endpoint url rejects cloud metadata / link-local targets")
+		}
 		enabled := true
 		if !ep.Enabled {
 			enabled = false
