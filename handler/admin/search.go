@@ -116,6 +116,12 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY account_count DESC LIMIT ?`,
 		likePattern, perCategory)
 
+	for _, row := range accounts {
+		redactSearchAccountSecrets(row)
+	}
+	for _, row := range accountTokens {
+		redactSearchTokenSecrets(row)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accounts":      normalizeSlice(accounts),
 		"accountTokens": normalizeSlice(accountTokens),
@@ -124,6 +130,32 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 		"proxyLogs":     normalizeSlice(proxyLogs),
 		"models":        normalizeSlice(modelRows),
 	})
+}
+
+// redactSearchAccountSecrets removes plaintext credentials from search account hits (#375).
+func redactSearchAccountSecrets(row map[string]any) {
+	if row == nil {
+		return
+	}
+	if s, ok := row["accessToken"].(string); ok && strings.TrimSpace(s) != "" {
+		row["accessTokenMasked"] = maskAdminSecret(s)
+	}
+	delete(row, "accessToken")
+	if s, ok := row["apiToken"].(string); ok && strings.TrimSpace(s) != "" {
+		row["apiTokenMasked"] = maskAdminSecret(s)
+	}
+	delete(row, "apiToken")
+}
+
+// redactSearchTokenSecrets removes plaintext token from search accountTokens hits (#375).
+func redactSearchTokenSecrets(row map[string]any) {
+	if row == nil {
+		return
+	}
+	if s, ok := row["token"].(string); ok && strings.TrimSpace(s) != "" {
+		row["tokenMasked"] = maskAdminSecret(s)
+	}
+	delete(row, "token")
 }
 
 func queryRows(db *sqlx.DB, query string, args ...any) []map[string]any {

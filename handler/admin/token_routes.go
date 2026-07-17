@@ -184,14 +184,7 @@ func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) 
 				"weight":           ch["weight"],
 				"enabled":          ch["enabled"],
 				"manualOverride":   ch["manualOverride"],
-				"account": map[string]any{
-					"id":          ch["accountId"],
-					"username":    ch["username"],
-					"accessToken": ch["accessToken"],
-					"apiToken":    ch["apiToken"],
-					"balance":     ch["balance"],
-					"status":      ch["accountStatus"],
-				},
+				"account":          routeChannelAccountPublic(ch),
 				"site": map[string]any{
 					"id":       ch["siteId"],
 					"name":     ch["siteName"],
@@ -546,14 +539,7 @@ func (h *tokenRoutesHandler) getRouteChannels(w http.ResponseWriter, r *http.Req
 			"weight":           ch["weight"],
 			"enabled":          ch["enabled"],
 			"manualOverride":   ch["manualOverride"],
-			"account": map[string]any{
-				"id":          ch["accountId"],
-				"username":    ch["username"],
-				"accessToken": ch["accessToken"],
-				"apiToken":    ch["apiToken"],
-				"balance":     ch["balance"],
-				"status":      ch["accountStatus"],
-			},
+			"account":          routeChannelAccountPublic(ch),
 			"site": map[string]any{
 				"id":       ch["siteId"],
 				"name":     ch["siteName"],
@@ -1260,4 +1246,44 @@ func toInt64(v any) int64 {
 	default:
 		return 0
 	}
+}
+
+// routeChannelAccountPublic returns account fields for admin route channel lists
+// without plaintext credentials (#375).
+func routeChannelAccountPublic(ch map[string]any) map[string]any {
+	out := map[string]any{
+		"id":       ch["accountId"],
+		"username": ch["username"],
+		"balance":  ch["balance"],
+		"status":   ch["accountStatus"],
+	}
+	if v, ok := ch["accessToken"]; ok {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			out["accessTokenMasked"] = maskAdminSecret(s)
+		}
+	}
+	if v, ok := ch["apiToken"]; ok {
+		switch tv := v.(type) {
+		case string:
+			if strings.TrimSpace(tv) != "" {
+				out["apiTokenMasked"] = maskAdminSecret(tv)
+			}
+		case *string:
+			if tv != nil && strings.TrimSpace(*tv) != "" {
+				out["apiTokenMasked"] = maskAdminSecret(*tv)
+			}
+		}
+	}
+	return out
+}
+
+func maskAdminSecret(secret string) string {
+	s := strings.TrimSpace(secret)
+	if s == "" {
+		return ""
+	}
+	if len(s) <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[len(s)-4:]
 }
