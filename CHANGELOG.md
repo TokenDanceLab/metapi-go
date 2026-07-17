@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.5] — 2026-07-17
+
+### Added
+- Site initialization preset registry + create/detect validation (#214 / #222)
+- Gemini `/v1beta/models` from owned model catalog (#215 / #221)
+- Site proxy cache invalidation hooks (routing + admin accounts snapshot) (#216 / #219)
+- Responses WebSocket honest residual + boot wire (#217 / #220)
+
+### Fixed
+- Shared PG CI: prefer `SiteSelectColumns` over `SELECT * FROM sites` (probe-column drift)
+
 ## [v0.8.4] — 2026-07-17
 
 ### Fixed
