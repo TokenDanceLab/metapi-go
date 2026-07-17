@@ -21,20 +21,30 @@ Document the **owned MetAPI listing** returned by `GET /v1/models`, how it diffe
 
 | Mode | What it is | Status in metapi-go |
 |------|------------|---------------------|
-| **Owned listing** (current) | MetAPI constructs the list itself from an owned catalog (stub today) filtered by downstream routing policy (`SupportedModels` / deny-all / route-id constraints). `owned_by` is always `"metapi"`. | **Implemented** |
-| **Upstream listing** | Proxy or merge of each site/account’s native `/v1/models` (or platform equivalent), including vendor `context_length` / `max_model_len` when present. | **Not implemented** on this surface. Route rebuild / platform model refresh populate routes elsewhere; this handler does **not** currently call `TokenRouter.GetAvailableModels` or pass through upstream payloads. |
+| **Owned listing** (current) | MetAPI constructs the list itself from enabled `token_routes` via `TokenRouter.GetAvailableModels`, then filters by downstream routing policy (`SupportedModels` / deny-all / route-id constraints). `owned_by` is always `"metapi"`. | **Implemented** (#169) |
+| **Upstream listing** | Proxy or merge of each site/account’s native `/v1/models` (or platform equivalent), including vendor `context_length` / `max_model_len` when present. | **Not implemented** (and not the default). This surface never scrapes live upstream `/v1/models`. |
+
+### Catalog resolution (`resolveOwnedModelCatalog`)
+
+| Condition | Catalog source |
+|-----------|----------------|
+| `UpstreamConfig.Router` implements `AvailableModelsSource` (production `routing.TokenRouter`) | `GetAvailableModels(ctx)` over enabled/visible routes |
+| Router listing returns an error | Empty list + warn log (no silent stub) |
+| Router is present but selection-only (no listing method) | Last-resort stub catalog (keeps e2e / selection mocks shape-compatible) |
+| `UpstreamConfig` nil **and** `METAPI_ENABLE_PROXY_STUB` on | Last-resort stub catalog (unit-test default) |
+| `UpstreamConfig` nil **and** stub disabled | Empty list + one-shot warn (production safety) |
 
 Implications:
 
 1. Clients always see a MetAPI-owned OpenAI/Claude envelope, not a raw vendor body.
-2. Model IDs are the names MetAPI is willing to route (catalog ∩ policy), not necessarily a complete dump of every upstream account’s models.
+2. Model IDs are the names MetAPI is willing to route (route catalog ∩ policy), not necessarily a complete dump of every upstream account’s models.
 3. `owned_by: "metapi"` intentionally avoids vendor-specific client branches (e.g. Hermes’ `owned_by == "llamacpp"` → `/v1/props` path).
 
-Future hardening (out of this issue’s code scope unless reopened):
+Residual / future hardening:
 
-- Wire `TokenRouter.GetAvailableModels` + channel resolvability (upstream metapi `listModelsSurface` behavior).
-- Prefer `token_routes.context_length` (SC2 additive column) over built-in defaults when set.
+- Prefer `token_routes.context_length` (SC2 additive column) over built-in defaults when set; today `knownModelContextLength` still supplies family defaults/heuristics only.
 - Optionally merge per-site discovered context metadata from platform model refresh.
+- Route-ID-aware listing when policy has only `AllowedRouteIDs` (currently empty until joined).
 
 ## OpenAI-compatible shape (default)
 
@@ -105,10 +115,10 @@ Notes:
 
 | Policy | Listing behavior |
 |--------|------------------|
-| Empty allow-all | Full owned catalog |
+| Empty allow-all | Full owned catalog (route-backed or last-resort fallback) |
 | `DenyAllWhenEmpty` with no supported models / routes | Empty `data` |
 | `SupportedModels` patterns | Catalog filtered by wildcard/exact match |
-| `AllowedRouteIDs` only (no supported models) | Empty until route-aware listing is wired |
+| `AllowedRouteIDs` only (no supported models) | Empty until route-aware listing is wired (`AllowedRouteIDs` still enforced at channel selection) |
 
 ## Client quirks
 
@@ -121,11 +131,13 @@ Notes:
 
 ## Tests
 
-- Unit: `handler/proxy/models_test.go` (`TestBuildOpenAIModelsResponse*`, `TestBuildClaudeModelsResponse*`, `TestHandleModels_*`)
-- E2E: `e2e/e2e_flow_test.go` Phase 5 asserts OpenAI required fields including `owned_by` / `created`
+- Unit: `handler/proxy/models_test.go` (`TestGetAvailableModels_*`, `TestBuildOpenAIModelsResponse*`, `TestBuildClaudeModelsResponse*`, `TestHandleModels_*`)
+- E2E: `e2e/e2e_flow_test.go` Phase 5 asserts OpenAI required fields including `owned_by` / `created` (selection-only mock router still uses last-resort catalog)
 
 ## References
 
+- Issue: TokenDanceLab/metapi-go #169 (route-backed listing), #53 (shape / `context_length`)
 - Upstream issue: [cita-777/metapi#507](https://github.com/cita-777/metapi/issues/507)
 - Upstream surface: `src/server/proxy-core/surfaces/modelsSurface.ts`
 - Schema home for future route context: `store.TokenRoute.ContextLength` / `token_routes.context_length`
+- Router API: `routing.TokenRouter.GetAvailableModels`
