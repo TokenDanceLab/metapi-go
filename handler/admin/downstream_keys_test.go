@@ -673,3 +673,144 @@ func assertDownstreamQuotaResponseNull(t *testing.T, body []byte) {
 
 func float64Ptr(v float64) *float64 { return &v }
 func int64Ptr(v int64) *int64       { return &v }
+
+func TestDownstreamKeysListSummaryOverviewRedactPlaintextKey(t *testing.T) {
+	secret := "sk-redact-list-summary-overview-secret"
+	_, r := setupDownstreamKeysTest(t)
+
+	// Create may intentionally return full key once.
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name": "redact-client",
+		"key":  secret,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	item, ok := createBody["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("create missing item: %#v", createBody)
+	}
+	if item["key"] != secret {
+		t.Fatalf("create should still return full key once, got %#v", item["key"])
+	}
+	if item["keyMasked"] != maskKey(secret) {
+		t.Fatalf("create keyMasked = %#v, want %q", item["keyMasked"], maskKey(secret))
+	}
+	keyID := int64(item["id"].(float64))
+
+	assertNoPlaintextKey := func(t *testing.T, surface string, row map[string]any) {
+		t.Helper()
+		if row == nil {
+			t.Fatalf("%s row is nil", surface)
+		}
+		if v, ok := row["key"]; ok && v != nil && v != "" {
+			if s, isStr := v.(string); isStr && s == secret {
+				t.Fatalf("%s leaked full key: %#v", surface, v)
+			}
+			if s, isStr := v.(string); isStr && s == secret {
+				t.Fatalf("%s leaked full key", surface)
+			}
+			// Any non-empty key field is a leak for list surfaces.
+			if s, isStr := v.(string); isStr && s != "" {
+				t.Fatalf("%s must omit key or leave empty; got %#v", surface, v)
+			}
+		}
+		masked, _ := row["keyMasked"].(string)
+		if masked == "" {
+			t.Fatalf("%s missing keyMasked", surface)
+		}
+		if masked == secret {
+			t.Fatalf("%s keyMasked equals full secret", surface)
+		}
+		if masked != maskKey(secret) {
+			t.Fatalf("%s keyMasked = %q, want %q", surface, masked, maskKey(secret))
+		}
+		// Raw body must not contain the full secret string either.
+	}
+
+	// List
+	resp = doGet(t, r, "/api/downstream-keys")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list returned %d: %s", resp.Code, resp.Body.String())
+	}
+	if strings.Contains(resp.Body.String(), secret) {
+		t.Fatalf("list response body contains full secret")
+	}
+	var listBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &listBody); err != nil {
+		t.Fatalf("unmarshal list: %v", err)
+	}
+	found := false
+	for _, rawItem := range listBody["items"].([]any) {
+		row := rawItem.(map[string]any)
+		if int64(row["id"].(float64)) != keyID {
+			continue
+		}
+		found = true
+		assertNoPlaintextKey(t, "list", row)
+	}
+	if !found {
+		t.Fatal("created key missing from list")
+	}
+
+	// Summary
+	resp = doGet(t, r, "/api/downstream-keys/summary")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("summary returned %d: %s", resp.Code, resp.Body.String())
+	}
+	if strings.Contains(resp.Body.String(), secret) {
+		t.Fatalf("summary response body contains full secret")
+	}
+	var summaryBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &summaryBody); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
+	found = false
+	for _, rawItem := range summaryBody["items"].([]any) {
+		row := rawItem.(map[string]any)
+		if int64(row["id"].(float64)) != keyID {
+			continue
+		}
+		found = true
+		assertNoPlaintextKey(t, "summary", row)
+	}
+	if !found {
+		t.Fatal("created key missing from summary")
+	}
+
+	// Overview
+	resp = doGet(t, r, "/api/downstream-keys/"+itoa(keyID)+"/overview")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("overview returned %d: %s", resp.Code, resp.Body.String())
+	}
+	if strings.Contains(resp.Body.String(), secret) {
+		t.Fatalf("overview response body contains full secret")
+	}
+	var overviewBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &overviewBody); err != nil {
+		t.Fatalf("unmarshal overview: %v", err)
+	}
+	overviewItem, ok := overviewBody["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("overview missing item: %#v", overviewBody)
+	}
+	assertNoPlaintextKey(t, "overview", overviewItem)
+}
+
+func TestRedactDownstreamKeySecret(t *testing.T) {
+	t.Parallel()
+	row := map[string]any{"id": int64(1), "key": "sk-abcdefghijklmnop", "name": "x"}
+	redactDownstreamKeySecret(row)
+	if _, ok := row["key"]; ok {
+		t.Fatalf("key still present: %#v", row["key"])
+	}
+	if row["keyMasked"] != "sk-a****mnop" {
+		t.Fatalf("keyMasked = %#v", row["keyMasked"])
+	}
+	// nil-safe
+	redactDownstreamKeySecret(nil)
+}

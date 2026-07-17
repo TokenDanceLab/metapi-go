@@ -78,9 +78,8 @@ func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) 
 		if group != "" && group != "__ungrouped__" && groupName != group {
 			continue
 		}
-		// Enrich with masked key and usage data
-		key, _ := row["key"].(string)
-		row["keyMasked"] = maskKey(key)
+		// Mask then drop plaintext key before list surfaces (#355).
+		redactDownstreamKeySecret(row)
 		enrichKeyRateWindow(row)
 		items = append(items, row)
 	}
@@ -101,9 +100,8 @@ func (h *downstreamKeysHandler) summary(w http.ResponseWriter, r *http.Request) 
 func (h *downstreamKeysHandler) listKeys(w http.ResponseWriter, r *http.Request) {
 	rows := queryRows(h.db, "SELECT * FROM downstream_api_keys ORDER BY id DESC")
 	for _, row := range rows {
-		if key, ok := row["key"].(string); ok {
-			row["keyMasked"] = maskKey(key)
-		}
+		// List must not return full key; only keyMasked (#355).
+		redactDownstreamKeySecret(row)
 		enrichKeyRateWindow(row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -572,9 +570,8 @@ func (h *downstreamKeysHandler) overview(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if key, ok := row["key"].(string); ok {
-		row["keyMasked"] = maskKey(key)
-	}
+	// Overview must not return full key; only keyMasked (#355).
+	redactDownstreamKeySecret(row)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -706,6 +703,19 @@ func maskKey(key string) string {
 		return "****"
 	}
 	return key[:4] + "****" + key[len(key)-4:]
+}
+
+// redactDownstreamKeySecret sets keyMasked from the stored secret and removes
+// plaintext "key" so list/summary/overview JSON never leaks the full secret (#355).
+// Create and export keep intentional full-key returns and do not call this helper.
+func redactDownstreamKeySecret(row map[string]any) {
+	if row == nil {
+		return
+	}
+	if key, ok := row["key"].(string); ok {
+		row["keyMasked"] = maskKey(key)
+	}
+	delete(row, "key")
 }
 
 func normalizeRange(v string) string {
@@ -1484,7 +1494,6 @@ func mustRowValue(row map[string]any, key string) any {
 	v, _ := rowValue(row, key)
 	return v
 }
-
 
 // enrichKeyRateWindow attaches process-local RPM/TPM window usage for admin display (#116).
 func enrichKeyRateWindow(row map[string]any) {
