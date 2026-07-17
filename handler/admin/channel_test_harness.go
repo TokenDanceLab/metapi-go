@@ -124,7 +124,12 @@ func (h *channelTestHandler) testChannel(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	h.runChannelTest(w, r, body)
+}
 
+// runChannelTest is the shared forced-channel probe implementation used by
+// /api/admin/test-channel and the /api/test/{proxy,chat} aliases (#185).
+func (h *channelTestHandler) runChannelTest(w http.ResponseWriter, r *http.Request, body channelTestRequest) {
 	mode := strings.ToLower(strings.TrimSpace(body.Mode))
 	if mode == "" {
 		mode = channelTestModeChat
