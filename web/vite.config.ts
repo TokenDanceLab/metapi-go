@@ -33,5 +33,11 @@ export default defineConfig({
       // Suppress vitest worker console RPC traffic that races teardown.
       return false;
     },
+    // #266: Longer teardown window avoids races when jsdom closes
+    // with pending microtasks/console RPC from React 19 async act().
+    teardownTimeout: 10_000,
+    // #266: Deterministic setup-file order prevents edge-case races
+    // when multiple setup files patch the same jsdom globals.
+    sequence: { setupFiles: 'list' as const },
   },
 });

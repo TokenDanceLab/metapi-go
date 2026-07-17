@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { afterAll, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import type {
   ReactTestRenderer,
@@ -86,3 +86,16 @@ console.warn = (...args: unknown[]) => {
   if (head.includes('react-test-renderer is deprecated')) return;
   originalWarn(...args);
 };
+
+// #266: Global afterAll to drain mocks and pending microtasks after each
+// suite, reducing EnvironmentTeardownError from leftover console RPC.
+afterAll(async () => {
+  try {
+    vi.clearAllMocks();
+  } catch {
+    // Ignore mock cleanup races under single-worker vitest.
+  }
+  // Drain pending microtasks so worker teardown does not race console RPC.
+  await Promise.resolve();
+  await Promise.resolve();
+});
