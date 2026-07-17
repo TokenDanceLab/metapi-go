@@ -11,7 +11,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - Go 1.26.5 toolchain; vulncheck green (GO-2026-5856) (#168)
 
 ### Added
-- Live  listing via TokenRouter.GetAvailableModels (#169)
+- Live /v1/models listing via TokenRouter.GetAvailableModels (#169)
 - Boot-wired ModelProbeScheduler probe executor + health recorder (#170)
 - Route decision admin APIs wired to ExplainSelection (#171)
 
