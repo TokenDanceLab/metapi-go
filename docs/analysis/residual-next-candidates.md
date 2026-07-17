@@ -1,8 +1,8 @@
 # Residual next candidates (post v0.8.18)
 
 **Date**: 2026-07-17  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); refresh trail #318 / #329 + v0.8.18 product  
-**Context**: After Enterprise residual **v0.8.18** (#327 `/v1/models` contextLength wire, #328 admin race isolation, #329 residual honesty).  
+**Issue**: [#334](https://github.com/TokenDanceLab/metapi-go/issues/334) (this refresh); inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290)  
+**Context**: After Enterprise residual **v0.8.18**. Active Milestone **28 / v0.8.19** work: **#334-#336**.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -40,12 +40,13 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (v0.8.19+)
 
-1. **Shipped in v0.8.18**: #327 models contextLength wire · #328 admin race isolation · #329 residual honesty.
-2. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
-3. **Optional**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength.
-4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Active Milestone 28**: #334 residual honesty · #335 healthPersistTimer race regression · #336 P0-585 cascade residual docs.
+2. **Shipped in v0.8.18**: #327 models contextLength wire · #328 admin race isolation · #329 residual honesty.
+3. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
+4. **Optional**: P0-585 load-proof / site-model breaker (docs #336); proxy max-token enforce from contextLength.
+5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -62,4 +63,4 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329
+- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336

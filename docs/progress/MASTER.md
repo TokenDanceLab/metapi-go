@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 27 (v0.8.18) — next residual wave TBD |
+| Active milestone | [Milestone 28 — Enterprise residual v0.8.19](https://github.com/TokenDanceLab/metapi-go/milestone/28) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -28,15 +28,17 @@
 | M-GAP inventory | ✅ | Matrix + backlog; product via residual tags |
 | M-BACKEND / UI / SCHEMA / RELIABILITY | ✅ | Design SSOT in `docs/design/` |
 | M-FEATURE + competitive learn | ✅ | Gap #38–#56 · learn #110–#121 |
-| Enterprise residual **v0.8.16** | ✅ | #309–#311 · tag v0.8.16 |
 | Enterprise residual **v0.8.17** | ✅ | #318–#320 · tag v0.8.17 |
-| Enterprise residual **v0.8.18** | ✅ | #327–#329 (PRs #330–#332); tag **v0.8.18** |
+| Enterprise residual **v0.8.18** | ✅ | #327–#329 · tag **v0.8.18** |
+| Enterprise residual **v0.8.19** | 🔄 | Milestone 28 · #334–#336 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.18; next residual only with ACs |
+| [#334](https://github.com/TokenDanceLab/metapi-go/issues/334) | docs | residual honesty refresh post v0.8.18 |
+| [#335](https://github.com/TokenDanceLab/metapi-go/issues/335) | test | harden scheduleSiteRuntimeHealthPersistence race regression |
+| [#336](https://github.com/TokenDanceLab/metapi-go/issues/336) | docs | P0-585 cascade residual honesty (site/model breaker + load-proof) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -66,7 +68,7 @@
 ## Quick status commands
 
 ```bash
-gh issue list --state open --limit 20
+gh issue list --milestone "Enterprise residual v0.8.19" --state open
 gh pr list --state open
 gh release view v0.8.18
 git log --oneline origin/master -10
@@ -74,8 +76,8 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 policy/media/lag; proxy max-token enforce from contextLength.
+1. Land **v0.8.19** Milestone 28: #334 residual honesty · #335 healthPersist race regression · #336 cascade residual docs.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Keep MASTER slim; docs map at `docs/README.md`.
 
 
