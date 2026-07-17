@@ -34,3 +34,15 @@ go test ./service ./handler/admin -count=1 -run 'Site|CreateSite'
 # with PG_TEST_DSN set:
 go test ./handler/admin -count=1 -run 'Sites_Postgres'
 ```
+
+
+## Follow-up root cause (shared PG CI)
+
+Even after RETURNING id, LoadSiteWithEndpoints used `SELECT * FROM sites`. Shared CI Postgres had a leftover column `sc1_test_probe_col` from schema experiments, so sqlx failed:
+
+```
+missing destination name sc1_test_probe_col in *store.Site
+```
+
+### Fix
+Use explicit `siteSelectColumns` for LoadSiteWithEndpoints / ListSites (never SELECT *).
