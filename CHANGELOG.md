@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.20] — 2026-07-17
+
+### Fixed
+- OpenAI-compatible chat/completions stream: inject/merge `stream_options.include_usage=true` on upstream body for final SSE usage chunks; skip codex/sub2api and non-chat paths (P0-555 residual) (#345 / #347)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 29 post v0.8.19 (#346 / #348)
+- P0-555 evidence: stream_options policy addressed for chat stream; residual provider-ignore / media zeros / multi-instance lag / orphan site join
+
 ## [v0.8.19] — 2026-07-17
 
 ### Fixed
