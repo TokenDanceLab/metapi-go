@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.21 shipped** (#350 completions include_usage, #351 residual honesty). Active residual wave: **Milestone 31 / v0.8.22** security residual (#355–#359).  
+**Context**: **v0.8.21 shipped** (#350 completions include_usage, #351 residual honesty). Milestone 31 product items **#355–#358 merged** to master; **#359** residual honesty for post-merge board; release gate **v0.8.22** pending.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -26,7 +26,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
-| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests. **Still open:** site/model breaker after 3 transient fails (intentional fleet filter), credential-scoped usage-limit multi-channel cool, empty-filter fallback, **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Optional load-test / breaker product AC only; soft-filter priority layer #358 | Medium residual — do not claim #585 present |
+| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests. **Still open:** site/model breaker after 3 transient fails (intentional fleet filter), credential-scoped usage-limit multi-channel cool, empty-filter fallback, **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Optional load-test / breaker product AC only; soft-filter next-priority present via #358 | Medium residual — do not claim #585 present |
 | P0-555 | Token usage statistics inaccurate | **present-with-residual** (#300/#311/#319/#345/#350) | Disconnect partial + failure proxy_logs with usage (#311); aggregation projects non-success tokens into `failed_calls` + `total_tokens` (#319 regression); OpenAI chat + legacy completions stream `stream_options.include_usage` inject (#345/#350). Residual: provider-ignored flag, media zeros, multi-instance lag, orphan site join — not perfect billing | Residual polish only | Billing/ops trust residual |
 | P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
@@ -37,27 +37,27 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
 | CTX-520 | Route contextLength admin + models wire | **present-with-residual** (#320 + #327) | Admin CRUD (#320) + OpenAI `/v1/models` prefers positive route `context_length` (max per exposed id) (#327). Residual: no proxy max-token enforce; Claude models path has no context_length field | Optional enforce Milestone only with ACs | Metadata vs enforcement |
-| SEC-KEY | Admin downstream-keys plaintext redaction | residual → active | `handler/admin/downstream_keys.go` list/summary/overview may still expose full `key` alongside `keyMasked` | Milestone 31 / #355 | Secret leakage via admin list |
-| SEC-HDR | custom_headers deny-list | residual → active | `applyProxyCustomHeaders` can set Authorization/Host/hop-by-hop after Bearer | Milestone 31 / #356 | Identity override / SSRF assist |
-| SEC-REDIR | RuntimeExecutor CheckRedirect SSRF | residual → active | `proxy.NewRuntimeExecutor` default client has no CheckRedirect; platform has `rejectCrossOriginRedirect` | Milestone 31 / #357 | Redirect to private/metadata |
-| REL-SOFT | Weighted soft-filter empty → next priority | partial → active | Soft-filter empties priority-0 layer then still selects unfiltered full layer | Milestone 31 / #358 | Broken P0 starves healthy P≥1 |
+| SEC-KEY | Admin downstream-keys plaintext redaction | **present** (#355/#361) | `redactDownstreamKeySecret` on list/summary/overview; `key` omitted, `keyMasked` only | Done for admin list surface | Residual: other admin dumps if any |
+| SEC-HDR | custom_headers deny-list | **present** (#356/#364) | Shared `platform.ApplyCustomHeaders` / deny-list; Bearer after custom on upstream path | Done | Residual novel header names only |
+| SEC-REDIR | RuntimeExecutor CheckRedirect SSRF | **present** (#357/#360) | `rejectCrossOriginRedirect` on RuntimeExecutor client | Done | Residual site-URL SSRF validation only if product AC |
+| REL-SOFT | Weighted soft-filter empty → next priority | **present** (#358/#362) | Weighted path skips soft-empty priority layer and tries next; failover-isolation note | Done for weighted soft-filter | P0-585 empty-filter fallback residual separate |
 
 
 ## Active wave (Milestone 31 / v0.8.22)
 
 | Issue | Role | Notes |
 |------:|------|-------|
-| [#355](https://github.com/TokenDanceLab/metapi-go/issues/355) | security | redact plaintext key from admin downstream-keys list/summary/overview |
-| [#356](https://github.com/TokenDanceLab/metapi-go/issues/356) | security | deny-list sensitive custom_headers (Authorization/Host/hop-by-hop) |
-| [#357](https://github.com/TokenDanceLab/metapi-go/issues/357) | security | RuntimeExecutor CheckRedirect reject cross-origin/private SSRF |
-| [#358](https://github.com/TokenDanceLab/metapi-go/issues/358) | reliability | weighted soft-filter empty should try next priority layer |
-| [#359](https://github.com/TokenDanceLab/metapi-go/issues/359) | docs | This residual + MASTER flip post v0.8.21 |
+| [#355](https://github.com/TokenDanceLab/metapi-go/issues/355) | security | **merged** #361 — admin key redact |
+| [#356](https://github.com/TokenDanceLab/metapi-go/issues/356) | security | **merged** #364 — custom_headers deny-list |
+| [#357](https://github.com/TokenDanceLab/metapi-go/issues/357) | security | **merged** #360 — RuntimeExecutor CheckRedirect |
+| [#358](https://github.com/TokenDanceLab/metapi-go/issues/358) | reliability | **merged** #362 — weighted soft-filter next priority |
+| [#359](https://github.com/TokenDanceLab/metapi-go/issues/359) | docs | residual honesty + MASTER flip (this document) |
 
 ## Recommended sequencing (v0.8.22+)
 
-1. **Shipped in v0.8.21**: #350 legacy completions `stream_options.include_usage` · #351 residual honesty. Prior v0.8.20: #345 chat stream include_usage · #346 residual honesty. **P0-555** stays **present-with-residual** (chat+completions stream policy wired; media/lag/orphan residual). **CTX-520** / **P0-585** unchanged residual notes.
-2. **v0.8.22 board (Milestone 31)**: #355–#357 security residual · #358 weighted soft-filter priority skip · #359 residual honesty — no fake WS/sticky/update-center.
-3. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
+1. **Shipped on master for v0.8.22**: #355–#358 (PRs #360/#361/#362/#364). **#359** residual honesty closes the Milestone 31 board; release gate tags **v0.8.22**.
+2. **Shipped in v0.8.21**: #350 completions include_usage · #351 residual honesty. **P0-555** stays **present-with-residual** (chat+completions stream policy; media/lag/orphan residual). **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter priority.
+3. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
 4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
 5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
 6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
