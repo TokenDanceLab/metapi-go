@@ -16,7 +16,7 @@ This synthesis is intentionally **evidence-first**, not fleet-journal-complete.
 | `CHANGELOG.md` (through v0.8.25) | Shipped narrative; do not invent unreleased product claims |
 | `docs/analysis/failover-isolation.md` | P0-585 shipped-vs-residual honesty |
 | Code spot-checks on residual high-value paths | Confirm residual / partial / present claims |
-| Open Issues #389 / #390; closed #391 | Next-wave shells + completed v0.8.25 release flip |
+| Closed Issues #389 / #390 / #391; PRs #395 / #396 | M35 follow-ons done on master; v0.8.25 release flip complete |
 
 **Not claimed as complete inputs:** full multi-lane WF journals (security / backend SUPER / frontend UX / reliability-perf / docs-hygiene). Some parallel review lanes may have incomplete journals (rate limits). Absence of a lane journal is **not** treated as “no findings”; residual docs + code evidence still drive ranking.
 
@@ -33,18 +33,19 @@ This synthesis is intentionally **evidence-first**, not fleet-journal-complete.
 ## Executive summary
 
 1. **Security residual waves v0.8.22–v0.8.25 largely landed** (admin secret redaction surfaces, custom_headers deny-list, RuntimeExecutor redirect guard, site URL metadata block, routes/search secret redact, IsValidHTTPURL metadata harden).
-2. **Milestone 34 / v0.8.25 shipped** (#382/#383 product + #384 residual honesty + closed #391 release flip). SEC-HTTPURL is **present**; PERF-ROUTES is **present** with multi-route regression residual #390.
-3. **Highest-value remaining product residual is not inventing WS/sticky/update-center** — it is closing **endpoint URL early-reject parity (#389)**, **routes list multi-route regression (#390)**, then optional reliability load-proof / metadata-vs-enforcement polish with dedicated ACs.
-4. **Do not claim product for**: Responses WebSocket Codex path, Redis sticky Option B, update-center remote deploy/rollback, perfect billing accuracy, proxy max-token enforcement from `contextLength`.
+2. **Milestone 34 / v0.8.25 shipped** (#382/#383 product + #384 residual honesty + closed #391 release flip). SEC-HTTPURL is **present**.
+3. **M35 product follow-ons closed on master**: **SEC-ENDPOINT present** via #389/#396 (admin `normalizeAPIEndpointsInput` early reject); **PERF-ROUTES fully present** via #383/#386 + test residual closed #390/#395.
+4. **Post-M35 residual board is M36 (#397–#400)** — not inventing WS/sticky/update-center. Highest-value remaining product slices: **#398** validator parity on base `IsValidAPIEndpointURL`, **#399** optional CTX-520 max_tokens reject, **#400** P0-555 missing-usage warn; optional reliability load-proof with dedicated ACs.
+5. **Do not claim product for**: Responses WebSocket Codex path, Redis sticky Option B, update-center remote deploy/rollback, perfect billing accuracy, proxy max-token enforcement from `contextLength` until #399 lands.
 
 ## P0 — act next (security / honesty / release)
 
 | ID | Finding | Evidence | Status | Recommended next Issue |
 |----|---------|----------|--------|------------------------|
-| SEC-ENDPOINT | Admin site `apiEndpoints` normalize path still validates with scheme-only `IsValidAPIEndpointURL`; metadata/link-local early reject is **not** in `normalizeAPIEndpointsInput`. Service `UpsertSiteAPIEndpoints` **does** reject via `IsForbiddenSiteTargetURL` (defense-in-depth), so storage is guarded when that path is used — but admin early error messaging / validator parity remains incomplete. | `handler/admin/sites.go` `normalizeAPIEndpointsInput` → `IsValidAPIEndpointURL` only; `service/site_endpoint_service.go` `IsValidAPIEndpointURL` scheme-only; `service/site_service.go` `UpsertSiteAPIEndpoints` calls `IsForbiddenSiteTargetURL`; open [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) | **partial** (service guard present; admin validator incomplete) | **#389** (already open) — keep handler/service tests for 169.254 reject + public/RFC1918 allow |
+| SEC-ENDPOINT | Admin site `apiEndpoints` normalize path early-rejects metadata/link-local via `IsForbiddenSiteTargetURL` (merged #389/#396). Service `UpsertSiteAPIEndpoints` remains defense-in-depth. Residual: base `IsValidAPIEndpointURL` still scheme-only for other callers → M36 **#398**. | `handler/admin/sites.go` `normalizeAPIEndpointsInput` + `IsForbiddenSiteTargetURL`; tests in `sites_create_endpoints_test.go`; closed [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) / PR [#396](https://github.com/TokenDanceLab/metapi-go/pull/396) | **present** (admin early-reject done) | Done #389/#396; optional validator parity **#398** |
 | SEC-HTTPURL | `IsValidHTTPURL` now rejects metadata/link-local (merged #382). externalCheckin admin paths call it. Residual inventory flipped present with v0.8.25 / #391. | `service/site_endpoint_service.go` `IsValidHTTPURL`; `handler/admin/sites.go` externalCheckin checks; tests `TestIsValidHTTPURL_RejectsMetadata` | **present** | Done with v0.8.25 |
-| PERF-ROUTES | `GET /api/routes` batch-loads channels once (merged #383). No multi-route assignment regression test found in `token_routes_test.go`. | `handler/admin/token_routes.go` `listRoutes` batch SELECT + `channelsByRoute`; open [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) | **present-with-residual** (impl present; regression test gap) | **#390** multi-route list regression |
-| REL-DOCS | MASTER/CHANGELOG/residual flipped to **v0.8.25** via closed #391. M35 synthesis + open follow-ons #389/#390 remain the residual board. | `docs/progress/MASTER.md`; residual inventory; closed [#391](https://github.com/TokenDanceLab/metapi-go/issues/391) | **present** (release docs) | Keep MASTER slim; land #388 then #389/#390 |
+| PERF-ROUTES | `GET /api/routes` batch-loads channels once (merged #383). Multi-route assignment + secret-redact regression landed (#390/#395). | `handler/admin/token_routes.go` `listRoutes` batch SELECT + `channelsByRoute`; `TestListRoutes_MultiRouteBatchChannelLoadAndRedaction`; closed [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) / PR [#395](https://github.com/TokenDanceLab/metapi-go/pull/395) | **present** (impl + regression test) | Done #383/#386 + #390/#395 |
+| REL-DOCS | MASTER/CHANGELOG/residual flipped to **v0.8.25** via closed #391. M35 synthesis (#388) + product follow-ons #389/#390 closed. Post-M35 honesty board is M36 **#397–#400**. | `docs/progress/MASTER.md`; residual inventory; closed [#391](https://github.com/TokenDanceLab/metapi-go/issues/391); open [#397](https://github.com/TokenDanceLab/metapi-go/issues/397) | **present** (release docs); M36 residual honesty open | Keep MASTER slim; land #397 then #398–#400 |
 
 ## P1 — high-value residual (optional product / reliability polish)
 
@@ -70,15 +71,15 @@ This synthesis is intentionally **evidence-first**, not fleet-journal-complete.
 
 ### Security
 
-- **Shipped (do not re-open as residual bugs):** SEC-KEY, SEC-HDR, SEC-REDIR, SEC-SITEURL, SEC-ROUTE; SEC-HTTPURL product on master (#382).
-- **Still actionable:** SEC-ENDPOINT admin early-reject parity (#389).
+- **Shipped (do not re-open as residual bugs):** SEC-KEY, SEC-HDR, SEC-REDIR, SEC-SITEURL, SEC-ROUTE; SEC-HTTPURL product on master (#382); SEC-ENDPOINT admin early-reject on master (#389/#396).
+- **Still actionable (M36):** base `IsValidAPIEndpointURL` metadata/link-local parity (#398) — scheme-only helper residual after admin normalize path is present.
 - **Honesty:** create-once credential echo and intentional export are residual-by-design, not list-surface leaks.
 
 ### Backend / reliability
 
 - Failover channel isolation is **hardened and tested**; P0-585 remains **partial** because site/model breaker + global empty-filter fallback + missing production multi-channel load proof are intentional / open.
 - Soft-filter priority demotion for weighted / RR / stable_first is **present** (#358/#368).
-- Routes list N+1 kill is **present** (#383); regression test gap is #390.
+- Routes list N+1 kill is **present** (#383/#386); multi-route regression test residual **closed** (#390/#395).
 
 ### Frontend / UX
 
@@ -96,12 +97,15 @@ This synthesis is intentionally **evidence-first**, not fleet-journal-complete.
 
 | Priority | Issue | Role | Notes |
 |---------:|------:|------|-------|
-| P0 | [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) | security | Site API endpoint URL validation must reject metadata/link-local at admin normalize path (parity with service upsert) |
-| P0/P1 | [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) | reliability/test | Multi-route list regression for batch channel load (#383) |
+| Done | [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) / PR [#396](https://github.com/TokenDanceLab/metapi-go/pull/396) | security | Admin endpoint early-reject metadata/link-local (**closed** / present) |
+| Done | [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) / PR [#395](https://github.com/TokenDanceLab/metapi-go/pull/395) | reliability/test | Multi-route list regression for batch channel load (**closed** / present) |
 | Done docs | [#391](https://github.com/TokenDanceLab/metapi-go/issues/391) | docs/release | CHANGELOG v0.8.25 + MASTER + residual status flip (**closed** with tag) |
+| Done docs | [#388](https://github.com/TokenDanceLab/metapi-go/issues/388) | docs/review | M35 multi-lane residual review synthesis (**closed**) |
+| Active M36 | [#397](https://github.com/TokenDanceLab/metapi-go/issues/397) | docs | Residual honesty post M35 + v0.8.26 board pointer |
+| Active M36 | [#398](https://github.com/TokenDanceLab/metapi-go/issues/398) | security | `IsValidAPIEndpointURL` rejects metadata/link-local (validator parity) |
+| Active M36 | [#399](https://github.com/TokenDanceLab/metapi-go/issues/399) | proxy | CTX-520 reject max_tokens above positive route context_length |
+| Active M36 | [#400](https://github.com/TokenDanceLab/metapi-go/issues/400) | observability | P0-555 warn when stream ends without usage after include_usage inject |
 | Optional later | *(new, only with ACs)* | reliability | P0-585 production multi-channel load proof / breaker policy knobs |
-| Optional later | *(new, only with ACs)* | observability | P0-555 media/provider-ignore/lag polish |
-| Optional later | *(new, only with ACs)* | proxy | CTX-520 proxy max-token enforce from contextLength |
 | Product Milestone only with ACs | — | protocol/ops | WS-1 Codex interop; STICKY-B Redis sticky; UC-1 update-center registry |
 
 ## Explicit non-goals (M35 synthesis + residual waves)
@@ -119,4 +123,4 @@ This synthesis is intentionally **evidence-first**, not fleet-journal-complete.
 - Failover honesty: [`failover-isolation.md`](./failover-isolation.md)
 - MASTER: [`../progress/MASTER.md`](../progress/MASTER.md)
 - Gap matrix: [`original-gap-matrix.md`](./original-gap-matrix.md)
-- Related issues: #274, #282, #283, #290, #291, #292, #298–#302, #309–#311, #318–#320, #327–#329, #334–#336, #345–#346, #350–#351, #355–#359, #366–#368, #375–#377, #382–#384, #388–#391
+- Related issues: #274, #282, #283, #290, #291, #292, #298–#302, #309–#311, #318–#320, #327–#329, #334–#336, #345–#346, #350–#351, #355–#359, #366–#368, #375–#377, #382–#384, #388–#391, #395–#400

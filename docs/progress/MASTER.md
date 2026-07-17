@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25)** (2026-07-17)
+**Latest release**: **[v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25)** (2026-07-17) — remains until release gate for v0.8.26
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,14 +13,14 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 34 (v0.8.25) — next residual wave TBD |
+| Active milestone | [Milestone 36 — Enterprise residual polish v0.8.26](https://github.com/TokenDanceLab/metapi-go/milestone/36) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
-| M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388) |
+| M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
 | Architecture | `docs/architecture.md` · design `docs/design/BACKEND.md` |
 
-## Current Status (2026-07-17)
+## Current Status (2026-07-18)
 
 | Track | Status | Notes |
 |:------|:-------|:------|
@@ -37,16 +37,20 @@
 | Enterprise residual **v0.8.23** | ✅ | #366–#368 (PRs #369/#370/#372); tag **v0.8.23** |
 | Enterprise residual **v0.8.24** | ✅ | #375–#377 (PRs #378/#379/#380); tag **v0.8.24** |
 | Enterprise residual **v0.8.25** | ✅ | #382–#384 (PRs #385/#386/#387); tag **v0.8.25** |
+| M35 residual review / follow-ons | ✅ closed | #388 synthesis · #389/#396 endpoint early reject · #390/#395 multi-route regression |
+| Enterprise residual polish **v0.8.26** | 🔄 active | Milestone 36 · board **#397–#400** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#388](https://github.com/TokenDanceLab/metapi-go/issues/388) | docs/review | M35 multi-lane residual review synthesis |
-| [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) | security | Site API endpoint URL metadata/link-local early reject |
-| [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) | reliability/test | Multi-route list regression for batch channel load |
+| [#397](https://github.com/TokenDanceLab/metapi-go/issues/397) | docs | Residual honesty post M35 + v0.8.26 board |
+| [#398](https://github.com/TokenDanceLab/metapi-go/issues/398) | security | `IsValidAPIEndpointURL` metadata/link-local validator parity |
+| [#399](https://github.com/TokenDanceLab/metapi-go/issues/399) | proxy | CTX-520 reject max_tokens above positive route context_length |
+| [#400](https://github.com/TokenDanceLab/metapi-go/issues/400) | observability | P0-555 warn when stream ends without usage after include_usage inject |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
+**M35 closed**: do not re-list #388–#390 as active work (landed on master with #395/#396).
 
 
 ## Residual releases (pointer only)
@@ -86,9 +90,9 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Land M35 review synthesis (#388 → `docs/analysis/enterprise-review-m35.md`); then #389 endpoint early-reject · #390 routes multi-route regression.
+1. Land M36 board **#397–#400**: residual honesty (#397) · endpoint validator parity (#398) · CTX-520 max_tokens reject (#399) · P0-555 missing-usage warn (#400). Latest release stays **v0.8.25** until release gate.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+3. Optional later: P0-585 load-proof / site-model breaker; deeper P0-555 media/lag polish.
 4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
