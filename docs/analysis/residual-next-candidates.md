@@ -4,7 +4,8 @@
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
 **Context**: **v0.8.25 shipped** (#382 IsValidHTTPURL metadata harden, #383 routes N+1 batch, #384 residual honesty). Prior **v0.8.24**: #375–#377. Original P0 #405/#565/#515/#409 already-correct in code.  
 **Scope**: inventory only — **no product code** in this document.  
-**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
+**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
+**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review
 
 ## Purpose
 
@@ -46,16 +47,18 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ROUTE | Routes/search admin secret dumps | **present** (#375/#378) | Route channel `account` uses `routeChannelAccountPublic` (masked); search accounts/tokens redacted | Done | Residual: create-once / export paths intentional |
 | SEC-SITEURL | Site URL metadata/link-local SSRF | **present** (#376/#379) | `IsForbiddenSiteTargetURL` blocks 169.254/16, IPv6 link-local, metadata hostnames on create/update/endpoint upsert | Done | RFC1918/localhost intentionally allowed |
 | SEC-HTTPURL | IsValidHTTPURL / externalCheckin metadata | **present** (#382/#385) | `IsValidHTTPURL` rejects metadata/link-local class via `IsForbiddenSiteTargetURL`; externalCheckin uses hardened check | Done | RFC1918/localhost intentionally allowed |
-| PERF-ROUTES | GET /api/routes N+1 channel queries | **present** (#383/#386) | Single channels JOIN for listed routes, group in memory; response shape + #375 redact unchanged | Done | Residual other admin list N+1 only if product AC |
-
+| PERF-ROUTES | GET /api/routes N+1 channel queries | **present** (#383/#386); test residual #390 | Single channels JOIN for listed routes, group in memory; response shape + #375 redact unchanged | Multi-route regression #390 | Residual other admin list N+1 only if product AC |
+| SEC-ENDPOINT | Site API endpoint admin normalize vs service upsert | **partial** (#389) | Admin `normalizeAPIEndpointsInput` uses scheme-only `IsValidAPIEndpointURL`; `UpsertSiteAPIEndpoints` rejects via `IsForbiddenSiteTargetURL` | Milestone follow-on / #389 | Early admin reject parity |
+| M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2 | This inventory + MASTER pointer | Synthesis only |
 
 ## Recommended sequencing (v0.8.26+)
 
-1. **Shipped in v0.8.25**: #382–#384 (PRs #385/#386/#387) — IsValidHTTPURL metadata harden · routes N+1 batch · residual honesty. Prior v0.8.24: #375–#377.
-2. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged.
-3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.25**: #382–#384 (PRs #385/#386/#387) — IsValidHTTPURL metadata harden · routes N+1 batch · residual honesty. Prior v0.8.24: #375–#377. Release docs flip #391 closed with tag **v0.8.25**.
+2. **M35 review (#388)**: ranked backlog in `enterprise-review-m35.md`. Next product shells already open: **#389** endpoint early-reject, **#390** routes multi-route regression.
+3. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged.
+4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -74,5 +77,6 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Release: [v0.8.25](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.25) · prior [v0.8.24](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.24)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
+- M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359
+- Related issues: #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391
