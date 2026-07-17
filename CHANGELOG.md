@@ -5,6 +5,19 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.22] — 2026-07-17
+
+### Security
+- Redact plaintext `key` from admin downstream-keys list/summary/overview (`keyMasked` only) (#355 / #361)
+- Deny-list sensitive site `custom_headers` (Authorization/Host/Cookie/hop-by-hop/Proxy-*/Content-Type); shared `platform.ApplyCustomHeaders`; Bearer set after custom so identity cannot be overridden (#356 / #364)
+- RuntimeExecutor `CheckRedirect` rejects cross-origin and private/metadata redirect targets (#357 / #360)
+
+### Fixed
+- Weighted routing: when soft-filter empties a priority layer, try the next priority instead of reselecting the unfiltered broken layer (#358 / #362)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 31 post v0.8.21; SEC-KEY/HDR/REDIR + REL-SOFT → present (#359 / #363)
+
 ## [v0.8.21] — 2026-07-17
 
 ### Fixed
