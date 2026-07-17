@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | Enterprise ops residual #154–#158 (probe/files/models/admin stubs) + release #157 |
-| Next | Land ops residual #154–#158; tag v0.8.0; Go 1.26.5 when available for vulncheck |
+| In flight WFs | none — ops residual #154–#158 landed; v0.8.0 tagged |
+| Next | Go 1.26.5 when available for vulncheck; optional v0.8.1 polish; deeper product backlog as needed |
 | Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
 
 ### M-COMPETE notes (active)
