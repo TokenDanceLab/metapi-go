@@ -79,3 +79,51 @@ Verify:
 ```bash
 go test ./handler/proxy ./app ./cmd/server -count=1 -run 'Responses|Websocket|WS'
 ```
+
+---
+
+## Product path evaluation (#274)
+
+**Date**: 2026-07-17  
+**Issue**: [#274](https://github.com/TokenDanceLab/metapi-go/issues/274) (extends [#217](https://github.com/TokenDanceLab/metapi-go/issues/217))
+
+This section evaluates how (and whether) to graduate from residual 426/501 to a real Responses WebSocket transport. It does **not** change runtime behavior.
+
+### Options
+
+| Option | Approach | Pros | Cons | Verdict for v0.8.x |
+|--------|----------|------|------|--------------------|
+| **A. Stay residual** | Keep plain GET **426**, upgrade **501**, boot still calls `EnsureResponsesWebsocketTransport` | Honest operators; zero protocol risk; no new deps; POST `/v1/responses` already serves non-WS clients | Codex CLI clients that require WS cannot use this surface | **Recommended default** |
+| **B. stdlib Hijacker + minimal RFC6455** | After auth, Hijack `GET /v1/responses`, hand-roll frames | No third-party WS module | Frame/ping/close correctness burden; easy to ship silent half-broken sockets | Only if dedicated milestone + interop tests |
+| **C. gorilla/websocket or nhooyr** | Add dependency, upgrade mux, message loop | Mature framing | New supply-chain surface; still need Codex semantics on top | Acceptable later if ACs require WS |
+| **D. Full Codex multi-turn WS** | Message loop, turn-state echo, pre-warm `generate=false`, HTTP fallback from open socket | TS-parity product path | Large scope; sticky/session interaction; multi-instance sticky residual | Separate Milestone, not residual wave |
+
+### Recommendation (v0.8.x residual waves)
+
+**Remain Option A** until a dedicated Milestone ships with:
+
+1. Codex client interop tests (at least single-turn upgrade + one response stream).
+2. Explicit auth on upgrade (reuse proxy admission / API key path).
+3. Clear error mapping (no Hijack-then-silent-close theater).
+4. Decision recorded for multi-instance sticky + WS session affinity (see sticky residual docs).
+
+Reasons:
+
+- `POST /v1/responses` already covers non-WS Responses traffic.
+- Residual registration is already explicit at boot (no silent missing wire).
+- Full Codex WS (Option D) is product work, not a drive-by residual.
+
+### MVP scope if later greenlit
+
+If a future Milestone greenlights WS:
+
+1. **In**: authenticated upgrade; single-turn Responses over WS; refuse multi-turn / unknown message types with structured WS or HTTP error; metrics/logs for upgrade reject vs accept.
+2. **Out of first MVP**: multi-turn turn-state machine, pre-warm synthesis on wire, HTTP fallback from an open socket, cluster-wide sticky for WS.
+3. **Still forbidden**: fake `response.completed` frames without upstream work; claiming Codex profile capability flags as transport readiness.
+
+### Links
+
+- Residual code: `handler/proxy/responses_ws.go`
+- Boot wire: `app` → `WireResponsesWebsocketTransport`
+- Issues: #217 (residual registration), #274 (this evaluation)
+
