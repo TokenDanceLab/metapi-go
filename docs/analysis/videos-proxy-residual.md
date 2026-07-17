@@ -54,7 +54,7 @@ resolution), not a raw URL override.
 
 1. **Raw site URL / token override** — mapping stores SiteURL/TokenValue but does not bypass router with a direct HTTP client pin.
 2. **Stub mode** — unconfigured upstream + stub does not rewrite publicId (no selected channel).
-3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave (see `videos-proxy-retention-residual.md`).
+3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave. Honesty residual: [`videos-proxy-retention-residual.md`](./videos-proxy-retention-residual.md) (#254).
 4. **TokenValue in DB** — same sensitivity as process memory mapping; operators must protect DB backups.
 
 ## Tests

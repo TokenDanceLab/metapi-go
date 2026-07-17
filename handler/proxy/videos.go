@@ -173,6 +173,7 @@ func applyVideoTaskStickyPin(ctx *Ctx, task *ProxyVideoTask) {
 
 // SaveProxyVideoTask saves a video task mapping to the process-local cache and
 // dual-writes to proxy_video_tasks when a runtime DB is available (#244).
+// Residual (#254): durable rows have no TTL/GC this wave — see docs/analysis/videos-proxy-retention-residual.md.
 func SaveProxyVideoTask(task *ProxyVideoTask) {
 	if task == nil || strings.TrimSpace(task.PublicID) == "" {
 		return
