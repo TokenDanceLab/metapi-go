@@ -1,12 +1,33 @@
 # Failover Isolation (R1 / #25, upstream #585)
 
-**Date:** 2026-07-16  
+**Date:** 2026-07-17  
 **Lane:** reliability  
-**SSOT code:** `routing/cooldown.go`, `routing/round_robin.go`, `routing/runtime_health.go`, `routing/router.go` (`RecordFailure`), `routing/selector.go`, `proxy/conductor.go`, `proxy/retry_policy.go`, `proxy/failure_judge.go`
+**Issues:** R1 [#25](https://github.com/TokenDanceLab/metapi-go/issues/25) → product harden [#299](https://github.com/TokenDanceLab/metapi-go/issues/299) / PR [#302](https://github.com/TokenDanceLab/metapi-go/pull/302); residual honesty [#336](https://github.com/TokenDanceLab/metapi-go/issues/336)  
+**SSOT code:** `routing/cooldown.go`, `routing/round_robin.go`, `routing/runtime_health.go`, `routing/router.go` (`RecordFailure`), `routing/selector.go`, `proxy/conductor.go`, `proxy/retry_policy.go`, `proxy/failure_judge.go`  
+**Inventory link:** [`residual-next-candidates.md`](./residual-next-candidates.md) (P0-585 row)
 
 ## Purpose
 
 Prevent one upstream channel failure from poisoning sibling channels or unrelated sites. Isolation is layered: channel cooldown, selection soft-filters, site/model breakers, and proxy failover excludes.
+
+## P0-585 honesty after #299 / #302 (shipped vs residual)
+
+Upstream gap **#585** (“one channel failure cascades to other channels”) is **partial**, not closed. After R1 isolation tests and the request-path harden in **#299** (merged as **#302**), operators may treat channel-scoped failover as shipped — but must **not** claim fleet-wide “no cascade” under load.
+
+| Bucket | What | Status after #299/#302 |
+|--------|------|------------------------|
+| **Shipped — channel isolation** | Non-usage-limit `RecordFailure` writes only the failed channel’s cooldown fields | **present** (R1 + unit tests) |
+| **Shipped — same-site siblings clean** | Different-credential siblings do not receive `failCount` / `cooldownUntil` from a peer fail | **present** (`routing/failure_isolation_test.go`) |
+| **Shipped — request-path exclude** | `excludeChannelIDs` is channel-ID only; never site-wide | **present** (`appendExcludedChannelID`, conductor tests) |
+| **Shipped — 429 / timeout policy** | 429 fails over to siblings; 408/425 same-channel budget then failover | **present** (`failureActionOf`, `maxSameChannelRetries`) |
+| **Shipped — selection soft filters** | Recent-failure + breaker filters prefer healthy candidates (all strategies) | **present** (R1 RR parity) |
+| **Residual — site/model breaker** | Transient streak ≥3 opens site or site+model breaker → **all** channels on that scope soft-filtered | **intentional policy**, not a “sibling poison bug”; still a fleet-level cascade pressure |
+| **Residual — credential usage-limit scope** | Short-window usage limit cools **all channels sharing the credential** | **intentional** shared-key truth |
+| **Residual — empty-filter fallback** | If every candidate is filtered, filters return the **full set** | Starvation prevention; can re-expose recently failed channels |
+| **Residual — production multi-channel load proof** | No e2e / production-shaped load evidence that systemic poison stays contained under failure storms | **open** — unit/integration only |
+
+**Do not claim:** “#585 is fully present” or “site-wide cascade is eliminated.”  
+**Honest claim:** channel-scoped request exclude + cooldown write isolation are hardened and tested; site/model breaker and production load-proof remain residual (see table below and inventory P0-585).
 
 ## Mechanism map (aligned with code)
 
@@ -77,14 +98,22 @@ Code evidence:
 
 ## Residual cascade (still intentional / partial)
 
-These are **not** bugs of “mark sibling failed,” but residual fleet-level pressure:
+These are **not** bugs of “mark sibling failed,” but residual fleet-level pressure that keeps **P0-585 = partial**:
 
-| Residual | Behavior | Why |
+| Residual | Behavior | Why still open |
 |:---------|:---------|:----|
-| Site/model breaker | 3 transient fails open breaker → **all** channels on that site/model filtered | Site-level systemic protection |
-| Credential-scoped usage limit | Short window cools **all channels sharing the credential** | Shared quota / key truth |
-| Empty-filter fallback | If every candidate is recently-failed or breaker-open, filters return the **full set** | Starvation prevention |
-| No multi-channel production proof | Load-shaped systemic poison not proven e2e under production traffic | Unit/integration isolation proven; see gap matrix #585 residual |
+| Site/model breaker | 3 transient fails open breaker → **all** channels on that site/model filtered via `FilterSiteRuntimeBrokenCandidatesByModel*` | Intentional systemic protection; can look like cascade under multi-channel storms on one site |
+| Credential-scoped usage limit | Short window cools **all channels sharing the credential** | Shared quota / key truth — not peer-channel poison, still multi-channel impact |
+| Empty-filter fallback | If every candidate is recently-failed or breaker-open, filters return the **full set** | Starvation prevention; may reselect cooled channels when the fleet is degraded |
+| Production multi-channel load proof | Load-shaped systemic poison not proven e2e under production traffic | Unit/integration isolation proven only; gap matrix #585 residual / inventory P0-585 |
+
+### What would close (or further shrink) residual
+
+| Residual item | Closing bar (product wave; out of #336 scope) |
+|:--------------|:-----------------------------------------------|
+| Site/model breaker “cascade look” | Product AC if breaker thresholds / model scope need operator knobs or different policy — **not** docs-only |
+| Production multi-channel load proof | Load-test or production evidence plan with multi-channel same-site failure storms; metrics that sibling channels stay eligible while breakers stay closed for single-channel noise |
+| Empty-filter fallback | Explicit product decision only — changing fallback risks hard outage when all candidates are dirty |
 
 ## Tests
 
@@ -103,10 +132,11 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
   - `TestRoundRobinFilterStack_MatchesWeightedRecentFailurePolicy`
 - Existing: `routing/cooldown_test.go`, `routing/runtime_health_test.go`, `routing/algorithm_test.go` (partial/all breaker open)
 
-## Non-goals (R1 / #299)
+## Non-goals (R1 / #299 / #336)
 
 - Schema / UI changes
-- Removing site breakers or empty-filter fallbacks
-- Production multi-channel load proof
+- Removing site breakers or empty-filter fallbacks in residual-docs waves
+- Production multi-channel load proof (still open; product/load-test Milestone)
 - WS / sticky product changes
 - Inventing site-wide poison “fixes” that change product policy without tests
+- Flipping matrix / inventory **#585 / P0-585** from **partial** to **present** without load-proof + explicit breaker policy ACs
