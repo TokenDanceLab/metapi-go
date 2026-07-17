@@ -2,6 +2,7 @@ package proxyhandler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -467,5 +468,96 @@ func TestProxyVideoTask_DBDurableRoundTrip(t *testing.T) {
 	DeleteProxyVideoTaskByPublicID(publicID)
 	if GetProxyVideoTaskByPublicID(publicID) != nil {
 		t.Fatal("expected deleted from memory+db")
+	}
+}
+
+
+// preferredTrackRouter records SelectPreferredChannel invocations.
+type preferredTrackRouter struct {
+	selected routing.SelectedChannel
+	lastPreferred int64
+	preferredCalls int
+}
+
+func (r *preferredTrackRouter) SelectChannel(context.Context, string, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	tcopy := r.selected
+	return &tcopy, nil
+}
+func (r *preferredTrackRouter) SelectNextChannel(context.Context, string, []int64, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (r *preferredTrackRouter) SelectPreferredChannel(_ context.Context, _ string, preferredChannelID int64, _ routing.DownstreamRoutingPolicy, _ []int64) (*routing.SelectedChannel, error) {
+	r.preferredCalls++
+	r.lastPreferred = preferredChannelID
+	if preferredChannelID != r.selected.Channel.ID {
+		return nil, nil
+	}
+	cp := r.selected
+	return &cp, nil
+}
+func (r *preferredTrackRouter) RecordSuccess(context.Context, int64, float64, float64, *string, *int64) error {
+	return nil
+}
+func (r *preferredTrackRouter) RecordFailure(context.Context, int64, routing.SiteRuntimeFailureContext, *int64) error {
+	return nil
+}
+
+func TestHandleVideosGet_StickyPinForcesPreferredChannel(t *testing.T) {
+	publicID := "video_sticky_pin_pref"
+	SaveProxyVideoTask(&ProxyVideoTask{
+		PublicID:        publicID,
+		UpstreamVideoID: "upstream_sticky_vid",
+		RequestedModel:  "sora-2",
+		ChannelID:       42,
+		AccountID:       7,
+	})
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(publicID) })
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/videos/upstream_sticky_vid" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"upstream_sticky_vid","status":"completed"}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	router := &preferredTrackRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+		TokenValue:  "upstream-token",
+		ActualModel: "sora-up",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{Router: router})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	r := chiRouterForVideo()
+	req := makeProxyReqNoBody("GET", "/v1/videos/"+publicID)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if router.preferredCalls < 1 {
+		t.Fatalf("expected SelectPreferredChannel, calls=%d", router.preferredCalls)
+	}
+	if router.lastPreferred != 42 {
+		t.Fatalf("preferred=%d want 42", router.lastPreferred)
+	}
+}
+
+func TestApplyVideoTaskStickyPin(t *testing.T) {
+	ctx := &Ctx{}
+	applyVideoTaskStickyPin(ctx, nil)
+	if ctx.ForcedChannelID != nil {
+		t.Fatal("nil task should not force")
+	}
+	applyVideoTaskStickyPin(ctx, &ProxyVideoTask{ChannelID: 9, RequestedModel: "m1"})
+	if ctx.ForcedChannelID == nil || *ctx.ForcedChannelID != 9 {
+		t.Fatalf("ForcedChannelID=%v", ctx.ForcedChannelID)
+	}
+	if ctx.RequestedModel != "m1" {
+		t.Fatalf("model=%q", ctx.RequestedModel)
 	}
 }

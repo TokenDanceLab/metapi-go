@@ -54,6 +54,11 @@ type Ctx struct {
 	Multipart      bool
 	Retries        int
 	MaxRetries     int
+	// ForcedChannelID pins channel selection to a specific route channel when set
+	// (videos sticky pin from mapping #253; tester forced channel paths).
+	// When non-nil and >0, SelectProxyChannelForAttempt uses SelectPreferredChannel
+	// and does not fall back to other channels on retry.
+	ForcedChannelID *int64
 }
 
 // PrepareCtx extracts all context needed for proxy request handling.
