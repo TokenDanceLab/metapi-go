@@ -790,10 +790,15 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	// TODO(P4): handle sub2api managed auth (extraConfig.sub2apiAuth.refreshToken / tokenExpiresAt)
-	// Spec lines 528-542: when platform is sub2api, rebind-session must update sub2apiAuth fields.
+	// Sub2API managed auth: merge refreshToken/tokenExpiresAt into extraConfig.sub2apiAuth
+	// without clobbering unrelated keys (spec p3-sites-accounts lines 528-542).
 	extraConfigPatch := map[string]any{
 		"credentialMode": "session",
+	}
+	if service.IsSub2ApiPlatform(row.Site.Platform) {
+		if mergedAuth := service.BuildMergedSub2ApiAuth(row.Account.ExtraConfig, body.RefreshToken, body.TokenExpiresAt, nil); mergedAuth != nil {
+			extraConfigPatch["sub2apiAuth"] = mergedAuth
+		}
 	}
 	extraConfigStr := service.MergeExtraConfig(row.Account.ExtraConfig, extraConfigPatch)
 
@@ -900,9 +905,24 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		updates["unitCost"] = *body.UnitCost
 	}
 	if body.ExtraConfig != nil {
-		// Merge with existing extraConfig to preserve keys not in the update
+		// Merge with existing extraConfig to preserve keys not in the update.
+		// For sub2api, strip nested sub2apiAuth here and merge it via managed-auth
+		// helpers later so partial patches cannot clobber unrelated auth keys.
 		if ecMap, ok := body.ExtraConfig.(map[string]any); ok {
-			mergeExtraConfigUpdate(ecMap)
+			if service.IsSub2ApiPlatform(row.Site.Platform) {
+				stripped := make(map[string]any, len(ecMap))
+				for k, v := range ecMap {
+					if k == "sub2apiAuth" {
+						continue
+					}
+					stripped[k] = v
+				}
+				if len(stripped) > 0 {
+					mergeExtraConfigUpdate(stripped)
+				}
+			} else {
+				mergeExtraConfigUpdate(ecMap)
+			}
 		}
 	}
 	nextAccount := row.Account
@@ -936,9 +956,22 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 			"proxyUrl": service.NormalizeNullable(body.ProxyURL),
 		})
 	}
-	// TODO(P4): handle sub2api managed auth (extraConfig.sub2apiAuth.refreshToken / tokenExpiresAt)
-	// Spec lines 530-542: updateAccount for sub2api platform must merge sub2apiAuth fields.
-	// TODO(P4): expired API key recovery — when updating an expired API key account,
+	// Sub2API managed auth: merge top-level / nested refreshToken+tokenExpiresAt
+	// into extraConfig.sub2apiAuth without clobbering unrelated keys.
+	if service.IsSub2ApiPlatform(row.Site.Platform) {
+		var extraPatch map[string]any
+		if body.ExtraConfig != nil {
+			if ecMap, ok := body.ExtraConfig.(map[string]any); ok {
+				extraPatch = ecMap
+			}
+		}
+		// Merge against the original stored config so nested extraConfig.sub2apiAuth
+		// patches compose with top-level fields instead of overwriting wholesale.
+		if mergedAuth := service.BuildMergedSub2ApiAuth(row.Account.ExtraConfig, body.RefreshToken, body.TokenExpiresAt, extraPatch); mergedAuth != nil {
+			mergeExtraConfigUpdate(map[string]any{"sub2apiAuth": mergedAuth})
+		}
+	}
+	// TODO(P4): expired API key recovery - when updating an expired API key account,
 	// trigger model refresh with allowInactive:true and reactivateAfterSuccessfulModelRefresh:true
 	// (spec lines 594-602, TS accounts.ts:1550-1556)
 
