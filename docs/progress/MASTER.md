@@ -79,7 +79,8 @@
 | Residual stubs | Milestone 12 closed · tag **[v0.8.3](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.3)** |
 | Polish v0.8.4 | Milestone 13 closed · tag **[v0.8.4](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.4)** |
 | Residual v0.8.5 | Milestone 14 closed · tag **[v0.8.5](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.5)** |
-| Residual v0.8.6 | Milestone 15 · **#225–#228 closed** (PRs #229–#233); tag **v0.8.6** |
+| Residual v0.8.6 | Milestone 15 closed · tag **[v0.8.6](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.6)** |
+| Residual v0.8.7 | Milestone 16 closed · **#235–#238** (PRs #239–#242); tag **v0.8.7** |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -174,6 +175,6 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Tag **v0.8.6** (Enterprise residual complete)
-2. Optional: multi-instance job coordination; full Responses WS product; video publicId rewrite mapping
+1. Tag **v0.8.7** (videos create publicId + multi-instance residual honesty)
+2. Optional deeper product: durable `proxy_video_tasks` DB store; sticky pin from video mapping; full Responses WS Codex path; Redis TPM multi-instance; durable admin job store
 3. Continue product backlog P0/P1; frontend flake observability
