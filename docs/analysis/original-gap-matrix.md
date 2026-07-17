@@ -70,7 +70,7 @@
 | 555 | Token usage statistics inaccurate | bug-correctness | partial | Aggregation pipeline: `scheduler/usage_aggregation.go` → `site_day_usage` / `model_day_usage`; dashboard reads `handler/admin/stats.go` (`SUM(total_tokens)`, model day usage). Accuracy of stream/partial/error token extraction still needs runtime audit | P0 | yes |
 | 496 | Claude cache pricing wrong when cache_ratio missing (fallback 1.0) | bug-correctness | present | Cost builder: `routing/pricing_cost.go` `ResolveCacheRatio` / `DefaultCacheRatioForModel` — Claude missing → **0.1**, cache_creation → **1.25**; non-Claude keeps historical 1.0; explicit 0 preserved. Proxy path: `handler/proxy/billing_cost.go` `EstimateBillingCostFromUsage` → `CalculateModelUsageBreakdown`. Tests `routing/pricing_cost_test.go`, `handler/proxy/billing_cost_test.go`. Analysis `docs/analysis/cache-ratio-pricing.md`. UI still shows `billing_details.cacheRatio` on proxy logs | P0 | no |
 | 529 | Drag-and-drop reorder | feature-admin-ux | present | Route **channel** drag: `web/pages/TokenRoutes.tsx` + `@dnd-kit` (`web/pages/token-routes/RouteCard*.tsx`, `priorityRail.ts`) → `api.batchUpdateChannels` priorities. Import drag is file-drop only (`ImportExport.tsx`) | P4 | no |
-| 538 | Hermes/Codex multi-turn `/v1/responses` reasoning item needs content | feature-protocol | partial | Responses surface: `handler/proxy/router.go` `/responses`, transform reasoning parsers `transform/shared/chatFormatsCore.go` `parseResponsesReasoning` / `ResponsesReasoningByIndex`; compact sanitize `transform/openai/responses/compact.go`. No dedicated fix ensuring multi-turn reasoning items always carry required `content` for Hermes/Codex second turn | P1 | yes |
+| 538 | Hermes/Codex multi-turn `/v1/responses` reasoning item needs content | feature-protocol | present | `transform/openai/responses/reasoning_input.go` injects/preserves `content` + keeps `encrypted_content`/`summary`; `SanitizeResponsesRequestBody` + `handler/proxy/upstream.go` `sanitizeUpstreamJSONBody` (Responses path + input gate #310); honest `ReasoningInputError` 400; tests `reasoning_input_test.go`, `upstream_test.go`. Residual: full Responses→chat conversion, server store, WS (see `responses-multi-turn-reasoning.md`) | P1 | no |
 
 **Mandatory row count:** 29 (all listed numbers covered; #580/#581 and #588/#526/#559 expanded as separate rows).
 
@@ -134,15 +134,15 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 18 | 18 |
-| partial | 10 | 31 |
+| present | 19 | 18 |
+| partial | 9 | 31 |
 | missing | 0 | 3 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (18): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496**.  
+Mandatory present (19): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538**.  
 Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559 shipped)*.  
-Mandatory partial (10): **#585, #580, #581, #579, #547, #520, #584, #577, #555, #538**.  
+Mandatory partial (9): **#585, #580, #581, #579, #547, #520, #584, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.
@@ -167,7 +167,7 @@ Remaining **all-rows missing** (3, additional product sample only): **#534** bul
 
 1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
 2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
-3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**), multi-turn responses content (**#538**).
+3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**). Multi-turn responses content (**#538**) is **present** for HTTP content inject/preserve (#50/#310); residual is conversion/store/WS only.
 4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
 5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 
