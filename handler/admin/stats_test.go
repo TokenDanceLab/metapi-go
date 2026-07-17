@@ -543,3 +543,313 @@ func TestStats_UsageHeatmapAndSlowRequestsClampParams(t *testing.T) {
 		t.Fatalf("empty fixtures should yield empty items, got %#v", slow["items"])
 	}
 }
+
+func seedModelsSurfacesFixture(t *testing.T, db *store.DB) (siteID, accountWithToken, accountWithoutToken, tokenID int64) {
+	t.Helper()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, ?)`, "ms-site", "https://ms.example.test", "openai", now, now)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	if err := db.Get(&siteID, "SELECT id FROM sites WHERE name = ?", "ms-site"); err != nil {
+		t.Fatalf("site id: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO accounts (site_id, username, access_token, status, balance, checkin_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, 0, ?, ?)`, siteID, "ms-token-user", "sk-ms-token", 9.5, now, now)
+	if err != nil {
+		t.Fatalf("insert account with token: %v", err)
+	}
+	if err := db.Get(&accountWithToken, "SELECT id FROM accounts WHERE username = ?", "ms-token-user"); err != nil {
+		t.Fatalf("account with token id: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO accounts (site_id, username, access_token, status, balance, checkin_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, 0, ?, ?)`, siteID, "ms-bare-user", "sk-ms-bare", 1.25, now, now)
+	if err != nil {
+		t.Fatalf("insert bare account: %v", err)
+	}
+	if err := db.Get(&accountWithoutToken, "SELECT id FROM accounts WHERE username = ?", "ms-bare-user"); err != nil {
+		t.Fatalf("bare account id: %v", err)
+	}
+
+	_, err = db.Exec(`INSERT INTO account_tokens (account_id, name, token, token_group, value_status, source, enabled, is_default, created_at, updated_at)
+		VALUES (?, ?, ?, NULL, 'ready', 'manual', 1, 1, ?, ?)`, accountWithToken, "default", "sk-ms-default", now, now)
+	if err != nil {
+		t.Fatalf("insert account token: %v", err)
+	}
+	if err := db.Get(&tokenID, "SELECT id FROM account_tokens WHERE account_id = ?", accountWithToken); err != nil {
+		t.Fatalf("token id: %v", err)
+	}
+
+	// Token-scoped availability for gpt-4o.
+	_, err = db.Exec(`INSERT INTO token_model_availability (token_id, model_name, available, latency_ms, checked_at)
+		VALUES (?, ?, 1, ?, ?)`, tokenID, "gpt-4o", 320, now)
+	if err != nil {
+		t.Fatalf("insert token model availability: %v", err)
+	}
+
+	// Account-level availability on bare account (no managed tokens).
+	_, err = db.Exec(`INSERT INTO model_availability (account_id, model_name, available, is_manual, latency_ms, checked_at)
+		VALUES (?, ?, 1, 0, ?, ?)`, accountWithoutToken, "claude-3-5-sonnet", 410, now)
+	if err != nil {
+		t.Fatalf("insert bare model availability: %v", err)
+	}
+
+	// Account-level availability on token account whose tokens lack group labels.
+	_, err = db.Exec(`INSERT INTO model_availability (account_id, model_name, available, is_manual, latency_ms, checked_at)
+		VALUES (?, ?, 1, 0, ?, ?)`, accountWithToken, "gpt-4o-mini", 280, now)
+	if err != nil {
+		t.Fatalf("insert grouped model availability: %v", err)
+	}
+
+	// Exact route so marketplace still lists a route-only model name.
+	_, err = db.Exec(`INSERT INTO token_routes (model_pattern, route_mode, routing_strategy, enabled, created_at, updated_at)
+		VALUES ('route-only-model', 'exact', 'weighted', 1, ?, ?)`, now, now)
+	if err != nil {
+		t.Fatalf("insert exact route: %v", err)
+	}
+
+	// Success-rate signal for gpt-4o.
+	_, err = db.Exec(`INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, 'success', 10, 0.01, 300, ?)`, accountWithToken, "gpt-4o", "gpt-4o", now)
+	if err != nil {
+		t.Fatalf("insert success proxy log: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO proxy_logs (account_id, model_requested, model_actual, status, total_tokens, estimated_cost, latency_ms, created_at)
+		VALUES (?, ?, ?, 'failed', 5, 0, 900, ?)`, accountWithToken, "gpt-4o", "gpt-4o", now)
+	if err != nil {
+		t.Fatalf("insert failed proxy log: %v", err)
+	}
+
+	return siteID, accountWithToken, accountWithoutToken, tokenID
+}
+
+func TestStats_SQLiteMarketplaceFromAvailability(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	_, accountWithToken, accountWithoutToken, tokenID := seedModelsSurfacesFixture(t, db)
+
+	resp := doGet(t, r, "/api/models/marketplace?includePricing=1")
+	if resp.Code != 200 {
+		t.Fatalf("marketplace returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	models, ok := body["models"].([]any)
+	if !ok || len(models) < 3 {
+		t.Fatalf("models = %#v, want non-empty fixture models", body["models"])
+	}
+	meta, ok := body["meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("meta missing: %#v", body)
+	}
+	if meta["includePricing"] != true {
+		t.Fatalf("includePricing = %v, want true", meta["includePricing"])
+	}
+	if meta["pricingStatus"] != "unavailable" {
+		t.Fatalf("pricingStatus = %v, want unavailable residual label", meta["pricingStatus"])
+	}
+	if meta["source"] != "db_availability" {
+		t.Fatalf("source = %v, want db_availability", meta["source"])
+	}
+
+	byName := map[string]map[string]any{}
+	for _, raw := range models {
+		m := raw.(map[string]any)
+		byName[m["name"].(string)] = m
+	}
+	gpt, ok := byName["gpt-4o"]
+	if !ok {
+		t.Fatalf("missing gpt-4o in marketplace: %#v", byName)
+	}
+	if int(gpt["accountCount"].(float64)) < 1 {
+		t.Fatalf("gpt-4o accountCount = %v, want >=1", gpt["accountCount"])
+	}
+	if int(gpt["tokenCount"].(float64)) < 1 {
+		t.Fatalf("gpt-4o tokenCount = %v, want >=1", gpt["tokenCount"])
+	}
+	if gpt["successRate"] == nil {
+		t.Fatalf("gpt-4o successRate missing: %#v", gpt)
+	}
+	if pricing, ok := gpt["pricingSources"].([]any); !ok || len(pricing) != 0 {
+		t.Fatalf("pricingSources must be empty residual, got %#v", gpt["pricingSources"])
+	}
+	accounts, ok := gpt["accounts"].([]any)
+	if !ok || len(accounts) == 0 {
+		t.Fatalf("gpt-4o accounts empty: %#v", gpt["accounts"])
+	}
+	acc0 := accounts[0].(map[string]any)
+	if int64(acc0["id"].(float64)) != accountWithToken {
+		t.Fatalf("account id = %v, want %d", acc0["id"], accountWithToken)
+	}
+	tokens, ok := acc0["tokens"].([]any)
+	if !ok || len(tokens) == 0 {
+		t.Fatalf("account tokens empty: %#v", acc0["tokens"])
+	}
+	if int64(tokens[0].(map[string]any)["id"].(float64)) != tokenID {
+		t.Fatalf("token id = %v, want %d", tokens[0].(map[string]any)["id"], tokenID)
+	}
+
+	if _, ok := byName["claude-3-5-sonnet"]; !ok {
+		t.Fatalf("missing bare-account model claude-3-5-sonnet: %#v", byName)
+	}
+	if _, ok := byName["route-only-model"]; !ok {
+		t.Fatalf("missing exact route model route-only-model: %#v", byName)
+	}
+	claude := byName["claude-3-5-sonnet"]
+	foundBare := false
+	for _, raw := range claude["accounts"].([]any) {
+		if int64(raw.(map[string]any)["id"].(float64)) == accountWithoutToken {
+			foundBare = true
+		}
+	}
+	if !foundBare {
+		t.Fatalf("bare account %d missing from claude accounts: %#v", accountWithoutToken, claude["accounts"])
+	}
+}
+
+func TestStats_SQLiteTokenCandidatesMaps(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	_, accountWithToken, accountWithoutToken, tokenID := seedModelsSurfacesFixture(t, db)
+
+	resp := doGet(t, r, "/api/models/token-candidates")
+	if resp.Code != 200 {
+		t.Fatalf("token-candidates returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	models, ok := body["models"].(map[string]any)
+	if !ok {
+		t.Fatalf("models map missing: %#v", body["models"])
+	}
+	gptCandidates, ok := models["gpt-4o"].([]any)
+	if !ok || len(gptCandidates) != 1 {
+		t.Fatalf("gpt-4o candidates = %#v, want one token candidate", models["gpt-4o"])
+	}
+	c0 := gptCandidates[0].(map[string]any)
+	if int64(c0["tokenId"].(float64)) != tokenID {
+		t.Fatalf("tokenId = %v, want %d", c0["tokenId"], tokenID)
+	}
+	if int64(c0["accountId"].(float64)) != accountWithToken {
+		t.Fatalf("accountId = %v, want %d", c0["accountId"], accountWithToken)
+	}
+
+	without, ok := body["modelsWithoutToken"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelsWithoutToken missing: %#v", body["modelsWithoutToken"])
+	}
+	bare, ok := without["claude-3-5-sonnet"].([]any)
+	if !ok || len(bare) != 1 {
+		t.Fatalf("modelsWithoutToken claude = %#v, want bare account", without["claude-3-5-sonnet"])
+	}
+	if int64(bare[0].(map[string]any)["accountId"].(float64)) != accountWithoutToken {
+		t.Fatalf("bare accountId = %v, want %d", bare[0].(map[string]any)["accountId"], accountWithoutToken)
+	}
+
+	missingGroups, ok := body["modelsMissingTokenGroups"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelsMissingTokenGroups missing: %#v", body["modelsMissingTokenGroups"])
+	}
+	groupRows, ok := missingGroups["gpt-4o-mini"].([]any)
+	if !ok || len(groupRows) != 1 {
+		t.Fatalf("modelsMissingTokenGroups gpt-4o-mini = %#v", missingGroups["gpt-4o-mini"])
+	}
+	g0 := groupRows[0].(map[string]any)
+	if g0["groupCoverageUncertain"] != true {
+		t.Fatalf("groupCoverageUncertain = %v, want true", g0["groupCoverageUncertain"])
+	}
+
+	endpointTypes, ok := body["endpointTypesByModel"].(map[string]any)
+	if !ok {
+		t.Fatalf("endpointTypesByModel missing: %#v", body["endpointTypesByModel"])
+	}
+	if types, ok := endpointTypes["gpt-4o"].([]any); !ok || len(types) == 0 {
+		t.Fatalf("endpointTypes gpt-4o = %#v", endpointTypes["gpt-4o"])
+	}
+	if types, ok := endpointTypes["claude-3-5-sonnet"].([]any); !ok || len(types) == 0 || types[0] != "anthropic" {
+		t.Fatalf("endpointTypes claude = %#v, want anthropic", endpointTypes["claude-3-5-sonnet"])
+	}
+}
+
+func TestStats_SQLiteModelCheckNoFakeSuccess(t *testing.T) {
+	db, r := setupStatsSQLiteTest(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', ?, ?)`, "check-site", "https://check.example.test", "openai", now, now)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	var siteID int64
+	if err := db.Get(&siteID, "SELECT id FROM sites WHERE name = ?", "check-site"); err != nil {
+		t.Fatalf("site id: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO accounts (site_id, username, access_token, status, checkin_enabled, created_at, updated_at)
+		VALUES (?, ?, ?, 'active', 0, ?, ?)`, siteID, "check-user", "sk-check", now, now)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	var accountID int64
+	if err := db.Get(&accountID, "SELECT id FROM accounts WHERE username = ?", "check-user"); err != nil {
+		t.Fatalf("account id: %v", err)
+	}
+
+	// Invalid id → Pattern C error, no fake success.
+	resp := doPostJSON(t, r, "/api/models/check/not-a-number", map[string]any{})
+	if resp.Code != 200 {
+		t.Fatalf("invalid id status = %d, want 200 with body error", resp.Code)
+	}
+	var invalidBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &invalidBody); err != nil {
+		t.Fatalf("unmarshal invalid: %v", err)
+	}
+	if invalidBody["success"] != false {
+		t.Fatalf("invalid id success = %v, want false", invalidBody["success"])
+	}
+	if invalidBody["error"] != "Invalid account id" {
+		t.Fatalf("invalid id error = %v", invalidBody["error"])
+	}
+
+	// Missing account → success=false.
+	resp = doPostJSON(t, r, "/api/models/check/999999", map[string]any{})
+	if resp.Code != 200 {
+		t.Fatalf("missing account status = %d", resp.Code)
+	}
+	var missingBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &missingBody); err != nil {
+		t.Fatalf("unmarshal missing: %v", err)
+	}
+	if missingBody["success"] != false {
+		t.Fatalf("missing account success = %v, want false (no fake success)", missingBody["success"])
+	}
+
+	// Real account against unreachable upstream URL: must not return success=true.
+	resp = doPostJSON(t, r, "/api/models/check/"+strconv.FormatInt(accountID, 10), map[string]any{})
+	if resp.Code != 200 {
+		t.Fatalf("model check status = %d: %s", resp.Code, resp.Body.String())
+	}
+	var checkBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &checkBody); err != nil {
+		t.Fatalf("unmarshal check: %v", err)
+	}
+	if checkBody["success"] != false {
+		t.Fatalf("unreachable upstream success = %v, want false (no fake success); body=%#v", checkBody["success"], checkBody)
+	}
+	refresh, ok := checkBody["refresh"].(map[string]any)
+	if !ok {
+		t.Fatalf("refresh missing: %#v", checkBody)
+	}
+	if refresh["status"] == "success" {
+		t.Fatalf("refresh.status must not be success for unreachable upstream: %#v", refresh)
+	}
+	if refresh["errorCode"] == nil || refresh["errorCode"] == "" {
+		t.Fatalf("refresh.errorCode required on failure: %#v", refresh)
+	}
+}
