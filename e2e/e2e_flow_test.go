@@ -36,19 +36,19 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 
 	// 1a. Build config first - EnsureRuntimeDatabase reads DbType and DbUrl.
 	cfg := &config.Config{
-		AuthToken:                    adminToken,
-		ProxyToken:                   proxyToken,
-		AccountCredentialSecret:      "test-cred-secret",
-		DbType:                       "sqlite",
-		DbUrl:                        ":memory:",
-		DataDir:                      t.TempDir(),
-		ProxyMaxChannelAttempts:      3,
-		ProxyStickySessionEnabled:    false,
-		ProxyStickySessionTtlMs:      30000,
-		TokenRouterCacheTtlMs:        1500,
+		AuthToken:                        adminToken,
+		ProxyToken:                       proxyToken,
+		AccountCredentialSecret:          "test-cred-secret",
+		DbType:                           "sqlite",
+		DbUrl:                            ":memory:",
+		DataDir:                          t.TempDir(),
+		ProxyMaxChannelAttempts:          3,
+		ProxyStickySessionEnabled:        false,
+		ProxyStickySessionTtlMs:          30000,
+		TokenRouterCacheTtlMs:            1500,
 		TokenRouterFailureCooldownMaxSec: 60,
-		RoutingFallbackUnitCost:      1,
-		RequestBodyLimit:             20 * 1024 * 1024,
+		RoutingFallbackUnitCost:          1,
+		RequestBodyLimit:                 20 * 1024 * 1024,
 	}
 	config.Set(cfg)
 
@@ -178,8 +178,10 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 	upstreamToken := "sk-test-upstream-token-abc123"
 
 	createAccountBody := map[string]any{
-		"siteId":      siteID,
-		"accessToken": upstreamToken,
+		"siteId":         siteID,
+		"accessToken":    upstreamToken,
+		"credentialMode": "apikey",
+		"skipModelFetch": true,
 	}
 	accountRec := doAdminPost(t, r, "/api/accounts", adminToken, createAccountBody)
 
@@ -200,38 +202,10 @@ func TestSiteCreateToProxyFlow(t *testing.T) {
 	t.Logf("created account: id=%d for site %d", accountID, siteID)
 
 	// ══════════════════════════════════════════════════════════════════════════
-	// Phase 4: Create account_token for the account via admin API
+	// Phase 4: API-key accounts store credentials on the account row itself.
+	// /api/account-tokens is session-only, so skip token CRUD for this path.
 	// ══════════════════════════════════════════════════════════════════════════
-
-	tokenName := "default-token"
-	createTokenBody := map[string]any{
-		"accountId": int(accountID),
-		"name":      tokenName,
-		"token":     upstreamToken,
-	}
-	tokenRec := doAdminPost(t, r, "/api/account-tokens", adminToken, createTokenBody)
-
-	if tokenRec.Code != 200 && tokenRec.Code != 201 {
-		t.Fatalf("create account_token: expected 200/201, got %d: %s", tokenRec.Code, tokenRec.Body.String())
-	}
-
-	var tokenResp map[string]any
-	if err := json.Unmarshal(tokenRec.Body.Bytes(), &tokenResp); err != nil {
-		t.Fatalf("create account_token: failed to parse response: %v", err)
-	}
-
-	// The account_token response may nest the token under a "token" key.
-	// Handle both flat and nested response shapes.
-	tokenData, ok := tokenResp["token"].(map[string]any)
-	if !ok {
-		// Flat response: id is at top level.
-		tokenData = tokenResp
-	}
-	tokenID := mapGetInt64(tokenData, "id")
-	if tokenID == 0 {
-		t.Fatalf("create account_token: expected numeric id in response, got %v", tokenResp)
-	}
-	t.Logf("created account_token: id=%d for account %d", tokenID, accountID)
+	t.Logf("apikey account %d uses account.apiToken (skip account-tokens create)", accountID)
 
 	// ══════════════════════════════════════════════════════════════════════════
 	// Phase 5: Query /v1/models via proxy
@@ -555,18 +529,18 @@ func TestSiteCreateToProxyFlow_Streaming(t *testing.T) {
 	// Create account.
 	accountRec := doAdminPost(t, r, "/api/accounts", adminToken, map[string]any{
 		"siteId": siteID, "accessToken": "sk-stream-token",
+		"credentialMode": "apikey", "skipModelFetch": true,
 	})
 	if accountRec.Code < 200 || accountRec.Code > 299 {
 		t.Fatalf("create account failed: %d: %s", accountRec.Code, accountRec.Body.String())
 	}
 	var accountResp map[string]any
 	json.Unmarshal(accountRec.Body.Bytes(), &accountResp)
-	accountID := int64(accountResp["id"].(float64))
+	if _, ok := accountResp["id"].(float64); !ok {
+		t.Fatalf("create account: missing id: %v", accountResp)
+	}
 
-	// Create account_token.
-	doAdminPost(t, r, "/api/account-tokens", adminToken, map[string]any{
-		"accountId": int(accountID), "name": "default", "token": "sk-stream-token",
-	})
+	// API-key accounts do not support /api/account-tokens management.
 
 	// Streaming chat request.
 	streamBody := map[string]any{
