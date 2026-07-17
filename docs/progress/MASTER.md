@@ -75,8 +75,8 @@
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | Polish | v0.8.1 #168–#171 landed |
-| P4 adapters | Milestone 11 · **#184** system-proxy/brand (#186) + **#185** test harness wire (#187) merged; **#182** token adapters + **#183** VerifyToken in flight |
-| Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake (tests pass) |
+| P4 adapters | Milestone 11 · **#182** (#190) **#184** (#186) **#185** (#187) merged; **#183** VerifyToken PR #189 hardening PG fixtures |
+| Residual CI | vulncheck green on Go 1.26.5; watch shared-PG site create flake on master post-#190 |
 
 ### M-COMPETE notes (active)
 
@@ -170,7 +170,7 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Continue **M-FEATURE** remaining P0 backlog: token stats (#42), cache_ratio (#43), key/whitelist correctness (#40/#41/#45/#46), expired-connection UX (#39), cross-protocol failover (#38)
-2. Protocol P1: `/v1/rerank` (#48), Gemini thought_signature residual (#47), Responses multi-turn (#50), Codex/OAuth model issues (#49/#55)
-3. Watch CI frontend unhandled-rejection flakiness (dashboard observability)
-4. Optional: Go stdlib vulncheck GO-2026-5856 via Go 1.26.5 when available
+1. Land **#183** VerifyToken PR #189 (PG fixture/boolean fixes); close P4 milestone 11 → tag **v0.8.2**
+2. Residual P4 TODOs: sub2api managed auth merge on update; expired API-key recovery model refresh
+3. Investigate shared-Postgres site create flake if still red on master after #190
+4. Continue product backlog P0/P1 as needed; frontend flake observability
