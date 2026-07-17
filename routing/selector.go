@@ -623,27 +623,32 @@ func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenR
 		}
 	}
 
-	// Resolve source model fallback
-	fallbackSourceModelByRouteID := make(map[int64]string)
-	for _, rID := range routeIDs {
-		// We'd need route details here; for simplicity, use model pattern
-		// In a real implementation, load the source route's model pattern
-		fallbackSourceModelByRouteID[rID] = "" // Will be resolved from the route
+	// Resolve source-model fallback from each channel's route model_pattern.
+	// Group routes expand to source route IDs; blank channel SourceModel
+	// must inherit that source route's pattern for eligibility/resolveModel.
+	fallbackSourceModelByRouteID, err := s.loadFallbackSourceModelByRouteID(ctx, route, routeIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	candidates := make([]RouteChannelCandidate, 0, len(joined))
 	for _, j := range joined {
-		sourceModel := j.Channel.SourceModel
-		// Fallback source model resolution
-		resolvedSourceModel := NormalizeChannelSourceModel(sourceModel)
+		channel := j.Channel
+		resolvedSourceModel := NormalizeChannelSourceModel(channel.SourceModel)
 		if resolvedSourceModel == "" {
-			if fb, ok := fallbackSourceModelByRouteID[j.Channel.RouteID]; ok && fb != "" {
+			if fb, ok := fallbackSourceModelByRouteID[channel.RouteID]; ok && fb != "" {
 				resolvedSourceModel = fb
 			}
 		}
+		if resolvedSourceModel != "" {
+			sm := resolvedSourceModel
+			channel.SourceModel = &sm
+		} else {
+			channel.SourceModel = nil
+		}
 
 		candidate := RouteChannelCandidate{
-			Channel: j.Channel,
+			Channel: channel,
 			Account: j.Account,
 			Site:    j.Site,
 			Token:   j.Token,
@@ -659,7 +664,6 @@ func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenR
 			}
 		}
 
-		_ = resolvedSourceModel
 		candidates = append(candidates, candidate)
 	}
 
@@ -669,6 +673,47 @@ func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenR
 	}
 	s.cache.SetMatch(route.ID, match)
 	return match, nil
+}
+
+// loadFallbackSourceModelByRouteID maps route IDs to model_pattern values used when
+// a channel's SourceModel is nil/empty. For group routes this is each source route's
+// pattern; for normal routes it is the matched route itself.
+func (s *ChannelSelector) loadFallbackSourceModelByRouteID(ctx context.Context, route store.TokenRoute, routeIDs []int64) (map[int64]string, error) {
+	fallback := make(map[int64]string, len(routeIDs))
+	if len(routeIDs) == 0 {
+		return fallback, nil
+	}
+
+	// Fast path: non-group routes only expand to themselves.
+	if len(routeIDs) == 1 && routeIDs[0] == route.ID {
+		pattern := strings.TrimSpace(route.ModelPattern)
+		if pattern != "" {
+			fallback[route.ID] = pattern
+		}
+		return fallback, nil
+	}
+
+	// Load enabled routes and map model patterns for every source route ID.
+	routes, err := s.db.LoadEnabledRoutes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("loadRouteMatch: load source route patterns: %w", err)
+	}
+	byID := make(map[int64]store.TokenRoute, len(routes)+1)
+	for _, r := range routes {
+		byID[r.ID] = r
+	}
+	// Always include the matched route in case it is a group or not in the enabled list shape used above.
+	byID[route.ID] = route
+
+	for _, rID := range routeIDs {
+		if r, ok := byID[rID]; ok {
+			pattern := strings.TrimSpace(r.ModelPattern)
+			if pattern != "" {
+				fallback[rID] = pattern
+			}
+		}
+	}
+	return fallback, nil
 }
 
 func (s *ChannelSelector) getCandidateEligibilityReasons(
