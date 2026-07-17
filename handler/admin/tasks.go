@@ -520,8 +520,35 @@ func newBackgroundTaskID() string {
 	return hex.EncodeToString(b[:])
 }
 
+// waitAllBackgroundTasksForTests polls until every in-memory task is terminal
+// or the timeout elapses. Used by tests so cleanup does not race runners that
+// still touch package globals (e.g. globalAccountsCache.clear) (#328).
+func waitAllBackgroundTasksForTests(timeout time.Duration) {
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		backgroundTasksMu.Lock()
+		pending := false
+		for _, task := range backgroundTasks {
+			if task.Status == BackgroundTaskPending || task.Status == BackgroundTaskRunning {
+				pending = true
+				break
+			}
+		}
+		backgroundTasksMu.Unlock()
+		if !pending {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // resetBackgroundTasksForTests clears the in-memory registry (tests only).
+// It first waits briefly for runners so map teardown does not race active work.
 func resetBackgroundTasksForTests() {
+	waitAllBackgroundTasksForTests(3 * time.Second)
 	backgroundTasksMu.Lock()
 	defer backgroundTasksMu.Unlock()
 	backgroundTasks = map[string]*BackgroundTask{}

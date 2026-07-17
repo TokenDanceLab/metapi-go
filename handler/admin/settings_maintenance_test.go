@@ -15,7 +15,8 @@ import (
 func setupMaintenanceTest(t *testing.T) (*store.DB, chi.Router, *routing.RouteCache) {
 	t.Helper()
 	resetBackgroundTasksForTests()
-	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	// Keep the process-lifetime singleton; only clear contents (#328).
+	globalAccountsCache.clear()
 
 	db, err := store.Open(store.DialectSQLite, ":memory:", false)
 	if err != nil {
