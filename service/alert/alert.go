@@ -18,8 +18,11 @@ type TokenExpiredParams struct {
 	Detail    string
 }
 
-// ReportTokenExpired reports a token expiration event.
-// Mirrors TS reportTokenExpired().
+// ReportTokenExpired reports a token expiration event and marks the account expired.
+// Callers MUST gate with ShouldMarkAccountExpired (ClassExpired only) — not the
+// broader IsTokenExpiredError / auto-relogin heuristic — so 429/5xx/network/billing
+// never force-mark keys (#568 / #298).
+// Mirrors TS reportTokenExpired() with tighter call-site guards.
 func ReportTokenExpired(cfg *config.Config, db *sqlx.DB, params TokenExpiredParams) {
 	accountLabel := orID(params.Username, params.AccountID)
 	siteLabel := "unknown-site"

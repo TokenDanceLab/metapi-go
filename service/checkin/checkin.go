@@ -435,7 +435,7 @@ func CheckinAccount(cfg *config.Config, db *sqlx.DB, accountID int64, options *C
 			return CheckinResult{Success: false, Status: CheckinFailed, Message: "failed to persist runtime health: " + err.Error()}
 		}
 
-		if alert.IsTokenExpiredError(0, result.Message) {
+		if alert.ShouldMarkAccountExpired(0, result.Message) {
 			alert.ReportTokenExpired(cfg, db, alert.TokenExpiredParams{
 				AccountID: account.ID, Username: account.Username,
 				SiteName: &site.Name, Detail: result.Message,

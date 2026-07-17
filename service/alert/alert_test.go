@@ -366,3 +366,46 @@ func TestProxyAllFailedParams(t *testing.T) {
 		t.Errorf("Reason = %q, want 'all channels exhausted'", params.Reason)
 	}
 }
+
+func TestShouldMarkAccountExpired_NotTransientOrBilling(t *testing.T) {
+	// Non-auth / transient must never mark accounts expired (#568/#298).
+	negatives := []struct {
+		status int
+		msg    string
+	}{
+		{0, "connection timeout"},
+		{0, "i/o timeout"},
+		{429, "rate limit exceeded"},
+		{500, "internal server error"},
+		{502, "bad gateway"},
+		{503, "service unavailable"},
+		{401, "insufficient_quota"},
+		{401, "billing hard limit reached"},
+		{403, "model is not supported"},
+		{400, "invalid_request_error"},
+		{0, "cloudflare challenge required"},
+	}
+	for _, tc := range negatives {
+		if ShouldMarkAccountExpired(tc.status, tc.msg) {
+			t.Fatalf("ShouldMarkAccountExpired(%d, %q) = true, want false", tc.status, tc.msg)
+		}
+	}
+}
+
+func TestShouldMarkAccountExpired_PositiveAuthExpiry(t *testing.T) {
+	positives := []struct {
+		status int
+		msg    string
+	}{
+		{0, "jwt expired"},
+		{0, "token expired"},
+		{0, "invalid access token"},
+		{401, ""}, // bare 401 empty body — legacy expired
+		{0, "访问令牌无效"},
+	}
+	for _, tc := range positives {
+		if !ShouldMarkAccountExpired(tc.status, tc.msg) {
+			t.Fatalf("ShouldMarkAccountExpired(%d, %q) = false, want true", tc.status, tc.msg)
+		}
+	}
+}

@@ -28,6 +28,8 @@ func IsTokenExpiredError(httpStatus int, message string) bool {
 }
 
 // ShouldMarkAccountExpired is the guard before writing accounts.status='expired'.
+// Prefer this over IsTokenExpiredError at ReportTokenExpired call sites (#568/#298):
+// only ClassExpired marks; auto-relogin may still use IsTokenExpiredError.
 func ShouldMarkAccountExpired(httpStatus int, message string) bool {
 	return platform.ShouldMarkAccountExpired(httpStatus, message)
 }
