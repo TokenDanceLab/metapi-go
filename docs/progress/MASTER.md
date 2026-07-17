@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.29](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.29)** (2026-07-18)
+**Latest release**: **[v0.8.29](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.29)** (2026-07-18) — remains latest until M40 release gate
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 39 (v0.8.29) — next residual wave TBD |
+| Active milestone | [Milestone 40 — Enterprise residual client/routing polish v0.8.30](https://github.com/TokenDanceLab/metapi-go/milestone/40) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -42,16 +42,19 @@
 | Enterprise residual security polish **v0.8.27** | ✅ closed | #407–#410 (PRs #411–#414); tag **v0.8.27** |
 | Enterprise residual SSRF/client harden **v0.8.28** | ✅ closed | #416–#418 (PRs #419–#421); tag **v0.8.28** |
 | Enterprise residual reliability harden **v0.8.29** | ✅ closed | #423–#426 (PRs #427/#428/#430/#431); tag **v0.8.29** |
+| Enterprise residual client/routing polish **v0.8.30** | 🔄 active | Milestone 40 · board **#433–#435** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.29; next residual only with ACs |
+| [#433](https://github.com/TokenDanceLab/metapi-go/issues/433) | security P0 | SEC-OAUTH-NOTIFY-REDIR: share RejectCrossOriginRedirect on OAuth HTTP client + Telegram notify client |
+| [#434](https://github.com/TokenDanceLab/metapi-go/issues/434) | reliability P1 | REL-SOURCE-MODEL: loadRouteMatch source-model fallback from source route pattern (no empty stub) |
+| [#435](https://github.com/TokenDanceLab/metapi-go/issues/435) | docs | Residual honesty post v0.8.29 (M40 board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 **M35–M39 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, or #423–#426 as active work (landed on master with v0.8.29).
-**Latest release**: **v0.8.29** after M39 release gate (docs gate only; do not claim next residual until new board + ACs).
+**Latest release**: stays **v0.8.29** until M40 release gate; do not claim v0.8.30 until tag.
 
 
 ## Residual releases (pointer only)
@@ -95,7 +98,7 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Close Milestone 39: #423 REL-PREFERRED-BREAKER · #424 REL-COOLDOWN-TS · #425 REL-CONDUCTOR-BUDGET · #426 residual honesty. Latest release **v0.8.29**.
+1. Land M40 board **#433–#435**: SEC-OAUTH-NOTIFY-REDIR (#433 P0) · REL-SOURCE-MODEL (#434 P1) · residual honesty (#435). Latest release stays **v0.8.29** until release gate.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Optional later: P0-585 production load-proof / empty-filter residual; deeper P0-555 media/lag polish; further dialect context_length enforce.
 4. Keep MASTER slim; docs map at `docs/README.md`.
