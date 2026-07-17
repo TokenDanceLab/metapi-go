@@ -12,6 +12,29 @@ import (
 	"time"
 )
 
+// rejectCrossOriginRedirect mirrors platform.rejectCrossOriginRedirect so the
+// RuntimeExecutor client cannot be tricked into following a 302 to a different
+// host (SSRF amplification to metadata / loopback / private networks).
+//
+// Kept local (not imported from platform) to avoid tightening package cycles;
+// behavior must stay in lockstep with platform/site_proxy.go.
+func rejectCrossOriginRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return fmt.Errorf("stopped after %d redirects", len(via))
+	}
+	if len(via) == 0 {
+		return nil
+	}
+	previous := via[len(via)-1].URL
+	if previous.Scheme == "https" && req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect from https to %s", req.URL.Scheme)
+	}
+	if !strings.EqualFold(previous.Host, req.URL.Host) {
+		return fmt.Errorf("refusing cross-origin redirect from %s to %s", previous.Host, req.URL.Host)
+	}
+	return nil
+}
+
 // ExecutorDispatchInput is the input for dispatching an HTTP request.
 type ExecutorDispatchInput struct {
 	SiteURL   string
@@ -36,10 +59,13 @@ type RuntimeExecutor struct {
 }
 
 // NewRuntimeExecutor creates a new RuntimeExecutor with the given timeout.
+// The client refuses cross-origin redirects (and https→http) to block SSRF
+// via 302 to a different host / private / metadata endpoint.
 func NewRuntimeExecutor(requestTimeout time.Duration) *RuntimeExecutor {
 	return &RuntimeExecutor{
 		client: &http.Client{
-			Timeout: requestTimeout,
+			Timeout:       requestTimeout,
+			CheckRedirect: rejectCrossOriginRedirect,
 		},
 	}
 }

@@ -174,3 +174,96 @@ func TestWithObservedFirstByteRejectsOversizedBufferedResponse(t *testing.T) {
 		t.Fatalf("error = %v, want response body exceeded", err)
 	}
 }
+
+func TestRuntimeExecutorRejectsCrossOriginRedirect(t *testing.T) {
+	// SSRF surface: 302 to a different host (e.g. metadata/loopback) must not be followed.
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "ssrf-payload")
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/metadata", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	executor := NewRuntimeExecutor(time.Second)
+	result, err := executor.Dispatch(context.Background(), ExecutorDispatchInput{
+		Method:    http.MethodGet,
+		TargetURL: source.URL + "/start",
+	})
+	if err == nil {
+		t.Fatalf("Dispatch allowed cross-origin redirect: result=%+v", result)
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin redirect rejection", err)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called (SSRF)")
+	}
+}
+
+func TestRuntimeExecutorAllowsSameHostRedirect(t *testing.T) {
+	// Mirror platform policy: same-host redirects remain allowed.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/landing", http.StatusFound)
+	})
+	mux.HandleFunc("/landing", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "same-host-ok")
+	})
+	upstream := httptest.NewServer(mux)
+	t.Cleanup(upstream.Close)
+
+	executor := NewRuntimeExecutor(time.Second)
+	result, err := executor.Dispatch(context.Background(), ExecutorDispatchInput{
+		Method:    http.MethodGet,
+		TargetURL: upstream.URL + "/start",
+	})
+	if err != nil {
+		t.Fatalf("same-host redirect Dispatch: %v", err)
+	}
+	if result.Status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", result.Status)
+	}
+	if string(result.Body) != "same-host-ok" {
+		t.Fatalf("body = %q, want same-host-ok", result.Body)
+	}
+}
+
+func TestRejectCrossOriginRedirectPolicy(t *testing.T) {
+	viaHTTPS, err := http.NewRequest(http.MethodGet, "https://api.example.com/v1", nil)
+	if err != nil {
+		t.Fatalf("NewRequest via: %v", err)
+	}
+	toHTTP, err := http.NewRequest(http.MethodGet, "http://api.example.com/v1", nil)
+	if err != nil {
+		t.Fatalf("NewRequest to: %v", err)
+	}
+	if err = rejectCrossOriginRedirect(toHTTP, []*http.Request{viaHTTPS}); err == nil {
+		t.Fatal("expected https→http redirect rejection")
+	}
+
+	toOtherHost, err := http.NewRequest(http.MethodGet, "https://169.254.169.254/latest/meta-data/", nil)
+	if err != nil {
+		t.Fatalf("NewRequest metadata: %v", err)
+	}
+	if err = rejectCrossOriginRedirect(toOtherHost, []*http.Request{viaHTTPS}); err == nil {
+		t.Fatal("expected cross-origin metadata redirect rejection")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin", err)
+	}
+
+	sameHost, err := http.NewRequest(http.MethodGet, "https://api.example.com/v2", nil)
+	if err != nil {
+		t.Fatalf("NewRequest same: %v", err)
+	}
+	if err = rejectCrossOriginRedirect(sameHost, []*http.Request{viaHTTPS}); err != nil {
+		t.Fatalf("same-host https redirect should be allowed: %v", err)
+	}
+}
