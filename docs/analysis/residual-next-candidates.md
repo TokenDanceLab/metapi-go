@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.16)
+# Residual next candidates (post v0.8.17)
 
 **Date**: 2026-07-17  
-**Issue**: [#318](https://github.com/TokenDanceLab/metapi-go/issues/318) (this refresh); inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290)  
-**Context**: After Enterprise residual **v0.8.16** (protocol + usage residual **#309–#311**: Gemini thought_signature wire, Responses multi-turn content sanitize, failure `proxy_logs` retain usage).  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); refresh trail #318 + v0.8.17 product  
+**Context**: After Enterprise residual **v0.8.17** (#318 residual honesty, #319 failed usage aggregates, #320 route `contextLength` admin surface).  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -36,12 +36,13 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | KEY-578 | Per-key outbound proxy | present | `proxy/key_proxy.go` + `downstream_api_keys.proxy_url` | Done (matrix #281) | — |
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
+| CTX-520 | Route contextLength admin surface | **present-with-residual** (#320) | Admin CRUD + list/summary/lite; residual: `/v1/models` still heuristic-only; no proxy max-token enforce | Optional models wire / enforce Milestone | Metadata vs enforcement |
 
-## Recommended sequencing (v0.8.17+)
+## Recommended sequencing (v0.8.18+)
 
-1. **Docs honesty** (#318): residual inventory + MASTER after v0.8.16 — done on master.
-2. **Observability** (#319 / P0-555): failed `proxy_logs` tokens project into aggregates — this PR; residual only policy/media/lag.
-3. **Product surface honesty** (#320): `token_routes.context_length` admin/API round-trip — done on master (metadata-only; no proxy max-token enforce).
+1. **Shipped in v0.8.17**: #318 docs honesty · #319 failed-status aggregate regression · #320 contextLength admin metadata.
+2. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
+3. **Optional**: wire `/v1/models` to route `contextLength`; P0-585 load-proof / breaker polish.
 4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
@@ -53,10 +54,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Inventing update-center deploy/rollback success without a registry.
 - Returning `success:true` for unimplemented admin stream/job queues.
 - Claiming perfect billing accuracy without aggregation proof after #311.
+- Claiming proxy max-token enforcement from `contextLength` without a dedicated product AC.
 
 ## Links
 
-- Release: [v0.8.16](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.16)
+- Release: [v0.8.17](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.17) · prior [v0.8.16](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.16)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`

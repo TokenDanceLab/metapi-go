@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.17] — 2026-07-17
+
+### Added
+- Admin `token_routes.contextLength` create/update + list/summary/lite surfaces (metadata-only; no proxy max-token enforcement) (#320 / #323)
+
+### Fixed / Verified
+- Usage aggregation projects `proxy_logs.status=failed` tokens into `failed_calls` + `total_tokens` (regression + audit note; aggregation logic already status-agnostic) (#319 / #324)
+
+### Docs / Honesty
+- Residual inventory + MASTER pointers post v0.8.16 (#318 / #322)
+- P0-555 → present-with-residual after #311/#319; residual policy/media/lag only
+
 ## [v0.8.16] — 2026-07-17
 
 ### Fixed
