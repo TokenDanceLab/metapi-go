@@ -18,6 +18,10 @@ const (
 	ActionStop             AttemptFailureAction = "stop"
 )
 
+// DefaultMaxRefreshAuthSuccesses caps successful RefreshAuth calls per channel
+// before the conductor fails over with a channel-scoped exclude.
+const DefaultMaxRefreshAuthSuccesses = 1
+
 // AttemptResult is the result of an attempt callback.
 type AttemptResult struct {
 	OK           bool
@@ -37,20 +41,27 @@ type AttemptInput struct {
 
 // ConductorDependencies are the injected dependencies for DefaultProxyConductor.
 type ConductorDependencies struct {
-	SelectChannel     func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
-	SelectNextChannel func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
+	SelectChannel          func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
+	SelectNextChannel      func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
 	PreviewSelectedChannel func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error)
-	RefreshAuth       func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
+	RefreshAuth            func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
 		Status       int
 		RawErrorText string
 	}) (*routing.SelectedChannel, error)
+	// MaxAttempts is the hard total attempt budget covering same-channel retries,
+	// auth refresh retries, and cross-channel failover. Values <= 0 resolve via
+	// GetProxyMaxChannelAttempts (minimum 1). Prefer wiring config.ProxyMaxChannelAttempts.
+	MaxAttempts int
+	// MaxRefreshAuthSuccesses caps successful RefreshAuth calls per selected channel
+	// before failover. Values <= 0 use DefaultMaxRefreshAuthSuccesses.
+	MaxRefreshAuthSuccesses int
 }
 
 // ExecuteInput is the input for the Execute method.
 type ExecuteInput struct {
-	RequestedModel   string
-	DownstreamPolicy routing.DownstreamRoutingPolicy
-	Attempt          func(ctx context.Context, input AttemptInput) (AttemptResult, error)
+	RequestedModel    string
+	DownstreamPolicy  routing.DownstreamRoutingPolicy
+	Attempt           func(ctx context.Context, input AttemptInput) (AttemptResult, error)
 	OnTerminalFailure func(ctx context.Context, selected *routing.SelectedChannel, failureCtx struct {
 		Status       int
 		RawErrorText string
@@ -70,12 +81,22 @@ type ExecuteResult struct {
 
 // DefaultProxyConductor implements action-based retry for non-surface flows.
 type DefaultProxyConductor struct {
-	deps ConductorDependencies
+	deps                    ConductorDependencies
+	maxAttempts             int
+	maxRefreshAuthSuccesses int
 }
 
 // NewDefaultProxyConductor creates a new conductor.
 func NewDefaultProxyConductor(deps ConductorDependencies) *DefaultProxyConductor {
-	return &DefaultProxyConductor{deps: deps}
+	maxRefresh := deps.MaxRefreshAuthSuccesses
+	if maxRefresh <= 0 {
+		maxRefresh = DefaultMaxRefreshAuthSuccesses
+	}
+	return &DefaultProxyConductor{
+		deps:                    deps,
+		maxAttempts:             GetProxyMaxChannelAttempts(deps.MaxAttempts),
+		maxRefreshAuthSuccesses: maxRefresh,
+	}
 }
 
 // PreviewSelectedChannel returns the selected channel without executing a request.
@@ -102,11 +123,15 @@ const maxSameChannelRetries = 1
 // excluded and remain eligible for SelectNextChannel unless they are themselves
 // in the exclude list or filtered by routing policy (cooldown / breaker /
 // credential-scoped usage-limit). See docs/analysis/failover-isolation.md.
+//
+// Hard budget: attempts never exceed maxAttempts (same-channel + refresh + failover).
+// RefreshAuth successes are capped per channel; nil/error RefreshAuth fails over.
 func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput) (ExecuteResult, error) {
 	// Request-local exclude list: channel IDs only (never site-wide).
 	excludeChannelIDs := make([]int64, 0)
 	attempts := 0
 	sameChannelRetries := 0
+	refreshAuthSuccesses := 0
 
 	selected, err := c.deps.SelectChannel(ctx, input.RequestedModel, input.DownstreamPolicy)
 	if err != nil {
@@ -136,6 +161,18 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 				Selected: selected,
 				Response: result.Response,
 				Attempts: attempts,
+			}, nil
+		}
+
+		// Budget covers every finished attempt (success already returned above).
+		if attempts >= c.maxAttempts {
+			return ExecuteResult{
+				OK:           false,
+				Reason:       "failed",
+				Selected:     selected,
+				Status:       result.Status,
+				RawErrorText: result.RawErrorText,
+				Attempts:     attempts,
 			}, nil
 		}
 
@@ -169,29 +206,27 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 			action = ActionFailover
 		}
 
-		if shouldRefreshAuth(action) && c.deps.RefreshAuth != nil {
-			refreshed, refreshErr := c.deps.RefreshAuth(ctx, selected, struct {
-				Status       int
-				RawErrorText string
-			}{Status: result.Status, RawErrorText: result.RawErrorText})
-			if refreshErr == nil && refreshed != nil {
-				selected = refreshed
-				sameChannelRetries = 0
-				continue
+		if shouldRefreshAuth(action) {
+			canRefresh := c.deps.RefreshAuth != nil && refreshAuthSuccesses < c.maxRefreshAuthSuccesses
+			if canRefresh {
+				refreshed, refreshErr := c.deps.RefreshAuth(ctx, selected, struct {
+					Status       int
+					RawErrorText string
+				}{Status: result.Status, RawErrorText: result.RawErrorText})
+				if refreshErr == nil && refreshed != nil {
+					selected = refreshed
+					refreshAuthSuccesses++
+					sameChannelRetries = 0
+					continue
+				}
 			}
-			// Auth refresh failed → fall through to failover so siblings can absorb.
+			// nil RefreshAuth, refresh error/nil result, or refresh success cap → failover.
 			action = ActionFailover
 		}
 
 		if shouldFailover(action) {
-			// Channel-scoped only: never expand to site/account sibling IDs here.
-			excludeChannelIDs = appendExcludedChannelID(excludeChannelIDs, selected.Channel.ID)
-			next, nextErr := c.deps.SelectNextChannel(
-				ctx,
-				input.RequestedModel,
-				excludeChannelIDs,
-				input.DownstreamPolicy,
-			)
+			next, nextErr, nextExclude := c.failover(ctx, input, selected, excludeChannelIDs)
+			excludeChannelIDs = nextExclude
 			if nextErr != nil || next == nil {
 				return ExecuteResult{
 					OK:           false,
@@ -204,6 +239,7 @@ func (c *DefaultProxyConductor) Execute(ctx context.Context, input ExecuteInput)
 			}
 			selected = next
 			sameChannelRetries = 0
+			refreshAuthSuccesses = 0
 			continue
 		}
 
@@ -233,6 +269,26 @@ func appendExcludedChannelID(exclude []int64, channelID int64) []int64 {
 		}
 	}
 	return append(exclude, channelID)
+}
+
+func (c *DefaultProxyConductor) failover(
+	ctx context.Context,
+	input ExecuteInput,
+	selected *routing.SelectedChannel,
+	excludeChannelIDs []int64,
+) (*routing.SelectedChannel, error, []int64) {
+	// Channel-scoped only: never expand to site/account sibling IDs here.
+	excludeChannelIDs = appendExcludedChannelID(excludeChannelIDs, selected.Channel.ID)
+	if c.deps.SelectNextChannel == nil {
+		return nil, nil, excludeChannelIDs
+	}
+	next, nextErr := c.deps.SelectNextChannel(
+		ctx,
+		input.RequestedModel,
+		excludeChannelIDs,
+		input.DownstreamPolicy,
+	)
+	return next, nextErr, excludeChannelIDs
 }
 
 // failureActionOf determines the action for a failed attempt.
