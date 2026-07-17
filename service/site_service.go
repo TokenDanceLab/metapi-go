@@ -150,10 +150,18 @@ func LoadSiteAPIEndpoints(db *sqlx.DB, siteIDs []int64) (map[int64][]store.SiteA
 	return result, nil
 }
 
+// siteSelectColumns lists known sites columns for SELECT (never SELECT *).
+// Shared PG CI DBs may have leftover probe columns from schema experiments;
+// SELECT * would fail struct scan with "missing destination name ...".
+const siteSelectColumns = `id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy,
+	custom_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency,
+	post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
+	post_refresh_probe_latency_threshold_ms, created_at, updated_at`
+
 // LoadSiteWithEndpoints loads a single site with its apiEndpoints attached.
 func LoadSiteWithEndpoints(db *sqlx.DB, siteID int64) (map[string]any, error) {
 	var site store.Site
-	err := db.Get(&site, db.Rebind("SELECT * FROM sites WHERE id = ?"), siteID)
+	err := db.Get(&site, db.Rebind("SELECT "+siteSelectColumns+" FROM sites WHERE id = ?"), siteID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -200,7 +208,7 @@ func siteToMap(site store.Site, endpoints []store.SiteAPIEndpoint) map[string]an
 // ListSites returns all sites with apiEndpoints, totalBalance, and subscriptionSummary.
 func ListSites(db *sqlx.DB) ([]map[string]any, error) {
 	var sites []store.Site
-	if err := db.Select(&sites, "SELECT * FROM sites ORDER BY sort_order, id"); err != nil {
+	if err := db.Select(&sites, "SELECT "+siteSelectColumns+" FROM sites ORDER BY sort_order, id"); err != nil {
 		return nil, err
 	}
 
@@ -280,29 +288,62 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 		}
 	}
 
-	result, err := tx.Exec(
+	useSystemProxy, _ := siteData["useSystemProxy"].(bool)
+	isPinned, _ := siteData["isPinned"].(bool)
+	postRefreshProbeEnabled, _ := siteData["postRefreshProbeEnabled"].(bool)
+	postRefreshProbeModel, _ := siteData["postRefreshProbeModel"].(string)
+	postRefreshProbeScope, _ := siteData["postRefreshProbeScope"].(string)
+	if postRefreshProbeScope == "" {
+		postRefreshProbeScope = "single"
+	}
+	postRefreshProbeLatencyThresholdMs := int64(0)
+	switch v := siteData["postRefreshProbeLatencyThresholdMs"].(type) {
+	case int64:
+		postRefreshProbeLatencyThresholdMs = v
+	case int:
+		postRefreshProbeLatencyThresholdMs = int64(v)
+	case float64:
+		postRefreshProbeLatencyThresholdMs = int64(v)
+	}
+	status, _ := siteData["status"].(string)
+	if status == "" {
+		status = "active"
+	}
+	globalWeight := 1.0
+	switch v := siteData["globalWeight"].(type) {
+	case float64:
+		globalWeight = v
+	case float32:
+		globalWeight = float64(v)
+	case int:
+		globalWeight = float64(v)
+	case int64:
+		globalWeight = float64(v)
+	}
+
+	// Use RETURNING so PostgreSQL (no LastInsertId) and SQLite both get a real id
+	// inside the open transaction before apiEndpoints FK inserts.
+	var siteID int64
+	err = tx.QueryRowx(
 		tx.Rebind(`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
 		 external_checkin_url, status, is_pinned, sort_order, global_weight, max_concurrency,
 		 post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		 post_refresh_probe_latency_threshold_ms, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 RETURNING id`),
 		name, urlStr, platform,
-		siteData["proxyUrl"], siteData["useSystemProxy"], siteData["customHeaders"],
-		siteData["externalCheckinUrl"], siteData["status"], siteData["isPinned"],
-		sortOrder, siteData["globalWeight"], maxConcurrency,
-		siteData["postRefreshProbeEnabled"], siteData["postRefreshProbeModel"],
-		siteData["postRefreshProbeScope"], siteData["postRefreshProbeLatencyThresholdMs"],
+		siteData["proxyUrl"], useSystemProxy, siteData["customHeaders"],
+		siteData["externalCheckinUrl"], status, isPinned,
+		sortOrder, globalWeight, maxConcurrency,
+		postRefreshProbeEnabled, postRefreshProbeModel,
+		postRefreshProbeScope, postRefreshProbeLatencyThresholdMs,
 		now, now,
-	)
+	).Scan(&siteID)
 	if err != nil {
 		return 0, err
 	}
-
-	siteID, err := result.LastInsertId()
-	if err != nil {
-		var id int64
-		tx.Get(&id, tx.Rebind("SELECT id FROM sites WHERE name = ? AND url = ? AND platform = ? ORDER BY id DESC LIMIT 1"), name, urlStr, platform)
-		siteID = id
+	if siteID <= 0 {
+		return 0, fmt.Errorf("create site: invalid id %d", siteID)
 	}
 
 	// Insert apiEndpoints if present

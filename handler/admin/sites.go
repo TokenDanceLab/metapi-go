@@ -185,9 +185,13 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.CustomHeaders != nil {
 		siteData["customHeaders"] = *body.CustomHeaders
+	} else {
+		siteData["customHeaders"] = nil
 	}
 	if body.ExternalCheckinURL != nil {
 		siteData["externalCheckinUrl"] = service.NormalizeNullable(body.ExternalCheckinURL)
+	} else {
+		siteData["externalCheckinUrl"] = nil
 	}
 
 	// Convert apiEndpoints
@@ -209,12 +213,19 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, fmt.Sprintf("A %s site with URL %s already exists.", platform, canonicalURL))
 			return
 		}
+		slog.Error("CreateSite failed", "err", createErr, "platform", platform, "url", canonicalURL)
 		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
 	}
 
-	result, _ := service.LoadSiteWithEndpoints(h.db, createdID)
+	result, loadErr := service.LoadSiteWithEndpoints(h.db, createdID)
+	if loadErr != nil {
+		slog.Error("LoadSiteWithEndpoints after create failed", "err", loadErr, "site_id", createdID)
+		writeError(w, http.StatusInternalServerError, "Create site failed")
+		return
+	}
 	if result == nil {
+		slog.Error("LoadSiteWithEndpoints returned nil after create", "site_id", createdID)
 		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
 	}
