@@ -74,9 +74,9 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none — ops residual #154–#158 landed; v0.8.0 tagged |
-| Next | v0.8.1 polish waves (#169 models list, #170 probe boot, #171 decision API); deeper product backlog as needed |
-| Residual CI | Go 1.26.5 clears GO-2026-5856; frontend occasional EnvironmentTeardownError flake (tests pass) |
+| In flight WFs | none — v0.8.1 polish #168–#171 landed |
+| Next | Optional tag v0.8.1; deeper product backlog / P4 adapter stubs as needed |
+| Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake (tests pass) |
 
 ### M-COMPETE notes (active)
 
