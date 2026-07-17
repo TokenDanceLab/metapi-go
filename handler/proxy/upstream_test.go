@@ -1063,7 +1063,6 @@ func TestHandleStreamUpstreamContextCancelPreservesPartialUsage(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestSanitizeUpstreamJSONBody_MultiTurnReasoningInjectsContent(t *testing.T) {
 	// Hermes/Codex second-turn: reasoning has encrypted_content + summary, no content.
 	body := []byte(`{
@@ -1196,7 +1195,9 @@ func TestSanitizeUpstreamJSONBody_CompactPreservesReasoningInput(t *testing.T) {
 	}
 	if r["content"] != "s" {
 		t.Fatalf("content = %#v", r["content"])
-=======
+	}
+}
+
 func TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog(t *testing.T) {
 	// Upstream 429 with usage still billed by the gateway must not under-count.
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1328,6 +1329,5 @@ func TestTruncateErrTextBoundsLength(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "...") {
 		t.Fatalf("expected ellipsis suffix, got len=%d", len(got))
->>>>>>> fab114d (fix(proxy): log failed attempts with usage for accuracy (#311))
 	}
 }
