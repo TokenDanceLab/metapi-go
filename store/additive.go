@@ -69,7 +69,7 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 	{
 		// Learn #116: downstream-key RPM/TPM soft admission fields.
 		Version:     "sc2_005_downstream_key_rate_limits",
-		Description: "downstream_api_keys.max_rpm / max_tpm INTEGER NULL — optional per-key rate windows; NULL means unlimited",
+		Description: "downstream_api_keys.max_rpm / max_tpm INTEGER NULL - optional per-key rate windows; NULL means unlimited",
 		Apply: func(db *DB) error {
 			if err := EnsureColumn(db, "downstream_api_keys", "max_rpm", "INTEGER", "INTEGER", ""); err != nil {
 				return err
@@ -77,7 +77,18 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 			return EnsureColumn(db, "downstream_api_keys", "max_tpm", "INTEGER", "INTEGER", "")
 		},
 	},
-
+	{
+		// Upstream #590 / #284: admin drag reorder of token routes (list order).
+		Version:     "sc2_006_token_routes_sort_order",
+		Description: "token_routes.sort_order INTEGER DEFAULT 0 - list/admin drag reorder; lower first, then id",
+		Apply: func(db *DB) error {
+			if err := EnsureColumn(db, "token_routes", "sort_order", "INTEGER", "INTEGER", "DEFAULT 0"); err != nil {
+				return err
+			}
+			return EnsureIndex(db, "token_routes_sort_order_id_idx",
+				`CREATE INDEX IF NOT EXISTS token_routes_sort_order_id_idx ON token_routes (sort_order, id)`)
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.

@@ -410,6 +410,7 @@ func buildTokenRoutesDDL(d string) string {
 			decision_refreshed_at TEXT,
 			routing_strategy TEXT DEFAULT 'weighted',
 			context_length INTEGER,
+			sort_order INTEGER DEFAULT 0,
 			enabled BOOLEAN DEFAULT TRUE,
 			created_at TEXT,
 			updated_at TEXT
@@ -426,6 +427,7 @@ func buildTokenRoutesDDL(d string) string {
 		decision_refreshed_at TEXT,
 		routing_strategy TEXT DEFAULT 'weighted',
 		context_length INTEGER,
+		sort_order INTEGER DEFAULT 0,
 		enabled INTEGER DEFAULT 1,
 		created_at TEXT,
 		updated_at TEXT
@@ -1128,7 +1130,6 @@ func buildSiteAnnouncementsDDL(d string) string {
 		FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
 	)`
 }
-
 
 func buildAdminBackgroundTasksDDL(d string) string {
 	if isPG(d) {

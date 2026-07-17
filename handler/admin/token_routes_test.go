@@ -283,8 +283,6 @@ func TestRouteChannelsBatchAllowsSameCredentialForDifferentSourceModels(t *testi
 	}
 }
 
-
-
 func isTruthyJSON(v any) bool {
 	switch t := v.(type) {
 	case bool:
@@ -450,11 +448,11 @@ func TestTokenRoutes_PartialUpdatePreservesModelMapping(t *testing.T) {
 // ---- Route Decision APIs (#171) ----
 
 type fakeDecisionRouter struct {
-	explainCalls       []string
-	explainForRoute    []string
-	explainRouteWide   []int64
-	decision           routing.RouteDecisionExplanation
-	err                error
+	explainCalls     []string
+	explainForRoute  []string
+	explainRouteWide []int64
+	decision         routing.RouteDecisionExplanation
+	err              error
 }
 
 func (f *fakeDecisionRouter) ExplainSelection(_ context.Context, requestedModel string, _ []int64, _ routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error) {
@@ -576,13 +574,13 @@ func TestRouteDecision_ExplainSelection(t *testing.T) {
 			Summary:           []string{"命中路由：gpt-4o", "路由策略：按权重随机"},
 			Candidates: []routing.RouteDecisionCandidate{
 				{
-					ChannelID:  channelID,
-					AccountID:  3,
-					Username:   "u1",
-					SiteName:   "s1",
-					Priority:   0,
-					Weight:     10,
-					Eligible:   true,
+					ChannelID:   channelID,
+					AccountID:   3,
+					Username:    "u1",
+					SiteName:    "s1",
+					Priority:    0,
+					Weight:      10,
+					Eligible:    true,
 					Probability: 1,
 				},
 			},
@@ -963,5 +961,82 @@ func TestTokenRoutes_ChannelUpdatePreservesIntentionalConfig(t *testing.T) {
 	}
 	if kept != 1 {
 		t.Fatalf("intentional channel config reset by rebuild")
+	}
+}
+
+func TestRoutes_ReorderAndListOrder(t *testing.T) {
+	_, r := setupTokenRoutesTest(t)
+
+	// Create three pattern routes.
+	for _, pattern := range []string{"model-a", "model-b", "model-c"} {
+		body := map[string]any{"modelPattern": pattern, "routeMode": "pattern", "enabled": true}
+		rec := doPostJSON(t, r, "/api/routes", body)
+		if rec.Code != 200 {
+			t.Fatalf("create %s: %d %s", pattern, rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := doGet(t, r, "/api/routes/lite")
+	if rec.Code != 200 {
+		t.Fatalf("list lite: %d %s", rec.Code, rec.Body.String())
+	}
+	var listed []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 3 {
+		t.Fatalf("expected 3 routes, got %d: %#v", len(listed), listed)
+	}
+	ids := make([]int64, 3)
+	for i, row := range listed {
+		ids[i] = int64(row["id"].(float64))
+	}
+
+	// Reverse order via sortOrder (lower first).
+	items := []map[string]any{
+		{"id": ids[0], "sortOrder": 2},
+		{"id": ids[1], "sortOrder": 1},
+		{"id": ids[2], "sortOrder": 0},
+	}
+	rec = doPutJSON(t, r, "/api/routes/reorder", map[string]any{"items": items})
+	if rec.Code != 200 {
+		t.Fatalf("reorder: %d %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["success"] != true {
+		t.Fatalf("reorder response: %#v", resp)
+	}
+
+	rec = doGet(t, r, "/api/routes/lite")
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	got := make([]int64, len(listed))
+	for i, row := range listed {
+		got[i] = int64(row["id"].(float64))
+	}
+	want := []int64{ids[2], ids[1], ids[0]}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("list order after reorder = %v, want %v", got, want)
+	}
+
+	// Unknown id is reported in failedItems without aborting others.
+	rec = doPutJSON(t, r, "/api/routes/reorder", map[string]any{
+		"items": []map[string]any{
+			{"id": ids[0], "sortOrder": 0},
+			{"id": int64(999999), "sortOrder": 1},
+		},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("reorder partial: %d %s", rec.Code, rec.Body.String())
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["success"] != false {
+		t.Fatalf("expected success=false with failed item, got %#v", resp)
 	}
 }

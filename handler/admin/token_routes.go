@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	routeDecisionBatchMaxItems      = 500
-	routeDecisionRefreshTaskType    = "route-decision.refresh"
-	routeDecisionRefreshTaskTitle   = "刷新路由选中概率"
-	routeDecisionRefreshDedupeKey   = "route-decision-refresh"
-	routeDecisionRouterUnavailable  = "路由决策引擎未配置"
+	routeDecisionBatchMaxItems     = 500
+	routeDecisionRefreshTaskType   = "route-decision.refresh"
+	routeDecisionRefreshTaskTitle  = "刷新路由选中概率"
+	routeDecisionRefreshDedupeKey  = "route-decision-refresh"
+	routeDecisionRouterUnavailable = "路由决策引擎未配置"
 )
 
 // RouteDecisionExplainer is the router surface used by decision admin APIs.
@@ -60,10 +60,11 @@ func RegisterTokenRoutesWithDeps(r chi.Router, db *sqlx.DB, deps TokenRoutesDeps
 
 	// Route CRUD
 	r.Post("/api/routes", handler.createRoute)
+	r.Post("/api/routes/batch", handler.batchRoutes)
+	r.Put("/api/routes/reorder", handler.reorderRoutes) // static path before /{id}
+	r.Post("/api/routes/rebuild", handler.rebuildRoutes)
 	r.Put("/api/routes/{id}", handler.updateRoute)
 	r.Delete("/api/routes/{id}", handler.deleteRoute)
-	r.Post("/api/routes/batch", handler.batchRoutes)
-	r.Post("/api/routes/rebuild", handler.rebuildRoutes)
 
 	// Route channels
 	r.Get("/api/routes/{id}/channels", handler.getRouteChannels)
@@ -93,7 +94,7 @@ type tokenRoutesHandler struct {
 // ---- List Lite ----
 // GET /api/routes/lite
 func (h *tokenRoutesHandler) listLite(w http.ResponseWriter, r *http.Request) {
-	rows := queryRows(h.db, "SELECT id, model_pattern, display_name, display_icon, route_mode, routing_strategy, enabled FROM token_routes ORDER BY id ASC")
+	rows := queryRows(h.db, "SELECT id, model_pattern, display_name, display_icon, route_mode, routing_strategy, enabled FROM token_routes ORDER BY sort_order ASC, id ASC")
 	type srcRow struct {
 		GroupRouteID  int64 `db:"group_route_id"`
 		SourceRouteID int64 `db:"source_route_id"`
@@ -118,7 +119,7 @@ func (h *tokenRoutesHandler) listLite(w http.ResponseWriter, r *http.Request) {
 // ---- List Summary ----
 // GET /api/routes/summary
 func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request) {
-	rows := queryRows(h.db, "SELECT * FROM token_routes ORDER BY id ASC")
+	rows := queryRows(h.db, "SELECT * FROM token_routes ORDER BY sort_order ASC, id ASC")
 	result := make([]map[string]any, 0)
 	for _, route := range rows {
 		routeID := toInt64(route["id"])
@@ -157,7 +158,7 @@ func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request)
 // ---- List Routes ----
 // GET /api/routes
 func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) {
-	rows := queryRows(h.db, "SELECT * FROM token_routes ORDER BY id ASC")
+	rows := queryRows(h.db, "SELECT * FROM token_routes ORDER BY sort_order ASC, id ASC")
 	result := make([]map[string]any, 0)
 	for _, route := range rows {
 		routeID := toInt64(route["id"])
@@ -727,6 +728,72 @@ func (h *tokenRoutesHandler) batchUpdateChannels(w http.ResponseWriter, r *http.
 
 // ---- Update Channel ----
 // PUT /api/channels/:channelId
+
+// PUT /api/routes/reorder
+// Body: { "items": [ { "id": 1, "sortOrder": 0 }, ... ] }
+// Assigns explicit sort_order for admin drag-and-drop route lists (#590/#284).
+func (h *tokenRoutesHandler) reorderRoutes(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Items []struct {
+			ID        int64 `json:"id"`
+			SortOrder int64 `json:"sortOrder"`
+		} `json:"items"`
+	}
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "invalid payload"})
+		return
+	}
+	if len(body.Items) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "items is required"})
+		return
+	}
+	if len(body.Items) > 1000 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "too many items (max 1000)"})
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	var successIDs []int64
+	var failedItems []map[string]any
+	seen := map[int64]bool{}
+
+	for _, item := range body.Items {
+		if item.ID <= 0 {
+			failedItems = append(failedItems, map[string]any{"id": item.ID, "message": "invalid id"})
+			continue
+		}
+		if item.SortOrder < 0 {
+			failedItems = append(failedItems, map[string]any{"id": item.ID, "message": "sortOrder must be >= 0"})
+			continue
+		}
+		if seen[item.ID] {
+			failedItems = append(failedItems, map[string]any{"id": item.ID, "message": "duplicate id in payload"})
+			continue
+		}
+		seen[item.ID] = true
+
+		res, err := h.db.Exec(h.db.Rebind(`
+			UPDATE token_routes SET sort_order = ?, updated_at = ? WHERE id = ?
+		`), item.SortOrder, now, item.ID)
+		if err != nil {
+			failedItems = append(failedItems, map[string]any{"id": item.ID, "message": err.Error()})
+			continue
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			failedItems = append(failedItems, map[string]any{"id": item.ID, "message": "route not found"})
+			continue
+		}
+		successIDs = append(successIDs, item.ID)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":     len(failedItems) == 0,
+		"successIds":  successIDs,
+		"failedItems": failedItems,
+	})
+}
+
 func (h *tokenRoutesHandler) updateChannel(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "channelId")
 	channelID, err := strconv.ParseInt(idStr, 10, 64)
@@ -1009,8 +1076,8 @@ func (h *tokenRoutesHandler) routeDecisionRefresh(w http.ResponseWriter, r *http
 			return nil, err
 		}
 		return map[string]any{
-			"exactModelCount":     exact,
-			"wildcardRouteCount":  wildcard,
+			"exactModelCount":       exact,
+			"wildcardRouteCount":    wildcard,
 			"refreshPricingCatalog": refreshPricing,
 		}, nil
 	})
