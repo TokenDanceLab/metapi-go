@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,13 @@ type ChannelRecoveryScheduler struct {
 	inFlightKeys       map[string]bool  // "channelId:modelName" -> in flight
 	lastStartedAtByKey map[string]int64 // "channelId:modelName" -> start timestamp ms
 	sweepInFlight      bool
+
+	// Optional injected probe path (same interfaces as ModelProbeScheduler).
+	probe    ChannelHealthProbe
+	recorder ChannelHealthRecorder
+
+	// lastProbeStatuses retains recent outcomes for tests / diagnostics.
+	lastProbeStatuses map[string]string
 }
 
 // NewChannelRecoveryScheduler creates a new channel recovery probe scheduler.
@@ -38,7 +46,29 @@ func NewChannelRecoveryScheduler(cfg *config.Config) *ChannelRecoveryScheduler {
 		cfg:                cfg,
 		inFlightKeys:       make(map[string]bool),
 		lastStartedAtByKey: make(map[string]int64),
+		lastProbeStatuses:  make(map[string]string),
 	}
+}
+
+// SetProbeExecutor injects the lightweight probe implementation used by recovery.
+func (s *ChannelRecoveryScheduler) SetProbeExecutor(probe ChannelHealthProbe) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.probe = probe
+}
+
+// SetHealthRecorder injects the routing health/cooldown recorder.
+func (s *ChannelRecoveryScheduler) SetHealthRecorder(recorder ChannelHealthRecorder) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.recorder = recorder
+}
+
+// LastProbeStatus returns the most recent recovery probe status for a channel:model key.
+func (s *ChannelRecoveryScheduler) LastProbeStatus(channelID int64, modelName string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastProbeStatuses[fmt.Sprintf("%d:%s", channelID, modelName)]
 }
 
 func (s *ChannelRecoveryScheduler) Name() string { return "channel-recovery" }
@@ -309,6 +339,8 @@ func (s *ChannelRecoveryScheduler) probeCandidate(dbw *store.DB, candidate recov
 	s.mu.Lock()
 	s.inFlightKeys[key] = true
 	s.lastStartedAtByKey[key] = nowMs
+	probe := s.probe
+	recorder := s.recorder
 	s.mu.Unlock()
 
 	defer func() {
@@ -317,28 +349,103 @@ func (s *ChannelRecoveryScheduler) probeCandidate(dbw *store.DB, candidate recov
 		s.mu.Unlock()
 	}()
 
-	// Prefer shared model probe executor when registered (#154).
-	if mp := GetGlobalModelProbeScheduler(); mp != nil {
-		target := ProbeTarget{
-			ChannelID: candidate.channelID,
-			ModelName: candidate.modelName,
-		}
-		timeoutMs := 15000
-		if s.cfg != nil && s.cfg.ModelAvailabilityProbeTimeoutMs >= 3000 {
-			timeoutMs = s.cfg.ModelAvailabilityProbeTimeoutMs
-		}
-		outcome := mp.probeOne(target, timeoutMs)
-		slog.Debug("channel-recovery: probe complete",
-			"channel_id", candidate.channelID,
-			"model", candidate.modelName,
-			"source", candidate.source,
-			"outcome", outcome,
-		)
-		return
-	}
-	slog.Debug("channel-recovery: no model probe scheduler registered; skip live probe",
+	slog.Debug("channel-recovery: probing candidate",
 		"channel_id", candidate.channelID,
 		"model", candidate.modelName,
 		"source", candidate.source,
 	)
+
+	status := s.executeCandidateProbe(dbw, candidate, probe, recorder)
+	s.mu.Lock()
+	s.lastProbeStatuses[key] = status
+	s.mu.Unlock()
+}
+
+// executeCandidateProbe runs one recovery probe through the injected executor and
+// applies the outcome via ApplyProbeOutcome (shared with model-probe).
+func (s *ChannelRecoveryScheduler) executeCandidateProbe(
+	dbw *store.DB,
+	candidate recoveryCandidate,
+	probe ChannelHealthProbe,
+	recorder ChannelHealthRecorder,
+) string {
+	if probe == nil || recorder == nil {
+		// Safe no-op when composition root has not wired deps yet.
+		slog.Debug("channel-recovery: probe executor or recorder not configured; skipping",
+			"channel_id", candidate.channelID,
+			"model", candidate.modelName,
+		)
+		return "skipped"
+	}
+
+	target, err := loadRecoveryProbeTarget(dbw, candidate)
+	if err != nil {
+		slog.Warn("channel-recovery: load target failed",
+			"channel_id", candidate.channelID,
+			"model", candidate.modelName,
+			"error", err,
+		)
+		return "inconclusive"
+	}
+
+	timeoutMs := 10_000
+	if s.cfg != nil && s.cfg.ModelAvailabilityProbeTimeoutMs > 0 {
+		timeoutMs = s.cfg.ModelAvailabilityProbeTimeoutMs
+		if timeoutMs < 3000 {
+			timeoutMs = 3000
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	outcome, err := probe.ProbeChannel(ctx, target)
+	if err != nil {
+		slog.Warn("channel-recovery: probe executor error (inconclusive)",
+			"channel_id", candidate.channelID,
+			"model", candidate.modelName,
+			"error", err,
+		)
+		return "inconclusive"
+	}
+
+	status, applyErr := ApplyProbeOutcome(ctx, recorder, target, outcome)
+	if applyErr != nil {
+		slog.Warn("channel-recovery: ApplyProbeOutcome failed",
+			"channel_id", candidate.channelID,
+			"model", candidate.modelName,
+			"error", applyErr,
+		)
+		return "inconclusive"
+	}
+	return status
+}
+
+func loadRecoveryProbeTarget(dbw *store.DB, candidate recoveryCandidate) (ProbeTarget, error) {
+	if dbw == nil {
+		return ProbeTarget{}, fmt.Errorf("db unavailable")
+	}
+	var accountID, siteID int64
+	var sourceModel string
+	err := dbw.QueryRow(`
+		SELECT rc.account_id, a.site_id, COALESCE(rc.source_model, '')
+		FROM route_channels rc
+		INNER JOIN accounts a ON a.id = rc.account_id
+		WHERE rc.id = ?
+	`, candidate.channelID).Scan(&accountID, &siteID, &sourceModel)
+	if err != nil {
+		return ProbeTarget{}, err
+	}
+	modelName := strings.TrimSpace(candidate.modelName)
+	if modelName == "" {
+		modelName = strings.TrimSpace(sourceModel)
+	}
+	if modelName == "" {
+		return ProbeTarget{}, fmt.Errorf("empty model name")
+	}
+	return ProbeTarget{
+		ChannelID: candidate.channelID,
+		AccountID: accountID,
+		SiteID:    siteID,
+		ModelName: modelName,
+	}, nil
 }

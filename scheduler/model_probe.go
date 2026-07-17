@@ -101,9 +101,16 @@ func (s *ModelProbeScheduler) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.cfg.ModelAvailabilityProbeEnabled {
+	// Always expose TriggerNow to admin /api/models/probe even when the
+	// background ticker is disabled. This replaces the legacy stub-probe job id.
+	SetModelProbeTrigger(func() ProbeRunSummary {
+		return s.TriggerNow()
+	})
+	// Keep process-global registry for residual ProbeSite / recovery callers.
+	SetGlobalModelProbeScheduler(s)
+
+	if s.cfg == nil || !s.cfg.ModelAvailabilityProbeEnabled {
 		slog.Info("model-probe: disabled (probe not enabled)")
-		SetGlobalModelProbeScheduler(s)
 		return nil
 	}
 
@@ -185,17 +192,19 @@ func (s *ModelProbeScheduler) LastRunSummary() ProbeRunSummary {
 	return s.lastRunSummary
 }
 
-// TriggerNow runs one probe pass asynchronously (or sync if sync=true).
-// Used by admin /api/models/probe and site probe-now (#154).
-func (s *ModelProbeScheduler) TriggerNow(sync bool) ProbeRunSummary {
+// TriggerNow runs one probe pass immediately (best-effort). Safe to call from
+// admin handlers; uses the same lease + budgeted target selection as the ticker.
+func (s *ModelProbeScheduler) TriggerNow() ProbeRunSummary {
 	if s == nil {
-		return ProbeRunSummary{}
+		return ProbeRunSummary{CompletedAtMs: time.Now().UnixMilli()}
 	}
-	if sync {
-		s.runProbe()
-		return s.LastRunSummary()
+	dbw := store.GetDB()
+	if dbw == nil {
+		return ProbeRunSummary{CompletedAtMs: time.Now().UnixMilli()}
 	}
-	go s.runProbe()
+	runWithSchedulerLease(context.Background(), dbw, s.Name(), func() {
+		s.runProbeLocked(dbw)
+	})
 	return s.LastRunSummary()
 }
 

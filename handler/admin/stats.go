@@ -2,7 +2,6 @@ package admin
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -768,27 +767,54 @@ func (h *statsHandler) modelCheck(w http.ResponseWriter, r *http.Request) {
 
 // ---- Model Probe ----
 // POST /api/models/probe
+// Body: { accountId?: number, wait?: boolean }
 func (h *statsHandler) modelProbe(w http.ResponseWriter, r *http.Request) {
-	sched := scheduler.GetGlobalModelProbeScheduler()
-	if sched == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-			"success": false,
-			"message": "model probe scheduler is not running (enable MODEL_AVAILABILITY_PROBE_ENABLED or start schedulers)",
-		})
+	var body struct {
+		AccountID *int64 `json:"accountId"`
+		Wait      *bool  `json:"wait"`
+	}
+	// Empty body is allowed.
+	if err := decodeJSONRequest(r, &body); err != nil {
+		msg := strings.ToLower(err.Error())
+		if !strings.Contains(msg, "eof") && !strings.Contains(msg, "unexpected end of json") {
+			writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
+
+	wait := false
+	if body.Wait != nil {
+		wait = *body.Wait
+	}
+	if body.AccountID != nil && *body.AccountID <= 0 {
+		writeError(w, http.StatusBadRequest, "Invalid accountId")
 		return
 	}
-	jobID := fmt.Sprintf("probe-%d", time.Now().UTC().UnixNano())
-	go func() {
-		sched.TriggerNow(true)
-	}()
-	writeJSON(w, http.StatusAccepted, map[string]any{
+
+	job := scheduler.EnqueueModelProbeJob(body.AccountID, wait)
+	if job == nil {
+		writeError(w, http.StatusInternalServerError, "Failed to enqueue model probe job")
+		return
+	}
+
+	resp := map[string]any{
 		"success": true,
-		"queued":  true,
+		"queued":  !wait,
 		"reused":  false,
-		"jobId":   jobID,
-		"status":  "pending",
-		"message": "已开始模型可用性探测，请稍后查看任务列表或 LastRunSummary",
-	})
+		"jobId":   job.ID,
+		"status":  job.Status,
+		"message": job.Message,
+	}
+	if job.Summary != nil {
+		resp["summary"] = job.Summary
+	}
+	if wait {
+		// Synchronous completion: 200 with result summary.
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	// Async: 202 accepted with real job id (never stub-probe).
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 func queryRow(db *sqlx.DB, query string, args ...any) map[string]any {

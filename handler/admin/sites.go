@@ -3,7 +3,9 @@ package admin
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -12,9 +14,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/handler/admin/payloads"
 	"github.com/tokendancelab/metapi-go/routing"
-	"github.com/tokendancelab/metapi-go/scheduler"
 	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -40,6 +42,10 @@ func RegisterSitesRoutes(r chi.Router, db *sqlx.DB) {
 
 type sitesHandler struct {
 	db *sqlx.DB
+
+	// Optional overrides used by forced probe paths and tests.
+	cfg       *config.Config
+	transport http.RoundTripper
 }
 
 // ---- List Sites ----
@@ -650,22 +656,27 @@ func (h *sitesHandler) probeNow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body payloads.ProbeNowBody
-	// Body is optional for probe-now.
-	_ = decodeJSONRequest(r, &body)
-
-	sched := scheduler.GetGlobalModelProbeScheduler()
-	if sched == nil {
-		// Fall back: create ephemeral scheduler for one-shot probe.
-		sched = scheduler.NewModelProbeScheduler(nil)
+	// Empty body is allowed (probe all models with defaults).
+	if err := decodeJSONRequest(r, &body); err != nil && !errors.Is(err, io.EOF) {
+		// Tolerate empty body; reject only truly invalid JSON payloads.
+		msg := strings.ToLower(err.Error())
+		if !strings.Contains(msg, "eof") && !strings.Contains(msg, "unexpected end of json") {
+			writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
 	}
-	results, available, unavailable := sched.ProbeSite(id)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":     true,
-		"totalModels": len(results),
-		"available":   available,
-		"unavailable": unavailable,
-		"results":     results,
-	})
+
+	opts := siteProbeOptionsFromBody(body)
+	summary, err := h.runSiteProbe(r.Context(), id, opts, nil)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 // ---- Probe Stream (SSE) ----
@@ -689,31 +700,80 @@ func (h *sitesHandler) probeStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scope := r.URL.Query().Get("scope")
-	modelName := r.URL.Query().Get("modelName")
-	latencyStr := r.URL.Query().Get("latencyThresholdMs")
-
-	_ = scope
-	_ = modelName
-	_ = latencyStr
-
-	sched := scheduler.GetGlobalModelProbeScheduler()
-	if sched == nil {
-		sched = scheduler.NewModelProbeScheduler(nil)
+	opts := siteProbeOptions{
+		Scope:     strings.TrimSpace(r.URL.Query().Get("scope")),
+		ModelName: strings.TrimSpace(r.URL.Query().Get("modelName")),
 	}
-	results, available, unavailable := sched.ProbeSite(id)
-	sseWrite(w, flusher, "probe-start", map[string]any{
-		"totalModels": len(results),
-		"startedAt":   time.Now().UTC().Format(time.RFC3339),
-	})
-	for _, res := range results {
-		sseWrite(w, flusher, "probe-result", res)
+	if latencyStr := strings.TrimSpace(r.URL.Query().Get("latencyThresholdMs")); latencyStr != "" {
+		if v, err := strconv.Atoi(latencyStr); err == nil && v > 0 {
+			opts.LatencyThresholdMs = v
+		}
+	}
+
+	// Frontend contract (Sites.tsx): event names are start/model/action/complete/error.
+	// Emit both start and probe-start so older consumers still see progress.
+	onProgress := func(ev siteProbeProgressEvent) {
+		switch ev.Type {
+		case "start":
+			sseWrite(w, flusher, "start", ev.Data)
+			sseWrite(w, flusher, "probe-start", map[string]any{
+				"totalModels": ev.Data["modelsCount"],
+				"startedAt":   ev.Data["startedAt"],
+				"scope":       ev.Data["scope"],
+			})
+		case "model":
+			sseWrite(w, flusher, "model", ev.Data)
+			// Compatibility aliases for earlier SSE draft names.
+			if modelName, _ := ev.Data["modelName"].(string); modelName != "" {
+				sseWrite(w, flusher, "probe-model-checked", map[string]any{
+					"modelName": modelName,
+					"checkedAt": time.Now().UTC().Format(time.RFC3339),
+				})
+				sseWrite(w, flusher, "probe-model-result", map[string]any{
+					"modelName": modelName,
+					"available": ev.Data["status"] == "supported",
+					"latencyMs": ev.Data["latencyMs"],
+					"error":     ev.Data["reason"],
+				})
+			}
+		case "action":
+			sseWrite(w, flusher, "action", ev.Data)
+		case "error":
+			sseWrite(w, flusher, "error", ev.Data)
+		}
+	}
+
+	summary, err := h.runSiteProbe(r.Context(), id, opts, onProgress)
+	if err != nil {
+		sseWrite(w, flusher, "error", map[string]any{"message": err.Error()})
+		return
 	}
 	sseWrite(w, flusher, "complete", map[string]any{
-		"totalModels": len(results),
-		"available":   available,
-		"unavailable": unavailable,
+		"totalModels": summary.TotalModels,
+		"available":   summary.Available,
+		"unavailable": summary.Unavailable,
+		"probed":      summary.Probed,
+		"unsupported": summary.Unsupported,
+		"skipped":     summary.Skipped,
+		"results":     summary.Results,
+		"emptyReason": summary.EmptyReason,
+		"scope":       summary.Scope,
+		"completedAt": summary.CompletedAt,
 	})
+}
+
+func siteProbeOptionsFromBody(body payloads.ProbeNowBody) siteProbeOptions {
+	opts := siteProbeOptions{}
+	if body.Scope != nil {
+		opts.Scope = strings.TrimSpace(*body.Scope)
+	}
+	if body.ModelName != nil {
+		opts.ModelName = strings.TrimSpace(*body.ModelName)
+	}
+	if body.LatencyThresholdMs != nil && *body.LatencyThresholdMs > 0 {
+		opts.LatencyThresholdMs = *body.LatencyThresholdMs
+	}
+	return opts
 }
 
 // ---- Helpers ----
