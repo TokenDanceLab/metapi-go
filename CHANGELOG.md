@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.2] — 2026-07-17
+
+### Added
+- P4 adapter wiring (milestone 11):
+  - Account token create/delete/sync via platform adapters + SyncTokensFromUpstream (#182 / #190)
+  - Account create fail-closed VerifyToken / GetModels with skipModelFetch residual (#183 / #189)
+  - Real system-proxy probe + brand list from platform registry (#184 / #186)
+  - `/api/test/proxy` + `/api/test/chat` wired to forced-channel harness; stream/jobs honest 501 (#185 / #187)
+
+### Notes
+- Residual TODOs: sub2api managed auth on update, expired API-key recovery model refresh, async health-refresh job, OAuth state stubs.
+
 ## [v0.8.1] — 2026-07-17
 
 ### Fixed
