@@ -1,8 +1,8 @@
-# Multi-turn `/v1/responses` reasoning content (#50 / upstream #538)
+# Multi-turn `/v1/responses` reasoning content (#50 / upstream #538 / #310)
 
 **Date:** 2026-07-17  
-**Lane:** feature / FE-PROTOCOL  
-**SSOT code:** `transform/openai/responses/reasoning_input.go`, `transform/openai/responses/compact.go`, `transform/openai/responses/previous_response_id.go` (`SanitizeResponsesRequestBody`), `transform/shared/chatFormatsCore.go` (`parseResponsesReasoning`)
+**Lane:** feature / FE-PROTOCOL / residual honesty  
+**SSOT code:** `transform/openai/responses/reasoning_input.go`, `transform/openai/responses/compact.go`, `transform/openai/responses/previous_response_id.go` (`SanitizeResponsesRequestBody`), `handler/proxy/upstream.go` (`sanitizeUpstreamJSONBody`), `transform/shared/chatFormatsCore.go` (`parseResponsesReasoning`)
 
 ## Problem
 
@@ -66,10 +66,13 @@ parseResponsesReasoning(m) // reads output[] or input[]; flattens summary/conten
 `handler/proxy/upstream.go` `sanitizeUpstreamJSONBody` cheap-gates on:
 
 - `"previous_response_id"`
-- compact path
+- compact path (`/responses/compact`)
 - `"type":"reasoning"` / `"type": "reasoning"` / `"encrypted_content"`
+- **Responses path + `"input"`** — catches pretty-printed / spaced JSON where type markers are not contiguous bytes (#310)
 
 then calls `SanitizeResponsesRequestBody` so second-turn reasoning bodies are rewritten even without continuity ids.
+
+`ReasoningInputError` / `ContinuityError` map to **HTTP 400** `invalid_request_error` (no silent accept).
 
 ## Acceptance mapping
 
@@ -77,16 +80,24 @@ then calls `SanitizeResponsesRequestBody` so second-turn reasoning bodies are re
 | --- | --- |
 | Multi-turn Hermes/Codex second turn accepts prior reasoning with required content | `SanitizeResponsesInputItems` injects/preserves `content`; keeps `encrypted_content` + `summary` |
 | Compact/sanitize does not drop required reasoning content | Compact only strips stream/store/previous_response_id; input sanitized before compact |
-| Fixture covers reasoning item round-trip | `reasoning_input_test.go`, shared parse fixtures |
-| Explicit error when client omits required fields | `ReasoningInputError` with `input[n]` index and required field list |
+| Fixture covers reasoning item round-trip | `reasoning_input_test.go`, shared parse fixtures, `upstream_test.go` wire tests |
+| Explicit error when client omits required fields | `ReasoningInputError` with `input[n]` index and required field list → 400 |
+| Pretty-printed / spaced type markers still sanitize | Responses path + `"input"` cheap gate (#310) |
 
-## Residual
+## Residual (honest)
 
-- Full Responses → chat conversion of reasoning items remains in original TS `convertResponsesBodyToOpenAiBody`; Go multi-protocol fallback still relies on passthrough + continuity strip (#54).
-- No server-side store of prior Responses payloads: clients must replay items or use `previous_response_id` on supported platforms.
+| Item | Status |
+|------|--------|
+| Inject `content` on reasoning items for strict gateway validators | **present** (`SanitizeResponsesInputItems` + wire tests) |
+| Preserve `encrypted_content` / `summary` through compact | **present** |
+| Explicit 400 when reasoning has no content/summary/encrypted | **present** (`ReasoningInputError` → 400) |
+| Pretty-printed / spaced JSON type markers | **present** (Responses path + `"input"` gate, #310) |
+| Full Responses → chat conversion of reasoning items | **residual** — Go multi-protocol fallback still relies on passthrough + continuity strip (#54); no invent of chat-shaped reasoning |
+| Server-side store of prior Responses payloads | **residual** — clients must replay items or use `previous_response_id` on supported platforms |
+| Full Responses WebSocket multi-turn Codex path | **residual** — 426/501 only; see `responses-websocket-residual.md` (not this issue) |
 
 ## Verification
 
 ```bash
-go test ./transform/openai/responses/ ./transform/shared/ -count=1
+go test ./transform/openai/responses/ ./transform/shared/ ./handler/proxy -count=1 -run 'Response|Sanitize|Reasoning'
 ```

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
+	"github.com/tokendancelab/metapi-go/transform/openai/responses"
 )
 
 type upstreamTestRouter struct {
@@ -625,7 +627,6 @@ func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
 	}
 }
 
-
 func TestNonStreamSuccessPersistsUsageTokensToProxyLog(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -1031,5 +1032,140 @@ func TestHandleStreamUpstreamContextCancelPreservesPartialUsage(t *testing.T) {
 	}
 	if usage.Source != usageSourceUnknown {
 		t.Fatalf("source = %q, want unknown when no usage extracted", usage.Source)
+	}
+}
+
+func TestSanitizeUpstreamJSONBody_MultiTurnReasoningInjectsContent(t *testing.T) {
+	// Hermes/Codex second-turn: reasoning has encrypted_content + summary, no content.
+	body := []byte(`{
+  "model": "gpt-5.4",
+  "input": [
+    {"type": "message", "role": "user", "content": "continue"},
+    {
+      "type": "reasoning",
+      "id": "rs_1",
+      "encrypted_content": "enc_abc",
+      "summary": [{"type": "summary_text", "text": "step one"}]
+    },
+    {"type": "message", "role": "assistant", "content": ""},
+    {"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{}"}
+  ]
+}`)
+	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses")
+	if err != nil {
+		t.Fatalf("sanitize: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("unmarshal out: %v", err)
+	}
+	arr, ok := m["input"].([]any)
+	if !ok || len(arr) != 4 {
+		t.Fatalf("input = %#v", m["input"])
+	}
+	reasoning, _ := arr[1].(map[string]any)
+	if reasoning["encrypted_content"] != "enc_abc" {
+		t.Fatalf("encrypted_content dropped: %#v", reasoning["encrypted_content"])
+	}
+	if _, ok := reasoning["summary"]; !ok {
+		t.Fatal("summary dropped")
+	}
+	if reasoning["content"] != "step one" {
+		t.Fatalf("content = %#v, want summary text for strict gateways", reasoning["content"])
+	}
+}
+
+func TestSanitizeUpstreamJSONBody_PrettyPrintedReasoningTypeSpace(t *testing.T) {
+	// Pretty-printed "type" : "reasoning" (spaces around colon) must still sanitize.
+	body := []byte(`{
+  "model": "gpt-5.4",
+  "input": [
+    {
+      "type" : "reasoning",
+      "encrypted_content": "enc_pretty",
+      "summary": [{"type": "summary_text", "text": "think"}]
+    }
+  ]
+}`)
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses")
+	if err != nil {
+		t.Fatalf("sanitize: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	arr := m["input"].([]any)
+	r := arr[0].(map[string]any)
+	if r["encrypted_content"] != "enc_pretty" {
+		t.Fatalf("encrypted_content = %#v", r["encrypted_content"])
+	}
+	if r["content"] != "think" {
+		t.Fatalf("content = %#v (pretty type key must still inject content)", r["content"])
+	}
+}
+
+func TestSanitizeUpstreamJSONBody_ReasoningMissingFieldsHonest400(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.4","input":[{"type":"reasoning","summary":[]}]}`)
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses")
+	if err == nil {
+		t.Fatalf("expected ReasoningInputError, got body=%s", out)
+	}
+	if !strings.Contains(err.Error(), "input[0]") {
+		t.Fatalf("err = %q, want input index", err.Error())
+	}
+	if !strings.Contains(err.Error(), "encrypted_content") {
+		t.Fatalf("err = %q, want required field list", err.Error())
+	}
+	// Wire path maps this to 400 invalid_request_error (no silent accept).
+	var re *responses.ReasoningInputError
+	if !errors.As(err, &re) {
+		t.Fatalf("err type = %T, want *responses.ReasoningInputError", err)
+	}
+	if re.Index != 0 {
+		t.Fatalf("index = %d", re.Index)
+	}
+}
+
+func TestSanitizeUpstreamJSONBody_NonResponsesPathSkipsUnlessMarkers(t *testing.T) {
+	// Chat path without markers: no parse, body unchanged.
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}]}`)
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/chat/completions")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if !bytes.Equal(out, body) {
+		t.Fatalf("chat body mutated without markers")
+	}
+}
+
+func TestSanitizeUpstreamJSONBody_CompactPreservesReasoningInput(t *testing.T) {
+	body := []byte(`{
+  "model":"gpt-5.4",
+  "stream":true,
+  "store":true,
+  "previous_response_id":"resp_1",
+  "input":[{"type":"reasoning","encrypted_content":"enc","summary":[{"type":"summary_text","text":"s"}]}]
+}`)
+	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses/compact")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(out, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, k := range []string{"stream", "previous_response_id"} {
+		if _, ok := m[k]; ok {
+			t.Fatalf("expected %q stripped on compact", k)
+		}
+	}
+	arr := m["input"].([]any)
+	r := arr[0].(map[string]any)
+	if r["encrypted_content"] != "enc" {
+		t.Fatalf("encrypted_content dropped: %#v", r)
+	}
+	if r["content"] != "s" {
+		t.Fatalf("content = %#v", r["content"])
 	}
 }

@@ -1210,11 +1210,17 @@ func sanitizeUpstreamJSONBody(bodyBytes []byte, sitePlatform, upstreamPath strin
 	// input is involved. Avoid full JSON parse on hot path otherwise.
 	pathLower := strings.ToLower(upstreamPath)
 	needsCompact := strings.Contains(pathLower, "/responses/compact")
+	isResponsesPath := needsCompact || strings.Contains(pathLower, "/responses")
 	needsContinuity := bytes.Contains(bodyBytes, []byte(`"previous_response_id"`))
-	// Match both "type":"reasoning" and "type": "reasoning" (space after colon).
+	// Multi-turn Hermes/Codex (#50 / #538 / #310):
+	// 1) Exact compact markers (common client encoding).
+	// 2) Responses path + "input" always parse - covers pretty-printed /
+	//    spaced JSON where "type" : "reasoning" does not match contiguous bytes.
+	// 3) encrypted_content anywhere (continuity payload even without type key).
 	needsReasoningInput := bytes.Contains(bodyBytes, []byte(`"type":"reasoning"`)) ||
 		bytes.Contains(bodyBytes, []byte(`"type": "reasoning"`)) ||
-		bytes.Contains(bodyBytes, []byte(`"encrypted_content"`))
+		bytes.Contains(bodyBytes, []byte(`"encrypted_content"`)) ||
+		(isResponsesPath && bytes.Contains(bodyBytes, []byte(`"input"`)))
 	if !needsCompact && !needsContinuity && !needsReasoningInput {
 		return bodyBytes, nil
 	}

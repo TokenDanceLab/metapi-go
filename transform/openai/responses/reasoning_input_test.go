@@ -280,3 +280,46 @@ func TestSanitizeCompactResponsesRequestBody_DoesNotDropInput(t *testing.T) {
 		t.Fatalf("input mutated: %#v", r)
 	}
 }
+
+func TestSanitizeResponsesInputItems_SummaryTextArrayContentKey(t *testing.T) {
+	// summary_text blocks with nested content field instead of text.
+	input := []any{
+		map[string]any{
+			"type":              "reasoning",
+			"encrypted_content": "enc_nested",
+			"summary": []any{
+				map[string]any{"type": "summary_text", "content": "from content key"},
+			},
+		},
+	}
+	got, err := SanitizeResponsesInputItems(input)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	r := got.([]any)[0].(map[string]any)
+	if r["content"] != "from content key" {
+		t.Fatalf("content = %#v", r["content"])
+	}
+	if r["encrypted_content"] != "enc_nested" {
+		t.Fatalf("encrypted dropped")
+	}
+}
+
+func TestSanitizeResponsesInputItems_EmptyStringContentWithEncrypted(t *testing.T) {
+	// content key present but empty string + encrypted -> keep key, do not reject.
+	input := []any{
+		map[string]any{
+			"type":              "reasoning",
+			"content":           "",
+			"encrypted_content": "enc",
+		},
+	}
+	got, err := SanitizeResponsesInputItems(input)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	r := got.([]any)[0].(map[string]any)
+	if c, ok := r["content"].(string); !ok || c != "" {
+		t.Fatalf("content = %#v", r["content"])
+	}
+}
