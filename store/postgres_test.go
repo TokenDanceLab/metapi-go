@@ -86,7 +86,7 @@ func TestPostgresSSLModeOverrideCanDisableTLS(t *testing.T) {
 	defer db.Close()
 }
 
-// TestPostgresAutoMigrateAllTables verifies all 27 tables exist after AutoMigrate.
+// TestPostgresAutoMigrateAllTables verifies all 28 tables exist after AutoMigrate.
 func TestPostgresAutoMigrateAllTables(t *testing.T) {
 	db := openTestPG(t)
 

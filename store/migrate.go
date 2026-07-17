@@ -7,7 +7,7 @@ import (
 	"github.com/tokendancelab/metapi-go/config"
 )
 
-// AutoMigrate creates all 27 tables with indexes, unique constraints, foreign keys,
+// AutoMigrate creates all 28 tables with indexes, unique constraints, foreign keys,
 // and check constraints. Uses CREATE TABLE IF NOT EXISTS for idempotency.
 // After the base bootstrap it runs ApplyAdditiveMigrations (schema_migrations
 // bookkeeping + ordered enterprise steps). Run on startup after Open().
@@ -1305,7 +1305,7 @@ func buildIndexes() []struct {
 }
 
 // Migrate is a backward-compatible entry point for the P0 stub API.
-// AutoMigrate (called from EnsureRuntimeDatabase) already runs the 27-table
+// AutoMigrate (called from EnsureRuntimeDatabase) already runs the 28-table
 // bootstrap plus ApplyAdditiveMigrations. This entry point re-runs additive
 // steps only — useful when GetDB() is already open and callers want an
 // explicit compatibility pass without re-executing full CREATE TABLE DDL.
