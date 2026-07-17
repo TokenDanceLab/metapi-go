@@ -5,6 +5,14 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Changed
+- Bump Go toolchain to 1.26.5 across go.mod, Dockerfile, and CI/CD workflows (#168).
+
+### Security
+- Resolve stdlib advisory GO-2026-5856 (crypto/tls ECH) by upgrading from Go 1.26.4 to 1.26.5; remove CI `vulncheck` continue-on-error gate once clean.
+
 ## [v0.8.0] — 2026-07-17
 
 ### Added

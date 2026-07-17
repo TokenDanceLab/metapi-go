@@ -75,8 +75,8 @@
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | In flight WFs | none — ops residual #154–#158 landed; v0.8.0 tagged |
-| Next | Go 1.26.5 when available for vulncheck; optional v0.8.1 polish; deeper product backlog as needed |
-| Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
+| Next | optional v0.8.1 polish; deeper product backlog as needed |
+| Residual CI | frontend occasional `EnvironmentTeardownError` flake (tests pass); GO-2026-5856 closed via Go 1.26.5 (#168) |
 
 ### M-COMPETE notes (active)
 
@@ -173,4 +173,4 @@
 1. Continue **M-FEATURE** remaining P0 backlog: token stats (#42), cache_ratio (#43), key/whitelist correctness (#40/#41/#45/#46), expired-connection UX (#39), cross-protocol failover (#38)
 2. Protocol P1: `/v1/rerank` (#48), Gemini thought_signature residual (#47), Responses multi-turn (#50), Codex/OAuth model issues (#49/#55)
 3. Watch CI frontend unhandled-rejection flakiness (dashboard observability)
-4. Optional: Go stdlib vulncheck GO-2026-5856 via Go 1.26.5 when available
+4. Go stdlib vulncheck GO-2026-5856 addressed by Go 1.26.5 bump (#168)
