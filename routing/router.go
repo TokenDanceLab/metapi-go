@@ -438,7 +438,8 @@ func getCandidateEligibilityReasonsExplain(
 			break
 		}
 	}
-	if candidate.Channel.CooldownUntil != nil && *candidate.Channel.CooldownUntil > nowISO {
+	// Cooldown — parse timestamps (millis-aware); do not lex-compare ISO strings.
+	if IsCooldownActive(candidate.Channel.CooldownUntil, nowISO) {
 		reasons = append(reasons, "冷却中")
 	}
 	return reasons
