@@ -75,8 +75,8 @@
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | Polish | v0.8.1 #168–#171 landed |
-| P4 adapters | Milestone 11 · **#182** (#190) **#184** (#186) **#185** (#187) merged; **#183** VerifyToken PR #189 hardening PG fixtures |
-| Residual CI | vulncheck green on Go 1.26.5; watch shared-PG site create flake on master post-#190 |
+| P4 adapters | Milestone 11 · **#182–#185 closed** (PRs #186/#187/#189/#190); tag **v0.8.2** |
+| Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
 
@@ -170,7 +170,7 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Land **#183** VerifyToken PR #189 (PG fixture/boolean fixes); close P4 milestone 11 → tag **v0.8.2**
-2. Residual P4 TODOs: sub2api managed auth merge on update; expired API-key recovery model refresh
-3. Investigate shared-Postgres site create flake if still red on master after #190
-4. Continue product backlog P0/P1 as needed; frontend flake observability
+1. Tag **v0.8.2** (P4 adapter wave complete)
+2. Residual admin stubs: sub2api auth merge, expired API-key recovery, health-refresh job, OAuth state, update-center deploy/rollback
+3. Shared-Postgres site create flake hardening if still observed on master
+4. Continue product backlog P0/P1; frontend flake observability
