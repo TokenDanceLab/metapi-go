@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.19] — 2026-07-17
+
+### Fixed
+- Race-harden `scheduleSiteRuntimeHealthPersistence` / `persistSiteRuntimeHealthState`: timer + in-flight flags under `healthStateMu`; concurrent success/failure regression (#335 / #339)
+
+### Docs / Honesty
+- Residual inventory + MASTER flip for Milestone 28 post v0.8.18 (#334 / #337)
+- P0-585 cascade residual honesty: shipped channel isolation vs site/model breaker + empty-filter fallback + no production multi-channel load proof (`failover-isolation.md`) (#336 / #343)
+
 ## [v0.8.18] — 2026-07-17
 
 ### Added

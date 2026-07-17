@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.18 → v0.8.19)
+# Residual next candidates (post v0.8.19)
 
 **Date**: 2026-07-17  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product  
-**Context**: **v0.8.18 shipped** (#327 `/v1/models` contextLength wire, #328 admin race isolation, #329 residual honesty). Active residual wave: **Milestone 28 / v0.8.19** (#334 docs honesty, #335 race regression test, #336 P0-585 cascade residual docs).  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
+**Context**: After Enterprise residual **v0.8.19** (#334 residual honesty, #335 healthPersist race, #336 P0-585 cascade honesty). Prior **v0.8.18**: #327 models contextLength wire · #328 admin race isolation · #329 residual honesty.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -38,23 +38,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
 | CTX-520 | Route contextLength admin + models wire | **present-with-residual** (#320 + #327) | Admin CRUD (#320) + OpenAI `/v1/models` prefers positive route `context_length` (max per exposed id) (#327). Residual: no proxy max-token enforce; Claude models path has no context_length field | Optional enforce Milestone only with ACs | Metadata vs enforcement |
 
-## Active wave (Milestone 28 / v0.8.19)
+## Recommended sequencing (v0.8.20+)
 
-| Issue | Role | Notes |
-|------:|------|-------|
-| [#334](https://github.com/TokenDanceLab/metapi-go/issues/334) | docs | This residual + MASTER flip post v0.8.18 |
-| [#335](https://github.com/TokenDanceLab/metapi-go/issues/335) | test | `scheduleSiteRuntimeHealthPersistence` race regression (follow-up to #328 path) |
-| [#336](https://github.com/TokenDanceLab/metapi-go/issues/336) | docs | P0-585 cascade residual honesty (site/model breaker + load-proof) |
-
-## Recommended sequencing (v0.8.19+)
-
-1. **Shipped in v0.8.18**: #327 models contextLength wire · #328 admin race isolation · #329 residual honesty. **CTX-520** stays **present-with-residual** (models metadata wire; no proxy max-token enforce).
-2. **v0.8.19 board**: #334 residual honesty · #335 race regression · #336 P0-585 residual docs — no fake WS/sticky/update-center.
-3. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
-4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.19**: #334 residual honesty · #335 healthPersist race · #336 P0-585 cascade honesty. Prior v0.8.18: #327 models contextLength · #328 admin race · #329 residual honesty. **CTX-520** stays **present-with-residual** (models metadata wire; no proxy max-token enforce). **P0-585** stays **partial** (channel isolation present; breaker + load-proof residual).
+2. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
+3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
+4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -67,7 +58,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.18](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.18) · prior [v0.8.17](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.17)
+- Release: [v0.8.19](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.19) · prior [v0.8.18](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.18)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
