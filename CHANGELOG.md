@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.16] — 2026-07-17
+
+### Fixed
+- Wire Gemini official tool-history `thought_signature` inject/preserve on generateContent / gemini-cli paths (#309 / #314)
+- Harden multi-turn Responses reasoning content sanitize (pretty-printed type keys + input gate) (#310 / #313)
+- Persist failed upstream attempts to proxy_logs with best-effort usage from error bodies (#311 / #315)
+
+### Docs / Honesty
+- Gap matrix #580/#581/#538 → present (with residual notes)
+- usage-token-extraction-audit follow-up (#311)
+- Hot-fix conflict markers in upstream_test after squash (#316)
+
 ## [v0.8.15] — 2026-07-17
 
 ### Fixed
