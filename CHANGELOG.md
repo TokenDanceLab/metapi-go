@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.23] — 2026-07-17
+
+### Security
+- Admin account list/overview redacts `accessToken`/`apiToken` (masked only) and strips `passwordCipher` from list `extraConfig`; account-token list drops join credential fields (#367 / #372)
+- Credential export remains intentional product path (create/update may still echo once outside list enrichment)
+
+### Fixed
+- Round-robin / stable_first / least_* soft-filter priority demotion: soft-empty higher priority tries next layer (parity with weighted #358) (#368 / #370)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 32 post v0.8.22; SEC-ADMIN + REL-SOFT-RR → present (#366 / #369)
+
 ## [v0.8.22] — 2026-07-17
 
 ### Security
