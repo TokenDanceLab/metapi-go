@@ -1,12 +1,12 @@
-# Residual next candidates (post v0.8.28)
+# Residual next candidates (post v0.8.28 / M39)
 
 **Date**: 2026-07-18  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410); post-v0.8.27 honesty [#418](https://github.com/TokenDanceLab/metapi-go/issues/418)  
-**Context**: **v0.8.28 shipped** (#416 SEC-REDIR bare clients share `RejectCrossOriginRedirect`, #417 SEC-MONITOR logout cookie clear, #418 residual honesty; PRs #419–#421). Board clean after M38. Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code.  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410); post-v0.8.27 honesty [#418](https://github.com/TokenDanceLab/metapi-go/issues/418); post-v0.8.28 honesty [#426](https://github.com/TokenDanceLab/metapi-go/issues/426)  
+**Context**: **v0.8.28 shipped** (#416 SEC-REDIR bare clients share `RejectCrossOriginRedirect`, #417 SEC-MONITOR logout cookie clear, #418 residual honesty; PRs #419–#421). Board was clean after M38. **Milestone 39 opened** with reliability harden board **#423–#426**. Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)  
-**Active wave**: board clean after **v0.8.28** / Milestone 38; next residual only with ACs (**v0.8.29+**)
+**Active wave**: Milestone 39 / **v0.8.29** board **#423–#426** (reliability harden; latest release remains **v0.8.28** until release gate)
 
 ## Purpose
 
@@ -28,7 +28,10 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
-| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests. **Still open:** site/model breaker after 3 transient fails (intentional fleet filter), credential-scoped usage-limit multi-channel cool, empty-filter fallback, **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Optional load-test / breaker product AC only; soft-filter next-priority present via #358 | Medium residual — do not claim #585 present |
+| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 active #423–#425) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests. **Still open / M39 active:** preferred sticky path may ignore open site/model breaker when single preferred candidate (#423); CooldownUntil eligibility may lex-compare ISO vs millis strings (#424); conductor lacks hard max attempt budget + nil RefreshAuth sibling failover (#425); credential-scoped usage-limit multi-channel cool; empty-filter fallback; **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty · §M39 active | **M39 #423–#425** reliability harden; load-proof only with dedicated AC | Medium residual — do not claim #585 present |
+| REL-PREFERRED-BREAKER | SelectPreferredChannel ignores open site/model breaker on single preferred | **active** (#423) | `FilterSiteRuntimeBrokenCandidatesByModel` returns candidates unchanged when `len(candidates)<=1`; sticky/preferred path can keep a broken preferred while healthy siblings exist on normal SelectChannel | **M39 P0 #423** — preferred open-breaker → nil when siblings exist | Preferred sticky bypass of fleet breaker |
+| REL-COOLDOWN-TS | CooldownUntil eligibility lex string compare | **active** (#424) | Writers use millis ISO (`…T15:04:05.mmmZ`); readers compare to RFC3339 `now` without fixed millis → same-second false eligible | **M39 P0 #424** — parse both sides (or fixed millis) before compare | Cool channels reselected inside wall second |
+| REL-CONDUCTOR-BUDGET | Conductor missing hard attempt budget + nil RefreshAuth failover | **active** (#425) | DefaultProxyConductor has same-channel timeout budget only; cross-channel walk can continue while SelectNextChannel returns channels; RefreshAuth success resets same-channel retries with no refresh/attempt budget; nil RefreshAuth on 401/403 may stop without sibling failover | **M39 P1 #425** — hard max attempts + refresh cap + nil RefreshAuth → failover | Failure-storm hangs / auth pin |
 | P0-555 | Token usage statistics inaccurate | **present-with-residual** (#300/#311/#319/#345/#350/#400) | Disconnect partial + failure proxy_logs with usage (#311); aggregation projects non-success tokens into `failed_calls` + `total_tokens` (#319 regression); OpenAI chat + legacy completions stream `stream_options.include_usage` inject (#345/#350); stream-end `slog.Warn` when include_usage requested but no usable tokens extracted (#400 — never invents counts). Residual: provider-ignored flag, media zeros, multi-instance lag, orphan site join — not perfect billing | Residual polish only | Billing/ops trust residual |
 | P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
@@ -57,10 +60,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 ## Recommended sequencing (v0.8.29+)
 
 1. **Shipped in v0.8.28**: #416–#418 (PRs #419–#421) — SEC-REDIR bare clients share `RejectCrossOriginRedirect` · SEC-MONITOR logout cookie clear · residual honesty. Prior v0.8.27: #407–#410. Prior v0.8.26: #397–#400. M35–M38 closed.
-2. **Board clean after M38** — next residual wave only with product ACs (**v0.8.29+**). Do not invent a board without Issue ACs.
+2. **Active M39 board (#423–#426)** — Enterprise residual reliability harden **v0.8.29** (latest tag stays **v0.8.28** until release gate):
+   1. **#423 REL-PREFERRED-BREAKER (P0)**: `SelectPreferredChannel` must respect open site/model breaker when healthy siblings exist (single preferred + open breaker → nil / fall through).
+   2. **#424 REL-COOLDOWN-TS (P0)**: parse CooldownUntil / now (or fixed-millis format both) before eligibility compare; regression for now+500ms still ineligible.
+   3. **#425 REL-CONDUCTOR-BUDGET (P1)**: hard max attempt budget across same-channel + refresh + failover; cap RefreshAuth successes; nil/error RefreshAuth → ActionFailover + exclude.
+   4. **#426 docs**: this residual honesty pass + MASTER M39 pointer (no product code).
 3. **SEC-REDIR** fully **present** (RuntimeExecutor + bare probe/harness/defaultUpstreamClient). **SEC-MONITOR** fully **present** for opaque session + logout clear (rotate/invalidate on auth_token change only with product AC). **SEC-AUTH-TIMING** fully **present**. **CTX-520** stays **present-with-residual** (OpenAI + Claude max_tokens reject shipped; further dialects / null-context residual). **P0-555** stays **present-with-residual** (warn shipped; provider-ignore / media / lag / orphan join residual).
-4. **P0-585** residual notes unchanged until load-proof / breaker ACs land.
-5. **Optional product later**: P0-585 load-proof / site-model breaker; deeper billing polish; further dialect context_length enforce (dedicated ACs only).
+4. **P0-585** remains **partial** until #423–#425 land and any further load-proof / empty-filter ACs are opened.
+5. **Optional product later**: P0-585 production load-proof; deeper billing polish; further dialect context_length enforce (dedicated ACs only).
 6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
@@ -77,13 +84,16 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Following cross-origin/private RuntimeExecutor or bare probe/harness/defaultUpstreamClient redirects after #357/#416.
 - Embedding live `AUTH_TOKEN` in monitor cookies after #407; leaving `meta_monitor_auth` set after admin logout after #417.
 - Non-constant-time compares on admin token-change paths after #408.
+- Claiming preferred/sticky selection respects site/model breakers until #423 lands.
+- Claiming CooldownUntil eligibility is time-correct until #424 lands.
+- Claiming conductor has a hard cross-channel attempt budget or always fails over on nil RefreshAuth until #425 lands.
 
 ## Links
 
 - Release: [v0.8.28](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.28) · prior [v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27) · next residual board **v0.8.29+** (no tag until release gate)
-- Milestone: [Enterprise residual SSRF/client harden v0.8.28](https://github.com/TokenDanceLab/metapi-go/milestone/38) · board **#416–#418** closed
+- Milestone: [Enterprise residual reliability harden v0.8.29](https://github.com/TokenDanceLab/metapi-go/milestone/39) · board **#423–#426**
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #416, #417, #418, #419, #420, #421, #407, #408, #409, #410, #411, #412, #413, #414, #397, #398, #399, #400, #401, #402, #403, #404, #406, #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391, #395, #396
+- Related issues: #423, #424, #425, #426, #416, #417, #418, #419, #420, #421, #407, #408, #409, #410, #411, #412, #413, #414, #397, #398, #399, #400, #401, #402, #403, #404, #406, #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391, #395, #396

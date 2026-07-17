@@ -29,6 +29,18 @@ Upstream gap **#585** (“one channel failure cascades to other channels”) is 
 **Do not claim:** “#585 is fully present” or “site-wide cascade is eliminated.”  
 **Honest claim:** channel-scoped request exclude + cooldown write isolation are hardened and tested; site/model breaker and production load-proof remain residual (see table below and inventory P0-585).
 
+### M39 active reliability board (post v0.8.28)
+
+Milestone **39** / **v0.8.29** opens three product reliability slices that sharpen residual notes above (latest release stays **v0.8.28** until the M39 gate). Inventory IDs: **REL-PREFERRED-BREAKER** · **REL-COOLDOWN-TS** · **REL-CONDUCTOR-BUDGET**.
+
+| Issue | ID | Gap (current code) | Target AC |
+|------:|:---|:-------------------|:----------|
+| [#423](https://github.com/TokenDanceLab/metapi-go/issues/423) | REL-PREFERRED-BREAKER | `FilterSiteRuntimeBrokenCandidatesByModel` no-ops when `len(candidates)<=1`, so sticky/preferred can keep an open-breaker channel while healthy siblings exist on normal SelectChannel | Preferred + open breaker + siblings → nil / fall through to normal selection |
+| [#424](https://github.com/TokenDanceLab/metapi-go/issues/424) | REL-COOLDOWN-TS | CooldownUntil writers use millis ISO; eligibility may lex-compare against RFC3339 `now` without fixed millis | Parse both sides (or format both with fixed millis); now+500ms still ineligible |
+| [#425](https://github.com/TokenDanceLab/metapi-go/issues/425) | REL-CONDUCTOR-BUDGET | Conductor has same-channel timeout budget only; RefreshAuth success can reset without hard attempt/refresh budget; nil RefreshAuth may stop without sibling failover | Hard max attempts across same-channel + refresh + failover; cap RefreshAuth; nil/error RefreshAuth → failover + exclude |
+
+Docs honesty for the board: [#426](https://github.com/TokenDanceLab/metapi-go/issues/426). Do **not** mark these present until the matching product PRs land.
+
 ## Mechanism map (aligned with code)
 
 | Layer | Mechanism | Code | Scope of poison |
