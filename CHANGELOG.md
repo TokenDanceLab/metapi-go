@@ -5,6 +5,12 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.10] — 2026-07-17
+
+### Added
+- Sub2API refresh scheduler wires to RefreshBalance (#261 / #263)
+- Proxy video task age-based retention scheduler (config-gated, default off) (#262 / #263)
+
 ## [v0.8.9] — 2026-07-17
 
 ### Added
