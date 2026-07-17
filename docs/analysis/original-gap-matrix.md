@@ -46,8 +46,8 @@
 | 568 | Relay-station API keys frequently force-marked expired | bug-failover | present | Hardened in #298: `platform.ShouldMarkAccountExpired` requires confirmed credential-expiry wording (no bare/generic 401 mark); `ReportTokenExpired` defense-in-depth no-ops unless ClassExpired; checkin/balance call sites use `ShouldMarkAccountExpired`; proxy surface uses same guard. Residual: novel provider wording may still need exclusion expansion | P0 | no |
 | 585 | One channel failure cascades to other channels | bug-failover | partial | Request-path exclude is **channel-scoped** (`proxy/conductor.go` `appendExcludedChannelID`; upstream loop appends `selected.Channel.ID` only). Hardened #299: 429 fails over (no same-channel pin), timeout same-channel budget, multi-channel same-site isolation tests in `proxy/conductor_test.go` + `routing/failure_isolation_test.go`. Residual: site/model breaker after 3 fails, credential-scoped usage-limit, empty-filter fallback, no production multi-channel load proof — see `docs/analysis/failover-isolation.md` | P0 | yes |
 | 573 | Add Site silent fail: HTTP 200 error body + UI success toast | bug-correctness | present | Backend: `handler/admin/sites.go` create path returns 400/409/500 with `error`/`message` (not 200-on-error); success only `writeJSON(..., StatusOK, result)`. Frontend: `web/pages/Sites.tsx` `api.addSite` then `toast.success`; failures `catch` → `toast.error` | P0 | no |
-| 580 | Gemini official chat rejects tool history without thought_signature | feature-protocol | partial | Only aggregate field `ThoughtSignatures []string` in `transform/gemini/generate_content/compatibility.go` `GeminiAggregateState`; no request-side injection/preservation of tool-history `thought_signature` for official Gemini chat found | P1 | yes |
-| 581 | PR: Fix Gemini official tool-history thought signatures | feature-protocol | partial | Same as #580 — stream state can collect signatures (`ThoughtSignatures`), but native bridge fix for official tool history is incomplete vs PR intent | P1 | yes |
+| 580 | Gemini official chat rejects tool history without thought_signature | feature-protocol | present | Transform (#86/`5dcaf76`): `NormalizeRequest` / OpenAI↔Gemini rebuild / dummy inject / stream `ThoughtSignatures` collect / aggregate re-attach helpers in `transform/gemini/generate_content/compatibility.go` + `thought_signature_test.go`. Runtime wire (#309): `handler/proxy/upstream.go` `sanitizeUpstreamJSONBody` calls normalize/rebuild for `gemini`/`gemini-cli`/`google` on generateContent / v1internal paths when tool-history markers present; tests `handler/proxy/gemini_thought_signature_test.go`. Residual: no multi-instance aggregate session store — clients must echo `provider_specific_fields` or native signed contents; OpenAI-compat chat/completions path not rewritten | P1 | no |
+| 581 | PR: Fix Gemini official tool-history thought signatures | feature-protocol | present | Same as #580 — request-side inject/preserve + proxy sanitize wire; residual is session aggregate re-attach across instances only | P1 | no |
 | 590 | Cannot adjust route order | feature-routing | present | `token_routes.sort_order` additive (`store/additive.go` `sc2_006_token_routes_sort_order`); `PUT /api/routes/reorder` + list `ORDER BY sort_order ASC, id ASC` in `handler/admin/token_routes.go` (#284/#288); channel priority reorder remains `PUT /api/channels/batch` | P2 | no |
 | 594 | Per-site max concurrency / request control | feature-routing | present | Schema: `sites.max_concurrency` (`store/schema.go` `Site.MaxConcurrency`, additive `store/additive.go` `sc2_002_site_max_concurrency`). Limiter: `proxy/site_concurrency.go` `SiteConcurrencyLimiter` (0 = unlimited; saturate → skip site, no cascade). Wired in `handler/proxy/upstream.go` + admin create/update `handler/admin/sites.go` / `handler/admin/payloads/sites.go`; tests `proxy/site_concurrency_test.go`, `handler/proxy/upstream_test.go` `TestSiteConcurrencySaturateSkipsWithoutFailure`, `handler/admin/sites_test.go` `TestSites_MaxConcurrencyRoundTrip`. Orthogonal to session channel leases in `proxy/session.go` | P2 | no |
 | 591 | Add `/v1/rerank` endpoint | feature-protocol | present | `handler/proxy/rerank.go` `HandleRerank` (`POST` passthrough `/v1/rerank`, model required, stream rejected); registered `handler/proxy/router.go` `RegisterProxyRoutes` → `r.Post("/rerank", HandleRerank)`; metrics path `handler/shared/metrics.go`; tests `handler/proxy/rerank_test.go` + router path coverage; contract `docs/analysis/rerank-endpoint.md` | P1 | no |
@@ -134,15 +134,15 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 19 | 18 |
-| partial | 9 | 31 |
+| present | 21 | 21 |
+| partial | 7 | 28 |
 | missing | 0 | 3 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (19): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538**.  
-Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559 shipped)*.  
-Mandatory partial (9): **#585, #580, #581, #579, #547, #520, #584, #577, #555**.  
+Mandatory present (21): **#582, #568, #573, #580, #581, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538**.  
+Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559/#580/#581/#538 shipped)*.  
+Mandatory partial (7): **#585, #579, #547, #520, #584, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.
@@ -167,7 +167,7 @@ Remaining **all-rows missing** (3, additional product sample only): **#534** bul
 
 1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
 2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
-3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**). Multi-turn responses content (**#538**) is **present** for HTTP content inject/preserve (#50/#310); residual is conversion/store/WS only.
+3. Remaining high-leverage **partial** mandatory work: cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**). Gemini `thought_signature` (**#580/#581**) request-side + proxy sanitize is **present** (#86/#309); multi-turn Responses content (**#538**) is **present** for HTTP (#50/#310); residuals are multi-instance aggregate re-attach and conversion/store/WS only.
 4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
 5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 

@@ -1051,7 +1051,7 @@ func TestSanitizeUpstreamJSONBody_MultiTurnReasoningInjectsContent(t *testing.T)
     {"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{}"}
   ]
 }`)
-	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses")
+	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses", "")
 	if err != nil {
 		t.Fatalf("sanitize: %v", err)
 	}
@@ -1087,7 +1087,7 @@ func TestSanitizeUpstreamJSONBody_PrettyPrintedReasoningTypeSpace(t *testing.T) 
     }
   ]
 }`)
-	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses")
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses", "")
 	if err != nil {
 		t.Fatalf("sanitize: %v", err)
 	}
@@ -1107,7 +1107,7 @@ func TestSanitizeUpstreamJSONBody_PrettyPrintedReasoningTypeSpace(t *testing.T) 
 
 func TestSanitizeUpstreamJSONBody_ReasoningMissingFieldsHonest400(t *testing.T) {
 	body := []byte(`{"model":"gpt-5.4","input":[{"type":"reasoning","summary":[]}]}`)
-	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses")
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/responses", "")
 	if err == nil {
 		t.Fatalf("expected ReasoningInputError, got body=%s", out)
 	}
@@ -1130,7 +1130,7 @@ func TestSanitizeUpstreamJSONBody_ReasoningMissingFieldsHonest400(t *testing.T) 
 func TestSanitizeUpstreamJSONBody_NonResponsesPathSkipsUnlessMarkers(t *testing.T) {
 	// Chat path without markers: no parse, body unchanged.
 	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"hi"}]}`)
-	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/chat/completions")
+	out, err := sanitizeUpstreamJSONBody(body, "openai", "/v1/chat/completions", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -1147,7 +1147,7 @@ func TestSanitizeUpstreamJSONBody_CompactPreservesReasoningInput(t *testing.T) {
   "previous_response_id":"resp_1",
   "input":[{"type":"reasoning","encrypted_content":"enc","summary":[{"type":"summary_text","text":"s"}]}]
 }`)
-	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses/compact")
+	out, err := sanitizeUpstreamJSONBody(body, "codex", "/v1/responses/compact", "")
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

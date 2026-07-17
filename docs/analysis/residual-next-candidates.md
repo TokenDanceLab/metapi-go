@@ -28,7 +28,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
 | P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302) | Channel-scoped exclude, 429 failover, same-channel timeout budget, isolation tests; residual site/model breaker + production multi-channel load proof | Optional load-test / breaker polish | Medium residual |
 | P0-555 | Token usage statistics inaccurate | **partial** (audit #300/#303) | Client disconnect keeps extracted stream usage; aggregation pipeline still needs broader error/partial coverage | Observability follow-up | Billing/ops trust |
-| P1-580 | Gemini thought_signature tool history | partial | Aggregate field only in `transform/gemini/generate_content/compatibility.go`; request-side preservation incomplete | Protocol wave | Official Gemini tool history rejects |
+| P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
 | ROUTE-590 | Route list drag reorder | **present** (v0.8.13) | `token_routes.sort_order` + `PUT /api/routes/reorder` (#284/#288); list `ORDER BY sort_order, id` | Done — matrix row should flip present on next refresh | — |
 | RERANK-591 | `/v1/rerank` | present | `handler/proxy/rerank.go` + router | Done (matrix #281) | — |
@@ -40,7 +40,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 ## Recommended sequencing (v0.8.16+)
 
 1. **Docs honesty**: flip matrix #590 → present; keep residual inventory honest after v0.8.15.
-2. **Protocol partials** P1-580 when client repros available (P1-538 HTTP multi-turn content present; residual conversion/store/WS only).
+2. **Protocol partials** largely present (P1-580 request-side + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
 3. **Observability follow-up** on P0-555 aggregation / non-stream paths (beyond disconnect partial).
 4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
