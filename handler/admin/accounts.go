@@ -88,6 +88,13 @@ func (c *accountsSnapshotCache) clear() {
 
 var globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
 
+func init() {
+	// Site mutations invalidate process-local admin list cache via service hook (#216).
+	service.RegisterSiteProxyCacheInvalidator(func() {
+		globalAccountsCache.clear()
+	})
+}
+
 // ---- List Accounts ----
 
 func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
@@ -844,7 +851,6 @@ func clearAccountAuthRuntimeHealth(db *sqlx.DB, accountID int64) error {
 	_, err = db.Exec(db.Rebind("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?"), *merged, now, accountID)
 	return err
 }
-
 
 // ---- Rebind Session ----
 
