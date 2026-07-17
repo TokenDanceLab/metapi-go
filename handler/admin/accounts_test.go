@@ -1764,7 +1764,38 @@ func TestAccounts_Batch_PartialFailure(t *testing.T) {
 // ---- Health Refresh ----
 
 func TestAccounts_HealthRefresh_Sync(t *testing.T) {
-	_, r, _ := setupAccountsTest(t)
+	db, r, _ := setupAccountsTest(t)
+	calls := 0
+	server := newAnyRouterBalanceServer(t, &calls)
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	siteID := insertAnyRouterBalanceSite(t, db, server.URL, now)
+
+	// Session-capable account (balance probe path).
+	accRes, err := db.Exec(
+		"INSERT INTO accounts (site_id, username, access_token, status, checkin_enabled, created_at, updated_at) VALUES (?, ?, ?, 'active', 1, ?, ?)",
+		siteID, "anyrouter-user", "session-token", now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert session account: %v", err)
+	}
+	accountID, err := accRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("session account LastInsertId: %v", err)
+	}
+
+	// proxy-only apikey on same site should be skipped honestly
+	apiKeyRes, err := db.Exec(
+		"INSERT INTO accounts (site_id, username, access_token, api_token, status, checkin_enabled, extra_config, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', 0, ?, ?, ?)",
+		siteID, nil, "anyrouter-api-key-token", "anyrouter-api-key-token", `{"credentialMode":"apikey"}`, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert apikey account: %v", err)
+	}
+	apiKeyAccountID, err := apiKeyRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("apikey account LastInsertId: %v", err)
+	}
+
 	body := map[string]any{"wait": true}
 	resp := doPostJSON(t, r, "/api/accounts/health/refresh", body)
 	if resp.Code != http.StatusOK {
@@ -1772,27 +1803,236 @@ func TestAccounts_HealthRefresh_Sync(t *testing.T) {
 	}
 
 	var result map[string]any
-	json.Unmarshal(resp.Body.Bytes(), &result)
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if result["success"] != true {
 		t.Error("expected success=true")
+	}
+	summary, _ := result["summary"].(map[string]any)
+	if summary == nil {
+		t.Fatalf("summary missing: %#v", result)
+	}
+	if summary["total"] != float64(2) {
+		t.Fatalf("summary.total = %v, want 2", summary["total"])
+	}
+	if summary["success"] != float64(1) {
+		t.Fatalf("summary.success = %v, want 1", summary["success"])
+	}
+	if summary["skipped"] != float64(1) {
+		t.Fatalf("summary.skipped = %v, want 1", summary["skipped"])
+	}
+	if summary["healthy"] != float64(1) {
+		t.Fatalf("summary.healthy = %v, want 1", summary["healthy"])
+	}
+	if calls < 2 {
+		t.Fatalf("upstream calls = %d, want discovery plus balance fetch", calls)
+	}
+
+	results, _ := result["results"].([]any)
+	if len(results) != 2 {
+		t.Fatalf("results len = %d, want 2", len(results))
+	}
+	byID := map[int64]map[string]any{}
+	for _, raw := range results {
+		item, _ := raw.(map[string]any)
+		byID[int64(item["accountId"].(float64))] = item
+	}
+	sessionItem := byID[accountID]
+	if sessionItem == nil || sessionItem["status"] != "success" {
+		t.Fatalf("session item = %#v, want success", sessionItem)
+	}
+	if sessionItem["state"] != "healthy" {
+		t.Fatalf("session state = %v, want healthy", sessionItem["state"])
+	}
+	apiKeyItem := byID[apiKeyAccountID]
+	if apiKeyItem == nil || apiKeyItem["status"] != "skipped" {
+		t.Fatalf("apikey item = %#v, want skipped", apiKeyItem)
+	}
+	if apiKeyItem["reason"] != "proxy_only" {
+		t.Fatalf("apikey reason = %v, want proxy_only", apiKeyItem["reason"])
+	}
+
+	// Balance + runtimeHealth should be persisted for the session account.
+	var balance float64
+	var extraConfig *string
+	if err := db.QueryRow("SELECT balance, extra_config FROM accounts WHERE id = ?", accountID).Scan(&balance, &extraConfig); err != nil {
+		t.Fatalf("read refreshed account: %v", err)
+	}
+	if balance != 2 {
+		t.Fatalf("balance = %v, want 2", balance)
+	}
+	if extraConfig == nil || !strings.Contains(*extraConfig, `"state":"healthy"`) {
+		t.Fatalf("extra_config = %v, want healthy runtimeHealth", extraConfig)
+	}
+}
+
+func TestAccounts_HealthRefresh_SingleAccountID(t *testing.T) {
+	db, r, _ := setupAccountsTest(t)
+	calls := 0
+	server := newAnyRouterBalanceServer(t, &calls)
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	siteID := insertAnyRouterBalanceSite(t, db, server.URL, now)
+
+	accRes, err := db.Exec(
+		"INSERT INTO accounts (site_id, username, access_token, status, checkin_enabled, created_at, updated_at) VALUES (?, ?, ?, 'active', 1, ?, ?)",
+		siteID, "anyrouter-user", "session-token", now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert session account: %v", err)
+	}
+	accountID, err := accRes.LastInsertId()
+	if err != nil {
+		t.Fatalf("session account LastInsertId: %v", err)
+	}
+	// Second account on same site is intentionally not targeted by accountId.
+	if _, err := db.Exec(
+		"INSERT INTO accounts (site_id, username, access_token, api_token, status, checkin_enabled, extra_config, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', 0, ?, ?, ?)",
+		siteID, nil, "anyrouter-api-key-token", "anyrouter-api-key-token", `{"credentialMode":"apikey"}`, now, now,
+	); err != nil {
+		t.Fatalf("insert other apikey account: %v", err)
+	}
+
+	body := map[string]any{"wait": true, "accountId": accountID}
+	resp := doPostJSON(t, r, "/api/accounts/health/refresh", body)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("health refresh single: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	summary, _ := result["summary"].(map[string]any)
+	if summary["total"] != float64(1) {
+		t.Fatalf("summary.total = %v, want 1", summary["total"])
+	}
+	if summary["success"] != float64(1) {
+		t.Fatalf("summary.success = %v, want 1", summary["success"])
+	}
+	results, _ := result["results"].([]any)
+	if len(results) != 1 {
+		t.Fatalf("results len = %d, want 1", len(results))
+	}
+	item, _ := results[0].(map[string]any)
+	if int64(item["accountId"].(float64)) != accountID {
+		t.Fatalf("accountId = %v, want %d", item["accountId"], accountID)
+	}
+	if item["status"] != "success" {
+		t.Fatalf("status = %v, want success", item["status"])
+	}
+	if calls < 2 {
+		t.Fatalf("upstream calls = %d, want discovery plus balance fetch", calls)
+	}
+}
+
+func TestAccounts_HealthRefresh_SingleAccountNotFound(t *testing.T) {
+	_, r, _ := setupAccountsTest(t)
+	resp := doPostJSON(t, r, "/api/accounts/health/refresh", map[string]any{
+		"wait":      true,
+		"accountId": 99999,
+	})
+	if resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 
 func TestAccounts_HealthRefresh_Background(t *testing.T) {
-	_, r, _ := setupAccountsTest(t)
-	body := map[string]any{"wait": false}
+	resetBackgroundTasksForTests()
+	t.Cleanup(resetBackgroundTasksForTests)
+
+	db, r, _ := setupAccountsTest(t)
+	calls := 0
+	server := newAnyRouterBalanceServer(t, &calls)
+	_, accountID := setupAnyRouterBalanceAccount(t, db, server.URL)
+
+	body := map[string]any{"wait": false, "accountId": accountID}
 	resp := doPostJSON(t, r, "/api/accounts/health/refresh", body)
 	if resp.Code != http.StatusAccepted {
-		t.Fatalf("health refresh bg: expected 202, got %d", resp.Code)
+		t.Fatalf("health refresh bg: expected 202, got %d body=%s", resp.Code, resp.Body.String())
 	}
 
 	var result map[string]any
-	json.Unmarshal(resp.Body.Bytes(), &result)
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
 	if result["queued"] != true {
 		t.Error("expected queued=true")
 	}
-	if result["jobId"] == nil {
-		t.Error("expected jobId")
+	jobID, _ := result["jobId"].(string)
+	if jobID == "" || jobID == "stub-health-refresh" {
+		t.Fatalf("jobId = %q, want real in-process task id", jobID)
+	}
+	if result["taskId"] != jobID {
+		t.Fatalf("taskId = %v, want same as jobId %q", result["taskId"], jobID)
+	}
+
+	// Wait for background runner to finish and persist runtime health.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		task := getBackgroundTask(jobID)
+		if task != nil && (task.Status == BackgroundTaskSucceeded || task.Status == BackgroundTaskFailed) {
+			if task.Status != BackgroundTaskSucceeded {
+				t.Fatalf("background task status = %s error=%v", task.Status, task.Error)
+			}
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	task := getBackgroundTask(jobID)
+	if task == nil || task.Status != BackgroundTaskSucceeded {
+		t.Fatalf("background task did not succeed: %#v", task)
+	}
+
+	var balance float64
+	var extraConfig *string
+	if err := db.QueryRow("SELECT balance, extra_config FROM accounts WHERE id = ?", accountID).Scan(&balance, &extraConfig); err != nil {
+		t.Fatalf("read refreshed account: %v", err)
+	}
+	if balance != 2 {
+		t.Fatalf("balance = %v, want 2 after async health refresh", balance)
+	}
+	if extraConfig == nil || !strings.Contains(*extraConfig, `"state":"healthy"`) {
+		t.Fatalf("extra_config = %v, want healthy runtimeHealth after async refresh", extraConfig)
+	}
+	if calls < 2 {
+		t.Fatalf("upstream calls = %d, want discovery plus balance fetch", calls)
+	}
+}
+
+func TestAccounts_HealthRefresh_BackgroundDedupe(t *testing.T) {
+	resetBackgroundTasksForTests()
+	t.Cleanup(resetBackgroundTasksForTests)
+
+	db, r, _ := setupAccountsTest(t)
+	// Slow-ish upstream is unnecessary; empty batch still exercises registry.
+	// Use a session account so the runner has real work if it runs twice.
+	calls := 0
+	server := newAnyRouterBalanceServer(t, &calls)
+	_, accountID := setupAnyRouterBalanceAccount(t, db, server.URL)
+
+	body := map[string]any{"wait": false, "accountId": accountID}
+	first := doPostJSON(t, r, "/api/accounts/health/refresh", body)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first bg refresh: %d %s", first.Code, first.Body.String())
+	}
+	var firstResult map[string]any
+	json.Unmarshal(first.Body.Bytes(), &firstResult)
+	jobID, _ := firstResult["jobId"].(string)
+	if jobID == "" {
+		t.Fatal("first jobId empty")
+	}
+
+	second := doPostJSON(t, r, "/api/accounts/health/refresh", body)
+	if second.Code != http.StatusAccepted {
+		t.Fatalf("second bg refresh: %d %s", second.Code, second.Body.String())
+	}
+	var secondResult map[string]any
+	json.Unmarshal(second.Body.Bytes(), &secondResult)
+	if secondResult["reused"] != true {
+		t.Fatalf("reused = %v, want true for concurrent dedupe", secondResult["reused"])
+	}
+	if secondResult["jobId"] != jobID {
+		t.Fatalf("second jobId = %v, want %q", secondResult["jobId"], jobID)
 	}
 }
 
