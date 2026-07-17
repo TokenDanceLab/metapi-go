@@ -281,6 +281,8 @@ func dispatchSelectedUpstream(
 		// Force stream=true for responses-only / stream-preferring sites (and codex/sub2api).
 		attemptBody, forcedStream := applyUpstreamStreamPreference(attemptBody, selected.Site.Platform, path, sitePref)
 		effectiveStream := ctx.IsStream || forcedStream
+		// OpenAI chat stream: ensure final SSE usage chunk via stream_options.include_usage (#345 / P0-555 residual).
+		attemptBody = applyUpstreamStreamIncludeUsage(attemptBody, selected.Site.Platform, path, effectiveStream)
 		finished, pending, cont := dispatchEndpointAttemptWithContinue(
 			w, r, ctx, cfg, selected, upstreamModel, proxyConfig,
 			path, contentType, attemptBody, firstByteTimeoutMs,
@@ -403,6 +405,81 @@ func applyUpstreamStreamPreference(bodyBytes []byte, sitePlatform, upstreamPath 
 		return bodyBytes, false
 	}
 	return out, true
+}
+
+// applyUpstreamStreamIncludeUsage forces stream_options.include_usage=true on OpenAI-compatible
+// chat/completions stream bodies so upstream SSE emits a final usage chunk (P0-555 residual / #345).
+// Platform-safe: skips non-chat endpoints and platforms known to reject stream_options (codex/sub2api).
+// Does not invent tokens; only asks the provider to include usage when streaming.
+func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPath string, isStream bool) []byte {
+	if !isStream || len(bodyBytes) == 0 {
+		return bodyBytes
+	}
+	ep, ok := proxy.EndpointFromPath(upstreamPath)
+	if !ok || ep != proxy.EndpointChat {
+		return bodyBytes
+	}
+	if rejectsOpenAIStreamOptions(sitePlatform) {
+		return bodyBytes
+	}
+	var body map[string]any
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		return bodyBytes
+	}
+	// Only when this attempt is streaming (client or forced).
+	if !jsonTruthyBool(body["stream"]) && !isStream {
+		return bodyBytes
+	}
+	opts, _ := body["stream_options"].(map[string]any)
+	if opts == nil {
+		opts = map[string]any{}
+	} else {
+		// Copy so we do not mutate nested maps shared with original body reference.
+		nextOpts := make(map[string]any, len(opts)+1)
+		for k, v := range opts {
+			nextOpts[k] = v
+		}
+		opts = nextOpts
+	}
+	if jsonTruthyBool(opts["include_usage"]) {
+		// Already requested; leave other stream_options keys intact without rewrite.
+		return bodyBytes
+	}
+	opts["include_usage"] = true
+	next := make(map[string]any, len(body)+1)
+	for k, v := range body {
+		next[k] = v
+	}
+	next["stream_options"] = opts
+	out, err := json.Marshal(next)
+	if err != nil {
+		return bodyBytes
+	}
+	return out
+}
+
+// rejectsOpenAIStreamOptions reports platforms that historically 400 on stream_options
+// (original metapi #446 Codex OAuth) or always strip it in Responses sanitize.
+func rejectsOpenAIStreamOptions(sitePlatform string) bool {
+	switch strings.ToLower(strings.TrimSpace(sitePlatform)) {
+	case "codex", "chatgpt-codex", "chatgpt codex", "sub2api":
+		return true
+	default:
+		return false
+	}
+}
+
+// jsonTruthyBool accepts JSON bool or common string encodings of true.
+func jsonTruthyBool(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		s := strings.TrimSpace(strings.ToLower(t))
+		return s == "true" || s == "1" || s == "yes"
+	default:
+		return false
+	}
 }
 
 // dispatchEndpointAttempt is the single-path entry used by multipart.
