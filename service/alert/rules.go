@@ -20,16 +20,17 @@ func IsCloudflareChallenge(message string) bool {
 		strings.Contains(text, "challenge required")
 }
 
-// IsTokenExpiredError detects if an error indicates an expired token.
-// Delegates to platform.ClassifyUpstreamError / IsTokenExpiredError (R0 SSOT).
-// Mirrors TS isTokenExpiredError() with tighter non-auth guards.
+// IsTokenExpiredError reports confirmed credential expiry/invalidity.
+// After #298 it matches ShouldMarkAccountExpired (ClassExpired only).
+// Auto-relogin callers that need broader 401/unauthorized heuristics must use
+// local shouldAttemptAutoRelogin* patterns, not this gate alone.
 func IsTokenExpiredError(httpStatus int, message string) bool {
 	return platform.IsTokenExpiredError(httpStatus, message)
 }
 
 // ShouldMarkAccountExpired is the guard before writing accounts.status='expired'.
-// Prefer this over IsTokenExpiredError at ReportTokenExpired call sites (#568/#298):
-// only ClassExpired marks; auto-relogin may still use IsTokenExpiredError.
+// Only ClassExpired marks (#568/#298). Prefer this at ReportTokenExpired call sites;
+// ReportTokenExpired also self-guards for defense-in-depth.
 func ShouldMarkAccountExpired(httpStatus int, message string) bool {
 	return platform.ShouldMarkAccountExpired(httpStatus, message)
 }
