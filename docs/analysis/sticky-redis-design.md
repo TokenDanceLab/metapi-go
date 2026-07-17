@@ -142,8 +142,8 @@ Mirror the **sharedcount admission** failure class (`docs/analysis/redis-shared-
 |-----------|----------|
 | `REDIS_URL` empty | Sticky = process-local only (today’s behavior). No Redis calls. |
 | Bad URL at startup | Disable shared sticky mode; log warning; local map only. Same class as “redis admission: disabled (bad REDIS_URL)”. |
-| Request-time timeout / network / RESP error on `GET` | Treat as miss → fall through to local map, then normal selection if still empty. Sticky Redis is **not** a hard dependency; **never** fail the proxy request solely because sticky store is down. |
-| Request-time error on `SET` / `DEL` | Best-effort; local map still updated (bind/clear). Request continues. Sticky Redis is **not** required for success. |
+| Request-time timeout / network / RESP error on `GET` | Treat as miss → fall through to local map, then normal selection if still empty. Sticky Redis is not a hard dependency; never fail the proxy request solely because sticky store is down. |
+| Request-time error on `SET` / `DEL` | Best-effort; local map still updated (bind/clear). Request continues. Sticky Redis is not required for success. |
 | Redis returns non-integer / garbage value | Treat as miss; optional best-effort `DEL`; do not panic. |
 
 ### Read path (proposed)

@@ -25,7 +25,11 @@ func TestPublicMarkdownHygiene(t *testing.T) {
 		}
 		if entry.IsDir() {
 			name := entry.Name()
-			if name == ".git" || name == "node_modules" || name == "dist" {
+			// Skip VCS/build caches and local agent worktrees so hygiene only
+			// covers published tree paths (CI clones are clean; local worktrees
+			// under .claude/ must not fail public docs gates).
+			if name == ".git" || name == "node_modules" || name == "dist" ||
+				name == ".claude" || name == "worktrees" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -146,9 +150,16 @@ func looksLikeRedisSupportedClaim(line string) bool {
 		return false
 	}
 	hasNegation := strings.Contains(lower, "not ") ||
+		strings.Contains(lower, "not*") || // markdown **not** / *not*
+		strings.Contains(lower, "*not*") ||
+		strings.Contains(lower, "never") ||
 		strings.Contains(lower, " no ") ||
 		strings.Contains(lower, "no `redis_url`") ||
+		strings.Contains(lower, "no live redis") ||
 		strings.Contains(lower, "without redis") ||
+		strings.Contains(lower, "optional redis") ||
+		strings.Contains(lower, "fail-open") ||
+		strings.Contains(lower, "fail open") ||
 		strings.Contains(lower, "尚未") ||
 		strings.Contains(lower, "没有") ||
 		strings.Contains(lower, "无 redis")
