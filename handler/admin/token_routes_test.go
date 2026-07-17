@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -509,6 +510,7 @@ func (f *fakeDecisionRouter) ExplainSelectionRouteWide(_ context.Context, routeI
 }
 
 type fakeDecisionRefresher struct {
+	mu                 sync.Mutex
 	calls              int
 	exact              int
 	wildcard           int
@@ -517,9 +519,17 @@ type fakeDecisionRefresher struct {
 }
 
 func (f *fakeDecisionRefresher) RefreshAllRouteDecisionSnapshots(_ context.Context, refreshPricingCatalog bool) (int, int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	f.refreshPricingSeen = append(f.refreshPricingSeen, refreshPricingCatalog)
 	return f.exact, f.wildcard, f.err
+}
+
+func (f *fakeDecisionRefresher) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
 }
 
 func setupTokenRoutesDecisionTest(t *testing.T, deps TokenRoutesDeps) (*store.DB, chi.Router) {
@@ -753,12 +763,12 @@ func TestRouteDecisionRefresh_RealTaskNotStub(t *testing.T) {
 	// Wait for background task completion.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if refresher.calls >= 1 {
+		if refresher.callCount() >= 1 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if refresher.calls < 1 {
+	if refresher.callCount() < 1 {
 		t.Fatalf("refresher never called")
 	}
 
@@ -904,7 +914,7 @@ func TestRouteDecision_WithSQLiteRouterFixture(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatalf("refresh task did not succeed in time, refresher.calls=%d", refresher.calls)
+	t.Fatalf("refresh task did not succeed in time, refresher.calls=%d", refresher.callCount())
 }
 
 // TestTokenRoutes_ChannelUpdatePreservesIntentionalConfig ensures channel edits set
