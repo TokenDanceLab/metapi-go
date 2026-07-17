@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.13] — 2026-07-17
+
+### Added
+- token_routes.sort_order + PUT /api/routes/reorder bulk drag reorder (#284 / #288)
+
+### Docs / Honesty
+- original-gap-matrix refresh for shipped surfaces (rerank/site concurrency/key proxy/rebuild/cache_ratio) (#281 / #285)
+- sticky multi-instance affinity product-path evaluation (#282 / #286)
+- update-center residual honesty hardening (no remote registry) (#283 / #287)
+
 ## [v0.8.12] — 2026-07-17
 
 ### Fixed
