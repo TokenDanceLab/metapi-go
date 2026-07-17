@@ -1445,6 +1445,10 @@ export const api = {
       body: JSON.stringify(data),
     }),
   initMonitorSession: () => request("/api/monitor/session", { method: "POST" }),
+  // Clears HttpOnly meta_monitor_auth (Path=/monitor-proxy/). Call while
+  // Bearer auth is still valid — before clearAuthSession wipes localStorage.
+  clearMonitorSession: () =>
+    request("/api/monitor/session", { method: "DELETE" }),
 
   // Models marketplace
   getModelsMarketplace: (options?: {

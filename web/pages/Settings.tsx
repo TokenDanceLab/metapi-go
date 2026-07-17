@@ -2578,8 +2578,14 @@ export default function Settings() {
             </button>
             <button
               onClick={() => {
-                clearAuthSession(localStorage);
-                window.location.reload();
+                // Await DELETE so Set-Cookie Max-Age=0 is applied before reload
+                // aborts in-flight requests.
+                void api.clearMonitorSession()
+                  .catch(() => {})
+                  .finally(() => {
+                    clearAuthSession(localStorage);
+                    window.location.reload();
+                  });
               }}
               className="btn btn-danger"
             >
