@@ -229,7 +229,8 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
 	}
-	routing.InvalidateCache()
+	// Clear accounts snapshot + token-router caches (site list is embedded in accounts snapshot).
+	service.InvalidateSiteCaches()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -409,11 +410,11 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	// Apply status side effects
 	if newStatus, ok := updates["status"].(string); ok {
 		service.ApplySiteStatusSideEffects(h.db, id, existing.Name, newStatus)
-		service.InvalidateSiteCaches()
 	}
 
 	result, _ := service.LoadSiteWithEndpoints(h.db, id)
-	routing.InvalidateCache()
+	// Always invalidate after a successful site mutation (proxy/url/status/endpoints).
+	service.InvalidateSiteCaches()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -432,7 +433,6 @@ func (h *sitesHandler) deleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	service.InvalidateSiteCaches()
-	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -494,7 +494,6 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	if action == "delete" || action == "enable" || action == "disable" ||
 		action == "enableSystemProxy" || action == "disableSystemProxy" {
 		service.InvalidateSiteCaches()
-		routing.InvalidateCache()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

@@ -27,6 +27,9 @@ import (
 
 // RegisterAccountsRoutes registers all /api/accounts routes.
 func RegisterAccountsRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
+	// Ensure accounts snapshot participates in service.InvalidateSiteProxyCache.
+	// Also registered from init() so site-only route wiring still clears the snapshot.
+	registerAccountsSnapshotCacheInvalidator()
 	handler := &accountsHandler{db: db, cfg: cfg}
 
 	r.Get("/api/accounts", handler.listAccounts)
@@ -87,6 +90,27 @@ func (c *accountsSnapshotCache) clear() {
 }
 
 var globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+
+// accountsSnapshotInvalidatorOnce ensures the site-proxy invalidation hook is
+// registered at most once even when tests re-register routes repeatedly.
+var accountsSnapshotInvalidatorOnce sync.Once
+
+// registerAccountsSnapshotCacheInvalidator wires admin's package-private
+// accounts snapshot cache into service.InvalidateSiteProxyCache without a
+// service → handler import cycle.
+func registerAccountsSnapshotCacheInvalidator() {
+	accountsSnapshotInvalidatorOnce.Do(func() {
+		service.RegisterSiteProxyCacheInvalidator(func() {
+			// Closure reads the package-level variable so test reassignments of
+			// globalAccountsCache remain effective.
+			globalAccountsCache.clear()
+		})
+	})
+}
+
+func init() {
+	registerAccountsSnapshotCacheInvalidator()
+}
 
 // ---- List Accounts ----
 

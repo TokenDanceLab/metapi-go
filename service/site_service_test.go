@@ -2,6 +2,9 @@ package service
 
 import (
 	"testing"
+
+	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // ---- Platform Detection Tests ----
@@ -497,4 +500,66 @@ func TestNormalizeNullable_Nil(t *testing.T) {
 	if result != nil {
 		t.Errorf("expected nil for nil input, got %v", result)
 	}
+}
+
+// ---- Site proxy cache invalidation (#216) ----
+
+func TestRegisterSiteProxyCacheInvalidator_RunsOnInvalidate(t *testing.T) {
+	resetSiteProxyCacheInvalidatorsForTest()
+	t.Cleanup(resetSiteProxyCacheInvalidatorsForTest)
+
+	var calls int
+	RegisterSiteProxyCacheInvalidator(func() { calls++ })
+	RegisterSiteProxyCacheInvalidator(nil) // ignored
+	RegisterSiteProxyCacheInvalidator(func() { calls++ })
+
+	InvalidateSiteProxyCache()
+	if calls != 2 {
+		t.Fatalf("hook calls=%d, want 2", calls)
+	}
+
+	InvalidateSiteCaches()
+	if calls != 4 {
+		t.Fatalf("after InvalidateSiteCaches calls=%d, want 4", calls)
+	}
+}
+
+func TestInvalidateSiteProxyCache_AlwaysInvalidatesRoutingCache(t *testing.T) {
+	resetSiteProxyCacheInvalidatorsForTest()
+	t.Cleanup(resetSiteProxyCacheInvalidatorsForTest)
+
+	rc := routing.NewRouteCache(5_000)
+	rc.SetRoutes([]store.TokenRoute{{ID: 42, ModelPattern: "gpt-*"}})
+	routing.SetGlobalCache(rc)
+	t.Cleanup(func() { routing.SetGlobalCache(nil) })
+
+	if got := rc.GetRoutes(); got == nil {
+		t.Fatal("route cache should be warm before invalidation")
+	}
+
+	// No hooks registered — routing invalidation must still happen.
+	InvalidateSiteProxyCache()
+	if got := rc.GetRoutes(); got != nil {
+		t.Fatalf("route cache still warm after InvalidateSiteProxyCache: %v", got)
+	}
+
+	rc.SetRoutes([]store.TokenRoute{{ID: 99, ModelPattern: "claude-*"}})
+	if got := rc.GetRoutes(); got == nil {
+		t.Fatal("route cache should be warm before InvalidateSiteCaches")
+	}
+	InvalidateSiteCaches()
+	if got := rc.GetRoutes(); got != nil {
+		t.Fatalf("route cache still warm after InvalidateSiteCaches: %v", got)
+	}
+}
+
+func TestInvalidateSiteProxyCache_SafeWithoutGlobalCache(t *testing.T) {
+	resetSiteProxyCacheInvalidatorsForTest()
+	t.Cleanup(resetSiteProxyCacheInvalidatorsForTest)
+	routing.SetGlobalCache(nil)
+
+	// Must not panic when global route cache is unset.
+	InvalidateSiteProxyCache()
+	InvalidateSiteCaches()
+	InvalidateTokenRouterCache()
 }

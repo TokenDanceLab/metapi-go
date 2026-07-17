@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -409,10 +410,48 @@ func DeleteSite(db *sqlx.DB, siteID int64) error {
 	return err
 }
 
-// InvalidateSiteProxyCache signals that cached site proxy configurations should be refreshed.
-// TODO(P8): integrate with the proxy cache layer when implemented.
+// siteProxyCacheInvalidators holds optional side-effect hooks for site proxy
+// cache invalidation (e.g. admin accounts snapshot). Handlers register via
+// RegisterSiteProxyCacheInvalidator so service never imports handler packages.
+var (
+	siteProxyCacheInvalidatorsMu sync.Mutex
+	siteProxyCacheInvalidators   []func()
+)
+
+// RegisterSiteProxyCacheInvalidator appends a hook that runs on every
+// InvalidateSiteProxyCache / InvalidateSiteCaches call. Nil hooks are ignored.
+// Safe for concurrent registration; intended for package init / route setup.
+func RegisterSiteProxyCacheInvalidator(fn func()) {
+	if fn == nil {
+		return
+	}
+	siteProxyCacheInvalidatorsMu.Lock()
+	defer siteProxyCacheInvalidatorsMu.Unlock()
+	siteProxyCacheInvalidators = append(siteProxyCacheInvalidators, fn)
+}
+
+// resetSiteProxyCacheInvalidatorsForTest clears registered hooks (tests only).
+func resetSiteProxyCacheInvalidatorsForTest() {
+	siteProxyCacheInvalidatorsMu.Lock()
+	defer siteProxyCacheInvalidatorsMu.Unlock()
+	siteProxyCacheInvalidators = nil
+}
+
+// InvalidateSiteProxyCache clears registered site-proxy related caches and the
+// in-process token router cache. Always calls routing.InvalidateCache (no-op
+// when the global cache has not been set).
 func InvalidateSiteProxyCache() {
-	// Stub: P8 proxy cache invalidation
+	siteProxyCacheInvalidatorsMu.Lock()
+	hooks := append([]func(){}, siteProxyCacheInvalidators...)
+	siteProxyCacheInvalidatorsMu.Unlock()
+
+	for _, fn := range hooks {
+		if fn == nil {
+			continue
+		}
+		fn()
+	}
+	routing.InvalidateCache()
 }
 
 // InvalidateTokenRouterCache signals that cached token-router state should be invalidated.
@@ -421,7 +460,9 @@ func InvalidateTokenRouterCache() {
 	routing.InvalidateCache()
 }
 
-// InvalidateSiteCaches invalidates both site proxy and token router caches.
+// InvalidateSiteCaches invalidates both site proxy hooks and token router caches.
+// Routing invalidation is performed by InvalidateSiteProxyCache; the follow-up
+// InvalidateTokenRouterCache is kept for explicit dual-path clarity and is idempotent.
 func InvalidateSiteCaches() {
 	InvalidateSiteProxyCache()
 	InvalidateTokenRouterCache()

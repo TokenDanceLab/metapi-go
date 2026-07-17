@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/service/alert"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -2382,5 +2383,29 @@ func TestAccounts_Update_ExtraConfigAndProxyURLMergeTogether(t *testing.T) {
 	}
 	if cfg["platformUserId"] != float64(42) {
 		t.Fatalf("platformUserId = %#v, want 42", cfg["platformUserId"])
+	}
+}
+
+func TestAccountsSnapshotHook_ClearsOnInvalidateSiteCaches(t *testing.T) {
+	// init() + RegisterAccountsRoutes already register the snapshot clear hook.
+	// Prove site-cache invalidation reaches the package-private snapshot.
+	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	globalAccountsCache.set([]byte(`{"accounts":[],"sites":[]}`))
+	if !globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot should be warm")
+	}
+
+	rc := routing.NewRouteCache(5_000)
+	rc.SetRoutes([]store.TokenRoute{{ID: 11, ModelPattern: "gpt-*"}})
+	routing.SetGlobalCache(rc)
+	t.Cleanup(func() { routing.SetGlobalCache(nil) })
+
+	service.InvalidateSiteCaches()
+
+	if globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot still warm after InvalidateSiteCaches")
+	}
+	if rc.GetRoutes() != nil {
+		t.Fatal("route cache still warm after InvalidateSiteCaches")
 	}
 }

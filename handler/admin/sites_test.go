@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -984,5 +985,65 @@ func TestSites_MaxConcurrencyRoundTrip(t *testing.T) {
 	})
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("negative maxConcurrency: expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestSites_MutationsInvalidateAccountsSnapshotAndRouteCache(t *testing.T) {
+	_, r := setupSitesTest(t)
+
+	// Warm package-level accounts snapshot cache (cleared via registered hook).
+	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	globalAccountsCache.set([]byte(`{"accounts":[],"sites":[]}`))
+	if !globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot should be warm")
+	}
+
+	rc := routing.NewRouteCache(5_000)
+	rc.SetRoutes([]store.TokenRoute{{ID: 7, ModelPattern: "gpt-*"}})
+	routing.SetGlobalCache(rc)
+	t.Cleanup(func() { routing.SetGlobalCache(nil) })
+	if rc.GetRoutes() == nil {
+		t.Fatal("route cache should be warm")
+	}
+
+	site := newSiteFixture(t, r, "CacheSite", "https://api.openai.com/v1")
+	id := int64(site["id"].(float64))
+
+	// Create path must clear both caches.
+	if globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot still warm after site create")
+	}
+	if rc.GetRoutes() != nil {
+		t.Fatal("route cache still warm after site create")
+	}
+
+	// Re-warm and update (non-status field) - must still invalidate.
+	globalAccountsCache.set([]byte(`{"accounts":[],"sites":[]}`))
+	rc.SetRoutes([]store.TokenRoute{{ID: 8, ModelPattern: "claude-*"}})
+	resp := doPutJSON(t, r, "/api/sites/"+strconv.FormatInt(id, 10), map[string]any{
+		"name": "CacheSite-renamed",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	if globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot still warm after site update")
+	}
+	if rc.GetRoutes() != nil {
+		t.Fatal("route cache still warm after site update")
+	}
+
+	// Re-warm and delete.
+	globalAccountsCache.set([]byte(`{"accounts":[],"sites":[]}`))
+	rc.SetRoutes([]store.TokenRoute{{ID: 9, ModelPattern: "gemini-*"}})
+	del := doDelete(t, r, "/api/sites/"+strconv.FormatInt(id, 10))
+	if del.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", del.Code, del.Body.String())
+	}
+	if globalAccountsCache.isValid() {
+		t.Fatal("accounts snapshot still warm after site delete")
+	}
+	if rc.GetRoutes() != nil {
+		t.Fatal("route cache still warm after site delete")
 	}
 }
