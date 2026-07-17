@@ -87,6 +87,7 @@
 | Residual v0.8.11 | Milestone 20 closed · **#265–#266** (PRs #267/#268); tag **v0.8.11** |
 | Residual v0.8.12 | Milestone 21 closed · **#271–#274** (PRs #275/#276/#277/#278); tag **v0.8.12** |
 | Residual v0.8.13 | Milestone 22 closed · **#281–#284** (PRs #285/#286/#287/#288); tag **v0.8.13** |
+| Residual v0.8.14 | Milestone 23 closed · **#290–#292** (PRs #293/#294/#295); tag **v0.8.14** |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -181,6 +182,6 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Tag **v0.8.13** (gap matrix refresh + sticky eval + update-center residual + route reorder)
-2. Optional deeper product: full Responses WS Codex path; Redis sticky (eval B); remaining P0/P1 backlog
-3. Continue product backlog P0/P1; frontend flake observability if CI noise returns
+1. Tag **v0.8.14** (next residual inventory + Redis sticky design + admin test residual honesty)
+2. Optional deeper product: full Responses WS Codex path; Redis sticky Option B Milestone; reliability partials #568/#585/#555
+3. Continue product backlog P0/P1 from residual-next-candidates.md
