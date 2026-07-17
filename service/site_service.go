@@ -280,12 +280,16 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 		}
 	}
 
-	result, err := tx.Exec(
+	// Use RETURNING so PostgreSQL (no LastInsertId) and SQLite both get a real id
+	// inside the open transaction before apiEndpoints FK inserts.
+	var siteID int64
+	err = tx.QueryRowx(
 		tx.Rebind(`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
 		 external_checkin_url, status, is_pinned, sort_order, global_weight, max_concurrency,
 		 post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		 post_refresh_probe_latency_threshold_ms, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 RETURNING id`),
 		name, urlStr, platform,
 		siteData["proxyUrl"], siteData["useSystemProxy"], siteData["customHeaders"],
 		siteData["externalCheckinUrl"], siteData["status"], siteData["isPinned"],
@@ -293,16 +297,12 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 		siteData["postRefreshProbeEnabled"], siteData["postRefreshProbeModel"],
 		siteData["postRefreshProbeScope"], siteData["postRefreshProbeLatencyThresholdMs"],
 		now, now,
-	)
+	).Scan(&siteID)
 	if err != nil {
 		return 0, err
 	}
-
-	siteID, err := result.LastInsertId()
-	if err != nil {
-		var id int64
-		tx.Get(&id, tx.Rebind("SELECT id FROM sites WHERE name = ? AND url = ? AND platform = ? ORDER BY id DESC LIMIT 1"), name, urlStr, platform)
-		siteID = id
+	if siteID <= 0 {
+		return 0, fmt.Errorf("create site: invalid id %d", siteID)
 	}
 
 	// Insert apiEndpoints if present
