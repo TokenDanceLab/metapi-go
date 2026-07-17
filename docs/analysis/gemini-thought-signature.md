@@ -2,7 +2,7 @@
 
 Last updated: 2026-07-17
 
-Issue: TokenDanceLab/metapi-go#47  
+Issue: TokenDanceLab/metapi-go#47 / #309  
 Upstream: cita-777/metapi#580 / #581
 
 ## Problem
@@ -17,7 +17,9 @@ OpenAI-compatible clients usually cannot carry Gemini provider metadata, so repl
 
 ## Implementation (metapi-go)
 
-Primary surface: `transform/gemini/generate_content/compatibility.go`
+### Transform surface
+
+Primary: `transform/gemini/generate_content/compatibility.go`
 
 | Concern | Behavior |
 |--------|----------|
@@ -33,12 +35,28 @@ Primary surface: `transform/gemini/generate_content/compatibility.go`
 | Next-turn inject | `ApplyThoughtSignaturesToFunctionCallParts` / `BuildSignedModelContentForToolHistory` re-attach aggregate signatures for follow-up requests |
 | OpenAI bridge | Gemini→OpenAI stores signature under `tool_calls[].provider_specific_fields.thought_signature`; OpenAI→Gemini restores it |
 
+### Proxy runtime wire (#309)
+
+Live path: `handler/proxy/upstream.go` `sanitizeUpstreamJSONBody` (after model swap, per candidate path).
+
+| Gate | Behavior |
+|------|----------|
+| Platform | `gemini` / `gemini-cli` / `google` only |
+| Path | native `*generateContent*` / `*streamGenerateContent*` or `/v1internal*` (CLI) |
+| Body markers | only when `"functionCall"` / `"function_call"` / `"tool_calls"` present (cheap skip) |
+| Native `contents` | `generate_content.NormalizeRequest(body, model)` |
+| CLI envelope | `{ request: { contents… } }` — normalize inner request |
+| OpenAI `messages` on native path | `BuildGeminiGenerateContentRequestFromOpenAi` |
+| Model source | upstream actual model → body/request model → path-parsed model |
+
+OpenAI-compat `/v1/chat/completions` on Gemini OpenAI-compat bases is **not** rewritten (stays OpenAI-shaped; no native `thoughtSignature` field).
+
 ## Round-trip
 
 1. Upstream stream/final Gemini parts may include `thoughtSignature` on `functionCall`.
-2. Aggregate state collects unique signatures (`GeminiAggregateState.ThoughtSignatures`).
+2. Aggregate state collects unique signatures (`GeminiAggregateState.ThoughtSignatures`) inside the transform `StreamBridge` (test/helpers; not a multi-instance session store).
 3. Gemini→OpenAI conversion preserves them on tool_calls provider fields.
-4. Next OpenAI→Gemini or native normalize re-attaches real signatures (or dummy when required and missing).
+4. Next OpenAI→Gemini or native normalize (via proxy sanitize or direct transform) re-attaches real signatures (or dummy when required and missing).
 
 ## Models without signature support / caveats
 
@@ -49,6 +67,12 @@ Primary surface: `transform/gemini/generate_content/compatibility.go`
 | `gemini-2.5*` without thinking | No injection (matches upstream #135 baseline) |
 | Non-`gemini-*` IDs routed through this bridge | No dummy; thinking config may be disabled if signature missing |
 | Third-party “Gemini-compatible” proxies | Dummy may be rejected; only official Gemini model IDs are treated as dummy-safe |
+
+## Residual (honest)
+
+- **No multi-instance / Redis session store** for aggregate `ThoughtSignatures`. Process-local stream aggregate helpers exist for tests and future session glue; live proxy does **not** re-attach prior-turn aggregate state across requests. Clients must echo `provider_specific_fields.thought_signature` or send native contents that `NormalizeRequest` can patch (dummy for Gemini 3 when missing).
+- Full Responses WS and Redis sticky remain out of scope.
+- OpenAI-compat chat path on Gemini is passthrough (no native inject).
 
 ## Tests
 
@@ -64,7 +88,16 @@ Primary surface: `transform/gemini/generate_content/compatibility.go`
 - Aggregate → next request round-trip
 - OpenAI↔Gemini tool-history signature round-trip
 
-## Out of scope (this issue)
+`handler/proxy/gemini_thought_signature_test.go` covers:
 
-- Proxy executor routing (`gemini-native` path selection) — upstream #581 also touched request builders; this Go issue focuses on transform/request-side signature inject/preserve.
-- `web/**` and other protocol issues (#52/#53/#54).
+- Proxy sanitize injects dummy for Gemini 3 tool history on generateContent
+- Preserves real signatures
+- gemini-cli request envelope inject
+- OpenAI messages → native rebuild with provider sig
+- Non-gemini platform / no tool-history skip
+
+## Out of scope
+
+- Redis sticky / multi-instance aggregate re-attach
+- Full Responses WebSocket
+- `web/**` and unrelated protocol issues
