@@ -101,9 +101,12 @@ func (s *ModelProbeScheduler) Start(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Always register for admin probe-now / recovery paths (#154/#170),
+	// even when the background ticker is disabled.
+	SetGlobalModelProbeScheduler(s)
+
 	if !s.cfg.ModelAvailabilityProbeEnabled {
 		slog.Info("model-probe: disabled (probe not enabled)")
-		SetGlobalModelProbeScheduler(s)
 		return nil
 	}
 
