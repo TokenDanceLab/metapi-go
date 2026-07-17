@@ -594,7 +594,7 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, "读取账号失败")
 		return
 	}
-	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), account.SiteID); err != nil {
 		writeError(w, http.StatusInternalServerError, "读取站点失败")
 		return
 	}
@@ -832,7 +832,7 @@ func (h *accountTokensHandler) getAccountDefault(w http.ResponseWriter, r *http.
 	}
 
 	var site store.Site
-	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), account.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), account.SiteID); err != nil {
 		writeError(w, http.StatusInternalServerError, "读取站点失败")
 		return
 	}

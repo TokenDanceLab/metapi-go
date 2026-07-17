@@ -121,7 +121,7 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 
 	// Also fetch sites for the response
 	var sites []store.Site
-	h.db.Select(&sites, "SELECT * FROM sites ORDER BY sort_order, id")
+	h.db.Select(&sites, "SELECT "+service.SiteSelectColumns+" FROM sites ORDER BY sort_order, id")
 
 	resp := map[string]any{
 		"generatedAt": time.Now().UTC().Format(time.RFC3339),
@@ -151,7 +151,7 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 
 	// Check site exists
 	var site store.Site
-	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeError(w, http.StatusBadRequest, "site not found")
 		return
 	}
@@ -545,7 +545,7 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 
 	// Get site
 	var site store.Site
-	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeError(w, http.StatusNotFound, "site not found")
 		return
 	}
@@ -687,7 +687,7 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 
 	// Get site
 	var site store.Site
-	if err := h.db.Get(&site, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), body.SiteID); err != nil {
+	if err := h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), body.SiteID); err != nil {
 		writeError(w, http.StatusNotFound, "site not found")
 		return
 	}

@@ -31,3 +31,7 @@ service.RegisterSiteProxyCacheInvalidator(func() { globalAccountsCache.clear() }
 ```bash
 go test ./service ./handler/admin -count=1 -run 'Invalidate|Cache|Site'
 ```
+
+## Related: sites SELECT * drift
+
+Shared CI Postgres may carry leftover columns (e.g. `sc1_test_probe_col`). All admin/service site loads should use `service.SiteSelectColumns` instead of `SELECT *`.

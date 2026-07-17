@@ -244,7 +244,7 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var existing store.Site
-	err = h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id)
+	err = h.db.Get(&existing, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), id)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
@@ -466,7 +466,7 @@ func (h *sitesHandler) batchSites(w http.ResponseWriter, r *http.Request) {
 	for _, rawID := range body.IDs {
 		id := int64(rawID)
 		var existing store.Site
-		err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id)
+		err := h.db.Get(&existing, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), id)
 		if err != nil {
 			failedItems = append(failedItems, map[string]any{"id": id, "message": "Site not found"})
 			continue
@@ -537,7 +537,7 @@ func (h *sitesHandler) getDisabledModels(w http.ResponseWriter, r *http.Request)
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), id); err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
@@ -566,7 +566,7 @@ func (h *sitesHandler) updateDisabledModels(w http.ResponseWriter, r *http.Reque
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), id); err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
@@ -608,7 +608,7 @@ func (h *sitesHandler) getAvailableModels(w http.ResponseWriter, r *http.Request
 	}
 
 	var existing store.Site
-	if err := h.db.Get(&existing, h.db.Rebind("SELECT * FROM sites WHERE id = ?"), id); err != nil {
+	if err := h.db.Get(&existing, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), id); err != nil {
 		writeError(w, http.StatusNotFound, "Site not found")
 		return
 	}
