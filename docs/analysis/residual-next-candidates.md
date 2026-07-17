@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.21 → v0.8.22)
+# Residual next candidates (post v0.8.22)
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.21 shipped** (#350 completions include_usage, #351 residual honesty). Milestone 31 product items **#355–#358 merged** to master; **#359** residual honesty for post-merge board; release gate **v0.8.22** pending.  
+**Context**: **v0.8.22 shipped** (#355 admin key redact, #356 custom_headers deny, #357 CheckRedirect, #358 weighted soft-filter next priority, #359 residual honesty). Prior **v0.8.21**: #350–#351.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -43,25 +43,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-SOFT | Weighted soft-filter empty → next priority | **present** (#358/#362) | Weighted path skips soft-empty priority layer and tries next; failover-isolation note | Done for weighted soft-filter | P0-585 empty-filter fallback residual separate |
 
 
-## Active wave (Milestone 31 / v0.8.22)
+## Recommended sequencing (v0.8.23+)
 
-| Issue | Role | Notes |
-|------:|------|-------|
-| [#355](https://github.com/TokenDanceLab/metapi-go/issues/355) | security | **merged** #361 — admin key redact |
-| [#356](https://github.com/TokenDanceLab/metapi-go/issues/356) | security | **merged** #364 — custom_headers deny-list |
-| [#357](https://github.com/TokenDanceLab/metapi-go/issues/357) | security | **merged** #360 — RuntimeExecutor CheckRedirect |
-| [#358](https://github.com/TokenDanceLab/metapi-go/issues/358) | reliability | **merged** #362 — weighted soft-filter next priority |
-| [#359](https://github.com/TokenDanceLab/metapi-go/issues/359) | docs | residual honesty + MASTER flip (this document) |
-
-## Recommended sequencing (v0.8.22+)
-
-1. **Shipped on master for v0.8.22**: #355–#358 (PRs #360/#361/#362/#364). **#359** residual honesty closes the Milestone 31 board; release gate tags **v0.8.22**.
-2. **Shipped in v0.8.21**: #350 completions include_usage · #351 residual honesty. **P0-555** stays **present-with-residual** (chat+completions stream policy; media/lag/orphan residual). **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter priority.
-3. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
-4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.22**: #355–#359 (PRs #360–#364) — admin key redact · custom_headers deny · CheckRedirect · weighted soft-filter next priority · residual honesty. Prior v0.8.21: #350–#351. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter priority.
+2. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
+3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
+4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -77,7 +66,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.21](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.21) · prior [v0.8.20](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.20)
+- Release: [v0.8.22](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.22) · prior [v0.8.21](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.21)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
