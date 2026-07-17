@@ -5,6 +5,13 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.14] — 2026-07-17
+
+### Docs / Honesty
+- Residual next candidates inventory post v0.8.13 (#290 / #293)
+- Redis sticky Option B design spike (no product code) (#292 / #294)
+- Admin /api/test stream and job residual honesty (#291 / #295)
+
 ## [v0.8.13] — 2026-07-17
 
 ### Added
