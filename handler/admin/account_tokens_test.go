@@ -868,7 +868,26 @@ func TestTokens_SyncAll_Background(t *testing.T) {
 
 func TestTokens_GetGroups(t *testing.T) {
 	db, r := setupTokensTest(t)
-	_, accountID := tokenFixture(t, db, r)
+	// Unsupported platform keeps adapter nil so this path exercises local DISTINCT groups.
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	res, err := db.Exec(
+		`INSERT INTO sites (name, url, platform, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)`,
+		"Local Groups Site", "https://local-groups.example.com", "not-a-platform", now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	siteID, _ := res.LastInsertId()
+	extra := `{"credentialMode":"session"}`
+	res, err = db.Exec(
+		`INSERT INTO accounts (site_id, access_token, status, checkin_enabled, extra_config, created_at, updated_at)
+		 VALUES (?, 'session-token', 'active', 1, ?, ?, ?)`,
+		siteID, &extra, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	accountID, _ := res.LastInsertId()
 	createTokenFixture(t, db, accountID, "t1", "sk-t1", "group-a", true, false)
 	createTokenFixture(t, db, accountID, "t2", "sk-t2", "group-b", true, false)
 

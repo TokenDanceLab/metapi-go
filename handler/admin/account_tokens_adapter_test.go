@@ -35,6 +35,17 @@ func (f *fakeNewAPIUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"data":    map[string]any{"system_name": "New API"},
 		})
 		return
+	case path == "/api/user/self/groups" || path == "/api/user_group_map":
+		// NewApi GetUserGroups tries self/groups then user_group_map.
+		// Return map keys as group names for extractGroupKeys.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"data": map[string]any{
+				"vip":     map[string]any{"desc": "VIP"},
+				"default": map[string]any{"desc": "Default"},
+			},
+		})
+		return
 	case strings.HasPrefix(path, "/api/token"):
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -320,5 +331,78 @@ func TestTokens_CreateUpstream_MissingAdapter(t *testing.T) {
 	resp := doPostJSON(t, r, "/api/account-tokens", map[string]any{"accountId": accountID, "name": "x"})
 	if resp.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502 for missing adapter, got %d %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestTokens_GetGroups_FromUpstream(t *testing.T) {
+	db, r := setupTokensTest(t)
+	fake := newFakeNewAPIUpstream()
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+
+	_, accountID := tokenFixtureWithPlatform(t, db, "NewAPI Groups Site", srv.URL, "new-api")
+	// Local only has group-a; upstream returns vip + default and should win.
+	createTokenFixture(t, db, accountID, "local", "sk-local-group", "group-a", true, true)
+
+	resp := doGet(t, r, "/api/account-tokens/groups/"+itoa(accountID))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("get groups: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result["success"] != true {
+		t.Fatalf("expected success=true, got %#v", result)
+	}
+	groups, _ := result["groups"].([]any)
+	set := map[string]bool{}
+	for _, g := range groups {
+		if s, ok := g.(string); ok {
+			set[s] = true
+		}
+	}
+	if !set["vip"] || !set["default"] {
+		t.Fatalf("expected upstream vip+default, got %#v", groups)
+	}
+	if set["group-a"] {
+		t.Fatalf("local-only group should not replace upstream groups: %#v", groups)
+	}
+}
+
+func TestTokens_GetGroups_LocalFallbackWhenUpstreamMissing(t *testing.T) {
+	db, r := setupTokensTest(t)
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	// Unsupported platform → adapter nil → local DISTINCT groups.
+	res, err := db.Exec(
+		`INSERT INTO sites (name, url, platform, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)`,
+		"No Groups Adapter", "https://no-groups.example.com", "not-a-platform", now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	siteID, _ := res.LastInsertId()
+	extra := `{"credentialMode":"session"}`
+	res, err = db.Exec(
+		`INSERT INTO accounts (site_id, access_token, status, checkin_enabled, extra_config, created_at, updated_at)
+		 VALUES (?, 'session-token', 'active', 1, ?, ?, ?)`,
+		siteID, &extra, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	accountID, _ := res.LastInsertId()
+	createTokenFixture(t, db, accountID, "t1", "sk-t1", "group-a", true, true)
+	createTokenFixture(t, db, accountID, "t2", "sk-t2", "group-b", true, false)
+
+	resp := doGet(t, r, "/api/account-tokens/groups/"+itoa(accountID))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("get groups fallback: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &result)
+	groups, _ := result["groups"].([]any)
+	if len(groups) < 2 {
+		t.Fatalf("expected local groups, got %#v", result)
 	}
 }
