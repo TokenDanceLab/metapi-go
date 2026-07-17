@@ -43,7 +43,7 @@ on success POST /v1/videos:
 
 1. **No sticky site/token restore from mapping** — GET/DELETE still use normal channel selection; mapping fields SiteURL/TokenValue are stored for future pin work only.
 2. **Stub mode** — unconfigured upstream + stub does not rewrite publicId (no selected channel).
-3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave.
+3. **TTL / GC** — no retention job for stale `proxy_video_tasks` rows this wave. Honesty residual: [`videos-proxy-retention-residual.md`](./videos-proxy-retention-residual.md) (#254).
 4. **TokenValue in DB** — same sensitivity as process memory mapping; operators must protect DB backups.
 
 ## Tests
