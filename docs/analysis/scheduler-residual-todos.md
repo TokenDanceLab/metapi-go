@@ -3,11 +3,11 @@
 **Date**: 2026-07-17  
 **Issue**: [#246](https://github.com/TokenDanceLab/metapi-go/issues/246)  
 **Lane**: residual honesty (scheduler scaffolding)  
-**Scope**: document + strengthen comments only. No invented Sub2API refresh product, no fake sync success.
+**Scope**: #246 document + residual honesty. **#272**: site-announcement ticker wired to admin `SyncSiteAnnouncements` (no invented success). Sub2API / update-center product paths remain residual.
 
 ## Goal
 
-Four background schedulers still carry TODOs that look like product work. Operators reading logs or code should see **honest residual** language: what actually runs, what is a no-op, and multi-instance behavior. This wave does **not** implement the missing product paths.
+Four background schedulers originally carried TODOs that looked like product work. Operators reading logs or code should see **honest residual** language: what actually runs, what is a no-op, and multi-instance behavior. #246 documented residuals; **#272 wires site-announcement** to real `SyncSiteAnnouncements` while Sub2API refresh and update-center remain residual-honest until their own issues land. Channel recovery active-candidate wiring is covered by #273.
 
 ## Inventory
 
@@ -73,19 +73,26 @@ Four background schedulers still carry TODOs that look like product work. Operat
 
 ### 3. `SiteAnnouncementScheduler` (`site_announcement.go`)
 
-**Runs today**
+**Runs today (#272 wired)**
 
-1. Ticker + immediate first run; `inFlight` + lease.
-2. `SELECT id, platform, url FROM sites WHERE status = 'active'`.
-3. Count rows; log residual scan complete. No adapter, no DB writes.
+1. Ticker + immediate first run; `inFlight` + lease preserved.
+2. If `SyncFunc` is set: call it under the lease and log honest
+   `scanned/inserted/updated/unsupported/notifications/events/failed` fields.
+3. Production wiring: `handler/admin.RegisterSiteAnnouncementsRoutes` installs
+   `scheduler.SetDefaultSiteAnnouncementSyncFunc` -> `admin.SyncSiteAnnouncements(db, nil)`
+   (avoids `app`/`scheduler` importing `handler/admin`; routes register before
+   `StartBackgroundServices`, so `NewSiteAnnouncementScheduler` picks up the default).
+4. If `SyncFunc` is nil: residual scan enumerates active sites and logs count only
+   (no adapter / no writes). Used by unit tests and any process that never
+   registered announcement routes.
 
-**Residual**
+**Status**
 
 | TODO site | Honest status |
 |-----------|---------------|
-| platform-specific announcement sync | **Not wired** from this scheduler. Prefer reusing admin `syncSiteAnnouncements` rather than inventing a second path. |
+| platform-specific announcement sync | **Wired** via exported admin `SyncSiteAnnouncements`. Scheduler does not reimplement adapter logic. |
 
-Log language is intentionally "residual scan", not "sync success".
+Do not invent success counts without the injected SyncFunc actually calling adapters.
 
 ### 4. `UpdateCenterScheduler` (`update_center.go`)
 
@@ -121,7 +128,7 @@ Implications:
 ## Explicit non-goals (#246)
 
 - Implementing full Sub2API scheduled refresh product
-- Calling admin announcement sync from the ticker without a deliberate product decision
+- ~~Calling admin announcement sync from the ticker without a deliberate product decision~~ — decided in #272: wire via injected SyncFunc -> `SyncSiteAnnouncements`
 - Remote update-center helper client / deploy orchestration
 - Fake `refreshed>0`, fake announcement inserts, fake `updateAvailable=true`
 - Multi-instance durable job coordination
@@ -129,7 +136,7 @@ Implications:
 ## Verify
 
 ```bash
-go test ./scheduler -count=1
+go test ./scheduler ./handler/admin ./app -count=1
 test -f docs/analysis/scheduler-residual-todos.md
 ```
 
