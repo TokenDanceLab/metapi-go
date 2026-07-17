@@ -74,8 +74,8 @@
 | Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| In flight WFs | none — v0.8.1 polish #168–#171 landed |
-| Next | Optional tag v0.8.1; deeper product backlog / P4 adapter stubs as needed |
+| Polish | v0.8.1 #168–#171 landed |
+| P4 adapters | Milestone 11 · **#184** system-proxy/brand (#186) + **#185** test harness wire (#187) merged; **#182** token adapters + **#183** VerifyToken in flight |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake (tests pass) |
 
 ### M-COMPETE notes (active)
