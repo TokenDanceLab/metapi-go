@@ -122,9 +122,16 @@ func (s *ChannelRecoveryScheduler) runSweep() {
 func (s *ChannelRecoveryScheduler) runSweepLocked(dbw *store.DB) {
 	nowMs := time.Now().UnixMilli()
 
-	// Query cooling channels
+	// Query cooling channels (SQL-backed; real candidate list).
 	coolingCandidates := s.loadCoolingCandidates(dbw)
-	// TODO: wire active candidate loading via proxyChannelCoordinator
+	// Residual honesty (#246): active candidates are loaded via a simplified SQL
+	// stub (enabled route_channels with null cooldown), NOT via
+	// proxyChannelCoordinator.getActiveChannelIds() as the TS path does.
+	// That means process-local routing/coordinator state is ignored; the SQL
+	// list is an approximation and may include channels the coordinator would
+	// not treat as "active for recovery".
+	// TODO residual (partial): wire active candidate loading via
+	// proxyChannelCoordinator when that surface is shared with this package.
 	activeCandidates := s.loadActiveCandidates(dbw)
 
 	merged := s.mergeCandidates(coolingCandidates, activeCandidates)
@@ -194,7 +201,10 @@ func (s *ChannelRecoveryScheduler) loadCoolingCandidates(dbw *store.DB) []recove
 }
 
 func (s *ChannelRecoveryScheduler) loadActiveCandidates(dbw *store.DB) []recoveryCandidate {
-	// Stub: queries active channels
+	// Residual (#246): SQL approximation of "active" channels (enabled + no
+	// cooldown + active account/site). Not wired to proxyChannelCoordinator.
+	// LIMIT 50 is a local guard, not TS coordinator semantics. Not a silent
+	// no-op — rows are returned and may be probed — but selection is residual.
 	var candidates []recoveryCandidate
 
 	rows, err := dbw.Query(`
