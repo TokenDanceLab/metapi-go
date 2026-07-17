@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
@@ -897,17 +898,44 @@ func TestDispatchUpstream_RetryThenSuccessKeepsSameRequestIDInProxyLog(t *testin
 	if hits.Load() < 2 {
 		t.Fatalf("expected retry across channels, hits=%d", hits.Load())
 	}
-	if len(logs) != 1 {
-		t.Fatalf("proxy logs = %d, want 1 success row: %#v", len(logs), logs)
+	if len(logs) < 2 {
+		t.Fatalf("proxy logs = %d, want failed attempt + success: %#v", len(logs), logs)
 	}
-	if logs[0].RequestID != wantID {
-		t.Fatalf("proxy log request_id = %q, want %s", logs[0].RequestID, wantID)
+	var success *proxy.ProxyLogEntry
+	var failed *proxy.ProxyLogEntry
+	for i := range logs {
+		switch logs[i].Status {
+		case "success":
+			success = &logs[i]
+		case "failed":
+			if failed == nil {
+				failed = &logs[i]
+			}
+		}
 	}
-	if logs[0].RetryCount != 1 {
-		t.Fatalf("retry_count = %d, want 1 (second channel attempt)", logs[0].RetryCount)
+	if failed == nil {
+		t.Fatalf("expected failed proxy log for first 429 attempt: %#v", logs)
 	}
-	if logs[0].ChannelID == nil || *logs[0].ChannelID != 22 {
-		t.Fatalf("channel_id = %#v, want 22", logs[0].ChannelID)
+	if failed.RequestID != wantID {
+		t.Fatalf("failed request_id = %q, want %s", failed.RequestID, wantID)
+	}
+	if failed.RetryCount != 0 {
+		t.Fatalf("failed retry_count = %d, want 0", failed.RetryCount)
+	}
+	if failed.ChannelID == nil || *failed.ChannelID != 11 {
+		t.Fatalf("failed channel_id = %#v, want 11", failed.ChannelID)
+	}
+	if success == nil {
+		t.Fatalf("expected success proxy log after retry: %#v", logs)
+	}
+	if success.RequestID != wantID {
+		t.Fatalf("success request_id = %q, want %s", success.RequestID, wantID)
+	}
+	if success.RetryCount != 1 {
+		t.Fatalf("success retry_count = %d, want 1 (second channel attempt)", success.RetryCount)
+	}
+	if success.ChannelID == nil || *success.ChannelID != 22 {
+		t.Fatalf("success channel_id = %#v, want 22", success.ChannelID)
 	}
 }
 
@@ -1035,6 +1063,7 @@ func TestHandleStreamUpstreamContextCancelPreservesPartialUsage(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestSanitizeUpstreamJSONBody_MultiTurnReasoningInjectsContent(t *testing.T) {
 	// Hermes/Codex second-turn: reasoning has encrypted_content + summary, no content.
 	body := []byte(`{
@@ -1167,5 +1196,138 @@ func TestSanitizeUpstreamJSONBody_CompactPreservesReasoningInput(t *testing.T) {
 	}
 	if r["content"] != "s" {
 		t.Fatalf("content = %#v", r["content"])
+=======
+func TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog(t *testing.T) {
+	// Upstream 429 with usage still billed by the gateway must not under-count.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limited","type":"rate_limit_error"},"usage":{"prompt_tokens":11,"completion_tokens":0,"total_tokens":11}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	var logs []proxy.ProxyLogEntry
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, RouteID: 9, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o-upstream",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(logs) == 0 {
+		t.Fatal("expected at least one failed proxy log")
+	}
+	entry := logs[0]
+	if entry.Status != "failed" {
+		t.Fatalf("status = %q, want failed", entry.Status)
+	}
+	if entry.HTTPStatus != http.StatusTooManyRequests {
+		t.Fatalf("http_status = %d, want 429", entry.HTTPStatus)
+	}
+	if entry.PromptTokens == nil || *entry.PromptTokens != 11 {
+		t.Fatalf("prompt_tokens = %#v, want 11", entry.PromptTokens)
+	}
+	if entry.TotalTokens == nil || *entry.TotalTokens != 11 {
+		t.Fatalf("total_tokens = %#v, want 11", entry.TotalTokens)
+	}
+	if entry.UsageSource != "upstream" {
+		t.Fatalf("usage_source = %q, want upstream", entry.UsageSource)
+	}
+	if entry.ErrorMessage == nil || *entry.ErrorMessage == "" {
+		t.Fatalf("error_message missing: %#v", entry.ErrorMessage)
+	}
+	if entry.IsStream == nil || *entry.IsStream {
+		t.Fatalf("is_stream = %#v, want false", entry.IsStream)
+	}
+}
+
+func TestNonStreamContentFailurePersistsParsedUsageToFailedProxyLog(t *testing.T) {
+	// Keyword-matched content failure must still persist usage extracted from the body.
+	t.Setenv("PROXY_ERROR_KEYWORDS", "content_policy_violation")
+	// DetectProxyFailure reads config.Get(); force a fresh config load if available.
+	if cfg := config.Get(); cfg != nil {
+		cfg.ProxyErrorKeywords = []string{"content_policy_violation"}
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// HTTP 200 but body matches failure keyword + usage present.
+		_, _ = w.Write([]byte(`{"error":{"message":"content_policy_violation"},"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	var logs []proxy.ProxyLogEntry
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, RouteID: 9, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o-upstream",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: router,
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code == http.StatusOK {
+		t.Fatalf("status = %d, want non-200 content failure; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(logs) == 0 {
+		t.Fatal("expected failed proxy log with usage")
+	}
+	entry := logs[0]
+	if entry.Status != "failed" {
+		t.Fatalf("status = %q, want failed", entry.Status)
+	}
+	if entry.PromptTokens == nil || *entry.PromptTokens != 5 {
+		t.Fatalf("prompt_tokens = %#v, want 5", entry.PromptTokens)
+	}
+	if entry.CompletionTokens == nil || *entry.CompletionTokens != 3 {
+		t.Fatalf("completion_tokens = %#v, want 3", entry.CompletionTokens)
+	}
+	if entry.TotalTokens == nil || *entry.TotalTokens != 8 {
+		t.Fatalf("total_tokens = %#v, want 8", entry.TotalTokens)
+	}
+	if entry.UsageSource != "upstream" {
+		t.Fatalf("usage_source = %q, want upstream", entry.UsageSource)
+	}
+}
+
+func TestTruncateErrTextBoundsLength(t *testing.T) {
+	short := truncateErrText("  hello  ")
+	if short != "hello" {
+		t.Fatalf("short = %q", short)
+	}
+	long := strings.Repeat("a", 2500)
+	got := truncateErrText(long)
+	if len([]rune(got)) > 2003 { // 2000 + "..."
+		t.Fatalf("len = %d, want <= 2003", len([]rune(got)))
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("expected ellipsis suffix, got len=%d", len(got))
+>>>>>>> fab114d (fix(proxy): log failed attempts with usage for accuracy (#311))
 	}
 }
