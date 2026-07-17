@@ -757,6 +757,95 @@ func normalizeAccountStatus(status string) string {
 	}
 }
 
+// shouldRecoverExpiredAPIKey detects the expired API-key credential recovery path:
+// previous status expired, next mode apikey, credentials changed, next status not forced disabled.
+func shouldRecoverExpiredAPIKey(prev, next store.Account, updates map[string]any) bool {
+	if !strings.EqualFold(strings.TrimSpace(prev.Status), "expired") {
+		return false
+	}
+	nextStatus := strings.TrimSpace(prev.Status)
+	if status, ok := updates["status"].(string); ok && strings.TrimSpace(status) != "" {
+		nextStatus = strings.TrimSpace(status)
+	}
+	if strings.EqualFold(nextStatus, "disabled") {
+		return false
+	}
+	mode := service.ResolveStoredCredentialMode(&next)
+	if mode != service.CredentialModeAPIKey {
+		return false
+	}
+	return credentialFieldsChanged(prev, updates)
+}
+
+func credentialFieldsChanged(prev store.Account, updates map[string]any) bool {
+	if accessToken, ok := updates["accessToken"].(string); ok {
+		if strings.TrimSpace(accessToken) != strings.TrimSpace(prev.AccessToken) {
+			return true
+		}
+	}
+	if apiTokenRaw, ok := updates["apiToken"]; ok {
+		prevAPI := ""
+		if prev.APIToken != nil {
+			prevAPI = strings.TrimSpace(*prev.APIToken)
+		}
+		switch v := apiTokenRaw.(type) {
+		case string:
+			if strings.TrimSpace(v) != prevAPI {
+				return true
+			}
+		case *string:
+			nextAPI := ""
+			if v != nil {
+				nextAPI = strings.TrimSpace(*v)
+			}
+			if nextAPI != prevAPI {
+				return true
+			}
+		default:
+			if v != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// clearAccountAuthRuntimeHealth removes auth-sourced runtimeHealth best-effort after recovery.
+func clearAccountAuthRuntimeHealth(db *sqlx.DB, accountID int64) error {
+	var extraConfig *string
+	if err := db.Get(&extraConfig, db.Rebind("SELECT extra_config FROM accounts WHERE id = ?"), accountID); err != nil {
+		return err
+	}
+	cfg := service.ParseExtraConfig(extraConfig)
+	if cfg == nil {
+		return nil
+	}
+	healthRaw, ok := cfg["runtimeHealth"]
+	if !ok || healthRaw == nil {
+		return nil
+	}
+	b, err := json.Marshal(healthRaw)
+	if err != nil {
+		return nil
+	}
+	var entry service.RuntimeHealthEntry
+	if err := json.Unmarshal(b, &entry); err != nil {
+		return nil
+	}
+	if strings.ToLower(strings.TrimSpace(string(entry.Source))) != string(service.HealthSourceAuth) {
+		return nil
+	}
+	merged := service.MergeExtraConfig(extraConfig, map[string]any{"runtimeHealth": nil})
+	now := time.Now().UTC().Format(time.RFC3339)
+	if merged == nil {
+		_, err = db.Exec(db.Rebind("UPDATE accounts SET extra_config = NULL, updated_at = ? WHERE id = ?"), now, accountID)
+		return err
+	}
+	_, err = db.Exec(db.Rebind("UPDATE accounts SET extra_config = ?, updated_at = ? WHERE id = ?"), *merged, now, accountID)
+	return err
+}
+
+
 // ---- Rebind Session ----
 
 func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) {
@@ -932,6 +1021,12 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	}
 	if apiToken, ok := updates["apiToken"].(*string); ok {
 		nextAccount.APIToken = apiToken
+	} else if apiTokenStr, ok := updates["apiToken"].(string); ok {
+		token := apiTokenStr
+		nextAccount.APIToken = &token
+	}
+	if status, ok := updates["status"].(string); ok {
+		nextAccount.Status = status
 	}
 	if service.BuildCapabilitiesForAccount(&nextAccount).CanCheckin {
 		if body.CheckinEnabled != nil {
@@ -971,9 +1066,16 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 			mergeExtraConfigUpdate(map[string]any{"sub2apiAuth": mergedAuth})
 		}
 	}
-	// TODO(P4): expired API key recovery - when updating an expired API key account,
-	// trigger model refresh with allowInactive:true and reactivateAfterSuccessfulModelRefresh:true
-	// (spec lines 594-602, TS accounts.ts:1550-1556)
+	// Expired API-key recovery (p3-sites-accounts.md 594-602 / TS accounts.ts):
+	// when credentials change on an expired apikey account and status is not forced
+	// disabled, refresh models with allowInactive and reactivate only on success.
+	recovery := shouldRecoverExpiredAPIKey(row.Account, nextAccount, updates)
+	if recovery {
+		// preserveExpiredStatus: do not activate until model refresh succeeds.
+		if status, ok := updates["status"].(string); ok && status == "active" {
+			delete(updates, "status")
+		}
+	}
 
 	if err := service.UpdateAccountFields(h.db, id, updates); err != nil {
 		slog.Error("Failed to update account", "err", err, "account_id", id)
@@ -990,6 +1092,27 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
+	var modelRefresh map[string]any
+	if recovery {
+		modelRefresh = accountModelRefresher(r.Context(), h.db, id, true)
+		if modelRefreshSucceeded(modelRefresh) {
+			if err := service.UpdateAccountFields(h.db, id, map[string]any{"status": "active"}); err != nil {
+				slog.Error("Failed to reactivate account after model refresh", "err", err, "account_id", id)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"message": "模型刷新成功但账号激活失败"})
+				return
+			}
+			// Best-effort: clear stale auth-unhealthy runtime health after successful recovery.
+			_ = clearAccountAuthRuntimeHealth(h.db, id)
+		} else {
+			// Keep expired; never claim active on failed model refresh.
+			msg := modelRefreshErrorMessage(modelRefresh)
+			slog.Warn("expired API-key recovery model refresh failed", "account_id", id, "message", msg)
+			if err := service.UpdateAccountFields(h.db, id, map[string]any{"status": "expired"}); err != nil {
+				slog.Warn("failed to preserve expired status after recovery failure", "account_id", id, "err", err)
+			}
+		}
+	}
+
 	updatedRow, err := service.GetAccountWithSiteByID(h.db, id)
 	if err != nil {
 		slog.Error("Failed to load updated account", "err", err, "account_id", id)
@@ -999,6 +1122,10 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	updated := updatedRow.Account
 	caps := service.BuildCapabilitiesForAccount(&updated)
 	sessionCapable := caps.CanRefreshBalance
+	hasDiscoveredModels := false
+	if recovery && modelRefreshSucceeded(modelRefresh) {
+		hasDiscoveredModels = true
+	}
 	resp := map[string]any{
 		"id":                 updated.ID,
 		"siteId":             updated.SiteID,
@@ -1025,11 +1152,12 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		"credentialMode":     string(service.ResolveStoredCredentialMode(&updated)),
 		"capabilities":       caps,
 		"runtimeHealth": service.BuildRuntimeHealthForAccount(service.RuntimeHealthInput{
-			AccountStatus:  updated.Status,
-			SiteStatus:     updatedRow.Site.Status,
-			ExtraConfig:    updated.ExtraConfig,
-			SessionCapable: &sessionCapable,
-			OAuthProvider:  updated.OAuthProvider,
+			AccountStatus:       updated.Status,
+			SiteStatus:          updatedRow.Site.Status,
+			ExtraConfig:         updated.ExtraConfig,
+			SessionCapable:      &sessionCapable,
+			HasDiscoveredModels: hasDiscoveredModels,
+			OAuthProvider:       updated.OAuthProvider,
 		}),
 		"site": map[string]any{
 			"id":       updatedRow.Site.ID,
@@ -1038,6 +1166,12 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 			"platform": updatedRow.Site.Platform,
 			"status":   updatedRow.Site.Status,
 		},
+	}
+	if recovery {
+		resp["modelRefresh"] = modelRefresh
+		if !modelRefreshSucceeded(modelRefresh) {
+			resp["message"] = "凭证已更新，但模型刷新失败，账号仍为 expired: " + modelRefreshErrorMessage(modelRefresh)
+		}
 	}
 	routing.InvalidateCache()
 	globalAccountsCache.clear()
