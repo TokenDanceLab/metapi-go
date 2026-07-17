@@ -5,6 +5,14 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.9] — 2026-07-17
+
+### Added
+- Videos GET/DELETE sticky pin via ForcedChannelID from mapping ChannelID (#253 / #256)
+
+### Docs / Honesty
+- proxy_video_tasks retention residual (no TTL/GC) (#254 / #259)
+
 ## [v0.8.8] — 2026-07-17
 
 ### Added
