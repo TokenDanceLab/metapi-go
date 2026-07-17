@@ -243,7 +243,7 @@ func TestTokens_Postgres_CreateListUpdateDefaultValueAndDelete(t *testing.T) {
 	err := db.QueryRow(
 		db.Rebind(`INSERT INTO accounts (site_id, username, access_token, status, is_pinned, sort_order,
 		 checkin_enabled, extra_config, created_at, updated_at)
-		 VALUES (?, ?, ?, 'active', 0, 0, 1, ?, ?, ?) RETURNING id`),
+		 VALUES (?, ?, ?, 'active', FALSE, 0, TRUE, ?, ?, ?) RETURNING id`),
 		siteID, username, "pg-session-token-"+suffix, extraConfig, now, now,
 	).Scan(&accountID)
 	if err != nil {
