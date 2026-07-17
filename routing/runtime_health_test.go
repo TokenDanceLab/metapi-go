@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"testing"
+	"time"
 )
 
 // =============================================================================
@@ -734,3 +735,44 @@ func TestBuildRuntimeBreakerReason(t *testing.T) {
 		t.Error("expected non-empty reason")
 	}
 }
+
+
+// =============================================================================
+// healthPersistTimer / schedule race regression (#335)
+// =============================================================================
+
+// TestScheduleSiteRuntimeHealthPersistence_NoDataRace hammers concurrent
+// RecordSiteRuntimeSuccess (which schedules debounced persistence) so the
+// race detector covers healthPersistTimer + healthPersistInFlight under
+// healthStateMu. Fix path: schedule clears timer under lock (#327 gate);
+// persist gates inFlight under lock (#335).
+func TestScheduleSiteRuntimeHealthPersistence_NoDataRace(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	const (
+		workers   = 16
+		perWorker = 40
+	)
+	var wg sync.WaitGroup
+	model := "gpt-4o"
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func(siteBase int64) {
+			defer wg.Done()
+			for i := 0; i < perWorker; i++ {
+				siteID := siteBase + int64(i%3)
+				RecordSiteRuntimeSuccess(siteID, float64(100+i), &model)
+				RecordSiteRuntimeFailure(siteID, SiteRuntimeFailureContext{
+					ErrorText: strPtr("temporary overload"),
+				})
+			}
+		}(int64(w%3 + 1))
+	}
+	wg.Wait()
+	// Let debounce AfterFunc fire (and clear timer) so reset cannot race it alone.
+	time.Sleep(time.Duration(SiteRuntimeHealthPersistDebounceMs+200) * time.Millisecond)
+	ResetSiteRuntimeHealthState()
+}
+
+func strPtr(s string) *string { return &s }

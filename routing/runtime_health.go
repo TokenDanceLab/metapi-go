@@ -1093,11 +1093,18 @@ func persistSiteRuntimeHealthState() {
 	if healthSettingsStore == nil {
 		return
 	}
+	healthStateMu.Lock()
 	if healthPersistInFlight {
+		healthStateMu.Unlock()
 		return
 	}
 	healthPersistInFlight = true
-	defer func() { healthPersistInFlight = false }()
+	healthStateMu.Unlock()
+	defer func() {
+		healthStateMu.Lock()
+		healthPersistInFlight = false
+		healthStateMu.Unlock()
+	}()
 
 	// Build payload under read lock, then serialize
 	healthStateMu.RLock()
