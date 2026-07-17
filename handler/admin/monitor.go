@@ -24,6 +24,9 @@ func RegisterMonitorRoutes(r chi.Router, db *sqlx.DB, cfg *config.Config) {
 	r.Get("/api/monitor/config", handler.getConfig)
 	r.Put("/api/monitor/config", handler.saveConfig)
 	r.Post("/api/monitor/session", handler.createSession)
+	// DELETE clears the HttpOnly meta_monitor_auth cookie on admin logout.
+	// Frontend JS cannot clear HttpOnly cookies; this is the honest clear path.
+	r.Delete("/api/monitor/session", handler.clearSession)
 
 	// LDOH proxy routes - rate limited at 60 req/min at the router layer when wired.
 	r.HandleFunc("/monitor-proxy/ldoh", handler.ldohProxy)
@@ -145,17 +148,53 @@ func (h *monitorHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 // must not yield a usable admin Bearer credential for /api/*.
 func (h *monitorHandler) createSession(w http.ResponseWriter, r *http.Request) {
 	session := deriveMonitorSessionToken(h.cfg.AuthToken)
-	cookie := &http.Cookie{
+	http.SetCookie(w, newMonitorAuthCookie(session, monitorSessionMaxAge, isMonitorHTTPS(r)))
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// DELETE /api/monitor/session
+// Clears the HttpOnly meta_monitor_auth cookie with Path matching createSession.
+// Admin logout must call this while the Bearer is still valid: after frontend
+// clears localStorage, the opaque cookie would otherwise remain usable for
+// /monitor-proxy/* until Max-Age (AuthToken is unchanged on logout).
+func (h *monitorHandler) clearSession(w http.ResponseWriter, r *http.Request) {
+	clearMonitorAuthCookies(w, r)
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// newMonitorAuthCookie builds the shared cookie attributes for mint + clear so
+// Path/HttpOnly/SameSite/Secure stay in lockstep (browsers only clear when the
+// Path matches the cookie that was originally set).
+func newMonitorAuthCookie(value string, maxAge int, secure bool) *http.Cookie {
+	return &http.Cookie{
 		Name:     monitorAuthCookie,
-		Value:    session,
+		Value:    value,
 		Path:     monitorCookiePath,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   monitorSessionMaxAge,
-		Secure:   isMonitorHTTPS(r),
+		MaxAge:   maxAge,
+		Secure:   secure,
 	}
-	http.SetCookie(w, cookie)
-	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// clearMonitorAuthCookies expires meta_monitor_auth for the scoped path used
+// by createSession. Also expires a legacy Path=/ cookie in case an older
+// release minted one before the /monitor-proxy/ scope landed (#407).
+//
+// net/http serializes MaxAge < 0 as Max-Age=0 (immediate expiry).
+func clearMonitorAuthCookies(w http.ResponseWriter, r *http.Request) {
+	secure := isMonitorHTTPS(r)
+	http.SetCookie(w, newMonitorAuthCookie("", -1, secure))
+	// Legacy Path=/ residual from pre-#407 createSession.
+	http.SetCookie(w, &http.Cookie{
+		Name:     monitorAuthCookie,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Secure:   secure,
+	})
 }
 
 // GET/POST/ALL /monitor-proxy/ldoh and /monitor-proxy/ldoh/*

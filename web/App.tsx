@@ -813,8 +813,16 @@ function AppShell() {
                   {t('个人信息')}
                 </button>
                 <button onClick={() => {
-                  clearAuthSession(localStorage);
-                  setAuthed(false);
+                  // Clear HttpOnly monitor cookie while Bearer is still valid,
+                  // then drop localStorage auth. Fire-and-forget is fine: the
+                  // browser applies Set-Cookie from the DELETE response even
+                  // after setAuthed(false) re-renders the login screen.
+                  void api.clearMonitorSession()
+                    .catch(() => {})
+                    .finally(() => {
+                      clearAuthSession(localStorage);
+                      setAuthed(false);
+                    });
                 }} className="user-dropdown-item danger">
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                   {t('退出登录')}

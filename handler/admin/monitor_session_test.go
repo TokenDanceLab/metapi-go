@@ -167,3 +167,104 @@ func TestMonitorAuth_AuthTokenRotationInvalidatesCookie(t *testing.T) {
 		t.Fatalf("post-rotation status = %d body=%s, want 401", recDenied.Code, recDenied.Body.String())
 	}
 }
+
+func TestMonitorSession_ClearCookieOnLogout(t *testing.T) {
+	_, r, _ := setupOpsAdminStubsTest(t)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/monitor/session", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["success"] != true {
+		t.Fatalf("success = %v, want true", body["success"])
+	}
+
+	cookies := rec.Result().Cookies()
+	var scoped *http.Cookie
+	var legacyRoot *http.Cookie
+	for _, c := range cookies {
+		if c.Name != monitorAuthCookie {
+			continue
+		}
+		switch c.Path {
+		case monitorCookiePath:
+			scoped = c
+		case "/":
+			legacyRoot = c
+		}
+	}
+	if scoped == nil {
+		t.Fatalf("missing clear cookie for Path=%q; cookies=%v", monitorCookiePath, cookies)
+	}
+	if scoped.MaxAge >= 0 {
+		t.Fatalf("scoped clear MaxAge = %d, want < 0 (Max-Age=0 on wire)", scoped.MaxAge)
+	}
+	if scoped.Value != "" {
+		t.Fatalf("scoped clear Value = %q, want empty", scoped.Value)
+	}
+	if !scoped.HttpOnly {
+		t.Fatal("scoped clear cookie must remain HttpOnly")
+	}
+	if scoped.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("scoped clear SameSite = %v, want Lax", scoped.SameSite)
+	}
+	// Legacy Path=/ residual clear keeps older pre-#407 cookies from surviving logout.
+	if legacyRoot == nil {
+		t.Fatal("missing legacy Path=/ clear cookie")
+	}
+	if legacyRoot.MaxAge >= 0 {
+		t.Fatalf("legacy clear MaxAge = %d, want < 0", legacyRoot.MaxAge)
+	}
+}
+
+func TestMonitorSession_ClearCookieSecureWhenHTTPS(t *testing.T) {
+	_, r, _ := setupOpsAdminStubsTest(t)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/monitor/session", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	var scoped *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == monitorAuthCookie && c.Path == monitorCookiePath {
+			scoped = c
+			break
+		}
+	}
+	if scoped == nil {
+		t.Fatal("missing scoped clear cookie")
+	}
+	if !scoped.Secure {
+		t.Fatal("clear cookie Secure must match createSession when X-Forwarded-Proto=https")
+	}
+}
+
+func TestClearMonitorAuthCookies_HelperContract(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodDelete, "/api/monitor/session", nil)
+	clearMonitorAuthCookies(rec, req)
+
+	headers := rec.Header().Values("Set-Cookie")
+	if len(headers) < 2 {
+		t.Fatalf("Set-Cookie count = %d, want >= 2 (scoped + legacy)", len(headers))
+	}
+	joined := strings.Join(headers, " | ")
+	if !strings.Contains(joined, monitorAuthCookie+"=") {
+		t.Fatalf("Set-Cookie missing %s: %s", monitorAuthCookie, joined)
+	}
+	if !strings.Contains(joined, "Path="+monitorCookiePath) && !strings.Contains(joined, "Path=/monitor-proxy/") {
+		t.Fatalf("Set-Cookie missing scoped Path: %s", joined)
+	}
+	// net/http renders MaxAge < 0 as Max-Age=0.
+	if !strings.Contains(joined, "Max-Age=0") {
+		t.Fatalf("Set-Cookie missing Max-Age=0: %s", joined)
+	}
+}
