@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.28](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.28)** (2026-07-18) — remains latest until M39 release gate
+**Latest release**: **[v0.8.29](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.29)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 39 — Enterprise residual reliability harden v0.8.29](https://github.com/TokenDanceLab/metapi-go/milestone/39) |
+| Active milestone | closed Milestone 39 (v0.8.29) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -41,26 +41,24 @@
 | Enterprise residual polish **v0.8.26** | ✅ closed | #397–#400 (PRs #401–#404/#406); tag **v0.8.26** |
 | Enterprise residual security polish **v0.8.27** | ✅ closed | #407–#410 (PRs #411–#414); tag **v0.8.27** |
 | Enterprise residual SSRF/client harden **v0.8.28** | ✅ closed | #416–#418 (PRs #419–#421); tag **v0.8.28** |
-| Enterprise residual reliability harden **v0.8.29** | 🔄 active | Milestone 39 · board **#423–#426** |
+| Enterprise residual reliability harden **v0.8.29** | ✅ closed | #423–#426 (PRs #427/#428/#430/#431); tag **v0.8.29** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#423](https://github.com/TokenDanceLab/metapi-go/issues/423) | reliability P0 | REL-PREFERRED-BREAKER: SelectPreferredChannel must respect open site/model breaker when siblings exist |
-| [#424](https://github.com/TokenDanceLab/metapi-go/issues/424) | reliability P0 | REL-COOLDOWN-TS: CooldownUntil eligibility must parse timestamps (not lex string compare) |
-| [#425](https://github.com/TokenDanceLab/metapi-go/issues/425) | reliability P1 | REL-CONDUCTOR-BUDGET: hard max attempt budget + nil RefreshAuth fails over |
-| [#426](https://github.com/TokenDanceLab/metapi-go/issues/426) | docs | Residual honesty post v0.8.28 (M39 board) |
+| — | — | Board clean after v0.8.29; next residual only with ACs |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35–M38 closed**: do not re-list #388–#390, #397–#400, #407–#410, or #416–#418 as active work (landed on master with v0.8.28).
-**Latest release**: stays **v0.8.28** until M39 release gate; do not claim v0.8.29 until tag.
+**M35–M39 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, or #423–#426 as active work (landed on master with v0.8.29).
+**Latest release**: **v0.8.29** after M39 release gate (docs gate only; do not claim next residual until new board + ACs).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.29](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.29) | 39 | preferred breaker · cooldown timestamp parse · conductor attempt budget · residual honesty |
 | [v0.8.28](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.28) | 38 | SEC-REDIR bare clients · SEC-MONITOR logout clear · residual honesty |
 | [v0.8.27](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.27) | 37 | opaque monitor session · OldToken constant-time · Claude max_tokens vs context_length · residual honesty |
 | [v0.8.26](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.26) | 36 | IsValidAPIEndpointURL metadata parity · max_tokens vs context_length reject · stream missing-usage warn · residual honesty |
@@ -91,15 +89,15 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.28
+gh release view v0.8.29
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land M39 board **#423–#426**: REL-PREFERRED-BREAKER (#423 P0) · REL-COOLDOWN-TS (#424 P0) · REL-CONDUCTOR-BUDGET (#425 P1) · residual honesty (#426). Latest release stays **v0.8.28** until release gate.
+1. Close Milestone 39: #423 REL-PREFERRED-BREAKER · #424 REL-COOLDOWN-TS · #425 REL-CONDUCTOR-BUDGET · #426 residual honesty. Latest release **v0.8.29**.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-3. Optional later: P0-585 production load-proof; deeper P0-555 media/lag polish; further dialect context_length enforce.
+3. Optional later: P0-585 production load-proof / empty-filter residual; deeper P0-555 media/lag polish; further dialect context_length enforce.
 4. Keep MASTER slim; docs map at `docs/README.md`.
 
 

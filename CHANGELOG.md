@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.29] — 2026-07-18
+
+### Fixed
+- Preferred/sticky channel selection respects open site/model breaker and falls through when healthy siblings exist (`SelectPreferredChannel`) (#423 / #430)
+- CooldownUntil eligibility parses timestamps (no millis-ISO vs RFC3339 lex compare) via `IsCooldownActive` (#424 / #427)
+- Proxy conductor hard max attempt budget across same-channel + refresh + failover; cap RefreshAuth successes; nil/error RefreshAuth → sibling failover with channel-scoped exclude (#425 / #431)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 39 post v0.8.28; REL-PREFERRED-BREAKER / REL-COOLDOWN-TS / REL-CONDUCTOR-BUDGET present · board #423–#426 closed (#426 / #428)
+
 ## [v0.8.28] — 2026-07-18
 
 ### Security

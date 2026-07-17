@@ -29,17 +29,17 @@ Upstream gap **#585** (“one channel failure cascades to other channels”) is 
 **Do not claim:** “#585 is fully present” or “site-wide cascade is eliminated.”  
 **Honest claim:** channel-scoped request exclude + cooldown write isolation are hardened and tested; site/model breaker and production load-proof remain residual (see table below and inventory P0-585).
 
-### M39 active reliability board (post v0.8.28)
+### M39 reliability slices (shipped in v0.8.29)
 
-Milestone **39** / **v0.8.29** opens three product reliability slices that sharpen residual notes above (latest release stays **v0.8.28** until the M39 gate). Inventory IDs: **REL-PREFERRED-BREAKER** · **REL-COOLDOWN-TS** · **REL-CONDUCTOR-BUDGET**.
+Milestone **39** / **v0.8.29** closed three product reliability slices that were active after v0.8.28. Inventory IDs: **REL-PREFERRED-BREAKER** · **REL-COOLDOWN-TS** · **REL-CONDUCTOR-BUDGET** — all **present**.
 
-| Issue | ID | Gap (current code) | Target AC |
-|------:|:---|:-------------------|:----------|
-| [#423](https://github.com/TokenDanceLab/metapi-go/issues/423) | REL-PREFERRED-BREAKER | `FilterSiteRuntimeBrokenCandidatesByModel` no-ops when `len(candidates)<=1`, so sticky/preferred can keep an open-breaker channel while healthy siblings exist on normal SelectChannel | Preferred + open breaker + siblings → nil / fall through to normal selection |
-| [#424](https://github.com/TokenDanceLab/metapi-go/issues/424) | REL-COOLDOWN-TS | CooldownUntil writers use millis ISO; eligibility may lex-compare against RFC3339 `now` without fixed millis | Parse both sides (or format both with fixed millis); now+500ms still ineligible |
-| [#425](https://github.com/TokenDanceLab/metapi-go/issues/425) | REL-CONDUCTOR-BUDGET | Conductor has same-channel timeout budget only; RefreshAuth success can reset without hard attempt/refresh budget; nil RefreshAuth may stop without sibling failover | Hard max attempts across same-channel + refresh + failover; cap RefreshAuth; nil/error RefreshAuth → failover + exclude |
+| Issue | ID | Status | Evidence |
+|------:|:---|:-------|:---------|
+| [#423](https://github.com/TokenDanceLab/metapi-go/issues/423) | REL-PREFERRED-BREAKER | **present** (PR [#430](https://github.com/TokenDanceLab/metapi-go/pull/430)) | Preferred path checks Global/Model breaker directly; open breaker + siblings → nil / fall through |
+| [#424](https://github.com/TokenDanceLab/metapi-go/issues/424) | REL-COOLDOWN-TS | **present** (PR [#427](https://github.com/TokenDanceLab/metapi-go/pull/427)) | `IsCooldownActive` parses millis ISO / RFC3339 both sides to ms; now+500ms still ineligible |
+| [#425](https://github.com/TokenDanceLab/metapi-go/issues/425) | REL-CONDUCTOR-BUDGET | **present** (PR [#431](https://github.com/TokenDanceLab/metapi-go/pull/431)) | Hard MaxAttempts across same-channel + refresh + failover; cap RefreshAuth; nil/error RefreshAuth → failover + exclude |
 
-Docs honesty for the board: [#426](https://github.com/TokenDanceLab/metapi-go/issues/426). Do **not** mark these present until the matching product PRs land.
+Docs honesty for the board: [#426](https://github.com/TokenDanceLab/metapi-go/issues/426) / PR [#428](https://github.com/TokenDanceLab/metapi-go/pull/428). **P0-585 remains partial** (credential usage-limit scope, empty-filter global fallback, production multi-channel load proof).
 
 ## Mechanism map (aligned with code)
 
