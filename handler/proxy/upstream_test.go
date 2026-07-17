@@ -356,6 +356,58 @@ func TestDispatchUpstreamUsesSiteCustomHeaders(t *testing.T) {
 	}
 }
 
+
+func TestDispatchUpstreamDeniesSensitiveCustomHeaders(t *testing.T) {
+	var gotAuth, gotHost, gotCustom, gotCookie, gotConn string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotHost = r.Host
+		gotCustom = r.Header.Get("X-Custom")
+		gotCookie = r.Header.Get("Cookie")
+		gotConn = r.Header.Get("Connection")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"chatcmpl_test","choices":[{"message":{"content":"ok"}}]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	// Malicious/sensitive custom headers must not reach upstream; X-Custom still applies.
+	customHeaders := `{"Authorization":"Bearer evil","Host":"evil.example","Cookie":"x=1","Connection":"close","X-Custom":"ok"}`
+	router := &upstreamTestRouter{selected: routing.SelectedChannel{
+		Channel:     store.RouteChannel{ID: 42, Enabled: true},
+		Account:     store.Account{ID: 7, Status: "active"},
+		Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active", CustomHeaders: &customHeaders},
+		TokenValue:  "upstream-token",
+		ActualModel: "gpt-4o-upstream",
+	}}
+	SetUpstreamConfig(&UpstreamConfig{Router: router})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if gotAuth != "Bearer upstream-token" {
+		t.Fatalf("Authorization = %q, want Bearer upstream-token", gotAuth)
+	}
+	if gotCustom != "ok" {
+		t.Fatalf("X-Custom = %q, want ok", gotCustom)
+	}
+	if gotCookie != "" {
+		t.Fatalf("Cookie leaked: %q", gotCookie)
+	}
+	if gotConn != "" {
+		t.Fatalf("Connection leaked: %q", gotConn)
+	}
+	if gotHost == "evil.example" {
+		t.Fatalf("Host overridden to evil.example")
+	}
+}
+
+
 func TestDispatchUpstreamNonStreamFailoversOnRetryableHTTPStatusAndRecordsHealth(t *testing.T) {
 	var firstCalls int
 	firstUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

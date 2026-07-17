@@ -95,11 +95,9 @@ func (sp *SiteProxy) proxyFunc(req *http.Request) (*url.URL, error) {
 func (sp *SiteProxy) Do(ctx context.Context, req *http.Request, proxyConfig *ProxyConfig) (*http.Response, error) {
 	req = req.WithContext(ctx)
 
-	// Apply custom headers from proxy config
+	// Apply custom headers from proxy config (deny-list filters identity/hop-by-hop).
 	if proxyConfig != nil {
-		for k, v := range proxyConfig.CustomHeaders {
-			req.Header.Set(k, v)
-		}
+		ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
 	}
 
 	// If specific proxy URL is given, use a dedicated transport
@@ -151,9 +149,8 @@ func (sp *SiteProxy) doWithExplicitProxy(ctx context.Context, req *http.Request,
 // DoWithProxy is a convenience function that works without a SiteProxy instance.
 func DoWithProxy(ctx context.Context, req *http.Request, proxyConfig *ProxyConfig) (*http.Response, error) {
 	if proxyConfig != nil {
-		for k, v := range proxyConfig.CustomHeaders {
-			req.Header.Set(k, v)
-		}
+		// Deny-list sensitive / hop-by-hop / metapi-control headers (#356).
+		ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
 	}
 
 	insecureSkipTLS := proxyConfig != nil && proxyConfig.InsecureSkipTLS
