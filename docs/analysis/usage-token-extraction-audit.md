@@ -35,14 +35,17 @@ Does **not** invent tokens when upstream omitted usage (usage_source=unknown, ze
 ## Tests
 
 ```bash
-go test ./handler/proxy ./scheduler -count=1 -run Usage
+go test ./handler/proxy ./scheduler -count=1 -run 'Usage|Token|Aggregation|ProxyLog|NonStream|StreamSuccess|DispatchUpstream|ClientDisconnect|ContextCancel|TruncateErr|Effective'
 ```
 
-- TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog
+- TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog (429 + total_tokens=11 → status=failed)
+- TestStreamHTTPErrorPersistsUsageTokensToFailedProxyLog (stream request, non-2xx JSON + usage)
 - TestNonStreamContentFailurePersistsParsedUsageToFailedProxyLog
 - TestDispatchUpstream_RetryThenSuccessKeepsSameRequestIDInProxyLog (failed+success rows, shared request_id)
+- TestDispatchUpstream_MultiRetrySharesRequestIDInProxyLogsAndError (all-fail: ≥2 failed rows + usage retained)
 - TestTruncateErrTextBoundsLength
-- Existing stream disconnect / Anthropic cache / aggregation effective-token tests remain green
+- TestEffectiveTokenCount / aggregation projection (no double-count; failed status → failed_calls)
+- Existing stream disconnect / Anthropic cache tests remain green
 
 ## Residual honesty
 

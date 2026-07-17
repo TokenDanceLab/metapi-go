@@ -769,14 +769,14 @@ func TestDetectProxyFailureReceivesParsedUsageFromBody(t *testing.T) {
 
 func TestDispatchUpstream_MultiRetrySharesRequestIDInProxyLogsAndError(t *testing.T) {
 	// Channel A always 429 (retryable); channel B also 429 → terminal after retries.
-	// Same parent request_id must appear on success-path logs if B later succeeds,
-	// and on the final client error body / header when all attempts fail.
+	// Each terminal channel attempt must write status=failed proxy_logs with the same
+	// parent request_id (P1 multi-attempt under-count fix for #311).
 	var hits atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
-		_, _ = w.Write([]byte(`{"error":{"message":"rate limited","type":"rate_limit_error"}}`))
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limited","type":"rate_limit_error"},"usage":{"prompt_tokens":3,"completion_tokens":0,"total_tokens":3}}`))
 	}))
 	t.Cleanup(upstream.Close)
 
@@ -833,12 +833,23 @@ func TestDispatchUpstream_MultiRetrySharesRequestIDInProxyLogsAndError(t *testin
 	if hdr := rec.Header().Get("X-Request-Id"); hdr != "" && hdr != wantID {
 		t.Fatalf("X-Request-Id = %q, want %s", hdr, wantID)
 	}
-	// proxy_logs currently only write on success in the hot path; ensure the
-	// parent id is still recoverable from the request context after multi-attempt.
 	if got := proxy.RequestIDFromContext(req.Context()); got != wantID {
 		t.Fatalf("request context lost id: %q", got)
 	}
-	_ = logs
+	if len(logs) < 2 {
+		t.Fatalf("proxy logs = %d, want failed row per channel attempt: %#v", len(logs), logs)
+	}
+	for i, entry := range logs {
+		if entry.Status != "failed" {
+			t.Fatalf("logs[%d].status = %q, want failed", i, entry.Status)
+		}
+		if entry.RequestID != wantID {
+			t.Fatalf("logs[%d].request_id = %q, want %s", i, entry.RequestID, wantID)
+		}
+		if entry.TotalTokens == nil || *entry.TotalTokens != 3 {
+			t.Fatalf("logs[%d].total_tokens = %#v, want 3 (usage retained on 429 body)", i, entry.TotalTokens)
+		}
+	}
 }
 
 func TestDispatchUpstream_RetryThenSuccessKeepsSameRequestIDInProxyLog(t *testing.T) {
@@ -1063,7 +1074,6 @@ func TestHandleStreamUpstreamContextCancelPreservesPartialUsage(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestSanitizeUpstreamJSONBody_MultiTurnReasoningInjectsContent(t *testing.T) {
 	// Hermes/Codex second-turn: reasoning has encrypted_content + summary, no content.
 	body := []byte(`{
@@ -1196,7 +1206,9 @@ func TestSanitizeUpstreamJSONBody_CompactPreservesReasoningInput(t *testing.T) {
 	}
 	if r["content"] != "s" {
 		t.Fatalf("content = %#v", r["content"])
-=======
+	}
+}
+
 func TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog(t *testing.T) {
 	// Upstream 429 with usage still billed by the gateway must not under-count.
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1254,6 +1266,56 @@ func TestNonStreamHTTPErrorPersistsUsageTokensToFailedProxyLog(t *testing.T) {
 	}
 	if entry.IsStream == nil || *entry.IsStream {
 		t.Fatalf("is_stream = %#v, want false", entry.IsStream)
+	}
+}
+
+func TestStreamHTTPErrorPersistsUsageTokensToFailedProxyLog(t *testing.T) {
+	// Stream request that gets a non-2xx JSON error body with usage must still log tokens.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"stream rate limited","type":"rate_limit_error"},"usage":{"prompt_tokens":7,"completion_tokens":0,"total_tokens":7}}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	var logs []proxy.ProxyLogEntry
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:     store.RouteChannel{ID: 42, RouteID: 9, Enabled: true},
+			Account:     store.Account{ID: 7, Status: "active"},
+			Site:        store.Site{ID: 3, URL: upstream.URL, Status: "active"},
+			TokenValue:  "upstream-token",
+			ActualModel: "gpt-4o-upstream",
+		}},
+		LogProxy: func(_ context.Context, entry proxy.ProxyLogEntry) error {
+			logs = append(logs, entry)
+			return nil
+		},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1/chat/completions", `{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	rec := httptest.NewRecorder()
+	HandleChatCompletions(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429; body=%s", rec.Code, rec.Body.String())
+	}
+	if len(logs) == 0 {
+		t.Fatal("expected failed proxy log for stream non-2xx with usage")
+	}
+	entry := logs[0]
+	if entry.Status != "failed" {
+		t.Fatalf("status = %q, want failed", entry.Status)
+	}
+	if entry.IsStream == nil || !*entry.IsStream {
+		t.Fatalf("is_stream = %#v, want true", entry.IsStream)
+	}
+	if entry.TotalTokens == nil || *entry.TotalTokens != 7 {
+		t.Fatalf("total_tokens = %#v, want 7", entry.TotalTokens)
+	}
+	if entry.UsageSource != "upstream" {
+		t.Fatalf("usage_source = %q, want upstream", entry.UsageSource)
 	}
 }
 
@@ -1328,6 +1390,5 @@ func TestTruncateErrTextBoundsLength(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "...") {
 		t.Fatalf("expected ellipsis suffix, got len=%d", len(got))
->>>>>>> fab114d (fix(proxy): log failed attempts with usage for accuracy (#311))
 	}
 }
