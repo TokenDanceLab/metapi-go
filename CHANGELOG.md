@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.25] — 2026-07-17
+
+### Security
+- `IsValidHTTPURL` rejects cloud metadata / link-local targets (aligned with `IsForbiddenSiteTargetURL`); site externalCheckin URL uses the hardened check (#382 / #385)
+
+### Fixed
+- Admin `GET /api/routes` batch-loads route channels in one query and groups in memory (kills per-route N+1; response shape + #375 redact unchanged) (#383 / #386)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 34 post v0.8.24; SEC-HTTPURL + PERF-ROUTES → present (#384 / #387)
+
 ## [v0.8.24] — 2026-07-17
 
 ### Security
