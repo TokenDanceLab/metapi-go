@@ -75,8 +75,8 @@
 | Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
 | Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
 | In flight WFs | none — ops residual #154–#158 landed; v0.8.0 tagged |
-| Next | Go 1.26.5 when available for vulncheck; optional v0.8.1 polish; deeper product backlog as needed |
-| Residual CI | `vulncheck` GO-2026-5856 (Go 1.26.4); frontend occasional `EnvironmentTeardownError` flake (tests pass) |
+| Next | v0.8.1 polish waves (#169 models list, #170 probe boot, #171 decision API); deeper product backlog as needed |
+| Residual CI | Go 1.26.5 clears GO-2026-5856; frontend occasional EnvironmentTeardownError flake (tests pass) |
 
 ### M-COMPETE notes (active)
 
