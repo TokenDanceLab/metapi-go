@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 28 (v0.8.19) — next residual wave TBD |
+| Active milestone | **[Milestone 29 — Enterprise residual v0.8.20](https://github.com/TokenDanceLab/metapi-go/milestone/29)** |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -32,12 +32,14 @@
 | Enterprise residual **v0.8.17** | ✅ | #318–#320 · tag v0.8.17 |
 | Enterprise residual **v0.8.18** | ✅ | #327–#329 · tag v0.8.18 |
 | Enterprise residual **v0.8.19** | ✅ | #334–#336 (PRs #337/#339/#343); tag **v0.8.19** |
+| Enterprise residual **v0.8.20** | 🔄 | Milestone 29 · #345–#346 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.19; next residual only with ACs |
+| [#345](https://github.com/TokenDanceLab/metapi-go/issues/345) | proxy | OpenAI chat stream `stream_options.include_usage` inject (P0-555 residual) |
+| [#346](https://github.com/TokenDanceLab/metapi-go/issues/346) | docs | residual honesty refresh post v0.8.19 |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -76,9 +78,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 policy/media/lag; proxy max-token enforce from contextLength.
-3. Keep MASTER slim; docs map at `docs/README.md`.
+1. Close Milestone 29: #345 stream include_usage · #346 residual honesty.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
