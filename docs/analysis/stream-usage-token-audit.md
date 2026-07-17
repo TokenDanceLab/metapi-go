@@ -50,7 +50,7 @@
 | Failure-path `proxy_logs` rows | Hot path still success-focused; failures update router health without always inserting logs. Needs product decision + schema status semantics. |
 | `usage_source` / `upstream_path` DDL | In-process only until schema migration. |
 | Upstream omits usage entirely (some media / tools / mid-stream kill before usage event) | Correctly stays 0; cannot recover without inventing or vendor-specific counters. |
-| OpenAI `stream_options.include_usage` not forced | If client/upstream never send a final usage chunk, stream logs stay zero. Runtime config/policy, not extraction. |
+| OpenAI `stream_options.include_usage` not forced | **Addressed for chat/completions stream (#345)**: `applyUpstreamStreamIncludeUsage` injects `include_usage=true` on OpenAI-compatible chat stream upstream bodies; skips codex/sub2api and non-chat paths. Still residual if provider ignores the flag or never emits usage. |
 | Transformed multi-protocol SSE (Claude↔OpenAI etc.) | Passthrough path extracts from upstream wire format; if a transformer rewrites usage keys, needs runtime fixture against real adapters. |
 | Multi-instance projection lag / lease | Aggregation correctness is separate; see `token-stats-accuracy.md`. |
 | Cache fields not first-class `proxy_logs` columns | Cache lives in `billing_details` JSON + in-process `ParsedUsage`; stats `SUM(total_tokens)` now includes Anthropic cache via expanded prompt/total. |

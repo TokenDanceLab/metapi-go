@@ -14,7 +14,7 @@
 | P1 | Multi-attempt retries under-counted failed attempts in logs | Success row only after failover; failed attempts invisible to stats | **Fixed**: each terminal channel attempt that records failure also logs |
 | P2 | Aggregation ignores orphan proxy_logs without site join | applyBatch skips siteID==nil (by design) | Residual (correct for site buckets; watermark still advances) |
 | P2 | usage_source / upstream_path not DDL columns | In-process only | Residual (schema) |
-| P2 | OpenAI stream without final usage chunk | Requires stream_options.include_usage policy | Residual (policy) |
+| P2 | OpenAI stream without final usage chunk | Requires stream_options.include_usage policy | **Policy inject for chat stream (#345)**; residual if provider omits anyway / media endpoints |
 | P3 | Pure network / timeout failures with no usage | Correctly zeros; no invent | Documented; failed row still written for call counts |
 
 Aggregation effectiveTokenCount already prefers total_tokens else prompt+completion without double-count (token-stats-accuracy.md). No change required there for this wave.
@@ -47,7 +47,7 @@ go test ./handler/proxy ./scheduler -count=1 -run Usage
 
 ## Residual honesty
 
-Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata columns, stream_options policy, media endpoints that never emit usage, multi-instance projection lag, orphan logs without site join.
+Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata columns, media endpoints that never emit usage, multi-instance projection lag, orphan logs without site join. OpenAI chat stream `stream_options.include_usage` policy is wired (#345); still not perfect billing.
 
 ## Aggregation of failed `proxy_logs` (#319)
 
@@ -61,6 +61,6 @@ Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata col
 | `"failed"` (#311 `writeFailureProxyLog`) | +0 | +1 | +tokens |
 | other / nil (incl. legacy `"error"`) | +0 | +1 | +tokens |
 
-Zero/unknown usage stays 0 (`effectiveTokenCount` does not invent; #311 cost only when `usage.Found`). This is **not** perfect billing — residuals above still apply (stream_options policy, media endpoints, multi-instance lag, orphans without site join).
+Zero/unknown usage stays 0 (`effectiveTokenCount` does not invent; #311 cost only when `usage.Found`). This is **not** perfect billing — residuals above still apply (provider-ignored include_usage, media endpoints, multi-instance lag, orphans without site join).
 
 Regression: `TestUsageAggregationProjectsFailedStatusTokens` (success + `status=failed` → `failed_calls=1`, `total_tokens=T1+T2`). Lifecycle projection seeds also use `"failed"` for the non-success row.

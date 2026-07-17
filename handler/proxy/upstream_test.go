@@ -1331,3 +1331,71 @@ func TestTruncateErrTextBoundsLength(t *testing.T) {
 		t.Fatalf("expected ellipsis suffix, got len=%d", len(got))
 	}
 }
+
+func TestApplyUpstreamStreamIncludeUsage_InjectsWhenMissing(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	var body map[string]any
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	opts, ok := body["stream_options"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stream_options map, got %#v", body["stream_options"])
+	}
+	if opts["include_usage"] != true {
+		t.Fatalf("include_usage = %#v, want true", opts["include_usage"])
+	}
+}
+
+func TestApplyUpstreamStreamIncludeUsage_ForcesFalseToTrueAndPreservesKeys(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"model":"gpt-4o","stream":true,"stream_options":{"include_usage":false,"foo":"bar"}}`)
+	out := applyUpstreamStreamIncludeUsage(in, "new-api", "/v1/chat/completions", true)
+	var body map[string]any
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	opts := body["stream_options"].(map[string]any)
+	if opts["include_usage"] != true {
+		t.Fatalf("include_usage = %#v", opts["include_usage"])
+	}
+	if opts["foo"] != "bar" {
+		t.Fatalf("preserved key lost: %#v", opts)
+	}
+}
+
+func TestApplyUpstreamStreamIncludeUsage_NoopWhenAlreadyTrue(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"stream":true,"stream_options":{"include_usage":true,"foo":1}}`)
+	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	if string(out) != string(in) {
+		t.Fatalf("expected identical bytes when already true, got %s want %s", out, in)
+	}
+}
+
+func TestApplyUpstreamStreamIncludeUsage_SkipNonChatAndNonStream(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"stream":true,"input":"hi"}`)
+	if got := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/responses", true); string(got) != string(in) {
+		t.Fatalf("responses path should skip: %s", got)
+	}
+	if got := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/messages", true); string(got) != string(in) {
+		t.Fatalf("messages path should skip: %s", got)
+	}
+	chat := []byte(`{"stream":false,"messages":[]}`)
+	if got := applyUpstreamStreamIncludeUsage(chat, "openai", "/v1/chat/completions", false); string(got) != string(chat) {
+		t.Fatalf("non-stream should skip: %s", got)
+	}
+}
+
+func TestApplyUpstreamStreamIncludeUsage_SkipCodexSub2API(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"stream":true,"messages":[{"role":"user","content":"x"}]}`)
+	for _, plat := range []string{"codex", "CODEX", "sub2api", "chatgpt-codex"} {
+		if got := applyUpstreamStreamIncludeUsage(in, plat, "/v1/chat/completions", true); string(got) != string(in) {
+			t.Fatalf("platform %q should skip stream_options inject: %s", plat, got)
+		}
+	}
+}
