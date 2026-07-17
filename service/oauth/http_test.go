@@ -92,3 +92,42 @@ func TestDoHTTPIgnoresEnvironmentProxyWithoutProxyURL(t *testing.T) {
 		t.Fatal("doHTTP without proxy URL used HTTP_PROXY from environment")
 	}
 }
+
+func TestOAuthHTTPClientRejectsCrossOriginRedirect(t *testing.T) {
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	req, err := http.NewRequest(http.MethodGet, source.URL+"/oauth/token", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := doHTTP(req, nil, nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("cross-origin redirect was allowed")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin", err)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called")
+	}
+}
+
+func TestNewOAuthHTTPClientWiresCheckRedirect(t *testing.T) {
+	client := newOAuthHTTPClient(nil)
+	if client.CheckRedirect == nil {
+		t.Fatal("newOAuthHTTPClient must set CheckRedirect")
+	}
+}

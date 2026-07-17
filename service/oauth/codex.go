@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 )
 
 const (
@@ -339,8 +340,9 @@ func doHTTP(req *http.Request, proxyURL *string, client *http.Client) (*http.Res
 
 func newOAuthHTTPClient(proxy func(*http.Request) (*url.URL, error)) *http.Client {
 	return &http.Client{
-		Transport: newOAuthHTTPTransport(proxy),
-		Timeout:   30 * time.Second,
+		Transport:     newOAuthHTTPTransport(proxy),
+		Timeout:       30 * time.Second,
+		CheckRedirect: platform.RejectCrossOriginRedirect,
 	}
 }
 
