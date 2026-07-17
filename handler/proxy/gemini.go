@@ -24,7 +24,22 @@ func RegisterGeminiRoutes(r chi.Router) {
 	r.Post("/v1internal::countTokens", HandleGeminiCLICountTokens)
 }
 
+// geminiSupportedGenerationMethods is the fixed method set advertised for owned
+// Gemini list entries. Typed as []any so writeJSON/appendJSON encodes a JSON
+// array (the lightweight encoder does not special-case []string).
+// GenerateContent paths still route through dispatchUpstream; this list only
+// describes client-visible capabilities.
+var geminiSupportedGenerationMethods = []any{
+	"generateContent",
+	"streamGenerateContent",
+	"countTokens",
+}
+
 // HandleGeminiModelsList handles GET /v1beta/models.
+// Returns a Gemini-shaped models list built from the MetAPI-owned catalog
+// (resolveOwnedModelCatalog / AvailableModelsSource), not a hard-coded stub and
+// not a live upstream Generative Language models scrape. See
+// docs/analysis/gemini-models-list.md.
 func HandleGeminiModelsList(w http.ResponseWriter, r *http.Request) {
 	authCtx := GetProxyAuth(r)
 	if authCtx == nil {
@@ -32,26 +47,85 @@ func HandleGeminiModelsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = authCtx
+	models := getAvailableModels(r.Context(), authCtx.Policy)
+	writeJSON(w, 200, buildGeminiModelsResponse(selectGeminiListModels(models)))
+}
 
-	// Gemini models list response
-	stubResp := map[string]any{
-		"models": []map[string]any{
-			{
-				"name":                       "models/gemini-2.5-pro",
-				"displayName":                "Gemini 2.5 Pro",
-				"description":                "Gemini 2.5 Pro model",
-				"supportedGenerationMethods": []string{"generateContent", "streamGenerateContent", "countTokens"},
-			},
-			{
-				"name":                       "models/gemini-2.5-flash",
-				"displayName":                "Gemini 2.5 Flash",
-				"description":                "Gemini 2.5 Flash model",
-				"supportedGenerationMethods": []string{"generateContent", "streamGenerateContent", "countTokens"},
-			},
-		},
+// selectGeminiListModels prefers catalog entries that look Gemini-related when
+// the owned catalog is mixed (OpenAI/Claude/Gemini). If no gemini-ish names are
+// present, the full owned catalog is returned so an empty list is reserved for
+// truly empty / deny-all / listing-error cases.
+func selectGeminiListModels(models []string) []string {
+	if len(models) == 0 {
+		return []string{}
 	}
-	writeJSON(w, 200, stubResp)
+	gemini := make([]string, 0, len(models))
+	for _, m := range models {
+		if isGeminiishModelName(m) {
+			gemini = append(gemini, m)
+		}
+	}
+	if len(gemini) > 0 {
+		return gemini
+	}
+	return models
+}
+
+func isGeminiishModelName(model string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(model)), "gemini")
+}
+
+// buildGeminiModelsResponse maps owned model IDs into the Gemini models.list
+// envelope used by Generative Language API clients:
+//
+//	{ "models": [ { "name": "models/<id>", "displayName", "description?",
+//	               "supportedGenerationMethods": [...] } ] }
+func buildGeminiModelsResponse(models []string) map[string]any {
+	items := make([]map[string]any, 0, len(models))
+	for _, m := range models {
+		id := normalizeGeminiModelID(m)
+		if id == "" {
+			continue
+		}
+		display := geminiDisplayName(id)
+		items = append(items, map[string]any{
+			"name":                       "models/" + id,
+			"displayName":                display,
+			"description":                display + " model",
+			"supportedGenerationMethods": append([]any(nil), geminiSupportedGenerationMethods...),
+		})
+	}
+	return map[string]any{
+		"models": items,
+	}
+}
+
+// normalizeGeminiModelID strips optional "models/" resource prefixes and blanks.
+func normalizeGeminiModelID(model string) string {
+	id := strings.TrimSpace(model)
+	id = strings.TrimPrefix(id, "models/")
+	return strings.TrimSpace(id)
+}
+
+// geminiDisplayName produces a lightweight human label from a model id
+// (e.g. gemini-2.5-pro → "Gemini 2.5 Pro"). Non-hyphenated ids pass through.
+func geminiDisplayName(id string) string {
+	id = normalizeGeminiModelID(id)
+	if id == "" || !strings.Contains(id, "-") {
+		return id
+	}
+	parts := strings.Split(id, "-")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		// Keep purely numeric / dotted version tokens as-is (2.5, 1.5, …).
+		if p[0] >= '0' && p[0] <= '9' {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	return strings.Join(parts, " ")
 }
 
 // HandleGeminiModelsListDynamic handles GET /gemini/:geminiApiVersion/models.
