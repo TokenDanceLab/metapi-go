@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	proxyhandler "github.com/tokendancelab/metapi-go/handler/proxy"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -171,4 +172,26 @@ func TestNewHTTPServerUsesHardenedDefaults(t *testing.T) {
 	if server.MaxHeaderBytes != 1<<20 {
 		t.Fatalf("MaxHeaderBytes = %d, want %d", server.MaxHeaderBytes, 1<<20)
 	}
+}
+
+// TestWireResponsesWebsocketTransport_RegistersResidual covers #217 boot path:
+// App.Start calls WireResponsesWebsocketTransport so Ensure is not a silent uncalled stub.
+func TestWireResponsesWebsocketTransport_RegistersResidual(t *testing.T) {
+	proxyhandler.ResetResponsesWebsocketTransportForTest()
+	if proxyhandler.ResponsesWebsocketTransportRegistered() {
+		t.Fatal("expected unregistered before wire")
+	}
+
+	a := New(&config.Config{ListenHost: "127.0.0.1", Port: 0}, http.NewServeMux())
+	a.Server = newHTTPServer("127.0.0.1:0", a.Router)
+	a.WireResponsesWebsocketTransport()
+
+	if !proxyhandler.ResponsesWebsocketTransportRegistered() {
+		t.Fatal("WireResponsesWebsocketTransport must call EnsureResponsesWebsocketTransport")
+	}
+
+	// nil / missing server must not panic
+	(&App{}).WireResponsesWebsocketTransport()
+	var nilApp *App
+	nilApp.WireResponsesWebsocketTransport()
 }
