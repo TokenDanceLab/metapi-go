@@ -14,7 +14,7 @@
 | P1 | Multi-attempt retries under-counted failed attempts in logs | Success row only after failover; failed attempts invisible to stats | **Fixed**: each terminal channel attempt that records failure also logs |
 | P2 | Aggregation ignores orphan proxy_logs without site join | applyBatch skips siteID==nil (by design) | Residual (correct for site buckets; watermark still advances) |
 | P2 | usage_source / upstream_path not DDL columns | In-process only | Residual (schema) |
-| P2 | OpenAI stream without final usage chunk | Requires stream_options.include_usage policy | **Policy inject for chat stream (#345)**; residual if provider omits anyway / media endpoints |
+| P2 | OpenAI stream without final usage chunk | Requires stream_options.include_usage policy | **Policy inject for chat + legacy completions stream (#345/#350)**; residual if provider omits anyway / media endpoints |
 | P3 | Pure network / timeout failures with no usage | Correctly zeros; no invent | Documented; failed row still written for call counts |
 
 Aggregation effectiveTokenCount already prefers total_tokens else prompt+completion without double-count (token-stats-accuracy.md). No change required there for this wave.

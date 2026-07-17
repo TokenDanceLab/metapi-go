@@ -408,15 +408,14 @@ func applyUpstreamStreamPreference(bodyBytes []byte, sitePlatform, upstreamPath 
 }
 
 // applyUpstreamStreamIncludeUsage forces stream_options.include_usage=true on OpenAI-compatible
-// chat/completions stream bodies so upstream SSE emits a final usage chunk (P0-555 residual / #345).
+// chat/completions and legacy /v1/completions stream bodies so upstream SSE emits a final usage chunk (P0-555 residual / #345/#350).
 // Platform-safe: skips non-chat endpoints and platforms known to reject stream_options (codex/sub2api).
 // Does not invent tokens; only asks the provider to include usage when streaming.
 func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPath string, isStream bool) []byte {
 	if !isStream || len(bodyBytes) == 0 {
 		return bodyBytes
 	}
-	ep, ok := proxy.EndpointFromPath(upstreamPath)
-	if !ok || ep != proxy.EndpointChat {
+	if !acceptsOpenAIStreamIncludeUsagePath(upstreamPath) {
 		return bodyBytes
 	}
 	if rejectsOpenAIStreamOptions(sitePlatform) {
@@ -456,6 +455,25 @@ func applyUpstreamStreamIncludeUsage(bodyBytes []byte, sitePlatform, upstreamPat
 		return bodyBytes
 	}
 	return out
+}
+
+// acceptsOpenAIStreamIncludeUsagePath reports OpenAI-compatible paths that honor
+// stream_options.include_usage (chat + legacy completions). Messages/Responses excluded.
+func acceptsOpenAIStreamIncludeUsagePath(upstreamPath string) bool {
+	ep, ok := proxy.EndpointFromPath(upstreamPath)
+	if ok && ep == proxy.EndpointChat {
+		return true
+	}
+	path := strings.TrimSpace(upstreamPath)
+	if i := strings.IndexAny(path, "?#"); i >= 0 {
+		path = path[:i]
+	}
+	path = strings.TrimRight(path, "/")
+	// Legacy OpenAI completions (not chat/completions — EndpointChat already matched).
+	if path == "/v1/completions" || path == "/completions" || strings.HasSuffix(path, "/v1/completions") {
+		return true
+	}
+	return false
 }
 
 // rejectsOpenAIStreamOptions reports platforms that historically 400 on stream_options
