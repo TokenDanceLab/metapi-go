@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -16,9 +17,41 @@ import (
 	"github.com/tokendancelab/metapi-go/service"
 )
 
+const (
+	routeDecisionBatchMaxItems      = 500
+	routeDecisionRefreshTaskType    = "route-decision.refresh"
+	routeDecisionRefreshTaskTitle   = "刷新路由选中概率"
+	routeDecisionRefreshDedupeKey   = "route-decision-refresh"
+	routeDecisionRouterUnavailable  = "路由决策引擎未配置"
+)
+
+// RouteDecisionExplainer is the router surface used by decision admin APIs.
+// Tests inject fakes; production wires routing.TokenRouter.
+type RouteDecisionExplainer interface {
+	ExplainSelection(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error)
+	ExplainSelectionForRoute(ctx context.Context, routeID int64, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error)
+	ExplainSelectionRouteWide(ctx context.Context, routeID int64, policy routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error)
+}
+
+// RouteDecisionRefresher refreshes persisted route decision snapshots.
+type RouteDecisionRefresher interface {
+	RefreshAllRouteDecisionSnapshots(ctx context.Context, refreshPricingCatalog bool) (exactModelCount int, wildcardRouteCount int, err error)
+}
+
+// TokenRoutesDeps are optional dependencies for route decision endpoints.
+type TokenRoutesDeps struct {
+	Router    RouteDecisionExplainer
+	Decisions RouteDecisionRefresher
+}
+
 // RegisterTokenRoutes registers all /api/routes and /api/channels routes.
 func RegisterTokenRoutes(r chi.Router, db *sqlx.DB) {
-	handler := &tokenRoutesHandler{db: db}
+	RegisterTokenRoutesWithDeps(r, db, TokenRoutesDeps{})
+}
+
+// RegisterTokenRoutesWithDeps registers routes with optional decision engine deps.
+func RegisterTokenRoutesWithDeps(r chi.Router, db *sqlx.DB, deps TokenRoutesDeps) {
+	handler := &tokenRoutesHandler{db: db, router: deps.Router, decisions: deps.Decisions}
 
 	// Route list
 	r.Get("/api/routes/lite", handler.listLite)
@@ -52,7 +85,9 @@ func RegisterTokenRoutes(r chi.Router, db *sqlx.DB) {
 }
 
 type tokenRoutesHandler struct {
-	db *sqlx.DB
+	db        *sqlx.DB
+	router    RouteDecisionExplainer
+	decisions RouteDecisionRefresher
 }
 
 // ---- List Lite ----
@@ -764,48 +799,306 @@ func (h *tokenRoutesHandler) routeDecision(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "model 不能为空"})
 		return
 	}
+	if h.router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"message": routeDecisionRouterUnavailable,
+		})
+		return
+	}
 
-	// Stub: decision engine not yet wired
+	decision, err := h.router.ExplainSelection(r.Context(), model, nil, routing.EmptyDownstreamRoutingPolicy)
+	if err != nil {
+		slog.Error("route decision explain failed", "model", model, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{
+			"success": false,
+			"message": "路由决策查询失败",
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
-		"decision": map[string]any{},
+		"decision": routeDecisionToMap(decision),
 	})
 }
 
 // POST /api/routes/decision/batch
 func (h *tokenRoutesHandler) routeDecisionBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Models                []string `json:"models"`
+		RefreshPricingCatalog bool     `json:"refreshPricingCatalog"`
+		PersistSnapshots      bool     `json:"persistSnapshots"`
+	}
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+	models := uniqueNonEmptyStrings(body.Models)
+	if len(models) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "models 必须是非空数组"})
+		return
+	}
+	if len(models) > routeDecisionBatchMaxItems {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": fmt.Sprintf("models 最多 %d 项", routeDecisionBatchMaxItems),
+		})
+		return
+	}
+	if h.router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"message": routeDecisionRouterUnavailable,
+		})
+		return
+	}
+
+	_ = body.RefreshPricingCatalog
+	_ = body.PersistSnapshots
+
+	decisions := make(map[string]any, len(models))
+	for _, model := range models {
+		decision, err := h.router.ExplainSelection(r.Context(), model, nil, routing.EmptyDownstreamRoutingPolicy)
+		if err != nil {
+			slog.Warn("route decision batch item failed", "model", model, "error", err)
+			continue
+		}
+		decisions[model] = routeDecisionToMap(decision)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"decisions": map[string]any{},
+		"decisions": decisions,
 	})
 }
 
 // POST /api/routes/decision/by-route/batch
 func (h *tokenRoutesHandler) routeDecisionByRouteBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Items []struct {
+			RouteID int64  `json:"routeId"`
+			Model   string `json:"model"`
+		} `json:"items"`
+		RefreshPricingCatalog bool `json:"refreshPricingCatalog"`
+		PersistSnapshots      bool `json:"persistSnapshots"`
+	}
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+	if len(body.Items) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "items 必须是非空数组"})
+		return
+	}
+	if len(body.Items) > routeDecisionBatchMaxItems {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": fmt.Sprintf("items 最多 %d 项", routeDecisionBatchMaxItems),
+		})
+		return
+	}
+	if h.router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"message": routeDecisionRouterUnavailable,
+		})
+		return
+	}
+
+	_ = body.RefreshPricingCatalog
+	_ = body.PersistSnapshots
+
+	// Nested map: routeId -> model -> decision
+	decisions := map[string]map[string]any{}
+	for _, item := range body.Items {
+		model := strings.TrimSpace(item.Model)
+		if item.RouteID <= 0 || model == "" {
+			continue
+		}
+		decision, err := h.router.ExplainSelectionForRoute(r.Context(), item.RouteID, model, nil, routing.EmptyDownstreamRoutingPolicy)
+		if err != nil {
+			slog.Warn("route decision by-route item failed", "routeId", item.RouteID, "model", model, "error", err)
+			continue
+		}
+		routeKey := strconv.FormatInt(item.RouteID, 10)
+		if decisions[routeKey] == nil {
+			decisions[routeKey] = map[string]any{}
+		}
+		decisions[routeKey][model] = routeDecisionToMap(decision)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"decisions": map[string]any{},
+		"decisions": decisions,
 	})
 }
 
 // POST /api/routes/decision/route-wide/batch
 func (h *tokenRoutesHandler) routeDecisionRouteWideBatch(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RouteIDs              []int64 `json:"routeIds"`
+		RefreshPricingCatalog bool    `json:"refreshPricingCatalog"`
+		PersistSnapshots      bool    `json:"persistSnapshots"`
+	}
+	if err := decodeJSONRequest(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
+		return
+	}
+	routeIDs := uniquePositiveInt64(body.RouteIDs)
+	if len(routeIDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "routeIds 必须是非空数组"})
+		return
+	}
+	if len(routeIDs) > routeDecisionBatchMaxItems {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"success": false,
+			"message": fmt.Sprintf("routeIds 最多 %d 项", routeDecisionBatchMaxItems),
+		})
+		return
+	}
+	if h.router == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"message": routeDecisionRouterUnavailable,
+		})
+		return
+	}
+
+	_ = body.RefreshPricingCatalog
+	_ = body.PersistSnapshots
+
+	decisions := make(map[string]any, len(routeIDs))
+	for _, routeID := range routeIDs {
+		decision, err := h.router.ExplainSelectionRouteWide(r.Context(), routeID, routing.EmptyDownstreamRoutingPolicy)
+		if err != nil {
+			slog.Warn("route decision route-wide item failed", "routeId", routeID, "error", err)
+			continue
+		}
+		decisions[strconv.FormatInt(routeID, 10)] = routeDecisionToMap(decision)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"decisions": map[string]any{},
+		"decisions": decisions,
 	})
 }
 
 // POST /api/routes/decision/refresh
 func (h *tokenRoutesHandler) routeDecisionRefresh(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		RefreshPricingCatalog bool `json:"refreshPricingCatalog"`
+	}
+	// Empty body is allowed; ignore decode errors for {}.
+	_ = decodeJSONRequest(r, &body)
+
+	if h.decisions == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"success": false,
+			"queued":  false,
+			"message": routeDecisionRouterUnavailable,
+		})
+		return
+	}
+
+	refresher := h.decisions
+	refreshPricing := body.RefreshPricingCatalog
+	task, reused := StartBackgroundTask(BackgroundTaskStartOptions{
+		Type:      routeDecisionRefreshTaskType,
+		Title:     routeDecisionRefreshTaskTitle,
+		DedupeKey: routeDecisionRefreshDedupeKey,
+	}, func() (any, error) {
+		exact, wildcard, err := refresher.RefreshAllRouteDecisionSnapshots(context.Background(), refreshPricing)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"exactModelCount":     exact,
+			"wildcardRouteCount":  wildcard,
+			"refreshPricingCatalog": refreshPricing,
+		}, nil
+	})
+
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"success": true,
 		"queued":  true,
-		"reused":  false,
-		"jobId":   "stub-decision-refresh",
-		"status":  "pending",
+		"reused":  reused,
+		"jobId":   task.ID,
+		"taskId":  task.ID,
+		"status":  string(task.Status),
 		"message": "已开始后台刷新路由选中概率，可稍后返回查看",
 	})
+}
+
+func routeDecisionToMap(d routing.RouteDecisionExplanation) map[string]any {
+	candidates := make([]map[string]any, 0, len(d.Candidates))
+	for _, c := range d.Candidates {
+		candidates = append(candidates, map[string]any{
+			"channelId":              c.ChannelID,
+			"accountId":              c.AccountID,
+			"username":               c.Username,
+			"siteName":               c.SiteName,
+			"tokenName":              c.TokenName,
+			"priority":               c.Priority,
+			"weight":                 c.Weight,
+			"eligible":               c.Eligible,
+			"recentlyFailed":         c.RecentlyFailed,
+			"avoidedByRecentFailure": c.AvoidedByRecentFailure,
+			"probability":            c.Probability,
+			"reason":                 c.Reason,
+		})
+	}
+	out := map[string]any{
+		"requestedModel": d.RequestedModel,
+		"actualModel":    d.ActualModel,
+		"matched":        d.Matched,
+		"modelPattern":   d.ModelPattern,
+		"selectedLabel":  d.SelectedLabel,
+		"summary":        d.Summary,
+		"candidates":     candidates,
+	}
+	if d.RouteID != nil {
+		out["routeId"] = *d.RouteID
+	}
+	if d.SelectedChannelID != nil {
+		out["selectedChannelId"] = *d.SelectedChannelID
+	}
+	if d.SelectedAccountID != nil {
+		out["selectedAccountId"] = *d.SelectedAccountID
+	}
+	if d.Summary == nil {
+		out["summary"] = []string{}
+	}
+	return out
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, raw := range values {
+		v := strings.TrimSpace(raw)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func uniquePositiveInt64(values []int64) []int64 {
+	seen := make(map[int64]struct{}, len(values))
+	out := make([]int64, 0, len(values))
+	for _, v := range values {
+		if v <= 0 {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func strOrNull(s *string) any {

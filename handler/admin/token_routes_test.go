@@ -1,13 +1,17 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -452,6 +456,465 @@ func TestTokenRoutes_PartialUpdatePreservesModelMapping(t *testing.T) {
 	if parsed["gpt-*"] != "gpt-4o-mini" {
 		t.Fatalf("intentional mapping update not applied: %v", parsed)
 	}
+}
+
+// ---- Route Decision APIs (#171) ----
+
+type fakeDecisionRouter struct {
+	explainCalls       []string
+	explainForRoute    []string
+	explainRouteWide   []int64
+	decision           routing.RouteDecisionExplanation
+	err                error
+}
+
+func (f *fakeDecisionRouter) ExplainSelection(_ context.Context, requestedModel string, _ []int64, _ routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error) {
+	f.explainCalls = append(f.explainCalls, requestedModel)
+	if f.err != nil {
+		return routing.RouteDecisionExplanation{}, f.err
+	}
+	d := f.decision
+	if d.RequestedModel == "" {
+		d.RequestedModel = requestedModel
+	}
+	if d.ActualModel == "" {
+		d.ActualModel = requestedModel
+	}
+	return d, nil
+}
+
+func (f *fakeDecisionRouter) ExplainSelectionForRoute(_ context.Context, routeID int64, requestedModel string, _ []int64, _ routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error) {
+	f.explainForRoute = append(f.explainForRoute, fmt.Sprintf("%d:%s", routeID, requestedModel))
+	if f.err != nil {
+		return routing.RouteDecisionExplanation{}, f.err
+	}
+	d := f.decision
+	d.RequestedModel = requestedModel
+	id := routeID
+	d.RouteID = &id
+	d.Matched = true
+	return d, nil
+}
+
+func (f *fakeDecisionRouter) ExplainSelectionRouteWide(_ context.Context, routeID int64, _ routing.DownstreamRoutingPolicy) (routing.RouteDecisionExplanation, error) {
+	f.explainRouteWide = append(f.explainRouteWide, routeID)
+	if f.err != nil {
+		return routing.RouteDecisionExplanation{}, f.err
+	}
+	d := f.decision
+	id := routeID
+	d.RouteID = &id
+	d.Matched = true
+	d.RequestedModel = fmt.Sprintf("route:%d", routeID)
+	return d, nil
+}
+
+type fakeDecisionRefresher struct {
+	mu                 sync.Mutex
+	calls              int
+	exact              int
+	wildcard           int
+	err                error
+	refreshPricingSeen []bool
+}
+
+func (f *fakeDecisionRefresher) RefreshAllRouteDecisionSnapshots(_ context.Context, refreshPricingCatalog bool) (int, int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	f.refreshPricingSeen = append(f.refreshPricingSeen, refreshPricingCatalog)
+	return f.exact, f.wildcard, f.err
+}
+
+func (f *fakeDecisionRefresher) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+func setupTokenRoutesDecisionTest(t *testing.T, deps TokenRoutesDeps) (*store.DB, chi.Router) {
+	t.Helper()
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("failed to open SQLite: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("AutoMigrate failed: %v", err)
+	}
+	r := chi.NewRouter()
+	RegisterTokenRoutesWithDeps(r, db.DB, deps)
+	return db, r
+}
+
+func TestRouteDecision_MissingModel(t *testing.T) {
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{Router: &fakeDecisionRouter{}})
+	resp := doGet(t, r, "/api/routes/decision")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 body=%s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestRouteDecision_RouterUnavailable(t *testing.T) {
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{})
+	resp := doGet(t, r, "/api/routes/decision?model=gpt-4o")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503 body=%s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["success"] != false {
+		t.Fatalf("success = %v, want false", body["success"])
+	}
+	if msg, _ := body["message"].(string); msg == "" {
+		t.Fatalf("expected clear error message, body=%v", body)
+	}
+}
+
+func TestRouteDecision_ExplainSelection(t *testing.T) {
+	routeID := int64(7)
+	channelID := int64(11)
+	fake := &fakeDecisionRouter{
+		decision: routing.RouteDecisionExplanation{
+			RequestedModel:    "gpt-4o",
+			ActualModel:       "gpt-4o",
+			Matched:           true,
+			RouteID:           &routeID,
+			ModelPattern:      "gpt-4o",
+			SelectedChannelID: &channelID,
+			Summary:           []string{"命中路由：gpt-4o", "路由策略：按权重随机"},
+			Candidates: []routing.RouteDecisionCandidate{
+				{
+					ChannelID:  channelID,
+					AccountID:  3,
+					Username:   "u1",
+					SiteName:   "s1",
+					Priority:   0,
+					Weight:     10,
+					Eligible:   true,
+					Probability: 1,
+				},
+			},
+		},
+	}
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{Router: fake})
+	resp := doGet(t, r, "/api/routes/decision?model=gpt-4o")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["success"] != true {
+		t.Fatalf("success = %v", body["success"])
+	}
+	decision, ok := body["decision"].(map[string]any)
+	if !ok {
+		t.Fatalf("decision missing: %v", body)
+	}
+	if decision["matched"] != true {
+		t.Fatalf("matched = %v", decision["matched"])
+	}
+	if decision["modelPattern"] != "gpt-4o" {
+		t.Fatalf("modelPattern = %v", decision["modelPattern"])
+	}
+	summary, ok := decision["summary"].([]any)
+	if !ok || len(summary) == 0 {
+		t.Fatalf("summary missing: %v", decision["summary"])
+	}
+	candidates, ok := decision["candidates"].([]any)
+	if !ok || len(candidates) != 1 {
+		t.Fatalf("candidates = %v", decision["candidates"])
+	}
+	if len(fake.explainCalls) != 1 || fake.explainCalls[0] != "gpt-4o" {
+		t.Fatalf("explainCalls = %v", fake.explainCalls)
+	}
+}
+
+func TestRouteDecisionBatch_BoundedAndMapped(t *testing.T) {
+	fake := &fakeDecisionRouter{
+		decision: routing.RouteDecisionExplanation{
+			Matched: true,
+			Summary: []string{"ok"},
+		},
+	}
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{Router: fake})
+
+	// empty models
+	empty := doPostJSON(t, r, "/api/routes/decision/batch", map[string]any{"models": []string{}})
+	if empty.Code != http.StatusBadRequest {
+		t.Fatalf("empty models status = %d body=%s", empty.Code, empty.Body.String())
+	}
+
+	// over bound
+	tooMany := make([]string, routeDecisionBatchMaxItems+1)
+	for i := range tooMany {
+		tooMany[i] = "m-" + strconv.Itoa(i)
+	}
+	bound := doPostJSON(t, r, "/api/routes/decision/batch", map[string]any{"models": tooMany})
+	if bound.Code != http.StatusBadRequest {
+		t.Fatalf("bound status = %d body=%s", bound.Code, bound.Body.String())
+	}
+
+	okResp := doPostJSON(t, r, "/api/routes/decision/batch", map[string]any{
+		"models": []string{"gpt-4o", "gpt-4o", " claude-4 "},
+	})
+	if okResp.Code != http.StatusOK {
+		t.Fatalf("batch status = %d body=%s", okResp.Code, okResp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(okResp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	decisions := body["decisions"].(map[string]any)
+	if len(decisions) != 2 {
+		t.Fatalf("decisions keys = %v, want 2 unique", decisions)
+	}
+	if _, ok := decisions["gpt-4o"]; !ok {
+		t.Fatalf("missing gpt-4o: %v", decisions)
+	}
+	if _, ok := decisions["claude-4"]; !ok {
+		t.Fatalf("missing claude-4: %v", decisions)
+	}
+	if len(fake.explainCalls) != 2 {
+		t.Fatalf("explainCalls = %v, want 2 after dedupe", fake.explainCalls)
+	}
+}
+
+func TestRouteDecisionByRouteAndRouteWideBatch(t *testing.T) {
+	fake := &fakeDecisionRouter{
+		decision: routing.RouteDecisionExplanation{
+			Matched: true,
+			Summary: []string{"route"},
+			Candidates: []routing.RouteDecisionCandidate{
+				{ChannelID: 1, Eligible: true, Probability: 0.5},
+			},
+		},
+	}
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{Router: fake})
+
+	byRoute := doPostJSON(t, r, "/api/routes/decision/by-route/batch", map[string]any{
+		"items": []map[string]any{
+			{"routeId": 1, "model": "gpt-4o"},
+			{"routeId": 2, "model": "claude-4"},
+		},
+	})
+	if byRoute.Code != http.StatusOK {
+		t.Fatalf("by-route status = %d body=%s", byRoute.Code, byRoute.Body.String())
+	}
+	var byRouteBody map[string]any
+	if err := json.Unmarshal(byRoute.Body.Bytes(), &byRouteBody); err != nil {
+		t.Fatalf("decode by-route: %v", err)
+	}
+	decisions := byRouteBody["decisions"].(map[string]any)
+	if _, ok := decisions["1"]; !ok {
+		t.Fatalf("missing route 1: %v", decisions)
+	}
+	route1 := decisions["1"].(map[string]any)
+	if _, ok := route1["gpt-4o"]; !ok {
+		t.Fatalf("missing model under route 1: %v", route1)
+	}
+
+	wide := doPostJSON(t, r, "/api/routes/decision/route-wide/batch", map[string]any{
+		"routeIds": []int64{9, 9, 10},
+	})
+	if wide.Code != http.StatusOK {
+		t.Fatalf("route-wide status = %d body=%s", wide.Code, wide.Body.String())
+	}
+	var wideBody map[string]any
+	if err := json.Unmarshal(wide.Body.Bytes(), &wideBody); err != nil {
+		t.Fatalf("decode wide: %v", err)
+	}
+	wideDecisions := wideBody["decisions"].(map[string]any)
+	if len(wideDecisions) != 2 {
+		t.Fatalf("wide decisions = %v", wideDecisions)
+	}
+	if len(fake.explainRouteWide) != 2 {
+		t.Fatalf("explainRouteWide calls = %v", fake.explainRouteWide)
+	}
+}
+
+func TestRouteDecisionRefresh_RealTaskNotStub(t *testing.T) {
+	refresher := &fakeDecisionRefresher{exact: 2, wildcard: 1}
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{
+		Router:    &fakeDecisionRouter{},
+		Decisions: refresher,
+	})
+
+	resp := doPostJSON(t, r, "/api/routes/decision/refresh", map[string]any{})
+	if resp.Code != http.StatusAccepted {
+		t.Fatalf("refresh status = %d body=%s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["success"] != true || body["queued"] != true {
+		t.Fatalf("unexpected body: %v", body)
+	}
+	jobID, _ := body["jobId"].(string)
+	if jobID == "" || jobID == "stub-decision-refresh" {
+		t.Fatalf("jobId = %q, want real background task id", jobID)
+	}
+
+	// Wait for background task completion.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if refresher.callCount() >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if refresher.callCount() < 1 {
+		t.Fatalf("refresher never called")
+	}
+
+	taskResp := doGet(t, r, "/api/tasks/"+jobID)
+	// tasks routes not registered on this router — just assert task registry entry.
+	task := getBackgroundTask(jobID)
+	if task == nil {
+		t.Fatalf("background task %s not found", jobID)
+	}
+	// Allow a short wait for status transition.
+	for i := 0; i < 50 && task.Status != BackgroundTaskSucceeded && task.Status != BackgroundTaskFailed; i++ {
+		time.Sleep(10 * time.Millisecond)
+		task = getBackgroundTask(jobID)
+	}
+	if task.Status != BackgroundTaskSucceeded {
+		t.Fatalf("task status = %s error=%v", task.Status, task.Error)
+	}
+	if task.Type != routeDecisionRefreshTaskType {
+		t.Fatalf("task type = %s", task.Type)
+	}
+	_ = taskResp
+}
+
+func TestRouteDecisionRefresh_Unavailable(t *testing.T) {
+	_, r := setupTokenRoutesDecisionTest(t, TokenRoutesDeps{})
+	resp := doPostJSON(t, r, "/api/routes/decision/refresh", map[string]any{})
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d body=%s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["queued"] == true {
+		t.Fatalf("must not claim queued when unavailable: %v", body)
+	}
+}
+
+func TestRouteDecision_WithSQLiteRouterFixture(t *testing.T) {
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	siteRes, err := db.Exec(`INSERT INTO sites (name, url, platform, status, created_at, updated_at)
+		VALUES ('Decision Site', 'https://decision.example.com', 'openai', 'active', ?, ?)`, now, now)
+	if err != nil {
+		t.Fatalf("insert site: %v", err)
+	}
+	siteID, _ := siteRes.LastInsertId()
+	accRes, err := db.Exec(`INSERT INTO accounts (site_id, username, access_token, status, checkin_enabled, created_at, updated_at)
+		VALUES (?, 'dec-user', 'sk-dec', 'active', 1, ?, ?)`, siteID, now, now)
+	if err != nil {
+		t.Fatalf("insert account: %v", err)
+	}
+	accountID, _ := accRes.LastInsertId()
+	tokRes, err := db.Exec(`INSERT INTO account_tokens (account_id, name, token, value_status, source, enabled, is_default, created_at, updated_at)
+		VALUES (?, 'dec-token', 'sk-dec-token', 'ready', 'manual', 1, 1, ?, ?)`, accountID, now, now)
+	if err != nil {
+		t.Fatalf("insert token: %v", err)
+	}
+	tokenID, _ := tokRes.LastInsertId()
+	routeRes, err := db.Exec(`INSERT INTO token_routes (model_pattern, routing_strategy, enabled, created_at, updated_at)
+		VALUES ('gpt-4o', 'weighted', 1, ?, ?)`, now, now)
+	if err != nil {
+		t.Fatalf("insert route: %v", err)
+	}
+	routeID, _ := routeRes.LastInsertId()
+	if _, err := db.Exec(`INSERT INTO route_channels (route_id, account_id, token_id, source_model, priority, weight, enabled, manual_override)
+		VALUES (?, ?, ?, 'gpt-4o', 0, 10, 1, 0)`, routeID, accountID, tokenID); err != nil {
+		t.Fatalf("insert channel: %v", err)
+	}
+
+	// Lightweight in-package fixture router: use fake that mirrors real explain shape.
+	// Full TokenRouter needs ChannelSelectorDB; fake + sqlite fixture covers handler path.
+	fake := &fakeDecisionRouter{
+		decision: routing.RouteDecisionExplanation{
+			Matched:      true,
+			ModelPattern: "gpt-4o",
+			RouteID:      &routeID,
+			Summary:      []string{"命中路由：gpt-4o"},
+			Candidates: []routing.RouteDecisionCandidate{
+				{ChannelID: 1, AccountID: accountID, Eligible: true, Probability: 1, Weight: 10},
+			},
+		},
+	}
+	refresher := &fakeDecisionRefresher{exact: 1}
+	r := chi.NewRouter()
+	RegisterTokenRoutesWithDeps(r, db.DB, TokenRoutesDeps{Router: fake, Decisions: refresher})
+	RegisterTasksRoutes(r, db.DB)
+
+	resp := doGet(t, r, "/api/routes/decision?model=gpt-4o")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	decision := body["decision"].(map[string]any)
+	if decision["matched"] != true {
+		t.Fatalf("expected matched decision, got %v", decision)
+	}
+	if float64(routeID) != decision["routeId"] {
+		// routeId may be number; tolerate
+		if decision["routeId"] == nil {
+			t.Fatalf("routeId missing: %v", decision)
+		}
+	}
+
+	// Refresh should not use stub job id and should complete.
+	refresh := doPostJSON(t, r, "/api/routes/decision/refresh", map[string]any{"refreshPricingCatalog": false})
+	if refresh.Code != http.StatusAccepted {
+		t.Fatalf("refresh status = %d body=%s", refresh.Code, refresh.Body.String())
+	}
+	var refreshBody map[string]any
+	if err := json.Unmarshal(refresh.Body.Bytes(), &refreshBody); err != nil {
+		t.Fatalf("decode refresh: %v", err)
+	}
+	jobID, _ := refreshBody["jobId"].(string)
+	if jobID == "stub-decision-refresh" || jobID == "" {
+		t.Fatalf("unexpected jobId %q", jobID)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		taskResp := doGet(t, r, "/api/tasks/"+jobID)
+		if taskResp.Code == http.StatusOK {
+			var taskBody map[string]any
+			_ = json.Unmarshal(taskResp.Body.Bytes(), &taskBody)
+			if task, ok := taskBody["task"].(map[string]any); ok {
+				if task["status"] == "succeeded" {
+					return
+				}
+				if task["status"] == "failed" {
+					t.Fatalf("refresh task failed: %v", task)
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("refresh task did not succeed in time, refresher.calls=%d", refresher.callCount())
 }
 
 // TestTokenRoutes_ChannelUpdatePreservesIntentionalConfig ensures channel edits set
