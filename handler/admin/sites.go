@@ -809,6 +809,12 @@ func normalizeAPIEndpointsInput(input []payloads.SiteAPIEndpointInput) ([]payloa
 		if normalizedURL == "" || !service.IsValidAPIEndpointURL(normalizedURL) {
 			return nil, "Invalid apiEndpoints url. Expected a valid http(s) URL."
 		}
+		// Reject cloud metadata / link-local early with a clear 400 (#389).
+		// UpsertSiteAPIEndpoints also guards, but without this the admin path
+		// surfaces a generic 500 when CreateSite/UpdateSite fails later.
+		if service.IsForbiddenSiteTargetURL(normalizedURL) {
+			return nil, "Invalid apiEndpoints url. Cloud metadata / link-local targets are not allowed."
+		}
 		if seen[normalizedURL] {
 			return nil, fmt.Sprintf("Duplicate apiEndpoints url: %s", normalizedURL)
 		}
