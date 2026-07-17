@@ -73,9 +73,9 @@ type ChannelSelectorDB interface {
 
 	// Runtime health
 	LoadRuntimeHealthChannelRows(ctx context.Context, channelIDs []int64) ([]struct {
-		SiteID             int64
-		SourceModel        *string
-		RouteModelPattern  string
+		SiteID            int64
+		SourceModel       *string
+		RouteModelPattern string
 	}, error)
 
 	// Clear channel failure states
@@ -84,13 +84,13 @@ type ChannelSelectorDB interface {
 
 // ChannelSelector implements selectChannel, selectNextChannel, selectPreferredChannel.
 type ChannelSelector struct {
-	db                ChannelSelectorDB
-	cache             *RouteCache
-	configuredMaxSec   int
-	downstreamPolicy   DownstreamRoutingPolicy
-	routingWeights    RoutingWeightsConfig
-	pricingFn         func(siteID, accountID int64, modelName string) *float64
-	fallbackUnitCost  float64
+	db                  ChannelSelectorDB
+	cache               *RouteCache
+	configuredMaxSec    int
+	downstreamPolicy    DownstreamRoutingPolicy
+	routingWeights      RoutingWeightsConfig
+	pricingFn           func(siteID, accountID int64, modelName string) *float64
+	fallbackUnitCost    float64
 	channelLoadProvider ChannelLoadSnapshotProvider
 }
 
@@ -105,12 +105,12 @@ func NewChannelSelector(
 	channelLoadProvider ChannelLoadSnapshotProvider,
 ) *ChannelSelector {
 	return &ChannelSelector{
-		db:                db,
-		cache:             cache,
-		configuredMaxSec:   configuredMaxSec,
-		routingWeights:    routingWeights,
-		pricingFn:         pricingFn,
-		fallbackUnitCost:  fallbackUnitCost,
+		db:                  db,
+		cache:               cache,
+		configuredMaxSec:    configuredMaxSec,
+		routingWeights:      routingWeights,
+		pricingFn:           pricingFn,
+		fallbackUnitCost:    fallbackUnitCost,
 		channelLoadProvider: channelLoadProvider,
 	}
 }
@@ -354,17 +354,49 @@ func (s *ChannelSelector) selectFromMatch(
 			recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
 	}
 
-	// Weighted: priority layers
+	// Weighted: priority layers (#358 soft-filter demotion).
+	selected := selectWeightedAcrossPriorityLayers(
+		available,
+		resolveModel,
+		nowMs,
+		s.configuredMaxSec,
+		func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+			return s.weightedRandomSelect(pool, resolveModel, policy)
+		},
+	)
+	if selected == nil {
+		return nil, nil
+	}
+	return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
+		recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
+}
+
+// selectWeightedAcrossPriorityLayers walks priority layers low→high. Per-layer soft
+// filters use softFilterCandidatesStrict (no full-set pin). If a layer is entirely
+// soft-empty, try the next priority. Only when ALL layers are soft-empty does the
+// global FilterRecentlyFailed / breaker full-set fallback apply (starvation guard).
+// See #358.
+func selectWeightedAcrossPriorityLayers(
+	available []RouteChannelCandidate,
+	resolveModel func(RouteChannelCandidate) string,
+	nowMs int64,
+	configuredMaxSec int,
+	selectFromPool func([]RouteChannelCandidate) *RouteChannelCandidate,
+) *RouteChannelCandidate {
+	if len(available) == 0 || selectFromPool == nil {
+		return nil
+	}
+
 	layers := make(map[int64][]RouteChannelCandidate)
 	for _, c := range available {
 		layers[c.Channel.Priority] = append(layers[c.Channel.Priority], c)
 	}
 
-	var priorities []int64
+	priorities := make([]int64, 0, len(layers))
 	for p := range layers {
 		priorities = append(priorities, p)
 	}
-	// Sort ascending
+	// Sort ascending (lower number = higher priority)
 	for i := 0; i < len(priorities); i++ {
 		for j := i + 1; j < len(priorities); j++ {
 			if priorities[j] < priorities[i] {
@@ -375,20 +407,54 @@ func (s *ChannelSelector) selectFromMatch(
 
 	for _, priority := range priorities {
 		rawLayer := layers[priority]
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(rawLayer, resolveModel)
-		filteredLayer := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-
-		selected := s.weightedRandomSelect(filteredLayer, resolveModel, policy)
-		if selected == nil {
+		filteredLayer := softFilterCandidatesStrict(rawLayer, resolveModel, nowMs, configuredMaxSec)
+		if len(filteredLayer) == 0 {
 			continue
 		}
-		return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
-			recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
+		if selected := selectFromPool(filteredLayer); selected != nil {
+			return selected
+		}
 	}
 
-	return nil, nil
+	// All priority layers soft-empty → global fallback with existing full-set behavior.
+	breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
+	filteredGlobal := FilterRecentlyFailedCandidates(breakerHealthy,
+		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+		nowMs, configuredMaxSec)
+	return selectFromPool(filteredGlobal)
+}
+
+// softFilterCandidatesStrict applies site/model breaker then recent-failure
+// filters without full-set fallback. An empty result means every candidate is
+// soft-unhealthy and the caller should try the next priority layer (or global
+// fallback). Unlike FilterRecentlyFailedCandidates / FilterSiteRuntimeBroken*,
+// a single soft-unhealthy candidate still yields empty so a lone broken
+// priority-0 channel cannot block demotion to priority>=1.
+func softFilterCandidatesStrict(
+	candidates []RouteChannelCandidate,
+	resolveModel func(RouteChannelCandidate) string,
+	nowMs int64,
+	configuredMaxSec int,
+) []RouteChannelCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+	healthy := make([]RouteChannelCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		modelName := ""
+		if resolveModel != nil {
+			modelName = resolveModel(c)
+		}
+		details := GetSiteRuntimeHealthDetails(c.Site.ID, modelName)
+		if details.GlobalBreakerOpen || details.ModelBreakerOpen {
+			continue
+		}
+		if IsChannelRecentlyFailed(&c.Channel.FailCount, c.Channel.LastFailAt, nowMs, configuredMaxSec) {
+			continue
+		}
+		healthy = append(healthy, c)
+	}
+	return healthy
 }
 
 func (s *ChannelSelector) findRoute(ctx context.Context, model string, policy DownstreamRoutingPolicy) (*RouteMatch, error) {
@@ -533,10 +599,10 @@ func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenR
 		}
 
 		candidate := RouteChannelCandidate{
-			Channel:  j.Channel,
-			Account:  j.Account,
-			Site:     j.Site,
-			Token:    j.Token,
+			Channel: j.Channel,
+			Account: j.Account,
+			Site:    j.Site,
+			Token:   j.Token,
 		}
 
 		if j.Channel.OAuthRouteUnitID != nil && *j.Channel.OAuthRouteUnitID > 0 {
