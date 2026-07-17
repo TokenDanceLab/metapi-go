@@ -38,7 +38,7 @@ type isolationDB struct {
 	// lastCooldownUpdate records the most recent UpdateChannelCooldownFields call
 	lastCooldownIDs     []int64
 	lastCooldownUpdates map[string]interface{}
-	cooldownCalls        int
+	cooldownCalls       int
 
 	// lastMemberUpdate records OAuth member cooldown writes
 	lastMemberID      int64
@@ -48,7 +48,7 @@ type isolationDB struct {
 
 func newIsolationDB() *isolationDB {
 	return &isolationDB{
-		channels:        make(map[int64]*struct {
+		channels: make(map[int64]*struct {
 			Channel store.RouteChannel
 			Account store.Account
 			Route   store.TokenRoute
@@ -596,10 +596,10 @@ func TestSelectionFilter_PrefersHealthySiblingAfterOneFailure(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		strategy       RouteRoutingStrategy
-		rows           []cand
-		wantIDs        []int64
+		name            string
+		strategy        RouteRoutingStrategy
+		rows            []cand
+		wantIDs         []int64
 		wantFallbackAll bool
 	}{
 		{
@@ -816,4 +816,104 @@ func channelIDOrNil(c *RouteChannelCandidate) interface{} {
 		return nil
 	}
 	return c.Channel.ID
+}
+
+// TestWeightedSoftFilter_EmptyPriorityDemotesToNext covers #358:
+// when every priority-0 candidate is soft-unhealthy (recent-fail / breaker),
+// weighted selection must try the next priority instead of pinning on the
+// unfiltered full priority-0 layer. Healthy priority-1 wins.
+func TestWeightedSoftFilter_EmptyPriorityDemotesToNext(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 2_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	// Priority 0: two recently-failed channels (would previously pin via full-set fallback)
+	c0a := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0a.Channel.FailCount = 2
+	c0a.Channel.LastFailAt = &recentISO
+	c0b := buildTestCandidate(2, 11, 102, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0b.Channel.FailCount = 3
+	c0b.Channel.LastFailAt = &recentISO
+	// Priority 1: healthy channel
+	c1 := buildTestCandidate(3, 20, 201, 10, 1, 100, 0, 50.0, 1.0, nil, 50.0, &model)
+
+	available := []RouteChannelCandidate{c0a, c0b, c1}
+
+	// Strict filter on prio 0 alone must be empty (no full-set pin).
+	strict0 := softFilterCandidatesStrict([]RouteChannelCandidate{c0a, c0b}, resolve, nowMs, 3600)
+	if len(strict0) != 0 {
+		t.Fatalf("expected strict soft-filter of failed prio-0 layer to be empty, got %d", len(strict0))
+	}
+	// Legacy full-set filter would return both failed channels.
+	legacy0 := FilterRecentlyFailedCandidates([]RouteChannelCandidate{c0a, c0b},
+		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+		nowMs, 3600)
+	if len(legacy0) != 2 {
+		t.Fatalf("expected legacy filter full-set fallback size 2, got %d", len(legacy0))
+	}
+
+	selected := selectWeightedAcrossPriorityLayers(available, resolve, nowMs, 3600,
+		func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+			if len(pool) == 0 {
+				return nil
+			}
+			// Deterministic pick: lowest channel ID (avoids rand flakiness).
+			best := &pool[0]
+			for i := range pool {
+				if pool[i].Channel.ID < best.Channel.ID {
+					best = &pool[i]
+				}
+			}
+			return best
+		})
+	if selected == nil {
+		t.Fatal("expected selection from healthy priority-1 layer")
+	}
+	if selected.Channel.ID != 3 {
+		t.Fatalf("expected priority-1 channel 3, got channel %d priority %d",
+			selected.Channel.ID, selected.Channel.Priority)
+	}
+	if selected.Channel.Priority != 1 {
+		t.Fatalf("expected priority 1, got %d", selected.Channel.Priority)
+	}
+}
+
+// TestWeightedSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback covers #358 AC2:
+// when every priority layer is soft-empty, selection still returns a candidate
+// via global full-set fallback instead of hard-failing.
+func TestWeightedSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 1_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	c0 := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0.Channel.FailCount = 2
+	c0.Channel.LastFailAt = &recentISO
+	c1 := buildTestCandidate(2, 20, 201, 10, 1, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c1.Channel.FailCount = 2
+	c1.Channel.LastFailAt = &recentISO
+
+	selected := selectWeightedAcrossPriorityLayers([]RouteChannelCandidate{c0, c1}, resolve, nowMs, 3600,
+		func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+			if len(pool) == 0 {
+				return nil
+			}
+			return &pool[0]
+		})
+	if selected == nil {
+		t.Fatal("expected global fallback selection when all layers soft-empty")
+	}
+	if selected.Channel.ID != 1 && selected.Channel.ID != 2 {
+		t.Fatalf("unexpected selected channel %d", selected.Channel.ID)
+	}
 }

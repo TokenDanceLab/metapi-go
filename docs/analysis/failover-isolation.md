@@ -23,7 +23,7 @@ Upstream gap **#585** (“one channel failure cascades to other channels”) is 
 | **Shipped — selection soft filters** | Recent-failure + breaker filters prefer healthy candidates (all strategies) | **present** (R1 RR parity) |
 | **Residual — site/model breaker** | Transient streak ≥3 opens site or site+model breaker → **all** channels on that scope soft-filtered | **intentional policy**, not a “sibling poison bug”; still a fleet-level cascade pressure |
 | **Residual — credential usage-limit scope** | Short-window usage limit cools **all channels sharing the credential** | **intentional** shared-key truth |
-| **Residual — empty-filter fallback** | If every candidate is filtered, filters return the **full set** | Starvation prevention; can re-expose recently failed channels |
+| **Residual — empty-filter fallback** | Soft filters still return the **full set** when healthy is empty (**global** starvation guard). Weighted priority layers now use **strict** soft-filter demotion first (`softFilterCandidatesStrict` / `selectWeightedAcrossPriorityLayers`): a soft-empty higher priority skips to the next priority; full-set fallback applies only after **all** layers are soft-empty (**#358**) | Starvation prevention without pinning on a broken priority-0 layer; residual remains for global full-set re-exposure |
 | **Residual — production multi-channel load proof** | No e2e / production-shaped load evidence that systemic poison stays contained under failure storms | **open** — unit/integration only |
 
 **Do not claim:** “#585 is fully present” or “site-wide cascade is eliminated.”  
@@ -57,6 +57,8 @@ All three strategies now share the same isolation order after eligibility:
 4. Strategy pick (weighted / RR / stable-first)
 
 > R1 fix: round-robin previously skipped step 3, so a single RR failure (no `cooldownUntil` yet) could be reselected immediately and starve healthy siblings. RR now applies the same recent-failure filter as weighted and stable-first.
+>
+> **#358 weighted priority layers:** per-layer soft filters are **strict** (no full-set pin). Soft-empty higher priority demotes to the next priority; only if every layer is soft-empty does the global full-set fallback apply.
 
 ### `RecordFailure` write scope
 
@@ -104,7 +106,7 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
 |:---------|:---------|:----|
 | Site/model breaker | 3 transient fails open breaker → **all** channels on that site/model filtered via `FilterSiteRuntimeBrokenCandidatesByModel*` | Intentional systemic protection; can look like cascade under multi-channel storms on one site |
 | Credential-scoped usage limit | Short window cools **all channels sharing the credential** | Shared quota / key truth — not peer-channel poison, still multi-channel impact |
-| Empty-filter fallback | If every candidate is recently-failed or breaker-open, filters return the **full set** | Starvation prevention; may reselect cooled channels when the fleet is degraded |
+| Empty-filter fallback | Global filters return the **full set** when healthy is empty; weighted layers demote soft-empty priorities before that global fallback (**#358**) | Global starvation prevention still reselects cooled channels when the whole fleet is degraded |
 | Production multi-channel load proof | Load-shaped systemic poison not proven e2e under production traffic | Unit/integration isolation proven only; gap matrix #585 residual / inventory P0-585 |
 
 ### What would close (or further shrink) residual
@@ -113,7 +115,7 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
 |:--------------|:-----------------------------------------------|
 | Site/model breaker “cascade look” | Product AC if breaker thresholds / model scope need operator knobs or different policy — **not** docs-only |
 | Production multi-channel load proof | Load-test or production evidence plan with multi-channel same-site failure storms; metrics that sibling channels stay eligible while breakers stay closed for single-channel noise |
-| Empty-filter fallback | Explicit product decision only — changing fallback risks hard outage when all candidates are dirty |
+| Empty-filter fallback (global) | Removing global full-set fallback risks hard outage when all candidates are dirty; weighted per-layer demotion is shipped (**#358**) |
 
 ## Tests
 
@@ -130,6 +132,8 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
   - `TestSelectionFilter_PrefersHealthySiblingAfterOneFailure` (weighted / RR / stable_first)
   - `TestSiteBreaker_DoesNotOpenOnSingleFailureAndDoesNotPoisonOtherSites`
   - `TestRoundRobinFilterStack_MatchesWeightedRecentFailurePolicy`
+  - `TestWeightedSoftFilter_EmptyPriorityDemotesToNext` (**#358**)
+  - `TestWeightedSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback` (**#358**)
 - Existing: `routing/cooldown_test.go`, `routing/runtime_health_test.go`, `routing/algorithm_test.go` (partial/all breaker open)
 
 ## Non-goals (R1 / #299 / #336)
