@@ -26,8 +26,13 @@ type RouteRefreshWorkflow interface {
 
 // ChannelSelectionInput is the input for SelectProxyChannelForAttempt.
 type ChannelSelectionInput struct {
-	RequestedModel    string
-	DownstreamPolicy  routing.DownstreamRoutingPolicy
+	RequestedModel   string
+	DownstreamPolicy routing.DownstreamRoutingPolicy
+	// ExcludeChannelIDs is a request-local list of already-tried channel IDs.
+	// Scope is channel-only: callers must not expand this to all channels of a
+	// site. Same-site siblings stay eligible unless routing policy (cooldown /
+	// site breaker / credential-scoped usage-limit) independently filters them.
+	// See docs/analysis/failover-isolation.md (#585 / #299).
 	ExcludeChannelIDs []int64
 	RetryCount        int
 	StickySessionKey  string

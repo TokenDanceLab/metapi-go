@@ -171,6 +171,11 @@ func ShouldRetryProxyRequest(status int, upstreamErrorText string) bool {
 // ShouldAbortSameSiteEndpointFallback decides whether to abort endpoint fallback
 // within the same site. Used by the endpoint flow to stop trying other endpoints
 // when the failure looks systemic (rate limit, gateway error, etc.).
+//
+// Scope note (#585 / #299): this aborts *endpoint-list* fallback on one selected
+// channel/site attempt — it does NOT mark sibling channels failed and does NOT
+// expand request-local excludeChannelIDs. Channel failover remains channel-scoped
+// via SelectNextChannel / conductor exclude lists.
 func ShouldAbortSameSiteEndpointFallback(status int, upstreamErrorText string) bool {
 	if status < 500 && status != 408 && status != 429 {
 		return false
