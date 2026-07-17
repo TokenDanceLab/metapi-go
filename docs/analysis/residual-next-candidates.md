@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.22)
+# Residual next candidates (post v0.8.22 → v0.8.23)
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.22 shipped** (#355 admin key redact, #356 custom_headers deny, #357 CheckRedirect, #358 weighted soft-filter next priority, #359 residual honesty). Prior **v0.8.21**: #350–#351.  
+**Context**: **v0.8.22 shipped** (#355–#359). Active residual wave: **Milestone 32 / v0.8.23** (#366 residual honesty, #367 admin secret surface audit, #368 RR/stable soft-filter priority demotion).  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -41,16 +41,27 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-HDR | custom_headers deny-list | **present** (#356/#364) | Shared `platform.ApplyCustomHeaders` / deny-list; Bearer after custom on upstream path | Done | Residual novel header names only |
 | SEC-REDIR | RuntimeExecutor CheckRedirect SSRF | **present** (#357/#360) | `rejectCrossOriginRedirect` on RuntimeExecutor client | Done | Residual site-URL SSRF validation only if product AC |
 | REL-SOFT | Weighted soft-filter empty → next priority | **present** (#358/#362) | Weighted path skips soft-empty priority layer and tries next; failover-isolation note | Done for weighted soft-filter | P0-585 empty-filter fallback residual separate |
+| SEC-ADMIN | Remaining admin secret surfaces | residual → active | Downstream-keys list redacted (#355); account-tokens list/`tokenToMap`, credential export, other dumps may still expose secrets | Milestone 32 / #367 | Secret leakage via admin APIs |
+| REL-SOFT-RR | RR/stable_first soft-filter priority demotion | partial → active | #358 fixed weighted only; RR/stable_first still soft-filter full set with full-set fallback | Milestone 32 / #368 | Broken P0 can still starve healthy P≥1 under non-weighted algos |
 
+
+## Active wave (Milestone 32 / v0.8.23)
+
+| Issue | Role | Notes |
+|------:|------|-------|
+| [#366](https://github.com/TokenDanceLab/metapi-go/issues/366) | docs | This residual + MASTER flip post v0.8.22 |
+| [#367](https://github.com/TokenDanceLab/metapi-go/issues/367) | security | audit/redact remaining admin secret surfaces beyond downstream-keys |
+| [#368](https://github.com/TokenDanceLab/metapi-go/issues/368) | reliability | RR + stable_first soft-filter priority demotion (parity with #358) |
 
 ## Recommended sequencing (v0.8.23+)
 
-1. **Shipped in v0.8.22**: #355–#359 (PRs #360–#364) — admin key redact · custom_headers deny · CheckRedirect · weighted soft-filter next priority · residual honesty. Prior v0.8.21: #350–#351. **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond soft-filter priority.
-2. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
-3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.22**: #355–#359 (PRs #360–#364/#365). **P0-555** stays **present-with-residual**. **CTX-520** / **P0-585** residual notes unchanged beyond weighted soft-filter priority.
+2. **v0.8.23 board (Milestone 32)**: #367 admin secret audit · #368 RR/stable soft-filter demotion · #366 residual honesty — no fake WS/sticky/update-center.
+3. **Observability residual only** on P0-555 (media/lag/multi-instance); not perfect billing.
+4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
+5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -70,4 +81,4 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359
+- Related issues: #366, #367, #368, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359

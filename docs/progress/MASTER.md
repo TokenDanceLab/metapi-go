@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | closed Milestone 31 (v0.8.22) — next residual wave TBD |
+| Active milestone | **[Milestone 32 — Enterprise residual v0.8.23](https://github.com/TokenDanceLab/metapi-go/milestone/32)** |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
@@ -33,12 +33,15 @@
 | Enterprise residual **v0.8.20** | ✅ | #345–#346 · tag v0.8.20 |
 | Enterprise residual **v0.8.21** | ✅ | #350–#351 (PRs #352/#353); tag **v0.8.21** |
 | Enterprise residual **v0.8.22** | ✅ | #355–#359 (PRs #360–#364); tag **v0.8.22** |
+| Enterprise residual **v0.8.23** | 🔄 | Milestone 32 · #366–#368 |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.22; next residual only with ACs |
+| [#366](https://github.com/TokenDanceLab/metapi-go/issues/366) | docs | residual honesty + M32 board post v0.8.22 |
+| [#367](https://github.com/TokenDanceLab/metapi-go/issues/367) | security | audit remaining admin secret surfaces |
+| [#368](https://github.com/TokenDanceLab/metapi-go/issues/368) | reliability | RR/stable_first soft-filter priority demotion |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -77,9 +80,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-2. Optional residual polish: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
-3. Keep MASTER slim; docs map at `docs/README.md`.
+1. Close Milestone 32: #367 admin secret audit · #368 RR/stable soft-filter · #366 residual honesty.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
+4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
