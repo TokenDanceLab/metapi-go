@@ -278,15 +278,21 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	if strategy == StrategyRoundRobin {
-		// Align with weighted/stable_first: avoid recently-failed channels when healthy
-		// alternatives remain. Without this filter, RR only hard-excludes cooldownUntil
-		// (which starts after RoundRobinFailureThreshold consecutive fails), so a single
-		// failure can be reselected immediately and starve sibling healthy channels.
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-		selected := SelectRoundRobinCandidate(filteredCandidates)
+		// Priority-layer strict soft-filter demotion (#368), same walk as weighted (#358).
+		// Per-layer soft filters use softFilterCandidatesStrict (no full-set pin). Without
+		// the layer walk, a failed prio-0 channel + global FilterRecentlyFailedCandidates
+		// fallback could pin RR onto the broken layer and starve healthy lower-priority
+		// siblings. RR still only hard-excludes cooldownUntil after
+		// RoundRobinFailureThreshold consecutive fails — soft demotion is the early avoid.
+		selected := selectAcrossPriorityLayers(
+			available,
+			resolveModel,
+			nowMs,
+			s.configuredMaxSec,
+			func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				return SelectRoundRobinCandidate(pool)
+			},
+		)
 		if selected == nil {
 			return nil, nil
 		}
@@ -295,40 +301,50 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	if strategy == StrategyStableFirst {
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-
+		// Priority-layer strict soft-filter demotion (#368). Primary/observation pool
+		// planning runs only on the chosen layer's soft-healthy set so a broken prio-0
+		// site does not pin stable_first when a healthy prio-1 alternative exists.
 		rotationKey := BuildStableFirstRotationKey(match.Route.ID, requestedModel)
-		poolPlan := BuildStableFirstPoolPlan(filteredCandidates, resolveModel)
+		usedObservation := false
+		selected := selectAcrossPriorityLayers(
+			available,
+			resolveModel,
+			nowMs,
+			s.configuredMaxSec,
+			func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				poolPlan := BuildStableFirstPoolPlan(pool, resolveModel)
 
-		shouldUseObservation := len(poolPlan.ObservationCandidates) > 0 &&
-			(len(poolPlan.PrimaryCandidates) == 0 ||
-				(recordSelection && ShouldUseStableFirstObservationCandidate(rotationKey, poolPlan.ObservationCandidates)))
+				shouldUseObservation := len(poolPlan.ObservationCandidates) > 0 &&
+					(len(poolPlan.PrimaryCandidates) == 0 ||
+						(recordSelection && ShouldUseStableFirstObservationCandidate(rotationKey, poolPlan.ObservationCandidates)))
 
-		var selectionPool []RouteChannelCandidate
-		if shouldUseObservation {
-			selectionPool = poolPlan.ObservationCandidates
-		} else if len(poolPlan.PrimaryCandidates) > 0 {
-			selectionPool = poolPlan.PrimaryCandidates
-		} else {
-			selectionPool = poolPlan.ObservationCandidates
-		}
+				var selectionPool []RouteChannelCandidate
+				if shouldUseObservation {
+					selectionPool = poolPlan.ObservationCandidates
+				} else if len(poolPlan.PrimaryCandidates) > 0 {
+					selectionPool = poolPlan.PrimaryCandidates
+				} else {
+					selectionPool = poolPlan.ObservationCandidates
+				}
+				if len(selectionPool) == 0 {
+					return nil
+				}
 
-		if len(selectionPool) == 0 {
-			return nil, nil
-		}
-
-		selected := s.stableFirstSelect(selectionPool, resolveModel, policy,
-			shouldUseObservation, rotationKey)
+				picked := s.stableFirstSelect(selectionPool, resolveModel, policy,
+					shouldUseObservation, rotationKey)
+				if picked != nil {
+					usedObservation = shouldUseObservation
+				}
+				return picked
+			},
+		)
 		if selected == nil {
 			return nil, nil
 		}
 
 		obsKey := rotationKey + ":observe"
 		return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
-			recordSelection, rotationKey, obsKey, shouldUseObservation, excludeChannelIDs, nowISO, nowMs)
+			recordSelection, rotationKey, obsKey, usedObservation, excludeChannelIDs, nowISO, nowMs)
 	}
 
 	// Deterministic pluggable strategies (#115): least_busy / lowest_latency / lowest_cost.
@@ -354,8 +370,8 @@ func (s *ChannelSelector) selectFromMatch(
 			recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
 	}
 
-	// Weighted: priority layers (#358 soft-filter demotion).
-	selected := selectWeightedAcrossPriorityLayers(
+	// Weighted: priority layers (#358 soft-filter demotion; shared walk with #368).
+	selected := selectAcrossPriorityLayers(
 		available,
 		resolveModel,
 		nowMs,
@@ -371,12 +387,21 @@ func (s *ChannelSelector) selectFromMatch(
 		recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
 }
 
-// selectWeightedAcrossPriorityLayers walks priority layers low→high. Per-layer soft
-// filters use softFilterCandidatesStrict (no full-set pin). If a layer is entirely
-// soft-empty, try the next priority. Only when ALL layers are soft-empty does the
-// global FilterRecentlyFailed / breaker full-set fallback apply (starvation guard).
-// See #358.
-func selectWeightedAcrossPriorityLayers(
+// selectAcrossPriorityLayers walks priority layers low→high for weighted (#358),
+// round_robin and stable_first (#368). Per-layer soft filters use
+// softFilterCandidatesStrict (no full-set pin). If a layer is entirely soft-empty,
+// try the next priority. Only when ALL layers are soft-empty does the global
+// FilterRecentlyFailed / breaker full-set fallback apply (starvation guard).
+//
+// Algorithm-specific pick happens via selectFromPool on each non-empty layer.
+// Hard excludes (eligibility / excludeChannelIDs) remain upstream.
+//
+// Honest global fallback: when every layer is soft-empty we deliberately re-enter
+// FilterRecentlyFailedCandidates (full-set pin when soft-empty) so the request still
+// attempts something rather than returning nil. That pin is a last resort, not the
+// happy path — priority demotion above is what prevents a broken prio-0 layer from
+// starving healthy lower-priority siblings.
+func selectAcrossPriorityLayers(
 	available []RouteChannelCandidate,
 	resolveModel func(RouteChannelCandidate) string,
 	nowMs int64,
@@ -416,12 +441,27 @@ func selectWeightedAcrossPriorityLayers(
 		}
 	}
 
-	// All priority layers soft-empty → global fallback with existing full-set behavior.
+	// All priority layers soft-empty → honest global fallback with existing full-set
+	// pin behavior (FilterRecentlyFailedCandidates returns the input when soft-empty).
+	// Prefer this over returning nil when every candidate is in soft-failure state —
+	// request must still attempt something; hard excludes already ran upstream.
 	breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
 	filteredGlobal := FilterRecentlyFailedCandidates(breakerHealthy,
 		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
 		nowMs, configuredMaxSec)
 	return selectFromPool(filteredGlobal)
+}
+
+// selectWeightedAcrossPriorityLayers is retained as a thin alias for tests and
+// any external references to the #358 name.
+func selectWeightedAcrossPriorityLayers(
+	available []RouteChannelCandidate,
+	resolveModel func(RouteChannelCandidate) string,
+	nowMs int64,
+	configuredMaxSec int,
+	selectFromPool func([]RouteChannelCandidate) *RouteChannelCandidate,
+) *RouteChannelCandidate {
+	return selectAcrossPriorityLayers(available, resolveModel, nowMs, configuredMaxSec, selectFromPool)
 }
 
 // softFilterCandidatesStrict applies site/model breaker then recent-failure
