@@ -442,3 +442,234 @@ func TestNormalizeDownstreamProxyURL(t *testing.T) {
 		t.Fatalf("bad => (%v, %q)", got, errMsg)
 	}
 }
+
+// TestDownstreamKeysQuotaClearNullAndZero covers #226:
+// create with maxCost/maxRequests set → PUT null and 0 clear DB columns to NULL (unlimited).
+func TestDownstreamKeysQuotaClearNullAndZero(t *testing.T) {
+	db, r := setupDownstreamKeysTest(t)
+
+	// Create with positive quotas.
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name":        "quota-clear-client",
+		"key":         "sk-quota-clear-1",
+		"maxCost":     25.5,
+		"maxRequests": 100,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	item, ok := createBody["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("create missing item: %#v", createBody)
+	}
+	keyID := int64(item["id"].(float64))
+	assertDownstreamQuotaDB(t, db, keyID, float64Ptr(25.5), int64Ptr(100))
+
+	// Clear both with JSON null → DB NULL (unlimited).
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"maxCost":     nil,
+		"maxRequests": nil,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("clear with null returned %d: %s", resp.Code, resp.Body.String())
+	}
+	assertDownstreamQuotaDB(t, db, keyID, nil, nil)
+	assertDownstreamQuotaResponseNull(t, resp.Body.Bytes())
+
+	// Re-set positive values.
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"maxCost":     9.75,
+		"maxRequests": 42,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("reset quotas returned %d: %s", resp.Code, resp.Body.String())
+	}
+	assertDownstreamQuotaDB(t, db, keyID, float64Ptr(9.75), int64Ptr(42))
+
+	// Clear both with 0 → DB NULL (unlimited).
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"maxCost":     0,
+		"maxRequests": 0,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("clear with zero returned %d: %s", resp.Code, resp.Body.String())
+	}
+	assertDownstreamQuotaDB(t, db, keyID, nil, nil)
+	assertDownstreamQuotaResponseNull(t, resp.Body.Bytes())
+}
+
+// TestDownstreamKeysQuotaPartialUpdatePreserves ensures omitted maxCost/maxRequests
+// keep existing values (create → set → partial name-only update).
+func TestDownstreamKeysQuotaPartialUpdatePreserves(t *testing.T) {
+	db, r := setupDownstreamKeysTest(t)
+
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name":        "quota-preserve-client",
+		"key":         "sk-quota-preserve-1",
+		"maxCost":     12.5,
+		"maxRequests": 99,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	keyID := int64(createBody["item"].(map[string]any)["id"].(float64))
+
+	// Partial update without quota fields must preserve maxCost/maxRequests.
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"name":    "quota-preserve-renamed",
+		"enabled": false,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("partial update returned %d: %s", resp.Code, resp.Body.String())
+	}
+	assertDownstreamQuotaDB(t, db, keyID, float64Ptr(12.5), int64Ptr(99))
+
+	var updateBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &updateBody); err != nil {
+		t.Fatalf("unmarshal update: %v", err)
+	}
+	item := updateBody["item"].(map[string]any)
+	if item["name"] != "quota-preserve-renamed" {
+		t.Fatalf("name = %#v, want renamed", item["name"])
+	}
+	if item["maxCost"] != 12.5 {
+		t.Fatalf("response maxCost = %#v, want 12.5", item["maxCost"])
+	}
+	if int64(item["maxRequests"].(float64)) != 99 {
+		t.Fatalf("response maxRequests = %#v, want 99", item["maxRequests"])
+	}
+}
+
+// TestDownstreamKeysQuotaCreatePositiveAndClearStringEmpty covers positive create
+// and empty-string clear (same unlimited contract as null/0).
+func TestDownstreamKeysQuotaCreatePositiveAndClearStringEmpty(t *testing.T) {
+	db, r := setupDownstreamKeysTest(t)
+
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name":        "quota-string-clear",
+		"key":         "sk-quota-string-1",
+		"maxCost":     "30.25",
+		"maxRequests": "200",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create with string quotas returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	keyID := int64(createBody["item"].(map[string]any)["id"].(float64))
+	assertDownstreamQuotaDB(t, db, keyID, float64Ptr(30.25), int64Ptr(200))
+
+	// Empty string clears to unlimited.
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"maxCost":     "",
+		"maxRequests": "",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("clear with empty string returned %d: %s", resp.Code, resp.Body.String())
+	}
+	assertDownstreamQuotaDB(t, db, keyID, nil, nil)
+}
+
+func TestNormalizeQuotaFloatOrNull(t *testing.T) {
+	t.Parallel()
+	if got := normalizeQuotaFloatOrNull(nil); got != nil {
+		t.Fatalf("nil => %#v", got)
+	}
+	if got := normalizeQuotaFloatOrNull(0.0); got != nil {
+		t.Fatalf("0 => %#v", got)
+	}
+	if got := normalizeQuotaFloatOrNull(-1.5); got != nil {
+		t.Fatalf("negative => %#v", got)
+	}
+	if got := normalizeQuotaFloatOrNull(""); got != nil {
+		t.Fatalf("empty string => %#v", got)
+	}
+	if got := normalizeQuotaFloatOrNull(12.5); got == nil || *got != 12.5 {
+		t.Fatalf("12.5 => %#v", got)
+	}
+	if got := normalizeQuotaFloatOrNull("3.25"); got == nil || *got != 3.25 {
+		t.Fatalf("\"3.25\" => %#v", got)
+	}
+}
+
+func TestNormalizeQuotaIntOrNull(t *testing.T) {
+	t.Parallel()
+	if got := normalizeQuotaIntOrNull(nil); got != nil {
+		t.Fatalf("nil => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull(0); got != nil {
+		t.Fatalf("0 => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull(float64(-2)); got != nil {
+		t.Fatalf("negative float => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull(""); got != nil {
+		t.Fatalf("empty string => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull(99); got == nil || *got != 99 {
+		t.Fatalf("99 => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull("42"); got == nil || *got != 42 {
+		t.Fatalf("\"42\" => %#v", got)
+	}
+	if got := normalizeQuotaIntOrNull(float64(7)); got == nil || *got != 7 {
+		t.Fatalf("7.0 => %#v", got)
+	}
+}
+
+func assertDownstreamQuotaDB(t *testing.T, db *store.DB, keyID int64, wantCost *float64, wantRequests *int64) {
+	t.Helper()
+	var maxCost sql.NullFloat64
+	var maxRequests sql.NullInt64
+	if err := db.QueryRow(
+		`SELECT max_cost, max_requests FROM downstream_api_keys WHERE id = ?`,
+		keyID,
+	).Scan(&maxCost, &maxRequests); err != nil {
+		t.Fatalf("select quotas for id=%d: %v", keyID, err)
+	}
+	if wantCost == nil {
+		if maxCost.Valid {
+			t.Fatalf("max_cost = %#v, want NULL", maxCost)
+		}
+	} else if !maxCost.Valid || maxCost.Float64 != *wantCost {
+		t.Fatalf("max_cost = %#v, want %v", maxCost, *wantCost)
+	}
+	if wantRequests == nil {
+		if maxRequests.Valid {
+			t.Fatalf("max_requests = %#v, want NULL", maxRequests)
+		}
+	} else if !maxRequests.Valid || maxRequests.Int64 != *wantRequests {
+		t.Fatalf("max_requests = %#v, want %v", maxRequests, *wantRequests)
+	}
+}
+
+func assertDownstreamQuotaResponseNull(t *testing.T, body []byte) {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	item, ok := payload["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing item: %#v", payload)
+	}
+	if item["maxCost"] != nil {
+		t.Fatalf("response maxCost = %#v, want null", item["maxCost"])
+	}
+	if item["maxRequests"] != nil {
+		t.Fatalf("response maxRequests = %#v, want null", item["maxRequests"])
+	}
+}
+
+func float64Ptr(v float64) *float64 { return &v }
+func int64Ptr(v int64) *int64       { return &v }
