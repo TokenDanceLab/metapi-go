@@ -46,7 +46,11 @@ func StartBackgroundServices() {
 	newRegistry.Register(scheduler.NewSiteAnnouncementScheduler(cfg))
 
 	// ---- Scheduler 7: Model Probe ----
-	newRegistry.Register(scheduler.NewModelProbeScheduler(cfg))
+	// Inject live ChannelHealthProbe + TokenRouter health recorder when the
+	// proxy upstream router is already configured (#170).
+	modelProbe := scheduler.NewModelProbeScheduler(cfg)
+	WireModelProbeScheduler(modelProbe)
+	newRegistry.Register(modelProbe)
 
 	// ---- Scheduler 8: Channel Recovery ----
 	newRegistry.Register(scheduler.NewChannelRecoveryScheduler(cfg))

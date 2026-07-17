@@ -53,6 +53,10 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 			return proxyhandler.InsertProxyLog(ctx, store.GetDB(), entry)
 		},
 	})
+	// Remember router for ModelProbeScheduler health recording (#170).
+	// Wire global scheduler if already started (reconfigure / test paths).
+	rememberProbeRouter(cfg, router)
+	WireGlobalModelProbeScheduler()
 	return nil
 }
 

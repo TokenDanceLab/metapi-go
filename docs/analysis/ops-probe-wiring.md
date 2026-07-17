@@ -7,5 +7,6 @@
 - channel_recovery.probeCandidate uses the global model probe executor when registered
 
 ## Residual
-- Ephemeral NewModelProbeScheduler(nil) path has no injected HTTP probe executor until app wires SetProbeExecutor / global scheduler at boot
+- Boot wiring of SetProbeExecutor + health recorder is #170 (`docs/analysis/probe-boot-wiring.md`)
+- Ephemeral `NewModelProbeScheduler(nil)` admin fallbacks still lack HTTP executor until `StartBackgroundServices` registers the global scheduler
 - Marketplace and model-check remain separate issues (#156)
