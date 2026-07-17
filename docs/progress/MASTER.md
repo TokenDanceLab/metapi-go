@@ -81,7 +81,8 @@
 | Residual v0.8.5 | Milestone 14 closed · tag **[v0.8.5](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.5)** |
 | Residual v0.8.6 | Milestone 15 closed · tag **[v0.8.6](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.6)** |
 | Residual v0.8.7 | Milestone 16 closed · tag **[v0.8.7](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.7)** |
-| Residual v0.8.8 | Milestone 17 closed · **#244–#246** (PRs #249–#251); tag **v0.8.8** |
+| Residual v0.8.8 | Milestone 17 closed · tag **[v0.8.8](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.8)** |
+| Residual v0.8.9 | Milestone 18 closed · **#253–#254** (PRs #256/#259); tag **v0.8.9** |
 | Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
 
 ### M-COMPETE notes (active)
@@ -176,6 +177,6 @@
 - **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
 
 ## Next Steps
-1. Tag **v0.8.8** (durable video tasks + TPM Redis + scheduler residual honesty)
-2. Optional deeper product: sticky pin from video mapping; full Responses WS Codex path; durable admin job store; scheduler Sub2API/channel-recovery product wiring
+1. Tag **v0.8.9** (videos sticky pin + retention residual honesty)
+2. Optional deeper product: full Responses WS Codex path; durable admin job store; Sub2API/channel-recovery product wiring; video task TTL/GC product
 3. Continue product backlog P0/P1; frontend flake observability
