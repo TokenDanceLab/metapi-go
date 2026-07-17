@@ -1076,11 +1076,15 @@ func cloneSiteRuntimeHealthState(state *SiteRuntimeHealthState) *SiteRuntimeHeal
 }
 
 func scheduleSiteRuntimeHealthPersistence() {
+	// Caller must hold healthStateMu (write lock). The AfterFunc clears the timer
+	// under the same mutex so concurrent schedule/persist paths are -race clean.
 	if healthPersistTimer != nil {
 		return
 	}
 	healthPersistTimer = time.AfterFunc(SiteRuntimeHealthPersistDebounceMs*time.Millisecond, func() {
+		healthStateMu.Lock()
 		healthPersistTimer = nil
+		healthStateMu.Unlock()
 		persistSiteRuntimeHealthState()
 	})
 }

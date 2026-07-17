@@ -14,9 +14,12 @@ import (
 
 // modelsTestRouter is a channel-selection router that implements
 // AvailableModelsSource for /v1/models unit tests.
+// Optional contextLengths implements AvailableModelContextLengthsSource (#327).
 type modelsTestRouter struct {
-	models []string
-	err    error
+	models         []string
+	err            error
+	contextLengths map[string]int64
+	contextErr     error
 }
 
 func (r *modelsTestRouter) SelectChannel(context.Context, string, routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
@@ -44,6 +47,20 @@ func (r *modelsTestRouter) GetAvailableModels(context.Context) ([]string, error)
 	return out, nil
 }
 
+func (r *modelsTestRouter) GetAvailableModelContextLengths(context.Context) (map[string]int64, error) {
+	if r.contextErr != nil {
+		return nil, r.contextErr
+	}
+	if r.contextLengths == nil {
+		return map[string]int64{}, nil
+	}
+	out := make(map[string]int64, len(r.contextLengths))
+	for k, v := range r.contextLengths {
+		out[k] = v
+	}
+	return out, nil
+}
+
 // selectionOnlyRouter satisfies TokenRouterInterface without AvailableModelsSource.
 type selectionOnlyRouter struct{}
 
@@ -65,9 +82,10 @@ func (r *selectionOnlyRouter) RecordFailure(context.Context, int64, routing.Site
 
 // Ensure compile-time interface compliance.
 var (
-	_ proxy.TokenRouterInterface = (*modelsTestRouter)(nil)
-	_ AvailableModelsSource      = (*modelsTestRouter)(nil)
-	_ proxy.TokenRouterInterface = (*selectionOnlyRouter)(nil)
+	_ proxy.TokenRouterInterface            = (*modelsTestRouter)(nil)
+	_ AvailableModelsSource                 = (*modelsTestRouter)(nil)
+	_ AvailableModelContextLengthsSource    = (*modelsTestRouter)(nil)
+	_ proxy.TokenRouterInterface            = (*selectionOnlyRouter)(nil)
 )
 
 func withModelsRouter(t *testing.T, router proxy.TokenRouterInterface) {
@@ -156,7 +174,7 @@ func TestIsModelAllowedByPolicy(t *testing.T) {
 func TestBuildOpenAIModelsResponse(t *testing.T) {
 	models := []string{"gpt-4o", "gpt-3.5-turbo"}
 	fixed := time.Date(2026, 3, 19, 0, 0, 0, 0, time.UTC)
-	resp := buildOpenAIModelsResponse(models, fixed)
+	resp := buildOpenAIModelsResponse(models, fixed, nil)
 
 	if resp["object"] != "list" {
 		t.Errorf("object = %v", resp["object"])
@@ -197,7 +215,7 @@ func TestBuildOpenAIModelsResponse(t *testing.T) {
 }
 
 func TestBuildOpenAIModelsResponse_Empty(t *testing.T) {
-	resp := buildOpenAIModelsResponse([]string{}, time.Unix(0, 0).UTC())
+	resp := buildOpenAIModelsResponse([]string{}, time.Unix(0, 0).UTC(), nil)
 	if resp["object"] != "list" {
 		t.Errorf("empty list must still set object=list, got %v", resp["object"])
 	}
@@ -208,7 +226,7 @@ func TestBuildOpenAIModelsResponse_Empty(t *testing.T) {
 }
 
 func TestBuildOpenAIModelsResponse_UnknownModelOmitsContextLength(t *testing.T) {
-	resp := buildOpenAIModelsResponse([]string{"custom-vendor/my-model"}, time.Unix(1, 0).UTC())
+	resp := buildOpenAIModelsResponse([]string{"custom-vendor/my-model"}, time.Unix(1, 0).UTC(), nil)
 	data, _ := resp["data"].([]map[string]any)
 	if len(data) != 1 {
 		t.Fatalf("expected 1 model, got %d", len(data))
@@ -221,6 +239,163 @@ func TestBuildOpenAIModelsResponse_UnknownModelOmitsContextLength(t *testing.T) 
 	}
 	if data[0]["object"] != "model" {
 		t.Errorf("object = %v", data[0]["object"])
+	}
+}
+
+// ---- route context_length override (#327) ----
+
+func TestBuildOpenAIModelsResponse_RouteContextLengthOverridesHeuristic(t *testing.T) {
+	// gpt-4o heuristic is 128000; route metadata wins when positive.
+	resp := buildOpenAIModelsResponse(
+		[]string{"gpt-4o", "custom-vendor/my-model"},
+		time.Unix(2, 0).UTC(),
+		map[string]int64{
+			"gpt-4o":                64000,
+			"custom-vendor/my-model": 32000,
+		},
+	)
+	data, _ := resp["data"].([]map[string]any)
+	if len(data) != 2 {
+		t.Fatalf("expected 2 models, got %d", len(data))
+	}
+	if data[0]["context_length"] != int64(64000) {
+		t.Errorf("gpt-4o route override = %v, want 64000", data[0]["context_length"])
+	}
+	if data[1]["context_length"] != int64(32000) {
+		t.Errorf("custom model route context = %v, want 32000", data[1]["context_length"])
+	}
+}
+
+func TestBuildOpenAIModelsResponse_NilRouteMapKeepsHeuristic(t *testing.T) {
+	resp := buildOpenAIModelsResponse([]string{"gpt-4o", "custom-vendor/my-model"}, time.Unix(3, 0).UTC(), nil)
+	data, _ := resp["data"].([]map[string]any)
+	if data[0]["context_length"] != int64(128000) {
+		t.Errorf("nil route map should keep heuristic, got %v", data[0]["context_length"])
+	}
+	if _, ok := data[1]["context_length"]; ok {
+		t.Errorf("unknown model with nil route map should omit context_length, got %v", data[1]["context_length"])
+	}
+}
+
+func TestBuildOpenAIModelsResponse_NonPositiveRouteLengthFallsBack(t *testing.T) {
+	// Zero/negative route values must not override heuristics or invent a window.
+	resp := buildOpenAIModelsResponse(
+		[]string{"gpt-4o", "custom-vendor/my-model"},
+		time.Unix(4, 0).UTC(),
+		map[string]int64{
+			"gpt-4o":                 0,
+			"custom-vendor/my-model": -1,
+		},
+	)
+	data, _ := resp["data"].([]map[string]any)
+	if data[0]["context_length"] != int64(128000) {
+		t.Errorf("non-positive route length should fall back to heuristic, got %v", data[0]["context_length"])
+	}
+	if _, ok := data[1]["context_length"]; ok {
+		t.Errorf("non-positive route length on unknown model should omit field, got %v", data[1]["context_length"])
+	}
+}
+
+func TestHandleModels_RouteContextLengthReflected(t *testing.T) {
+	// AC: create/list path with route contextLength → /v1/models reflects it.
+	// (Admin CRUD already stores the column; this verifies models listing consumption.)
+	withModelsRouter(t, &modelsTestRouter{
+		models: []string{"gpt-4o", "custom-route-model"},
+		contextLengths: map[string]int64{
+			"gpt-4o":             99999, // override heuristic 128000
+			"custom-route-model": 424242,
+		},
+	})
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "test",
+		Source: "global",
+		Policy: auth.EmptyDownstreamRoutingPolicy,
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 2 {
+		t.Fatalf("expected 2 models, got %#v", data)
+	}
+	byID := map[string]map[string]any{}
+	for _, raw := range data {
+		item := raw.(map[string]any)
+		id, _ := item["id"].(string)
+		byID[id] = item
+	}
+	// JSON numbers decode as float64
+	if byID["gpt-4o"]["context_length"] != float64(99999) {
+		t.Fatalf("gpt-4o context_length = %v, want 99999 (route override)", byID["gpt-4o"]["context_length"])
+	}
+	if byID["custom-route-model"]["context_length"] != float64(424242) {
+		t.Fatalf("custom-route-model context_length = %v, want 424242", byID["custom-route-model"]["context_length"])
+	}
+}
+
+func TestHandleModels_RouteContextLengthErrorKeepsHeuristic(t *testing.T) {
+	withModelsRouter(t, &modelsTestRouter{
+		models:     []string{"gpt-4o"},
+		contextErr: errors.New("context map unavailable"),
+	})
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "test",
+		Source: "global",
+		Policy: auth.EmptyDownstreamRoutingPolicy,
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 1 {
+		t.Fatalf("expected 1 model, got %#v", data)
+	}
+	first := data[0].(map[string]any)
+	if first["context_length"] != float64(128000) {
+		t.Fatalf("context error should keep heuristic, got %v", first["context_length"])
+	}
+}
+
+func TestHandleModels_ClaudeFormatOmitsContextLengthEvenWithRouteMap(t *testing.T) {
+	// Claude path must stay unchanged — no context_length field.
+	withModelsRouter(t, &modelsTestRouter{
+		models:         []string{"claude-sonnet-4-20250514"},
+		contextLengths: map[string]int64{"claude-sonnet-4-20250514": 500000},
+	})
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req = auth.ProxyAuthFromRequest(req, &auth.ProxyAuthContext{
+		Token:  "test",
+		Source: "global",
+		Policy: auth.EmptyDownstreamRoutingPolicy,
+	})
+	rec := httptest.NewRecorder()
+	HandleModels(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	data, _ := m["data"].([]any)
+	if len(data) != 1 {
+		t.Fatalf("expected 1 model, got %#v", data)
+	}
+	first := data[0].(map[string]any)
+	if _, ok := first["context_length"]; ok {
+		t.Fatalf("Claude format must not emit context_length, got %v", first["context_length"])
+	}
+	if first["type"] != "model" {
+		t.Fatalf("type = %v, want model", first["type"])
 	}
 }
 

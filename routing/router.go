@@ -104,6 +104,43 @@ func (tr *TokenRouter) GetAvailableModels(ctx context.Context) ([]string, error)
 	return result, nil
 }
 
+// GetAvailableModelContextLengths returns positive token_routes.context_length values
+// keyed by the same exposed model id used in GetAvailableModels.
+//
+// Rules:
+//   - only non-null positive context_length values are included
+//   - when multiple visible routes expose the same id, the max value wins
+//   - NULL / non-positive lengths are omitted (caller keeps heuristics)
+//
+// Metadata only — no proxy max-token enforcement is implied by this map.
+func (tr *TokenRouter) GetAvailableModelContextLengths(ctx context.Context) (map[string]int64, error) {
+	routes, err := tr.db.FindAllEnabledRoutes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getAvailableModelContextLengths: %w", err)
+	}
+	return buildAvailableModelContextLengths(routes), nil
+}
+
+// buildAvailableModelContextLengths maps exposed model ids to the max positive
+// context_length among visible enabled routes. Pure helper for unit tests.
+func buildAvailableModelContextLengths(routes []store.TokenRoute) map[string]int64 {
+	exposed := buildVisibleEnabledRoutes(routes)
+	out := make(map[string]int64)
+	for _, route := range exposed {
+		if !route.Enabled {
+			continue
+		}
+		name := GetExposedModelNameForRoute(route.DisplayName, route.ModelPattern)
+		if name == "" || route.ContextLength == nil || *route.ContextLength <= 0 {
+			continue
+		}
+		if prev, ok := out[name]; !ok || *route.ContextLength > prev {
+			out[name] = *route.ContextLength
+		}
+	}
+	return out
+}
+
 // buildVisibleEnabledRoutes filters out routes covered by explicit_group or wildcard display names.
 func buildVisibleEnabledRoutes(routes []store.TokenRoute) []store.TokenRoute {
 	exactModelNames := make(map[string]bool)
