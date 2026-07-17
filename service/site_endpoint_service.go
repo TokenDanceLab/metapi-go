@@ -53,6 +53,9 @@ func IsValidProxyURL(raw string) bool {
 }
 
 // IsValidHTTPURL checks whether a string is a valid http/https URL (not socks).
+// Empty is valid (optional field). Also rejects cloud metadata / link-local
+// targets via IsForbiddenSiteTargetURL so externalCheckin and similar callers
+// cannot store first-hop SSRF URLs (#382 / extends #376).
 func IsValidHTTPURL(raw string) bool {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -62,7 +65,13 @@ func IsValidHTTPURL(raw string) bool {
 	if err != nil {
 		return false
 	}
-	return parsed.Scheme == "http" || parsed.Scheme == "https"
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	if IsForbiddenSiteTargetURL(trimmed) {
+		return false
+	}
+	return true
 }
 
 // IsForbiddenSiteTargetURL reports whether a site/endpoint URL must be rejected

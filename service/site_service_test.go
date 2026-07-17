@@ -550,3 +550,25 @@ func TestIsForbiddenSiteTargetURL(t *testing.T) {
 		}
 	}
 }
+
+func TestIsValidHTTPURL_RejectsMetadata(t *testing.T) {
+	forbid := []string{
+		"http://169.254.169.254/latest/meta-data",
+		"https://metadata.google.internal/",
+		"http://[fe80::1]/",
+	}
+	for _, u := range forbid {
+		if IsValidHTTPURL(u) {
+			t.Errorf("expected invalid for metadata URL %q", u)
+		}
+	}
+	if !IsValidHTTPURL("https://example.com/checkin") {
+		t.Error("public URL should stay valid")
+	}
+	if !IsValidHTTPURL("") {
+		t.Error("empty should stay valid")
+	}
+	if !IsValidHTTPURL("http://10.0.0.5/checkin") {
+		t.Error("RFC1918 should remain valid for lab external checkin")
+	}
+}
