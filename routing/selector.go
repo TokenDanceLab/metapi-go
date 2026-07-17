@@ -204,17 +204,21 @@ func (s *ChannelSelector) SelectPreferredChannel(
 		return nil, nil
 	}
 
-	// Check breaker
+	// Check site/model breaker on the preferred candidate alone.
+	// FilterSiteRuntimeBrokenCandidatesByModel intentionally keeps a single-candidate
+	// set unchanged (multi-candidate starvation fallback). Preferred/sticky must not
+	// reuse that short-circuit: an open breaker should decline preferred so the
+	// caller can fall through to normal SelectChannel, which still applies the
+	// multi-candidate empty-filter fallback when every sibling is also broken.
 	runtimeModelResolver := mappedModel
-	_ = runtimeModelResolver
 	if requestedByDisplayName {
 		sm := NormalizeChannelSourceModel(preferred.Channel.SourceModel)
 		if sm != "" {
 			runtimeModelResolver = sm
 		}
 	}
-	breakerHealthy, _ := FilterSiteRuntimeBrokenCandidatesByModel([]RouteChannelCandidate{*preferred}, runtimeModelResolver)
-	if len(breakerHealthy) == 0 {
+	details := GetSiteRuntimeHealthDetails(preferred.Site.ID, runtimeModelResolver)
+	if details.GlobalBreakerOpen || details.ModelBreakerOpen {
 		return nil, nil
 	}
 
@@ -227,7 +231,7 @@ func (s *ChannelSelector) SelectPreferredChannel(
 
 	recordSelection := strategy == StrategyRoundRobin || strategy == StrategyStableFirst
 	rotationKey := BuildStableFirstRotationKey(match.Route.ID, requestedModel)
-	return s.finalizeDispatch(ctx, &breakerHealthy[0], match, requestedModel, mappedModel, policy,
+	return s.finalizeDispatch(ctx, preferred, match, requestedModel, mappedModel, policy,
 		recordSelection, rotationKey, rotationKey+":observe", false, excludeChannelIDs, nowISO, nowMs)
 }
 
