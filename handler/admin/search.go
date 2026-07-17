@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/service"
 )
 
 // RegisterSearchRoutes registers all /api/search routes.
@@ -67,7 +68,7 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 	likePattern := "%" + q + "%"
 
 	// Search sites
-	sites := queryRows(h.db, "SELECT * FROM sites WHERE name LIKE ? OR url LIKE ? OR platform LIKE ? LIMIT ?",
+	sites := queryRows(h.db, "SELECT "+service.SiteSelectColumns+" FROM sites WHERE name LIKE ? OR url LIKE ? OR platform LIKE ? LIMIT ?",
 		likePattern, likePattern, likePattern, perCategory)
 
 	// Search accounts

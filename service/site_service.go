@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -150,10 +151,10 @@ func LoadSiteAPIEndpoints(db *sqlx.DB, siteIDs []int64) (map[int64][]store.SiteA
 	return result, nil
 }
 
-// siteSelectColumns lists known sites columns for SELECT (never SELECT *).
+// SiteSelectColumns lists known sites columns for SELECT (never SELECT *).
 // Shared PG CI DBs may have leftover probe columns from schema experiments;
 // SELECT * would fail struct scan with "missing destination name ...".
-const siteSelectColumns = `id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy,
+const SiteSelectColumns = `id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy,
 	custom_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency,
 	post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 	post_refresh_probe_latency_threshold_ms, created_at, updated_at`
@@ -161,7 +162,7 @@ const siteSelectColumns = `id, name, url, external_checkin_url, platform, proxy_
 // LoadSiteWithEndpoints loads a single site with its apiEndpoints attached.
 func LoadSiteWithEndpoints(db *sqlx.DB, siteID int64) (map[string]any, error) {
 	var site store.Site
-	err := db.Get(&site, db.Rebind("SELECT "+siteSelectColumns+" FROM sites WHERE id = ?"), siteID)
+	err := db.Get(&site, db.Rebind("SELECT "+SiteSelectColumns+" FROM sites WHERE id = ?"), siteID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -208,7 +209,7 @@ func siteToMap(site store.Site, endpoints []store.SiteAPIEndpoint) map[string]an
 // ListSites returns all sites with apiEndpoints, totalBalance, and subscriptionSummary.
 func ListSites(db *sqlx.DB) ([]map[string]any, error) {
 	var sites []store.Site
-	if err := db.Select(&sites, "SELECT "+siteSelectColumns+" FROM sites ORDER BY sort_order, id"); err != nil {
+	if err := db.Select(&sites, "SELECT "+SiteSelectColumns+" FROM sites ORDER BY sort_order, id"); err != nil {
 		return nil, err
 	}
 
@@ -409,10 +410,43 @@ func DeleteSite(db *sqlx.DB, siteID int64) error {
 	return err
 }
 
-// InvalidateSiteProxyCache signals that cached site proxy configurations should be refreshed.
-// TODO(P8): integrate with the proxy cache layer when implemented.
+// siteProxyCacheInvalidators are optional hooks (e.g. admin accounts snapshot cache).
+// Registered from other packages to avoid import cycles.
+var (
+	siteProxyCacheInvalidatorsMu sync.RWMutex
+	siteProxyCacheInvalidators   []func()
+)
+
+// RegisterSiteProxyCacheInvalidator appends a hook invoked by InvalidateSiteProxyCache.
+// Safe for concurrent registration; hooks should be idempotent and non-blocking.
+func RegisterSiteProxyCacheInvalidator(fn func()) {
+	if fn == nil {
+		return
+	}
+	siteProxyCacheInvalidatorsMu.Lock()
+	siteProxyCacheInvalidators = append(siteProxyCacheInvalidators, fn)
+	siteProxyCacheInvalidatorsMu.Unlock()
+}
+
+// InvalidateSiteProxyCache refreshes process-local caches that depend on site/proxy config.
+// Always invalidates the token-router route cache; then runs registered hooks
+// (admin accounts snapshot, future proxy config caches).
 func InvalidateSiteProxyCache() {
-	// Stub: P8 proxy cache invalidation
+	routing.InvalidateCache()
+	siteProxyCacheInvalidatorsMu.RLock()
+	hooks := append([]func(){}, siteProxyCacheInvalidators...)
+	siteProxyCacheInvalidatorsMu.RUnlock()
+	for _, fn := range hooks {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// never let a hook panic abort site mutations
+					_ = r
+				}
+			}()
+			fn()
+		}()
+	}
 }
 
 // InvalidateTokenRouterCache signals that cached token-router state should be invalidated.
