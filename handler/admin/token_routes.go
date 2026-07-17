@@ -160,42 +160,50 @@ func (h *tokenRoutesHandler) listSummary(w http.ResponseWriter, r *http.Request)
 // GET /api/routes
 func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) {
 	rows := queryRows(h.db, "SELECT * FROM token_routes ORDER BY sort_order ASC, id ASC")
-	result := make([]map[string]any, 0)
+	// Batch-load all channels once (kill per-route N+1; #383).
+	allChannelRows := queryRows(h.db,
+		`SELECT rc.*, a.username, a.access_token, a.api_token, a.balance, a.status as account_status,
+		        s.id as site_id, s.name as site_name, s.url as site_url, s.platform as site_platform, s.status as site_status
+		 FROM route_channels rc
+		 LEFT JOIN accounts a ON rc.account_id = a.id
+		 LEFT JOIN sites s ON a.site_id = s.id
+		 ORDER BY rc.route_id ASC, rc.priority ASC, rc.id ASC`)
+	channelsByRoute := make(map[int64][]map[string]any)
+	for _, ch := range allChannelRows {
+		routeID := toInt64(ch["routeId"])
+		if routeID == 0 {
+			routeID = toInt64(ch["route_id"])
+		}
+		enriched := map[string]any{
+			"id":               ch["id"],
+			"routeId":          ch["routeId"],
+			"accountId":        ch["accountId"],
+			"tokenId":          ch["tokenId"],
+			"oauthRouteUnitId": ch["oauthRouteUnitId"],
+			"sourceModel":      ch["sourceModel"],
+			"priority":         ch["priority"],
+			"weight":           ch["weight"],
+			"enabled":          ch["enabled"],
+			"manualOverride":   ch["manualOverride"],
+			"account":          routeChannelAccountPublic(ch),
+			"site": map[string]any{
+				"id":       ch["siteId"],
+				"name":     ch["siteName"],
+				"url":      ch["siteUrl"],
+				"platform": ch["sitePlatform"],
+				"status":   ch["siteStatus"],
+			},
+		}
+		channelsByRoute[routeID] = append(channelsByRoute[routeID], enriched)
+	}
+
+	result := make([]map[string]any, 0, len(rows))
 	for _, route := range rows {
 		routeID := toInt64(route["id"])
-		channelRows := queryRows(h.db,
-			`SELECT rc.*, a.username, a.access_token, a.api_token, a.balance, a.status as account_status,
-			        s.id as site_id, s.name as site_name, s.url as site_url, s.platform as site_platform, s.status as site_status
-			 FROM route_channels rc
-			 LEFT JOIN accounts a ON rc.account_id = a.id
-			 LEFT JOIN sites s ON a.site_id = s.id
-			 WHERE rc.route_id = ?`, routeID)
-
-		var enrichedChannels []map[string]any
-		for _, ch := range channelRows {
-			enriched := map[string]any{
-				"id":               ch["id"],
-				"routeId":          ch["routeId"],
-				"accountId":        ch["accountId"],
-				"tokenId":          ch["tokenId"],
-				"oauthRouteUnitId": ch["oauthRouteUnitId"],
-				"sourceModel":      ch["sourceModel"],
-				"priority":         ch["priority"],
-				"weight":           ch["weight"],
-				"enabled":          ch["enabled"],
-				"manualOverride":   ch["manualOverride"],
-				"account":          routeChannelAccountPublic(ch),
-				"site": map[string]any{
-					"id":       ch["siteId"],
-					"name":     ch["siteName"],
-					"url":      ch["siteUrl"],
-					"platform": ch["sitePlatform"],
-					"status":   ch["siteStatus"],
-				},
-			}
-			enrichedChannels = append(enrichedChannels, enriched)
+		enrichedChannels := channelsByRoute[routeID]
+		if enrichedChannels == nil {
+			enrichedChannels = []map[string]any{}
 		}
-
 		item := route
 		item["channels"] = enrichedChannels
 		if ds, ok := route["decisionSnapshot"].(string); ok && ds != "" {
