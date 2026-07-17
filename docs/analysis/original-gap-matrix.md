@@ -1,7 +1,7 @@
 # Original MetAPI Gap Matrix (metapi-go evidence)
 
 > Snapshot date: 2026-07-16 (G2 inventory)  
-> **Matrix evidence refreshed: 2026-07-17** (post v0.8.12 / toward v0.8.13 — docs-only #281)  
+> **Matrix evidence refreshed: 2026-07-17** (post v0.8.15 — #568 present, #585/#555 partial evidence, #590 present)  
 > Branch base: `feat/gap-inventory` (G1 sources/taxonomy); refresh on `docs/p90-gap-matrix-refresh`  
 > Issue: [#9 G2](https://github.com/tokendancelab/metapi-go/issues/9) · refresh [#281](https://github.com/TokenDanceLab/metapi-go/issues/281)  
 > Sources: `docs/analysis/original-gap-sources.md`  
@@ -48,7 +48,7 @@
 | 573 | Add Site silent fail: HTTP 200 error body + UI success toast | bug-correctness | present | Backend: `handler/admin/sites.go` create path returns 400/409/500 with `error`/`message` (not 200-on-error); success only `writeJSON(..., StatusOK, result)`. Frontend: `web/pages/Sites.tsx` `api.addSite` then `toast.success`; failures `catch` → `toast.error` | P0 | no |
 | 580 | Gemini official chat rejects tool history without thought_signature | feature-protocol | partial | Only aggregate field `ThoughtSignatures []string` in `transform/gemini/generate_content/compatibility.go` `GeminiAggregateState`; no request-side injection/preservation of tool-history `thought_signature` for official Gemini chat found | P1 | yes |
 | 581 | PR: Fix Gemini official tool-history thought signatures | feature-protocol | partial | Same as #580 — stream state can collect signatures (`ThoughtSignatures`), but native bridge fix for official tool history is incomplete vs PR intent | P1 | yes |
-| 590 | Cannot adjust route order | feature-routing | partial | Routes listed `ORDER BY id ASC` in `handler/admin/token_routes.go` `listLite`/`listSummary` — no route-level order column/API. Channel priority reorder exists: `PUT /api/channels/batch` `batchUpdateChannels` updates `route_channels.priority` | P2 | yes |
+| 590 | Cannot adjust route order | feature-routing | present | `token_routes.sort_order` additive (`store/additive.go` `sc2_006_token_routes_sort_order`); `PUT /api/routes/reorder` + list `ORDER BY sort_order ASC, id ASC` in `handler/admin/token_routes.go` (#284/#288); channel priority reorder remains `PUT /api/channels/batch` | P2 | no |
 | 594 | Per-site max concurrency / request control | feature-routing | present | Schema: `sites.max_concurrency` (`store/schema.go` `Site.MaxConcurrency`, additive `store/additive.go` `sc2_002_site_max_concurrency`). Limiter: `proxy/site_concurrency.go` `SiteConcurrencyLimiter` (0 = unlimited; saturate → skip site, no cascade). Wired in `handler/proxy/upstream.go` + admin create/update `handler/admin/sites.go` / `handler/admin/payloads/sites.go`; tests `proxy/site_concurrency_test.go`, `handler/proxy/upstream_test.go` `TestSiteConcurrencySaturateSkipsWithoutFailure`, `handler/admin/sites_test.go` `TestSites_MaxConcurrencyRoundTrip`. Orthogonal to session channel leases in `proxy/session.go` | P2 | no |
 | 591 | Add `/v1/rerank` endpoint | feature-protocol | present | `handler/proxy/rerank.go` `HandleRerank` (`POST` passthrough `/v1/rerank`, model required, stream rejected); registered `handler/proxy/router.go` `RegisterProxyRoutes` → `r.Post("/rerank", HandleRerank)`; metrics path `handler/shared/metrics.go`; tests `handler/proxy/rerank_test.go` + router path coverage; contract `docs/analysis/rerank-endpoint.md` | P1 | no |
 | 583 | Key grouping / tags | feature-keys | present | `downstream_api_keys.group_name` CRUD: `handler/admin/downstream_keys.go` create/update/batch groupName; schema `store/schema.go` `DownstreamAPIKey`; tests `handler/admin/downstream_keys_test.go` | P2 | no |
@@ -134,15 +134,15 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 17 | 18 |
-| partial | 11 | 31 |
+| present | 18 | 18 |
+| partial | 10 | 31 |
 | missing | 0 | 3 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (17): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #594, #591, #578, #588, #526, #559, #496**.  
+Mandatory present (18): **#582, #568, #573, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496**.  
 Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559 shipped)*.  
-Mandatory partial (11): **#585, #580, #581, #590, #579, #547, #520, #584, #577, #555, #538**.  
+Mandatory partial (10): **#585, #580, #581, #579, #547, #520, #584, #577, #555, #538**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.
@@ -167,7 +167,7 @@ Remaining **all-rows missing** (3, additional product sample only): **#534** bul
 
 1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
 2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
-3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade/failover hardening (**#585/#568**), route **order** (**#590**), multi-key binding (**#579**), usage/stats accuracy (**#555**), multi-turn responses content (**#538**).
+3. Remaining high-leverage **partial** mandatory work: Gemini `thought_signature` depth (**#580/#581**), cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**), multi-turn responses content (**#538**).
 4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
 5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 

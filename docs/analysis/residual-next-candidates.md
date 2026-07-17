@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.13)
+# Residual next candidates (post v0.8.15)
 
 **Date**: 2026-07-17  
-**Issue**: [#290](https://github.com/TokenDanceLab/metapi-go/issues/290)  
-**Context**: After Enterprise residual **v0.8.13** (gap matrix refresh, sticky eval, update-center residual honesty, token_routes reorder).  
+**Issue**: [#290](https://github.com/TokenDanceLab/metapi-go/issues/290) (inventory origin); reliability wave **#298–#300**  
+**Context**: After Enterprise residual **v0.8.15** (expired-mark guard, cascade isolation, stream/partial usage).  
 **Scope**: inventory only — **no product code** in this document.
 
 ## Purpose
@@ -24,9 +24,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | STICKY-B | Redis sticky map (option B) | design-only | `proxy/session.go` process-local `stickyBindings`; `docs/analysis/sticky-session-multi-instance-residual.md` (#237/#282); design spike #292 | Only if multi-instance sticky is product-critical and LB pin is unavailable | Hot-path Redis; must fail-open like sharedcount |
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
-| P0-568 | Relay keys force-marked expired | **present** (#298) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
-| P0-585 | Channel failure cascade poison | partial | Retry/exclude in `proxy/channel_selection.go`, `proxy/conductor.go`, `proxy/retry_policy.go`; no full production proof vs site-wide poison | Reliability / load-test wave | High under multi-channel failure storms |
-| P0-555 | Token usage statistics inaccurate | partial | `scheduler/usage_aggregation.go` + admin stats; stream/partial/error token extraction still needs runtime audit | Observability wave | Billing/ops trust |
+| P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
+| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302) | Channel-scoped exclude, 429 failover, same-channel timeout budget, isolation tests; residual site/model breaker + production multi-channel load proof | Optional load-test / breaker polish | Medium residual |
+| P0-555 | Token usage statistics inaccurate | **partial** (audit #300/#303) | Client disconnect keeps extracted stream usage; aggregation pipeline still needs broader error/partial coverage | Observability follow-up | Billing/ops trust |
 | P1-580 | Gemini thought_signature tool history | partial | Aggregate field only in `transform/gemini/generate_content/compatibility.go`; request-side preservation incomplete | Protocol wave | Official Gemini tool history rejects |
 | P1-538 | Hermes/Codex multi-turn responses content | partial | Responses surface + reasoning parsers; multi-turn required `content` not fully enforced | Protocol wave | Client second-turn failures |
 | ROUTE-590 | Route list drag reorder | **present** (v0.8.13) | `token_routes.sort_order` + `PUT /api/routes/reorder` (#284/#288); list `ORDER BY sort_order, id` | Done — matrix row should flip present on next refresh | — |
@@ -36,11 +36,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
 
-## Recommended sequencing (v0.8.14+)
+## Recommended sequencing (v0.8.16+)
 
-1. **Docs hygiene** (this file + Redis sticky design spike #292 + admin test residual honesty #291) — no runtime risk.
-2. **Reliability partials** P0-568 / P0-585 with tests under multi-channel failure — highest operator pain.
-3. **Protocol partials** P1-580 / P1-538 when client repros available.
+1. **Docs honesty**: flip matrix #590 → present; keep residual inventory honest after v0.8.15.
+2. **Protocol partials** P1-580 / P1-538 when client repros available.
+3. **Observability follow-up** on P0-555 aggregation / non-stream paths (beyond disconnect partial).
 4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
@@ -53,7 +53,8 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.13](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.13)
+- Release: [v0.8.15](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.15)
 - Matrix: `docs/analysis/original-gap-matrix.md`
+- Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #274, #282, #283, #290, #291, #292
+- Related issues: #274, #282, #283, #290, #291, #292, #298, #299, #300
