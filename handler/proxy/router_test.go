@@ -225,7 +225,7 @@ func TestFilesListRoute_Returns200(t *testing.T) {
 	}
 }
 
-func TestFilesUploadRoute_501(t *testing.T) {
+func TestFilesUploadRoute_NotHard501(t *testing.T) {
 	r := chi.NewRouter()
 	r.Use(injectAuth)
 	RegisterProxyRoutes(r)
@@ -234,8 +234,8 @@ func TestFilesUploadRoute_501(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != 501 {
-		t.Errorf("expected 501, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code == 501 {
+		t.Errorf("unexpected hard 501 stub: %s", rec.Body.String())
 	}
 }
 

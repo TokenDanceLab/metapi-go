@@ -560,3 +560,8 @@ Forwarded client IP headers are ignored by default. Set `TRUSTED_PROXY_CIDRS` on
 ### GET /api/downstream-keys/:id/export
 
 Admin credential export adapters (openai/cherry/generic). See docs/analysis/credential-export.md.
+
+
+### /v1/files*
+
+OpenAI-compatible files proxy (upload/list/get/content/delete). Pass-through to selected upstream; residual platforms without files API return upstream errors. See docs/analysis/files-proxy.md.
