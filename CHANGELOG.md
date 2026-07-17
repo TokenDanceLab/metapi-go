@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.4] — 2026-07-17
+
+### Fixed
+- PostgreSQL CreateSite: RETURNING id + explicit sites column select (shared CI probe-column drift) (#204 / #208)
+- Multipart `/v1/images/edits` forwards via dispatchUpstream (no example.com stub) (#207 / #210)
+
+### Added
+- Expired API-key account recovery on credential update (allowInactive model refresh + reactivate) (#205 / #212)
+- Account token groups via platform.GetUserGroups with local fallback (#206 / #211)
+
 ## [v0.8.3] — 2026-07-17
 
 ### Added
