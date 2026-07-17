@@ -99,12 +99,15 @@ func (s *SiteAnnouncementScheduler) runSync() {
 }
 
 func (s *SiteAnnouncementScheduler) runSyncLocked(dbw *store.DB) {
-	slog.Info("site-announcement: syncing announcements")
-	// Stub: calls sync function on active sites
-	// The TS version calls syncSiteAnnouncements() which iterates over sites
-	// and pulls announcements from each site's API.
+	// Residual honesty (#246): this scheduler pass is scan-only.
+	// What runs: enumerate active sites under the scheduler lease and log the
+	// count. What does NOT run: platform adapter GetSiteAnnouncements, DB
+	// insert/update into site_announcements, notifications, or events.
+	// Admin path POST /api/site-announcements/sync already implements real
+	// syncSiteAnnouncements; this ticker does not call it. "sync complete"
+	// means "enumeration complete", not that announcements were fetched.
+	slog.Info("site-announcement: residual scan (no platform sync)")
 
-	// For now we enumerate active sites and log
 	rows, err := dbw.Query("SELECT id, platform, url FROM sites WHERE status = 'active'")
 	if err != nil {
 		slog.Error("site-announcement: failed to query sites", "error", err)
@@ -120,12 +123,16 @@ func (s *SiteAnnouncementScheduler) runSyncLocked(dbw *store.DB) {
 			continue
 		}
 		_ = id
+		_ = platform
 		_ = url
-		// TODO: wire actual platform-specific announcement sync
+		// Residual (#246): site row is counted only.
+		// TODO residual (not wired): call platform-specific announcement sync
+		// (reuse admin syncSiteAnnouncements / adapter.GetSiteAnnouncements).
+		// Do not invent inserted/updated success without real upstream calls.
 		count++
 	}
 
-	slog.Info("site-announcement: sync complete", "sites", count)
+	slog.Info("site-announcement: residual scan complete (no announcements written)", "sites", count)
 }
 
 func maxInt64(a, b int64) int64 {

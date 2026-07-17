@@ -100,7 +100,15 @@ func (s *UpdateCenterScheduler) runSync() {
 
 func (s *UpdateCenterScheduler) runSyncLocked(dbw *store.DB) {
 	_ = dbw
-	slog.Info("update-center: checking for updates")
-	// Stub: calls update center API
-	// TODO: wire actual update center polling logic
+	// Residual honesty (#246): silent no-op for product purposes.
+	// What runs: ticker + in-flight guard + scheduler lease + this log line.
+	// What does NOT run: remote registry/helper polling, version compare,
+	// persistence of lastCheckedAt, or any deploy/rollback side effect.
+	// Admin update-center status/check endpoints are also local stubs
+	// (0.0.0 / updateAvailable=false); deploy/rollback are honest 501 residuals
+	// (see residual-update-center.md). This scheduler must not invent
+	// "update available" or fake task completion.
+	// TODO residual (not wired): wire actual update-center polling when a real
+	// helper/registry client exists — until then this is scan-free log-only.
+	slog.Info("update-center: residual check (no remote polling; no version discovery)")
 }

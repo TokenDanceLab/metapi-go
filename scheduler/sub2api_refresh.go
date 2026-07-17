@@ -118,7 +118,13 @@ func (s *Sub2APIRefreshScheduler) runPass() {
 func (s *Sub2APIRefreshScheduler) runPassLocked(dbw *store.DB) {
 	slog.Info("sub2api-refresh: running pass")
 
-	// Query Sub2API platform active accounts
+	// Residual honesty (#246): this pass is scaffolding only.
+	// What runs: SQL scan of active sub2api accounts (id + extra_config) under
+	// the scheduler lease. What does NOT run: extraConfig.sub2apiAuth parsing,
+	// due-window filter (refreshToken + tokenExpiresAt), concurrency pool, or
+	// any call into balance.refreshSub2ApiManagedSessionSingleflight.
+	// Logs always report refreshed=0 / failed=0 — not fake success, just no work.
+	// Full managed-auth product is out of scope here; see residual-sub2api-auth.md.
 	rows, err := dbw.Query(`
 		SELECT a.id, a.extra_config
 		FROM accounts a
@@ -144,13 +150,20 @@ func (s *Sub2APIRefreshScheduler) runPassLocked(dbw *store.DB) {
 		if err := rows.Scan(&c.id, &c.extraConfig); err != nil {
 			continue
 		}
-		// Filter: must have sub2apiAuth in extraConfig
-		// TODO: parse extraConfig and check for refreshToken+tokenExpiresAt
+		// Residual (#246): extraConfig is loaded but not parsed.
+		// TODO residual (not wired): parse extraConfig.sub2apiAuth and keep only
+		// candidates with non-empty refreshToken + due tokenExpiresAt.
+		// Until then every active sub2api account is treated as a scan candidate
+		// and none are refreshed.
+		_ = c.extraConfig
 		candidates = append(candidates, c)
 	}
 
-	// TODO: Wire actual Sub2API refresh via singleflight
-	slog.Info("sub2api-refresh: pass complete",
+	// Residual (#246): no refresh side effects. singleflight helper lives in
+	// service/balance but is not invoked from this scheduler.
+	// TODO residual (not wired): call refreshSub2ApiManagedSessionSingleflight
+	// with concurrency=sub2apiRefreshConcurrency; do not invent success counts.
+	slog.Info("sub2api-refresh: pass complete (scan-only residual; no tokens refreshed)",
 		"scanned", len(candidates),
 		"refreshed", 0,
 		"failed", 0,
