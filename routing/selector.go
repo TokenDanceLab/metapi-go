@@ -278,15 +278,18 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	if strategy == StrategyRoundRobin {
-		// Align with weighted/stable_first: avoid recently-failed channels when healthy
-		// alternatives remain. Without this filter, RR only hard-excludes cooldownUntil
-		// (which starts after RoundRobinFailureThreshold consecutive fails), so a single
-		// failure can be reselected immediately and starve sibling healthy channels.
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-		selected := SelectRoundRobinCandidate(filteredCandidates)
+		// #368: same priority-layer strict soft-filter demotion as weighted (#358).
+		// Soft-empty higher priority demotes to next; global full-set fallback only
+		// when every layer is soft-empty (starvation guard).
+		selected := selectAcrossPriorityLayersStrict(
+			available,
+			resolveModel,
+			nowMs,
+			s.configuredMaxSec,
+			func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				return SelectRoundRobinCandidate(pool)
+			},
+		)
 		if selected == nil {
 			return nil, nil
 		}
@@ -295,58 +298,65 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	if strategy == StrategyStableFirst {
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-
+		// #368: walk priority layers with strict soft-filter before stable_first pools.
 		rotationKey := BuildStableFirstRotationKey(match.Route.ID, requestedModel)
-		poolPlan := BuildStableFirstPoolPlan(filteredCandidates, resolveModel)
-
-		shouldUseObservation := len(poolPlan.ObservationCandidates) > 0 &&
-			(len(poolPlan.PrimaryCandidates) == 0 ||
-				(recordSelection && ShouldUseStableFirstObservationCandidate(rotationKey, poolPlan.ObservationCandidates)))
-
-		var selectionPool []RouteChannelCandidate
-		if shouldUseObservation {
-			selectionPool = poolPlan.ObservationCandidates
-		} else if len(poolPlan.PrimaryCandidates) > 0 {
-			selectionPool = poolPlan.PrimaryCandidates
-		} else {
-			selectionPool = poolPlan.ObservationCandidates
-		}
-
-		if len(selectionPool) == 0 {
-			return nil, nil
-		}
-
-		selected := s.stableFirstSelect(selectionPool, resolveModel, policy,
-			shouldUseObservation, rotationKey)
+		var usedObservation bool
+		selected := selectAcrossPriorityLayersStrict(
+			available,
+			resolveModel,
+			nowMs,
+			s.configuredMaxSec,
+			func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				poolPlan := BuildStableFirstPoolPlan(pool, resolveModel)
+				shouldUseObservation := len(poolPlan.ObservationCandidates) > 0 &&
+					(len(poolPlan.PrimaryCandidates) == 0 ||
+						(recordSelection && ShouldUseStableFirstObservationCandidate(rotationKey, poolPlan.ObservationCandidates)))
+				var selectionPool []RouteChannelCandidate
+				if shouldUseObservation {
+					selectionPool = poolPlan.ObservationCandidates
+				} else if len(poolPlan.PrimaryCandidates) > 0 {
+					selectionPool = poolPlan.PrimaryCandidates
+				} else {
+					selectionPool = poolPlan.ObservationCandidates
+				}
+				if len(selectionPool) == 0 {
+					return nil
+				}
+				picked := s.stableFirstSelect(selectionPool, resolveModel, policy,
+					shouldUseObservation, rotationKey)
+				if picked != nil {
+					usedObservation = shouldUseObservation
+				}
+				return picked
+			},
+		)
 		if selected == nil {
 			return nil, nil
 		}
-
 		obsKey := rotationKey + ":observe"
 		return s.finalizeDispatch(ctx, selected, match, requestedModel, mappedModel, policy,
-			recordSelection, rotationKey, obsKey, shouldUseObservation, excludeChannelIDs, nowISO, nowMs)
+			recordSelection, rotationKey, obsKey, usedObservation, excludeChannelIDs, nowISO, nowMs)
 	}
 
 	// Deterministic pluggable strategies (#115): least_busy / lowest_latency / lowest_cost.
-	// Same eligibility + recent-failure filters as weighted; exclude lists remain upstream.
+	// #368: same priority-layer strict soft-filter demotion as weighted.
 	if strategy == StrategyLeastBusy || strategy == StrategyLowestLatency || strategy == StrategyLowestCost {
-		breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
-		filteredCandidates := FilterRecentlyFailedCandidates(breakerHealthy,
-			func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
-			nowMs, s.configuredMaxSec)
-		var selected *RouteChannelCandidate
-		switch strategy {
-		case StrategyLeastBusy:
-			selected = SelectLeastBusyCandidate(filteredCandidates, s.channelLoadProvider)
-		case StrategyLowestLatency:
-			selected = SelectLowestLatencyCandidate(filteredCandidates, resolveModel)
-		default:
-			selected = SelectLowestCostCandidate(filteredCandidates, resolveModel, s.pricingFn, s.fallbackUnitCost)
-		}
+		selected := selectAcrossPriorityLayersStrict(
+			available,
+			resolveModel,
+			nowMs,
+			s.configuredMaxSec,
+			func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				switch strategy {
+				case StrategyLeastBusy:
+					return SelectLeastBusyCandidate(pool, s.channelLoadProvider)
+				case StrategyLowestLatency:
+					return SelectLowestLatencyCandidate(pool, resolveModel)
+				default:
+					return SelectLowestCostCandidate(pool, resolveModel, s.pricingFn, s.fallbackUnitCost)
+				}
+			},
+		)
 		if selected == nil {
 			return nil, nil
 		}
@@ -355,7 +365,7 @@ func (s *ChannelSelector) selectFromMatch(
 	}
 
 	// Weighted: priority layers (#358 soft-filter demotion).
-	selected := selectWeightedAcrossPriorityLayers(
+	selected := selectAcrossPriorityLayersStrict(
 		available,
 		resolveModel,
 		nowMs,
@@ -371,12 +381,12 @@ func (s *ChannelSelector) selectFromMatch(
 		recordSelection, "", "", false, excludeChannelIDs, nowISO, nowMs)
 }
 
-// selectWeightedAcrossPriorityLayers walks priority layers low→high. Per-layer soft
+// selectAcrossPriorityLayersStrict walks priority layers low→high. Per-layer soft
 // filters use softFilterCandidatesStrict (no full-set pin). If a layer is entirely
 // soft-empty, try the next priority. Only when ALL layers are soft-empty does the
 // global FilterRecentlyFailed / breaker full-set fallback apply (starvation guard).
-// See #358.
-func selectWeightedAcrossPriorityLayers(
+// Used by weighted (#358) and RR/stable_first/least_* (#368).
+func selectAcrossPriorityLayersStrict(
 	available []RouteChannelCandidate,
 	resolveModel func(RouteChannelCandidate) string,
 	nowMs int64,
@@ -422,6 +432,17 @@ func selectWeightedAcrossPriorityLayers(
 		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
 		nowMs, configuredMaxSec)
 	return selectFromPool(filteredGlobal)
+}
+
+// selectWeightedAcrossPriorityLayers is the historical name for weighted callers/tests (#358).
+func selectWeightedAcrossPriorityLayers(
+	available []RouteChannelCandidate,
+	resolveModel func(RouteChannelCandidate) string,
+	nowMs int64,
+	configuredMaxSec int,
+	selectFromPool func([]RouteChannelCandidate) *RouteChannelCandidate,
+) *RouteChannelCandidate {
+	return selectAcrossPriorityLayersStrict(available, resolveModel, nowMs, configuredMaxSec, selectFromPool)
 }
 
 // softFilterCandidatesStrict applies site/model breaker then recent-failure

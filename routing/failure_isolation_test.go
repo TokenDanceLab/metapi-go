@@ -917,3 +917,77 @@ func TestWeightedSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback(t *testing.T)
 		t.Fatalf("unexpected selected channel %d", selected.Channel.ID)
 	}
 }
+
+// TestRRSoftFilter_EmptyPriorityDemotesToNext covers #368: round-robin must
+// demote soft-empty priority-0 to healthy priority-1 (parity with weighted #358).
+func TestRRSoftFilter_EmptyPriorityDemotesToNext(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 2_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	c0a := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0a.Channel.FailCount = 2
+	c0a.Channel.LastFailAt = &recentISO
+	c0b := buildTestCandidate(2, 11, 102, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0b.Channel.FailCount = 3
+	c0b.Channel.LastFailAt = &recentISO
+	c1 := buildTestCandidate(3, 20, 201, 10, 1, 100, 0, 50.0, 1.0, nil, 50.0, &model)
+
+	available := []RouteChannelCandidate{c0a, c0b, c1}
+	selected := selectAcrossPriorityLayersStrict(available, resolve, nowMs, 3600,
+		func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+			return SelectRoundRobinCandidate(pool)
+		})
+	if selected == nil {
+		t.Fatal("expected selection from healthy priority-1 layer")
+	}
+	if selected.Channel.ID != 3 {
+		t.Fatalf("expected priority-1 channel 3, got channel %d priority %d",
+			selected.Channel.ID, selected.Channel.Priority)
+	}
+}
+
+// TestStableFirstSoftFilter_EmptyPriorityDemotesToNext covers #368: stable_first
+// demotes soft-empty priority-0 to healthy priority-1.
+func TestStableFirstSoftFilter_EmptyPriorityDemotesToNext(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 2_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	c0 := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0.Channel.FailCount = 2
+	c0.Channel.LastFailAt = &recentISO
+	c1 := buildTestCandidate(3, 20, 201, 10, 1, 100, 0, 50.0, 1.0, nil, 50.0, &model)
+
+	available := []RouteChannelCandidate{c0, c1}
+	selected := selectAcrossPriorityLayersStrict(available, resolve, nowMs, 3600,
+		func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+			if len(pool) == 0 {
+				return nil
+			}
+			// Deterministic: prefer lowest channel ID in the filtered layer.
+			best := &pool[0]
+			for i := range pool {
+				if pool[i].Channel.ID < best.Channel.ID {
+					best = &pool[i]
+				}
+			}
+			return best
+		})
+	if selected == nil {
+		t.Fatal("expected selection from healthy priority-1 layer")
+	}
+	if selected.Channel.ID != 3 {
+		t.Fatalf("expected priority-1 channel 3, got channel %d", selected.Channel.ID)
+	}
+}
