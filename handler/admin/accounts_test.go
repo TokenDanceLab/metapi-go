@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/service"
 	"github.com/tokendancelab/metapi-go/service/alert"
 	"github.com/tokendancelab/metapi-go/store"
 )
@@ -2401,5 +2402,63 @@ func TestAccounts_Update_ExtraConfigAndProxyURLMergeTogether(t *testing.T) {
 	}
 	if cfg["platformUserId"] != float64(42) {
 		t.Fatalf("platformUserId = %#v, want 42", cfg["platformUserId"])
+	}
+}
+
+func TestListAccounts_RedactsAccessTokenAndAPIToken(t *testing.T) {
+	db, _, _ := setupAccountsTest(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	siteRes, err := db.Exec(
+		`INSERT INTO sites (name, url, platform, status, sort_order, created_at, updated_at)
+		 VALUES (?, ?, ?, 'active', 0, ?, ?)`,
+		"redact-site", "https://example.com", "openai", now, now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	siteID, _ := siteRes.LastInsertId()
+	secret := "sk-list-secret-ABCDEFGH"
+	apiTok := "sk-api-token-XYZ12345"
+	res, err := db.Exec(
+		`INSERT INTO accounts (site_id, username, access_token, api_token, balance, balance_used, quota, value_score, status, is_pinned, sort_order, checkin_enabled, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, 0, 0, 0, 0, 'active', 0, 0, 0, ?, ?)`,
+		siteID, "redact-user", secret, apiTok, now, now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+
+	items, err := service.ListAccountsWithSites(db.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found map[string]any
+	for _, it := range items {
+		switch v := it["id"].(type) {
+		case int64:
+			if v == id {
+				found = it
+			}
+		case float64:
+			if int64(v) == id {
+				found = it
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("account %d not in list (%d items)", id, len(items))
+	}
+	if v, ok := found["accessToken"]; ok && v != nil && v != "" {
+		t.Fatalf("list leaked accessToken: %#v", v)
+	}
+	if v, ok := found["apiToken"]; ok && v != nil && v != "" {
+		t.Fatalf("list leaked apiToken: %#v", v)
+	}
+	if got, _ := found["accessTokenMasked"].(string); got == "" || strings.Contains(got, secret) {
+		t.Fatalf("accessTokenMasked = %#v", found["accessTokenMasked"])
+	}
+	if got, _ := found["apiTokenMasked"].(string); got == "" || strings.Contains(got, apiTok) {
+		t.Fatalf("apiTokenMasked = %#v", found["apiTokenMasked"])
 	}
 }
