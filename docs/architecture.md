@@ -1,5 +1,7 @@
 # Architecture Overview
 
+> **Navigation**: full docs map in [`docs/README.md`](README.md) · session status in [`progress/MASTER.md`](progress/MASTER.md) · residual queue in [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md).
+
 MetAPI Go is a ground-up rewrite of the TypeScript MetAPI proxy gateway in Go. This document describes the **as-built** package layout, request paths, and key design decisions. Design philosophy and package dependency rules live in [`docs/design/BACKEND.md`](design/BACKEND.md).
 
 > **Naming truth (B0 / #16):** There is **no** `proxycore/` or `protocol/` package in this repository. The proxy engine is `proxy/` (with `proxy/profiles` and `proxy/types`). Protocol conversion is `transform/` (with `transform/canonical`, `openai`, `anthropic`, `gemini`, `shared`). Older docs or TS-era names that say “ProxyCore package” or “protocol package” refer to these real packages.

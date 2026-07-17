@@ -51,17 +51,19 @@ lane-gate       → 跨线合并 / MASTER / 发布闸
 
 每个 WF prompt 必须写死：`Lane: <name>`、`Issue #N`、`Allowed files`、`Forbidden files`、`Commit contains #N`。
 
-## 并行矩阵（E1 当前）
+## 并行矩阵（post enterprise residual — 2026-07-17）
+
+历史七条线（STACK…RELIABILITY）**已闭环**。当前默认是 **residual 波次**：
 
 ```
-lane-stack      S1          ████████░░░░
-lane-gap        G1✓ G2      ████████░░░░
-lane-ui         U0 DESIGN   ████░░░░░░░░
-lane-backend    B0 + B2     ████████░░░░
-lane-schema     SC0         ████░░░░░░░░
-lane-reliability R0         ████░░░░░░░░
-lane-feature    —           等待 G2+F0
+lane-protocol     #309 Gemini thought_signature · #310 Responses multi-turn
+lane-observability #311 usage accuracy follow-up
+lane-gate         MASTER slim · CHANGELOG · tag · board hygiene
 ```
+
+文件所有权仍按模块拆分（`transform/gemini/**` ∥ `transform/openai/responses/**` ∥ `handler/proxy` usage / `scheduler`），禁止两 WF 同写 `MASTER.md`。
+
+完整程序图见 `docs/plan/enterprise-program.md`；状态见 `docs/progress/MASTER.md`。
 
 ## 反模式（禁止）
 
@@ -70,3 +72,5 @@ lane-feature    —           等待 G2+F0
 3. FEATURE 线在 matrix 完成前实现  
 4. 两个 WF 同时写 `MASTER.md`  
 5. agent 嵌套 agent 假装并行  
+6. 重复开同一主题 Issue / 开已合入功能的重复 PR  
+7. 把 MASTER 写成变更日志（写 `CHANGELOG.md` + Release）

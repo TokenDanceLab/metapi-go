@@ -1,188 +1,92 @@
-# MASTER.md — MetAPI Go Rewrite
+# MASTER.md — MetAPI Go
 
-**Task**: MetAPI TypeScript → Go 完整重写 + 生产就绪优化 + stack/gap 双轨计划
-**Tracking Mode**: GitHub Project + Milestones (SDD)
-**Repository**: https://github.com/TokenDanceLab/metapi-go
+**Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery  
+**Mode**: GitHub Issues + Milestones (SDD)  
+**Repo**: https://github.com/TokenDanceLab/metapi-go  
+**Latest release**: **[v0.8.15](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.15)** (2026-07-17)
+
+> 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。  
+> 文档地图：[`docs/README.md`](../README.md)
 
 ## Tracking
 
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Milestone M-STACK | https://github.com/TokenDanceLab/metapi-go/milestone/1 |
-| Milestone M-GAP | https://github.com/TokenDanceLab/metapi-go/milestone/2 |
-| Plan | `docs/plan/milestones-stack-gap.md` |
+| Active milestone | [v0.8.16](https://github.com/TokenDanceLab/metapi-go/milestone/25) |
+| Program map | `docs/plan/enterprise-program.md` |
+| Residual backlog | `docs/analysis/residual-next-candidates.md` |
+| Gap matrix | `docs/analysis/original-gap-matrix.md` |
+| Architecture | `docs/architecture.md` · design `docs/design/BACKEND.md` |
 
-## Current Status
+## Current Status (2026-07-17)
 
-| Phase | Name | Status |
-|:------|:-----|:-------|
-| P0-P13 | Original rewrite (14 phases) | ✅ |
-| COMPARE | TS vs Go deep comparison | ✅ |
-| AUDIT | 16-dimension audit | ✅ |
-| FIX | Audit findings remediation | ✅ |
-| **HARDEN** | Production hardening (18/23 findings) | ✅ Done |
-| **M-STACK** | Frontend stack modernization (TS7 + React19 + Vite8) | ✅ S0–S3 landed (#35/#68); S4 operational via CI green path |
-| **M-GAP** | Original metapi gap inventory (docs-only) | ✅ Closed / accepted (G4 #11) |
-| **M-BACKEND** | Backend architecture clarity | ✅ B0–B3 landed |
-| **M-UI** | UI/UX design system | ✅ U0–U3 landed (DESIGN/tokens/components/pages/a11y) |
-| **M-SCHEMA** | Schema compat + upgrade | ✅ SC0–SC2 landed (parity + additive migrations + P0 columns) |
-| **M-RELIABILITY** | Reliability and boundaries | ✅ R0–R2 landed |
-| **M-FEATURE** | Feature completeness from gap matrix | ✅ Gap #38–#56 + learn #110–#121 complete |
+| Track | Status | Notes |
+|:------|:-------|:------|
+| Rewrite P0–P13 | ✅ | Single-binary Go + embed SPA |
+| M-STACK (TS7 / React19 / Vite8) | ✅ | CI frontend green path |
+| M-GAP inventory | ✅ | Matrix + backlog; product via residual tags |
+| M-BACKEND / UI / SCHEMA / RELIABILITY | ✅ | Design SSOT in `docs/design/` |
+| M-FEATURE + competitive learn | ✅ | Gap #38–#56 · learn #110–#121 |
+| Enterprise residual **v0.8.15** | ✅ | #298–#300 · tag v0.8.15 |
+| Enterprise residual **v0.8.16** | 🔄 | #309 Gemini signature · #310 Responses multi-turn · #311 usage follow-up |
 
-> **Program map**: `docs/plan/enterprise-program.md` + `docs/plan/lane-charters.md`  
-> **Scope**: product gap implementation only after F0; CRITICAL reliability (B2/R*) may ship earlier.
+## Active work (v0.8.16)
 
-## Program map (#3–#11 stack/gap)
+| Issue | Title | Lane |
+|------:|:------|:-----|
+| [#309](https://github.com/TokenDanceLab/metapi-go/issues/309) | Gemini tool-history `thought_signature` | protocol |
+| [#310](https://github.com/TokenDanceLab/metapi-go/issues/310) | Multi-turn Responses content honesty | protocol |
+| [#311](https://github.com/TokenDanceLab/metapi-go/issues/311) | Usage aggregation / non-stream accuracy | observability |
 
-| Issue | Track | Title | Wave |
-|------:|:------|:------|:-----|
-| #3 | S0 / gate | Bootstrap SDD + MASTER status for stack/gap program | Wave 0→1 |
-| #4 | S1 | Bump TS 7.0.2 + React 19.2.7 + Vite 8.1.5 (core lock) | Wave 1 |
-| #5 | S2 | React 19 test adaptation (~79 react-test-renderer files) | Wave 2 |
-| #6 | S3 | Vite 8 plugin / vitepress-mermaid tooling closure | Wave 2 |
-| #7 | S4 | CI / Docker / embed regression gate + CHANGELOG | Wave 3 |
-| #8 | G1 | Capture original metapi open issues + taxonomy | Wave 1 ✅ |
-| #9 | G2 | metapi-go capability gap matrix with code evidence | Wave 1 ✅ |
-| #10 | G3 | Publish [backlog] GitHub issues from gap matrix | Wave 2 ✅ |
-| #11 | G4 | Gap inventory acceptance (docs-only gate) | Wave 3 ✅ |
+**Closed as duplicate**: #308 → #309. **Superseded PR**: #306 → already merged via #302.
 
-### M-GAP notes (closed / accepted)
+## Residual releases (pointer only)
 
-| Item | Detail |
-|------|--------|
-| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/2 |
-| Acceptance | `docs/plan/gap-inventory-acceptance.md` (G4 #11) |
-| Sources | `docs/analysis/original-gap-sources.md` |
-| Taxonomy | `docs/analysis/original-gap-taxonomy.md` |
-| Matrix | `docs/analysis/original-gap-matrix.md` (mandatory set complete) |
-| Backlog | `docs/plan/original-gap-backlog.md` · issues **#36–#56** |
-| Product fixes | **Not** this gate — schedule via **M-FEATURE** / individual PRs (`docs/plan/feature-complete-roadmap.md`) |
+| Tag | Milestone | Highlights |
+|:----|:----------|:-----------|
+| [v0.8.15](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.15) | 24 | Expired-mark guard · cascade isolation · stream usage partial |
+| [v0.8.14](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.14) | 23 | Residual inventory · Redis sticky design · admin test honesty |
+| [v0.8.13](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.13) | 22 | Gap matrix refresh · sticky eval · route reorder |
+| [v0.8.12](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.12) | 21 | Task race · announcement sync · recovery provider · WS residual |
+| older | 11–20 | See GitHub Releases / `CHANGELOG.md` |
 
-### M-BACKEND notes
+## Architecture entry points
 
-| Item | Detail |
-|------|--------|
-| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/4 |
-| B0–B3 | Landed (architecture docs, package boundaries, concurrency, unified errors) |
-| Philosophy SSOT | `docs/design/BACKEND.md` |
+| Concern | SSOT |
+|:--------|:-----|
+| Package map / request path | `docs/architecture.md` |
+| Backend philosophy / boundaries | `docs/design/BACKEND.md` |
+| UI design system | `docs/design/DESIGN.md` |
+| Engineering rules | root `AGENTS.md` |
+| Public API surface | `docs/api.md` |
+| Deploy | `docs/deployment.md` |
+| Residual honesty (what is NOT product yet) | `docs/analysis/residual-next-candidates.md` |
 
-### M-FEATURE notes (active)
+## Quick status commands
 
-| Item | Detail |
-|------|--------|
-| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/6 · Roadmap `docs/plan/feature-complete-roadmap.md` |
-| Shipped infra | Site max concurrency · per-key `proxy_url` · group route rebuild |
-| Closed F1+P1 | Full gap backlog #38–#56 (PRs #74–#94) |
-| Polish | v0.8.1 #168–#171 landed |
-| P4 adapters | Milestone 11 closed · **#182–#185** · tag **[v0.8.2](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.2)** |
-| Residual stubs | Milestone 12 closed · tag **[v0.8.3](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.3)** |
-| Polish v0.8.4 | Milestone 13 closed · tag **[v0.8.4](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.4)** |
-| Residual v0.8.5 | Milestone 14 closed · tag **[v0.8.5](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.5)** |
-| Residual v0.8.6 | Milestone 15 closed · tag **[v0.8.6](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.6)** |
-| Residual v0.8.7 | Milestone 16 closed · tag **[v0.8.7](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.7)** |
-| Residual v0.8.8 | Milestone 17 closed · tag **[v0.8.8](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.8)** |
-| Residual v0.8.9 | Milestone 18 closed · tag **[v0.8.9](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.9)** |
-| Residual v0.8.10 | Milestone 19 closed · tag **[v0.8.10](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.10)** |
-| Residual v0.8.11 | Milestone 20 closed · **#265–#266** (PRs #267/#268); tag **v0.8.11** |
-| Residual v0.8.12 | Milestone 21 closed · **#271–#274** (PRs #275/#276/#277/#278); tag **v0.8.12** |
-| Residual v0.8.13 | Milestone 22 closed · **#281–#284** (PRs #285/#286/#287/#288); tag **v0.8.13** |
-| Residual v0.8.14 | Milestone 23 closed · **#290–#292** (PRs #293/#294/#295); tag **v0.8.14** |
-| Residual v0.8.15 | Milestone 24 closed · **#298–#300** (PRs #301/#302/#303); tag **v0.8.15** |
-| Residual CI | vulncheck green on Go 1.26.5; frontend occasional EnvironmentTeardownError flake |
-
-### M-COMPETE notes (active)
-
-| Item | Detail |
-|------|--------|
-| Milestone | https://github.com/TokenDanceLab/metapi-go/milestone/8 |
-| Local clones | operator-only checkouts under competitors/ (not product SSOT) |
-| Scope | Competitive learning matrix + implemented `[learn]` **#110–#121** (closed) |
-| Peers | [all-api-hub](https://github.com/qixing-jk/all-api-hub) · [axonhub](https://github.com/looplj/axonhub) · [new-api](https://github.com/QuantumNous/new-api) · [litellm](https://github.com/BerriAI/litellm) |
-| Matrix / backlog | `docs/analysis/competitive/matrix.md` · issues **#110–#121** |
-| Inventory | `docs/analysis/competitive/` — [README](../analysis/competitive/README.md) · [sources](../analysis/competitive/sources.md) · [matrix](../analysis/competitive/matrix.md) |
-| Status | Matrix L1–L12 published; `[learn]` #110–#121 implemented and closed |
-
-
-## Hardening Results
-
-**Completed 2026-07-05. 4 commits pushed. All 30 packages test green.**
-
-### Phase 1: Critical Fixes ✅
-| Fix | Detail |
-|-----|--------|
-| C1 | `http.DefaultClient` → RuntimeExecutor (90s fallback) |
-| C2 | 6 OAuth panics → return errors |
-| C3 | Default token warnings in config.Validate() + AES key standalone |
-| C4 | SSE streaming WriteTimeout disabled via SetWriteDeadline |
-
-### Phase 2: Security & Reliability ✅
-| Fix | Detail |
-|-----|--------|
-| H1 | `!=` → subtle.ConstantTimeCompare (admin + proxy auth) |
-| H2 | CI: errcheck/staticcheck/ineffassign enabled, lint gates, -race in tests, standalone vet |
-| H3 | DB pool: ConnMaxLifetime(5min) + ConnMaxIdleTime(2min) |
-| H4 | 13 log.Printf → slog.Warn/Error |
-| H5 | RequestID middleware (chi middleware.RequestID) |
-| H7 | usage_aggregation: no longer re-panics (prevents server crash) |
-
-### Phase 3: Observability & Tests ✅
-| Fix | Detail |
-|-----|--------|
-| M1 | 7 zero-coverage packages → all ≥50% (chat 89.9%, images 100%, profiles 85.2%) |
-| M3 | /metrics Prometheus endpoint (zero-dependency text format) |
-| M4 | handler/shared/errors.go: APIError type + WriteError/WriteErrorDetail |
-| M5 | SecurityHeaders: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP |
-| M8 | /debug/vars behind admin auth |
-
-### Phase 4: Polish ✅
-| Fix | Detail |
-|-----|--------|
-| E2E | 3 new hardening tests (concurrent proxy, auth timing, rate limit) |
-| AGENTS.md | Pre-push checklist now includes -race |
-
-### Deferred (not blocking v0.4.0)
-- context.Background → request context in OAuth (needs broader signature refactor)
-- chatFormatsCore.go file split
-- PGO in Docker build
-- CORS per-route group refinement
-- Responses WebSocket (known STUB, matches TS parity gap doc)
-
-## Coverage Highlights
-
-| Package | Before | After |
-|---------|--------|-------|
-| transform/openai/chat | 0% | **89.9%** |
-| transform/openai/completions | 0% | **50.0%** |
-| transform/openai/embeddings | 0% | **100%** |
-| transform/openai/images | 0% | **100%** |
-| transform/openai/responses | 0% | **100%** |
-| proxy/profiles | 0% | **85.2%** |
-| service/adapter | 0% | covered |
-| e2e tests | 4 files | **5 files** (+3 hardening tests) |
-
-## CI/CD Status
-- CI workflow includes lint, vet, vulncheck, frontend, test-sqlite `-race`, test-pg, build, and Docker image build plus `/health` and `/ready` smoke gates.
-- CD: ✅ (ghcr.io/tokendancelab/metapi-go:latest)
-- Release: v0.3.0 → **next: v0.4.0** (stack modernization may land in a later patch/minor after S4 gate)
-
-## Specs
-- Audit: `docs/analysis/hardening-audit.md`
-- Schema parity (SC0 #20): `docs/analysis/schema-parity.md`
-- Task breakdown: `docs/plan/task-breakdown-hardening.md`
-- Dependency graph: `docs/plan/dependency-graph-hardening.md`
-- Milestones (hardening): `docs/plan/milestones-hardening.md`
-- Milestones (stack + gap): `docs/plan/milestones-stack-gap.md`
-- Gap inventory acceptance (G4 #11): `docs/plan/gap-inventory-acceptance.md`
-- Feature-complete roadmap (F0 #23): `docs/plan/feature-complete-roadmap.md`
-
-## Enterprise modernization (active)
-- **M-UI** complete foundation: `docs/design/DESIGN.md` + tokens + U1–U3
-- **M-GAP** inventory closed/accepted: `docs/plan/gap-inventory-acceptance.md` (backlog shells #36–#56; #36/#37 closed as addressed by R0/R1)
-- **M-FEATURE shipped P0 slices**: per-site max concurrency, per-key `proxy_url`, custom group route rebuild
-- **M-SCHEMA**: additive `schema_migrations` + columns `proxy_url` / `max_concurrency` / `context_length`
+```bash
+gh issue list --milestone "Enterprise residual v0.8.16" --state open
+gh pr list --state open
+gh release view v0.8.15
+git log --oneline origin/master -10
+```
 
 ## Next Steps
-1. Tag **v0.8.15** (reliability P0: expired-mark guard + cascade isolation + stream usage partial) — this release
-2. Open **v0.8.16**: matrix #590 present flip, residual-next-candidates refresh, protocol partials P1-580/P1-538, optional usage aggregation deeper audit
-3. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry
+
+1. Land **v0.8.16** product PRs for #309 / #310 / #311 (parallel WFs).
+2. Keep residuals honest: no fake WS / no Redis sticky product without dedicated ACs.
+3. Prefer board hygiene: one Issue per topic; close duplicates immediately.
+4. MASTER stays slim — release notes go to `CHANGELOG.md` + GitHub Release only.
+
+## Governance
+
+| Surface | Role |
+|:--------|:-----|
+| `AGENTS.md` | Agent hard rules (parity, dual dialect, pre-push) |
+| GitHub Issues/Milestones | Task SSOT |
+| `docs/progress/MASTER.md` | Session resume index (this file) |
+| `CHANGELOG.md` | Version narrative |
+| Native Claude project memory | Optional short pointers only |
+
+Telemetry / drift: Milestone descriptions + Issue comments (SDD adaptive control).
