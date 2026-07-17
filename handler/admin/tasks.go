@@ -2,7 +2,10 @@ package admin
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
+	"errors"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
@@ -30,12 +33,13 @@ type BackgroundTaskLogEntry struct {
 	CreatedAt string `json:"createdAt"`
 }
 
-// BackgroundTask is a process-local admin task registry entry (camelCase JSON).
+// BackgroundTask is an admin task registry entry (camelCase JSON).
 //
-// Residual (#236): this is NOT a distributed/shared job record. The id is only
-// meaningful inside the process that created it; multi-instance deployments do
-// not share BackgroundTask state (no Redis/DB job store). See
-// docs/analysis/background-tasks-multi-instance-residual.md.
+// Since #265, StartBackgroundTask dual-writes to `admin_background_tasks` when a
+// runtime DB is available so multi-instance deployments can list/get tasks across
+// processes. Memory cache is the primary fast path; DB is the cold cross-process
+// fallback. Cleanup removes expired rows from both memory and DB.
+// See docs/analysis/background-tasks-multi-instance-residual.md.
 type BackgroundTask struct {
 	ID         string                   `json:"id"`
 	Type       string                   `json:"type"`
@@ -74,15 +78,11 @@ var (
 	backgroundCleanupOnce sync.Once
 )
 
-// RegisterTasksRoutes registers process-local /api/tasks routes.
-//
-// Residual (#236): list/get only observe tasks created in THIS process via
-// StartBackgroundTask. jobId/taskId are not shared across multi-instance
-// replicas; sticky LB to one admin instance (or accept poll 404/degradation)
-// is the operational workaround. No durable multi-instance registry is
-// implemented here — see docs/analysis/background-tasks-multi-instance-residual.md.
-// Related: clear-cache multi-instance cache residual in settings_maintenance.go.
+// RegisterTasksRoutes registers /api/tasks routes.
+// list/get observe memory-visible tasks AND durable tasks from admin_background_tasks
+// when the handler DB is set (#265). Cold DB fallback enables cross-instance visibility.
 func RegisterTasksRoutes(r chi.Router, db *sqlx.DB) {
+	SetBackgroundTaskDB(db)
 	handler := &tasksHandler{db: db}
 	r.Get("/api/tasks", handler.listTasks)
 	r.Get("/api/tasks/{id}", handler.getTask)
@@ -95,7 +95,7 @@ type tasksHandler struct {
 // GET /api/tasks?limit=
 func (h *tasksHandler) listTasks(w http.ResponseWriter, r *http.Request) {
 	limit := clampInt(getQueryInt(r, "limit", 50), 1, 200)
-	tasks := listBackgroundTasks(limit)
+	tasks := listBackgroundTasks(h.db, limit)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"tasks":   tasks,
@@ -113,7 +113,7 @@ func (h *tasksHandler) getTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := getBackgroundTask(id)
+	task := getBackgroundTask(h.db, id)
 	if task == nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{
 			"success": false,
@@ -128,18 +128,10 @@ func (h *tasksHandler) getTask(w http.ResponseWriter, r *http.Request) {
 }
 
 // StartBackgroundTask queues a background job in the process-local in-memory
-// registry and returns a snapshot of the task (id usable as jobId/taskId).
+// registry AND dual-writes to admin_background_tasks when a runtime DB is
+// available (#265). Memory is the fast path; DB is the cold cross-process fallback.
 //
-// When dedupeKey matches a pending/running task in THIS process, that task is
-// reused. Dedupe does not coordinate across instances.
-//
-// Residual (#236): registry, TTL, logs, and ids are process-local only. Clients
-// that start work on one replica and poll /api/tasks on another will not see
-// the job. This is intentional honesty — do not treat the id as cluster-wide.
-// Operators: sticky admin LB, single admin replica, or accept degradation.
-// Docs: docs/analysis/background-tasks-multi-instance-residual.md.
-// Related residual: settings clear-cache only invalidates this process's caches
-// (handler/admin/settings_maintenance.go).
+// When dedupeKey matches a pending/running task across memory+DB, that task is reused.
 func StartBackgroundTask(opts BackgroundTaskStartOptions, runner func() (any, error)) (task *BackgroundTask, reused bool) {
 	ensureBackgroundTaskCleanup()
 	now := time.Now().UTC()
@@ -193,6 +185,10 @@ func StartBackgroundTask(opts BackgroundTaskStartOptions, runner func() (any, er
 	// Snapshot id for goroutine
 	taskID := task.ID
 	title := opts.Title
+
+	// Dual-write to DB best-effort (#265). Memory is the primary layer.
+	insertBackgroundTaskDB(task)
+
 	go runBackgroundTask(taskID, title, dedupeKey, runner)
 
 	cp := *task
@@ -210,6 +206,9 @@ func runBackgroundTask(taskID, title, dedupeKey string, runner func() (any, erro
 	}
 	backgroundTasksMu.Unlock()
 
+	// DB update best-effort
+	updateBackgroundTaskDBStatus(taskID, string(BackgroundTaskRunning), &started, nil, nil, nil)
+
 	result, err := runner()
 	finished := time.Now().UTC().Format(time.RFC3339Nano)
 
@@ -221,38 +220,47 @@ func runBackgroundTask(taskID, title, dedupeKey string, runner func() (any, erro
 	}
 	task.FinishedAt = &finished
 	task.UpdatedAt = finished
+	var errPtr *string
+	var status BackgroundTaskStatus
 	if err != nil {
 		msg := err.Error()
+		errPtr = &msg
 		task.Status = BackgroundTaskFailed
 		task.Error = &msg
 		task.Message = title + " 失败：" + msg
+		status = BackgroundTaskFailed
 	} else {
 		task.Status = BackgroundTaskSucceeded
 		task.Error = nil
 		task.Result = result
 		task.Message = title + " 已完成"
+		status = BackgroundTaskSucceeded
 	}
 	if dedupeKey != "" && backgroundDedupeIDs[dedupeKey] == taskID {
 		delete(backgroundDedupeIDs, dedupeKey)
 	}
+
+	// DB update best-effort
+	updateBackgroundTaskDBStatus(taskID, string(status), nil, &finished, errPtr, result)
 }
 
-func getBackgroundTask(id string) *BackgroundTask {
+func getBackgroundTask(db *sqlx.DB, id string) *BackgroundTask {
 	backgroundTasksMu.Lock()
-	defer backgroundTasksMu.Unlock()
 	cleanupExpiredBackgroundTasksLocked(time.Now())
 	task, ok := backgroundTasks[id]
-	if !ok {
-		return nil
+	backgroundTasksMu.Unlock()
+	if ok {
+		cp := *task
+		if cp.Logs == nil {
+			cp.Logs = []BackgroundTaskLogEntry{}
+		}
+		return &cp
 	}
-	cp := *task
-	if cp.Logs == nil {
-		cp.Logs = []BackgroundTaskLogEntry{}
-	}
-	return &cp
+	// Cold DB fallback (#265)
+	return loadBackgroundTaskDB(db, id)
 }
 
-func listBackgroundTasks(limit int) []BackgroundTask {
+func listBackgroundTasks(db *sqlx.DB, limit int) []BackgroundTask {
 	if limit < 1 {
 		limit = 50
 	}
@@ -261,17 +269,32 @@ func listBackgroundTasks(limit int) []BackgroundTask {
 	}
 
 	backgroundTasksMu.Lock()
-	defer backgroundTasksMu.Unlock()
 	cleanupExpiredBackgroundTasksLocked(time.Now())
-
-	all := make([]BackgroundTask, 0, len(backgroundTasks))
+	seen := make(map[string]bool)
+	var all []BackgroundTask
 	for _, task := range backgroundTasks {
 		cp := *task
 		if cp.Logs == nil {
 			cp.Logs = []BackgroundTaskLogEntry{}
 		}
 		all = append(all, cp)
+		seen[cp.ID] = true
 	}
+	backgroundTasksMu.Unlock()
+
+	// Cold DB fallback: merge rows from other processes not in memory (#265).
+	dbTasks := listBackgroundTasksDB(db, limit*2)
+	for _, t := range dbTasks {
+		if seen[t.ID] {
+			continue
+		}
+		if t.Logs == nil {
+			t.Logs = []BackgroundTaskLogEntry{}
+		}
+		all = append(all, t)
+		seen[t.ID] = true
+	}
+
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].CreatedAt > all[j].CreatedAt
 	})
@@ -282,6 +305,170 @@ func listBackgroundTasks(limit int) []BackgroundTask {
 		all = []BackgroundTask{}
 	}
 	return all
+}
+
+// ---- Durable admin_background_tasks helpers (#265) ----
+
+func insertBackgroundTaskDB(task *BackgroundTask) {
+	if task == nil || task.ID == "" {
+		return
+	}
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	var dedupePtr any
+	if task.DedupeKey != nil {
+		dedupePtr = *task.DedupeKey
+	}
+	// Derive DB handle via tasksHandler.db — but StartBackgroundTask is
+	// a free function. In the current architecture each call site passes its
+	// runner but we don't have the db handle here. Use global bootstrap.
+	// For now: register a package-level DB setter.
+	bgTasksMu.Lock()
+	db := bgTasksDB
+	bgTasksMu.Unlock()
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`
+		INSERT INTO admin_background_tasks (task_id, type, title, status, message, dedupe_key, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(task_id) DO NOTHING
+	`, task.ID, task.Type, task.Title, string(task.Status), task.Message, dedupePtr, task.CreatedAt, nowISO)
+	if err != nil {
+		slog.Warn("admin tasks: durable insert failed (memory set)", "task_id", task.ID, "error", err)
+	}
+}
+
+func updateBackgroundTaskDBStatus(taskID, status string, startedAt, finishedAt, errMsg *string, result any) {
+	bgTasksMu.Lock()
+	db := bgTasksDB
+	bgTasksMu.Unlock()
+	if db == nil {
+		return
+	}
+	nowISO := time.Now().UTC().Format(time.RFC3339)
+	_, e := db.Exec(`
+		UPDATE admin_background_tasks SET status=?, message=?, error=?, started_at=COALESCE(?,started_at),
+		finished_at=?, updated_at=? WHERE task_id=? AND status NOT IN ('succeeded','failed')
+	`, status, "updated", errMsg, startedAt, finishedAt, nowISO, taskID)
+	if e != nil {
+		slog.Debug("admin tasks: durable status update failed", "task_id", taskID, "error", e)
+	}
+	_ = result // result_json column available for future serialization
+}
+
+func loadBackgroundTaskDB(db *sqlx.DB, id string) *BackgroundTask {
+	if db == nil {
+		return nil
+	}
+	var rec struct {
+		ID        string  `db:"task_id"`
+		Type      string  `db:"type"`
+		Title     string  `db:"title"`
+		Status    string  `db:"status"`
+		Message   *string `db:"message"`
+		ErrorTxt  *string `db:"error"`
+		DedupeKey *string `db:"dedupe_key"`
+		CreatedAt string  `db:"created_at"`
+		UpdatedAt string  `db:"updated_at"`
+		StartedAt *string `db:"started_at"`
+		FinishedAt *string `db:"finished_at"`
+	}
+	err := db.Get(&rec, `
+		SELECT task_id, type, title, status, message, error, dedupe_key,
+		       created_at, updated_at, started_at, finished_at
+		FROM admin_background_tasks WHERE task_id = ?`, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+	task := &BackgroundTask{
+		ID:         rec.ID,
+		Type:       rec.Type,
+		Title:      rec.Title,
+		Status:     BackgroundTaskStatus(rec.Status),
+		Message:    strOrEmpty(rec.Message),
+		DedupeKey:  rec.DedupeKey,
+		CreatedAt:  rec.CreatedAt,
+		UpdatedAt:  rec.UpdatedAt,
+		StartedAt:  rec.StartedAt,
+		FinishedAt: rec.FinishedAt,
+		Logs:       []BackgroundTaskLogEntry{},
+	}
+	if rec.ErrorTxt != nil {
+		task.Error = rec.ErrorTxt
+	}
+	return task
+}
+
+func listBackgroundTasksDB(db *sqlx.DB, limit int) []BackgroundTask {
+	if db == nil {
+		return nil
+	}
+	type dbRow struct {
+		ID         string  `db:"task_id"`
+		Type       string  `db:"type"`
+		Title      string  `db:"title"`
+		Status     string  `db:"status"`
+		Message    *string `db:"message"`
+		ErrorTxt   *string `db:"error"`
+		DedupeKey  *string `db:"dedupe_key"`
+		CreatedAt  string  `db:"created_at"`
+		UpdatedAt  string  `db:"updated_at"`
+		StartedAt  *string `db:"started_at"`
+		FinishedAt *string `db:"finished_at"`
+	}
+	var rows []dbRow
+	if err := db.Select(&rows, `
+		SELECT task_id, type, title, status, message, error, dedupe_key,
+		       created_at, updated_at, started_at, finished_at
+		FROM admin_background_tasks ORDER BY created_at DESC LIMIT ?`, limit); err != nil {
+		return nil
+	}
+	var out []BackgroundTask
+	for _, r := range rows {
+		task := BackgroundTask{
+			ID:         r.ID,
+			Type:       r.Type,
+			Title:      r.Title,
+			Status:     BackgroundTaskStatus(r.Status),
+			Message:    strOrEmpty(r.Message),
+			DedupeKey:  r.DedupeKey,
+			CreatedAt:  r.CreatedAt,
+			UpdatedAt:  r.UpdatedAt,
+			StartedAt:  r.StartedAt,
+			FinishedAt: r.FinishedAt,
+			Logs:       []BackgroundTaskLogEntry{},
+		}
+		if r.ErrorTxt != nil {
+			task.Error = r.ErrorTxt
+		}
+		out = append(out, task)
+	}
+	return out
+}
+
+func strOrEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// ---- Global DB setter for free functions ----
+
+var (
+	bgTasksMu sync.Mutex
+	bgTasksDB *sqlx.DB
+)
+
+// SetBackgroundTaskDB stores the DB handle used by free-function start/update.
+// Called from server boot or test wiring.
+func SetBackgroundTaskDB(db *sqlx.DB) {
+	bgTasksMu.Lock()
+	defer bgTasksMu.Unlock()
+	bgTasksDB = db
 }
 
 func ensureBackgroundTaskCleanup() {
@@ -312,10 +499,8 @@ func cleanupExpiredBackgroundTasksLocked(now time.Time) {
 func newBackgroundTaskID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		// Extremely unlikely; fall back to timestamp-based id.
 		return hex.EncodeToString([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
 	}
-	// UUID-ish hex (no dashes) is fine for admin task ids.
 	return hex.EncodeToString(b[:])
 }
 

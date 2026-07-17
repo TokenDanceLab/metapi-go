@@ -81,6 +81,7 @@ func TestSQLiteAutoMigrateAllTables(t *testing.T) {
 		"proxy_debug_traces",
 		"proxy_debug_attempts",
 		"proxy_video_tasks",
+		"admin_background_tasks",
 		"proxy_files",
 		"settings",
 		"admin_snapshots",

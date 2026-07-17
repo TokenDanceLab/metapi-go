@@ -465,6 +465,24 @@ type SiteAnnouncement struct {
 }
 
 // ---- Table 27: events ----
+// ---- Table 28: admin_background_tasks ----
+type AdminBackgroundTask struct {
+	ID         int64   `db:"id" json:"id"`
+	TaskID     string  `db:"task_id" json:"taskId"`
+	Type       string  `db:"type" json:"type"`
+	Title      string  `db:"title" json:"title"`
+	Status     string  `db:"status" json:"status"`
+	Message    *string `db:"message" json:"message"`
+	Error      *string `db:"error" json:"error"`
+	ResultJSON *string `db:"result_json" json:"resultJson"`
+	DedupeKey  *string `db:"dedupe_key" json:"dedupeKey"`
+	CreatedAt  string  `db:"created_at" json:"createdAt"`
+	UpdatedAt  string  `db:"updated_at" json:"updatedAt"`
+	StartedAt  *string `db:"started_at" json:"startedAt"`
+	FinishedAt *string `db:"finished_at" json:"finishedAt"`
+	LogsJSON   *string `db:"logs_json" json:"logsJson"`
+}
+
 type Event struct {
 	ID          int64   `db:"id" json:"id"`
 	Type        string  `db:"type" json:"type"`

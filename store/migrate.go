@@ -73,6 +73,8 @@ func AutoMigrate(db *DB) error {
 		{"site_announcements", buildSiteAnnouncementsDDL(dialect)},
 		// Table 27: events
 		{"events", buildEventsDDL(dialect)},
+		// Table 28: admin_background_tasks
+		{"admin_background_tasks", buildAdminBackgroundTasksDDL(dialect)},
 	}
 
 	// Non-UNIQUE indexes are created separately via CREATE INDEX IF NOT EXISTS
@@ -1124,6 +1126,46 @@ func buildSiteAnnouncementsDDL(d string) string {
 		raw_payload TEXT,
 		CONSTRAINT site_announcements_site_source_key_unique UNIQUE (site_id, source_key),
 		FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
+	)`
+}
+
+
+func buildAdminBackgroundTasksDDL(d string) string {
+	if isPG(d) {
+		return `CREATE TABLE IF NOT EXISTS admin_background_tasks (
+			id SERIAL PRIMARY KEY,
+			task_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			message TEXT,
+			error TEXT,
+			result_json TEXT,
+			dedupe_key TEXT,
+			created_at TEXT,
+			updated_at TEXT,
+			started_at TEXT,
+			finished_at TEXT,
+			logs_json TEXT,
+			CONSTRAINT admin_background_tasks_task_id_unique UNIQUE (task_id)
+		)`
+	}
+	return `CREATE TABLE IF NOT EXISTS admin_background_tasks (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id TEXT NOT NULL,
+		type TEXT NOT NULL,
+		title TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		message TEXT,
+		error TEXT,
+		result_json TEXT,
+		dedupe_key TEXT,
+		created_at TEXT,
+		updated_at TEXT,
+		started_at TEXT,
+		finished_at TEXT,
+		logs_json TEXT,
+		CONSTRAINT admin_background_tasks_task_id_unique UNIQUE (task_id)
 	)`
 }
 
