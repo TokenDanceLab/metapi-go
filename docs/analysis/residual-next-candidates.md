@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.20 → v0.8.21)
+# Residual next candidates (post v0.8.21)
 
 **Date**: 2026-07-17  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual  
-**Context**: **v0.8.20 shipped** (#345 stream include_usage, #346 residual honesty). Active residual wave: **Milestone 30 / v0.8.21** (#350 completions include_usage, #351 residual honesty).  
+**Context**: After Enterprise residual **v0.8.21** (#350 completions include_usage, #351 residual honesty). Prior **v0.8.20**: #345 chat stream include_usage · #346 residual honesty.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 
@@ -38,22 +38,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
 | CTX-520 | Route contextLength admin + models wire | **present-with-residual** (#320 + #327) | Admin CRUD (#320) + OpenAI `/v1/models` prefers positive route `context_length` (max per exposed id) (#327). Residual: no proxy max-token enforce; Claude models path has no context_length field | Optional enforce Milestone only with ACs | Metadata vs enforcement |
 
-## Active wave (Milestone 30 / v0.8.21)
+## Recommended sequencing (v0.8.22+)
 
-| Issue | Role | Notes |
-|------:|------|-------|
-| [#350](https://github.com/TokenDanceLab/metapi-go/issues/350) | proxy | legacy `/v1/completions` stream `include_usage` |
-| [#351](https://github.com/TokenDanceLab/metapi-go/issues/351) | docs | This residual + MASTER flip post v0.8.20 |
-
-## Recommended sequencing (v0.8.21+)
-
-1. **Shipped in v0.8.20**: #345 OpenAI chat stream `stream_options.include_usage` · #346 residual honesty. Prior v0.8.19: #334–#336. **P0-555** stays **present-with-residual** (chat stream policy wired; media/lag/orphan residual). **CTX-520** / **P0-585** unchanged residual notes.
-2. **v0.8.21 board**: #350 legacy completions include_usage · #351 residual honesty — no fake WS/sticky/update-center.
-3. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
-4. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
-5. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
-6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+1. **Shipped in v0.8.21**: #350 legacy completions `stream_options.include_usage` · #351 residual honesty. Prior v0.8.20: #345 chat stream include_usage · #346 residual honesty. **P0-555** stays **present-with-residual** (chat+completions stream policy wired; media/lag/orphan residual). **CTX-520** / **P0-585** unchanged residual notes.
+2. **Observability residual only** on P0-555 (policy/media/lag/multi-instance); not perfect billing.
+3. **Optional product later**: P0-585 load-proof / site-model breaker; proxy max-token enforce from contextLength (dedicated ACs only).
+4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
 ## Explicit non-goals for residual waves
 
@@ -66,7 +58,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.20](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.20) · prior [v0.8.19](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.19)
+- Release: [v0.8.21](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.21) · prior [v0.8.20](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.20)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - MASTER: `docs/progress/MASTER.md`
