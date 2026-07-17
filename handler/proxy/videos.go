@@ -2,8 +2,11 @@ package proxyhandler
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,15 +15,17 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // ProxyVideoTask holds a video task mapping (publicId -> upstreamVideoId).
 //
-// Create (#235) saves a process-local mapping on successful POST /v1/videos and
-// rewrites the response `id` to publicId. GET/DELETE treat the local store as
-// an optional rewrite aid, not a hard gate — missing entries still pass the
-// client id through to upstream. Multi-instance durable DB store and sticky
-// site/token pin remain residual. See docs/analysis/videos-proxy-residual.md.
+// Create (#235/#244) saves a process-local cache entry and dual-writes to
+// `proxy_video_tasks` when store.GetDB() is available so multi-instance /
+// restart can resolve publicId. GET/DELETE treat the store as an optional
+// rewrite aid, not a hard gate — missing entries still pass the client id
+// through to upstream. Sticky site/token pin remains residual.
+// See docs/analysis/videos-proxy-residual.md.
 type ProxyVideoTask struct {
 	PublicID        string `json:"publicId"`
 	UpstreamVideoID string `json:"upstreamVideoId"`
@@ -133,35 +138,184 @@ func resolveVideoUpstreamID(publicID string) string {
 	return publicID
 }
 
-// SaveProxyVideoTask saves a video task mapping.
+// SaveProxyVideoTask saves a video task mapping to the process-local cache and
+// dual-writes to proxy_video_tasks when a runtime DB is available (#244).
 func SaveProxyVideoTask(task *ProxyVideoTask) {
 	if task == nil || strings.TrimSpace(task.PublicID) == "" {
 		return
 	}
-	videoTaskStoreMu.Lock()
-	defer videoTaskStoreMu.Unlock()
 	// Store a copy so callers cannot mutate the map entry after return.
 	cp := *task
+	cp.PublicID = strings.TrimSpace(cp.PublicID)
+	cp.UpstreamVideoID = strings.TrimSpace(cp.UpstreamVideoID)
+
+	videoTaskStoreMu.Lock()
 	videoTaskStore[cp.PublicID] = &cp
+	videoTaskStoreMu.Unlock()
+
+	if err := upsertProxyVideoTaskDB(&cp); err != nil {
+		slog.Warn("proxy video task: durable upsert failed (memory cache still set)",
+			"public_id", cp.PublicID, "error", err)
+	}
 }
 
 // GetProxyVideoTaskByPublicID retrieves a video task by publicId.
+// Memory cache first; cold miss falls back to proxy_video_tasks (#244).
 func GetProxyVideoTaskByPublicID(publicID string) *ProxyVideoTask {
-	videoTaskStoreMu.RLock()
-	defer videoTaskStoreMu.RUnlock()
-	task := videoTaskStore[publicID]
-	if task == nil {
+	publicID = strings.TrimSpace(publicID)
+	if publicID == "" {
 		return nil
 	}
-	cp := *task
+	videoTaskStoreMu.RLock()
+	task := videoTaskStore[publicID]
+	if task != nil {
+		cp := *task
+		videoTaskStoreMu.RUnlock()
+		return &cp
+	}
+	videoTaskStoreMu.RUnlock()
+
+	loaded, err := loadProxyVideoTaskDB(publicID)
+	if err != nil {
+		slog.Debug("proxy video task: durable load failed", "public_id", publicID, "error", err)
+		return nil
+	}
+	if loaded == nil {
+		return nil
+	}
+	// Warm process-local cache.
+	videoTaskStoreMu.Lock()
+	videoTaskStore[loaded.PublicID] = loaded
+	videoTaskStoreMu.Unlock()
+	cp := *loaded
 	return &cp
 }
 
-// DeleteProxyVideoTaskByPublicID deletes a video task by publicId.
+// DeleteProxyVideoTaskByPublicID deletes a video task by publicId (memory + DB).
 func DeleteProxyVideoTaskByPublicID(publicID string) {
+	publicID = strings.TrimSpace(publicID)
+	if publicID == "" {
+		return
+	}
 	videoTaskStoreMu.Lock()
-	defer videoTaskStoreMu.Unlock()
 	delete(videoTaskStore, publicID)
+	videoTaskStoreMu.Unlock()
+
+	if err := deleteProxyVideoTaskDB(publicID); err != nil {
+		slog.Warn("proxy video task: durable delete failed", "public_id", publicID, "error", err)
+	}
+}
+
+func upsertProxyVideoTaskDB(task *ProxyVideoTask) error {
+	db := store.GetDB()
+	if db == nil || task == nil {
+		return nil
+	}
+	if strings.TrimSpace(task.PublicID) == "" || strings.TrimSpace(task.UpstreamVideoID) == "" {
+		return nil
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	// store.DB rebinds ? → $N for postgres.
+	const q = `
+INSERT INTO proxy_video_tasks (
+	public_id, upstream_video_id, site_url, token_value,
+	requested_model, actual_model, channel_id, account_id,
+	created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(public_id) DO UPDATE SET
+	upstream_video_id = excluded.upstream_video_id,
+	site_url = excluded.site_url,
+	token_value = excluded.token_value,
+	requested_model = excluded.requested_model,
+	actual_model = excluded.actual_model,
+	channel_id = excluded.channel_id,
+	account_id = excluded.account_id,
+	updated_at = excluded.updated_at
+`
+	var reqModel, actModel any
+	if strings.TrimSpace(task.RequestedModel) != "" {
+		reqModel = task.RequestedModel
+	}
+	if strings.TrimSpace(task.ActualModel) != "" {
+		actModel = task.ActualModel
+	}
+	var channelID, accountID any
+	if task.ChannelID > 0 {
+		channelID = task.ChannelID
+	}
+	if task.AccountID > 0 {
+		accountID = task.AccountID
+	}
+	_, err := db.Exec(q,
+		task.PublicID,
+		task.UpstreamVideoID,
+		task.SiteURL,
+		task.TokenValue,
+		reqModel,
+		actModel,
+		channelID,
+		accountID,
+		now,
+		now,
+	)
+	return err
+}
+
+func loadProxyVideoTaskDB(publicID string) (*ProxyVideoTask, error) {
+	db := store.GetDB()
+	if db == nil {
+		return nil, nil
+	}
+	const q = `
+SELECT public_id, upstream_video_id, site_url, token_value,
+       requested_model, actual_model, channel_id, account_id
+FROM proxy_video_tasks
+WHERE public_id = ?
+LIMIT 1
+`
+	var (
+		rowPublic, upstream, siteURL, token string
+		reqModel, actModel                  *string
+		channelID, accountID                *int64
+	)
+	err := db.QueryRow(q, publicID).Scan(
+		&rowPublic, &upstream, &siteURL, &token,
+		&reqModel, &actModel, &channelID, &accountID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	task := &ProxyVideoTask{
+		PublicID:        rowPublic,
+		UpstreamVideoID: upstream,
+		SiteURL:         siteURL,
+		TokenValue:      token,
+	}
+	if reqModel != nil {
+		task.RequestedModel = *reqModel
+	}
+	if actModel != nil {
+		task.ActualModel = *actModel
+	}
+	if channelID != nil {
+		task.ChannelID = *channelID
+	}
+	if accountID != nil {
+		task.AccountID = *accountID
+	}
+	return task, nil
+}
+
+func deleteProxyVideoTaskDB(publicID string) error {
+	db := store.GetDB()
+	if db == nil {
+		return nil
+	}
+	_, err := db.Exec(`DELETE FROM proxy_video_tasks WHERE public_id = ?`, publicID)
+	return err
 }
 
 // maybeRewriteVideosCreateResponse rewrites a successful POST /v1/videos body so

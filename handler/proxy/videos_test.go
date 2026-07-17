@@ -415,3 +415,57 @@ func TestProxyVideoTask_SiteURLAndToken(t *testing.T) {
 
 var _ = json.Marshal
 var _ = http.MethodPost
+
+func TestProxyVideoTask_DBDurableRoundTrip(t *testing.T) {
+	db, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := store.AutoMigrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	store.OverrideDB(db)
+	t.Cleanup(func() { store.OverrideDB(nil) })
+
+	publicID := "video_db_roundtrip_1"
+	// Ensure memory empty for cold load path after save+clear memory.
+	SaveProxyVideoTask(&ProxyVideoTask{
+		PublicID:        publicID,
+		UpstreamVideoID: "up_db_999",
+		SiteURL:         "https://upstream.example.test",
+		TokenValue:      "sk-db",
+		RequestedModel:  "sora-2",
+		ActualModel:     "sora-up",
+		ChannelID:       7,
+		AccountID:       8,
+	})
+	// Drop memory only (simulate other process / restart) without deleting DB.
+	videoTaskStoreMu.Lock()
+	delete(videoTaskStore, publicID)
+	videoTaskStoreMu.Unlock()
+
+	got := GetProxyVideoTaskByPublicID(publicID)
+	if got == nil {
+		t.Fatal("expected durable load from proxy_video_tasks")
+	}
+	if got.UpstreamVideoID != "up_db_999" {
+		t.Fatalf("UpstreamVideoID=%q", got.UpstreamVideoID)
+	}
+	if got.ChannelID != 7 || got.AccountID != 8 {
+		t.Fatalf("ids channel=%d account=%d", got.ChannelID, got.AccountID)
+	}
+	if got.TokenValue != "sk-db" {
+		t.Fatalf("token=%q", got.TokenValue)
+	}
+	// Second get hits warm cache.
+	got2 := GetProxyVideoTaskByPublicID(publicID)
+	if got2 == nil || got2.UpstreamVideoID != "up_db_999" {
+		t.Fatalf("cache warm failed: %+v", got2)
+	}
+
+	DeleteProxyVideoTaskByPublicID(publicID)
+	if GetProxyVideoTaskByPublicID(publicID) != nil {
+		t.Fatal("expected deleted from memory+db")
+	}
+}
