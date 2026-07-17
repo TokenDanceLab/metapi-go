@@ -27,7 +27,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
 | P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302) | Channel-scoped exclude, 429 failover, same-channel timeout budget, isolation tests; residual site/model breaker + production multi-channel load proof | Optional load-test / breaker polish | Medium residual |
-| P0-555 | Token usage statistics inaccurate | **partial** (#300/#303 stream partial; **#311** failure logs) | Client disconnect keeps extracted stream usage; **#311** failure `proxy_logs` retain usage on error paths; aggregation still needs to project failed-row tokens into aggregates — follow-up **#319** | Observability wave **#319** (v0.8.17) | Billing/ops trust |
+| P0-555 | Token usage statistics inaccurate | **present-with-residual** (#300/#311/#319) | Disconnect partial + failure proxy_logs with usage (#311); aggregation projects non-success tokens into `failed_calls` + `total_tokens` (#319 regression). Residual: stream_options policy, media zeros, multi-instance lag, orphan site join — not perfect billing | Residual polish only | Billing/ops trust residual |
 | P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
 | ROUTE-590 | Route list drag reorder | **present** (v0.8.13) | `token_routes.sort_order` + `PUT /api/routes/reorder` (#284/#288); list `ORDER BY sort_order, id` | Done — matrix row should flip present on next refresh | — |
@@ -39,10 +39,10 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (v0.8.17+)
 
-1. **Docs honesty** (#318): residual inventory + MASTER pointers after v0.8.16 so inventory matches shipped **#309–#311**.
-2. **Observability** (#319 / P0-555): project failed `proxy_logs` usage into aggregation (`failed_calls` + tokens); do not invent tokens when unknown.
-3. **Product surface honesty** (#320): `token_routes.context_length` admin/API JSON round-trip; document non-goal if no runtime max-token enforcement.
-4. **Protocol partials** already **present** on master (P1-580 request-side + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
+1. **Docs honesty** (#318): residual inventory + MASTER after v0.8.16 — done on master.
+2. **Observability** (#319 / P0-555): failed `proxy_logs` tokens project into aggregates — this PR; residual only policy/media/lag.
+3. **Product surface honesty** (#320): `token_routes.context_length` admin/API round-trip — done on master (metadata-only; no proxy max-token enforce).
+4. **Protocol partials** already **present** (P1-580 + P1-538 HTTP multi-turn); residual conversion/store/WS + multi-instance aggregate only.
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 
