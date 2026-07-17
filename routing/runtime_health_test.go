@@ -3,7 +3,9 @@ package routing
 import (
 	"math"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // =============================================================================
@@ -691,6 +693,111 @@ func TestSiteRuntimeHealthConstants(t *testing.T) {
 	}
 	if SiteTransientStreakWindowMs != 5*60*1000 {
 		t.Errorf("expected transient streak window 300000, got %d", SiteTransientStreakWindowMs)
+	}
+}
+
+// memHealthSettingsStore is a tiny concurrent-safe SettingsStore for race tests.
+type memHealthSettingsStore struct {
+	mu   sync.Mutex
+	data map[string]string
+	sets atomic.Int64
+}
+
+func newMemHealthSettingsStore() *memHealthSettingsStore {
+	return &memHealthSettingsStore{data: make(map[string]string)}
+}
+
+func (s *memHealthSettingsStore) Get(key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data[key], nil
+}
+
+func (s *memHealthSettingsStore) Set(key, value string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[key] = value
+	s.sets.Add(1)
+	return nil
+}
+
+// TestScheduleSiteRuntimeHealthPersistenceConcurrentRace is a regression for the
+// healthPersistTimer path fixed under #327: concurrent RecordSiteRuntimeSuccess /
+// schedule + timer fire + Flush must stay -race clean.
+func TestScheduleSiteRuntimeHealthPersistenceConcurrentRace(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	store := newMemHealthSettingsStore()
+	SetHealthSettingsStore(store)
+	t.Cleanup(func() {
+		FlushSiteRuntimeHealthPersistence()
+		SetHealthSettingsStore(nil)
+		ResetSiteRuntimeHealthState()
+	})
+
+	const workers = 8
+	const iterations = 200
+	modelName := "gpt-4o"
+	status500 := 500
+	errText := "bad gateway"
+
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		siteID := int64(9200 + i)
+		wg.Add(1)
+		go func(siteID int64) {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				if j%4 == 0 {
+					RecordSiteRuntimeFailure(siteID, SiteRuntimeFailureContext{
+						Status:    &status500,
+						ErrorText: &errText,
+						ModelName: &modelName,
+					})
+					continue
+				}
+				RecordSiteRuntimeSuccess(siteID, float64(80+j%40), &modelName)
+			}
+		}(siteID)
+	}
+
+	// Concurrent flushes exercise timer Stop/clear against AfterFunc.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			FlushSiteRuntimeHealthPersistence()
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	// Concurrent readers keep public paths hot while the timer fires.
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			for j := 0; j < iterations*2; j++ {
+				siteID := int64(9200 + ((j + offset) % workers))
+				_ = GetSiteRuntimeHealthDetails(siteID, modelName)
+				_ = GetSiteRuntimeHealthMultiplier(siteID)
+				_ = IsSiteRuntimeBreakerOpen(siteID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	// Allow debounce timer to fire at least once under -race.
+	time.Sleep(time.Duration(SiteRuntimeHealthPersistDebounceMs+200) * time.Millisecond)
+	FlushSiteRuntimeHealthPersistence()
+
+	if store.sets.Load() == 0 {
+		t.Fatal("expected at least one health persistence Set under concurrent schedule")
+	}
+	raw, err := store.Get(SiteRuntimeHealthSettingKey)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if raw == "" {
+		t.Fatal("expected persisted health payload")
 	}
 }
 

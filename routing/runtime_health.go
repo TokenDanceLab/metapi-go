@@ -128,12 +128,12 @@ type SiteRuntimeHealthState struct {
 	LastFailureAtMs          *int64   `json:"lastFailureAtMs,omitempty"`
 	LastSuccessAtMs          *int64   `json:"lastSuccessAtMs,omitempty"`
 	// Background probe status (issue #114). Soft operator signal; never marks keys expired.
-	LastProbeAtMs     *int64   `json:"lastProbeAtMs,omitempty"`
-	LastProbeStatus   string   `json:"lastProbeStatus,omitempty"` // success | failure | inconclusive
+	LastProbeAtMs      *int64   `json:"lastProbeAtMs,omitempty"`
+	LastProbeStatus    string   `json:"lastProbeStatus,omitempty"` // success | failure | inconclusive
 	LastProbeLatencyMs *float64 `json:"lastProbeLatencyMs,omitempty"`
-	LastProbeError    *string  `json:"lastProbeError,omitempty"`
-	LastProbeModel    string   `json:"lastProbeModel,omitempty"`
-	LastProbeChannelID *int64  `json:"lastProbeChannelId,omitempty"`
+	LastProbeError     *string  `json:"lastProbeError,omitempty"`
+	LastProbeModel     string   `json:"lastProbeModel,omitempty"`
+	LastProbeChannelID *int64   `json:"lastProbeChannelId,omitempty"`
 }
 
 // SiteRuntimeHealthDetails is the resolved health for selection.
@@ -197,6 +197,8 @@ var healthSettingsStore SettingsStore
 
 // SetHealthSettingsStore sets the settings store for health persistence.
 func SetHealthSettingsStore(store SettingsStore) {
+	healthStateMu.Lock()
+	defer healthStateMu.Unlock()
 	healthSettingsStore = store
 }
 
@@ -785,14 +787,14 @@ func RecordSiteRuntimeSuccess(siteID int64, latencyMs float64, modelName *string
 
 // ProbeStatus is the operator-visible background probe outcome for a site.
 type ProbeStatus struct {
-	Status     string   // success | failure | inconclusive | ""
-	AtMs       int64
-	LatencyMs  *float64
-	ErrorText  *string
-	ModelName  string
-	ChannelID  *int64
+	Status      string // success | failure | inconclusive | ""
+	AtMs        int64
+	LatencyMs   *float64
+	ErrorText   *string
+	ModelName   string
+	ChannelID   *int64
 	BreakerOpen bool
-	Multiplier float64
+	Multiplier  float64
 }
 
 // RecordSiteProbeOutcome stamps the last background probe result on site health
@@ -1077,7 +1079,7 @@ func cloneSiteRuntimeHealthState(state *SiteRuntimeHealthState) *SiteRuntimeHeal
 
 func scheduleSiteRuntimeHealthPersistence() {
 	// Caller must hold healthStateMu (write lock). The AfterFunc clears the timer
-	// under the same mutex so concurrent schedule/persist paths are -race clean.
+	// under the same mutex so concurrent schedule/persist/flush paths are -race clean.
 	if healthPersistTimer != nil {
 		return
 	}
@@ -1090,16 +1092,26 @@ func scheduleSiteRuntimeHealthPersistence() {
 }
 
 func persistSiteRuntimeHealthState() {
+	healthStateMu.Lock()
 	if healthSettingsStore == nil {
+		healthStateMu.Unlock()
 		return
 	}
 	if healthPersistInFlight {
+		healthStateMu.Unlock()
 		return
 	}
+	store := healthSettingsStore
 	healthPersistInFlight = true
-	defer func() { healthPersistInFlight = false }()
+	healthStateMu.Unlock()
 
-	// Build payload under read lock, then serialize
+	defer func() {
+		healthStateMu.Lock()
+		healthPersistInFlight = false
+		healthStateMu.Unlock()
+	}()
+
+	// Build payload under read lock, then serialize outside the critical section.
 	healthStateMu.RLock()
 	payload := buildSiteRuntimeHealthPersistencePayload()
 	healthStateMu.RUnlock()
@@ -1108,7 +1120,7 @@ func persistSiteRuntimeHealthState() {
 	if err != nil {
 		return
 	}
-	_ = healthSettingsStore.Set(SiteRuntimeHealthSettingKey, data)
+	_ = store.Set(SiteRuntimeHealthSettingKey, data)
 }
 
 func buildSiteRuntimeHealthPersistencePayload() SiteRuntimeHealthPersistencePayload {
@@ -1248,10 +1260,12 @@ func EnsureSiteRuntimeHealthStateLoaded() error {
 
 // FlushSiteRuntimeHealthPersistence flushes any pending persistence immediately.
 func FlushSiteRuntimeHealthPersistence() {
+	healthStateMu.Lock()
 	if healthPersistTimer != nil {
 		healthPersistTimer.Stop()
 		healthPersistTimer = nil
 	}
+	healthStateMu.Unlock()
 	persistSiteRuntimeHealthState()
 }
 
