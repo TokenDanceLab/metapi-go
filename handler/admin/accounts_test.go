@@ -18,7 +18,10 @@ import (
 
 func setupAccountsTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 	t.Helper()
-	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	// Clear the process-global cache in place. Do NOT reassign globalAccountsCache:
+	// background health-refresh tasks may still hold the old pointer and race with
+	// later tests under -race (TestAccounts_RefreshBalance_NotFound flake).
+	globalAccountsCache.clear()
 
 	db, err := store.Open(store.DialectSQLite, ":memory:", false)
 	if err != nil {
@@ -43,7 +46,7 @@ func setupAccountsTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 
 func setupAccountsPostgresTest(t *testing.T) (*store.DB, chi.Router, *config.Config) {
 	t.Helper()
-	globalAccountsCache = &accountsSnapshotCache{ttl: 30 * time.Second}
+	globalAccountsCache.clear()
 
 	db, r := setupSitesPostgresTest(t)
 	cfg := &config.Config{
@@ -2034,6 +2037,17 @@ func TestAccounts_HealthRefresh_BackgroundDedupe(t *testing.T) {
 	if secondResult["jobId"] != jobID {
 		t.Fatalf("second jobId = %v, want %q", secondResult["jobId"], jobID)
 	}
+
+	// Drain the async runner so later tests do not race on globalAccountsCache.clear().
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		task := getBackgroundTask(nil, jobID)
+		if task != nil && (task.Status == BackgroundTaskSucceeded || task.Status == BackgroundTaskFailed) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("background health-refresh job %s did not finish", jobID)
 }
 
 // ---- Refresh Balance ----
