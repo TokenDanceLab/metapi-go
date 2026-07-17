@@ -1,7 +1,6 @@
 package proxyhandler
 
 import (
-	"encoding/json"
 	"net/http"
 	"sync"
 
@@ -9,6 +8,11 @@ import (
 )
 
 // ProxyVideoTask holds a video task mapping (publicId -> upstreamVideoId).
+//
+// Residual (#225): Create currently dispatches upstream but does not save this
+// mapping or rewrite response id. GET/DELETE therefore treat the local store as
+// an optional rewrite aid, not a hard gate — missing entries pass the client id
+// through to upstream. See docs/analysis/videos-proxy-residual.md.
 type ProxyVideoTask struct {
 	PublicID        string `json:"publicId"`
 	UpstreamVideoID string `json:"upstreamVideoId"`
@@ -27,6 +31,10 @@ var (
 
 // HandleVideosCreate handles POST /v1/videos.
 // Supports multipart/form-data or JSON body. Model is required.
+//
+// Residual: does not yet persist ProxyVideoTask or rewrite upstream response id
+// to a publicId. Clients that receive an upstream id can still GET/DELETE it via
+// honest passthrough when the local mapping is absent.
 func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 	EnsureMultipartBufferParser()
 
@@ -49,6 +57,10 @@ func HandleVideosCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleVideosGet handles GET /v1/videos/{id}.
+//
+// If a local mapping exists and UpstreamVideoID differs from the public path id,
+// the upstream path uses UpstreamVideoID. When the mapping is missing, the
+// client-provided id is passed through — no store-gated 404 theater.
 func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 	publicID := chi.URLParam(r, "id")
 	if publicID == "" {
@@ -56,9 +68,11 @@ func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	upstreamID := resolveVideoUpstreamID(publicID)
+
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "videos",
-		DownstreamPath: "/v1/videos/" + publicID,
+		DownstreamPath: "/v1/videos/" + upstreamID,
 		RequireModel:   false,
 	})
 	if errResp != nil {
@@ -66,21 +80,14 @@ func HandleVideosGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videoTaskStoreMu.RLock()
-	task, ok := videoTaskStore[publicID]
-	videoTaskStoreMu.RUnlock()
-
-	if !ok {
-		writeJSONError(w, 404, "Video task not found", "not_found_error")
-		return
-	}
-
-	_ = task
-	_ = ctx
 	dispatchUpstream(w, r, ctx)
 }
 
 // HandleVideosDelete handles DELETE /v1/videos/{id}.
+//
+// Clears any local mapping for the public id, then always dispatches DELETE to
+// upstream (mapping is optional rewrite aid, not a hard gate). Prefer honest
+// upstream status over a local-only 204 residual.
 func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 	publicID := chi.URLParam(r, "id")
 	if publicID == "" {
@@ -88,20 +95,35 @@ func HandleVideosDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videoTaskStoreMu.RLock()
-	_, ok := videoTaskStore[publicID]
-	videoTaskStoreMu.RUnlock()
+	upstreamID := resolveVideoUpstreamID(publicID)
+	// Best-effort local cleanup whether or not a mapping existed.
+	DeleteProxyVideoTaskByPublicID(publicID)
 
-	if !ok {
-		writeJSONError(w, 404, "Video task not found", "not_found_error")
+	ctx, errResp := PrepareCtx(r, SurfConfig{
+		Endpoint:       "videos",
+		DownstreamPath: "/v1/videos/" + upstreamID,
+		RequireModel:   false,
+	})
+	if errResp != nil {
+		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
 		return
 	}
 
-	videoTaskStoreMu.Lock()
-	delete(videoTaskStore, publicID)
-	videoTaskStoreMu.Unlock()
+	dispatchUpstream(w, r, ctx)
+}
 
-	w.WriteHeader(204)
+// resolveVideoUpstreamID returns the upstream path id for a client-facing id.
+// When a mapping exists with a non-empty UpstreamVideoID different from publicID,
+// that upstream id is used; otherwise publicID is passed through unchanged.
+func resolveVideoUpstreamID(publicID string) string {
+	task := GetProxyVideoTaskByPublicID(publicID)
+	if task == nil {
+		return publicID
+	}
+	if task.UpstreamVideoID != "" && task.UpstreamVideoID != publicID {
+		return task.UpstreamVideoID
+	}
+	return publicID
 }
 
 // SaveProxyVideoTask saves a video task mapping.
@@ -124,6 +146,3 @@ func DeleteProxyVideoTaskByPublicID(publicID string) {
 	defer videoTaskStoreMu.Unlock()
 	delete(videoTaskStore, publicID)
 }
-
-// Ensure json import is used
-var _ = json.Marshal

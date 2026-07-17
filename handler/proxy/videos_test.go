@@ -117,13 +117,14 @@ func TestHandleVideosCreate_InvalidMultipartReturnsBadRequest(t *testing.T) {
 	}
 }
 
-func TestHandleVideosGet_Found(t *testing.T) {
+func TestHandleVideosGet_WithMapping(t *testing.T) {
 	publicID := "video_test_get_123"
 	SaveProxyVideoTask(&ProxyVideoTask{
 		PublicID:        publicID,
 		UpstreamVideoID: "upstream_" + publicID,
 		RequestedModel:  "sora-2",
 	})
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(publicID) })
 
 	r := chiRouterForVideo()
 	req := makeProxyReqNoBody("GET", "/v1/videos/"+publicID)
@@ -141,18 +142,38 @@ func TestHandleVideosGet_Found(t *testing.T) {
 	}
 }
 
-func TestHandleVideosGet_NotFound(t *testing.T) {
+func TestHandleVideosGet_WithoutMapping_Passthrough(t *testing.T) {
+	// Missing local store entry must not hard-404; auth + stub/upstream path proceeds.
 	r := chiRouterForVideo()
 	req := makeProxyReqNoBody("GET", "/v1/videos/nonexistent_video_id")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != 404 {
-		t.Errorf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("expected no store-gated 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected stub 200 when auth proceeds, got %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	if m == nil {
+		t.Fatal("expected non-nil stub response")
 	}
 }
 
-func TestHandleVideosDelete_Found(t *testing.T) {
+func TestHandleVideosGet_Unauthorized(t *testing.T) {
+	r := chi.NewRouter()
+	r.Get("/v1/videos/{id}", HandleVideosGet)
+	req := httptest.NewRequest("GET", "/v1/videos/vid_no_auth", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleVideosDelete_WithMapping_ClearsAndPassthrough(t *testing.T) {
 	publicID := "video_test_delete_456"
 	SaveProxyVideoTask(&ProxyVideoTask{
 		PublicID:        publicID,
@@ -165,25 +186,69 @@ func TestHandleVideosDelete_Found(t *testing.T) {
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != 204 {
-		t.Errorf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	// Prefer upstream/stub dispatch over local-only 204 residual.
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("expected no store-gated 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected stub 200 when auth proceeds, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify deleted
+	// Local mapping must be cleared even though we pass through upstream.
 	task := GetProxyVideoTaskByPublicID(publicID)
 	if task != nil {
 		t.Error("task should be deleted")
 	}
 }
 
-func TestHandleVideosDelete_NotFound(t *testing.T) {
+func TestHandleVideosDelete_WithoutMapping_Passthrough(t *testing.T) {
 	r := chiRouterForVideo()
 	req := makeProxyReqNoBody("DELETE", "/v1/videos/nonexistent_id")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	if rec.Code != 404 {
-		t.Errorf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("expected no store-gated 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected stub 200 when auth proceeds, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleVideosDelete_Unauthorized(t *testing.T) {
+	r := chi.NewRouter()
+	r.Delete("/v1/videos/{id}", HandleVideosDelete)
+	req := httptest.NewRequest("DELETE", "/v1/videos/vid_no_auth", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestResolveVideoUpstreamID(t *testing.T) {
+	publicID := "video_resolve_public"
+	if got := resolveVideoUpstreamID(publicID); got != publicID {
+		t.Errorf("missing mapping: got %q want %q", got, publicID)
+	}
+
+	SaveProxyVideoTask(&ProxyVideoTask{
+		PublicID:        publicID,
+		UpstreamVideoID: "upstream_video_xyz",
+	})
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(publicID) })
+
+	if got := resolveVideoUpstreamID(publicID); got != "upstream_video_xyz" {
+		t.Errorf("mapped id: got %q want upstream_video_xyz", got)
+	}
+
+	// Same public/upstream id should not force a different path segment.
+	same := "video_same_id"
+	SaveProxyVideoTask(&ProxyVideoTask{PublicID: same, UpstreamVideoID: same})
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(same) })
+	if got := resolveVideoUpstreamID(same); got != same {
+		t.Errorf("same id mapping: got %q want %q", got, same)
 	}
 }
 
