@@ -280,6 +280,39 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 		}
 	}
 
+	useSystemProxy, _ := siteData["useSystemProxy"].(bool)
+	isPinned, _ := siteData["isPinned"].(bool)
+	postRefreshProbeEnabled, _ := siteData["postRefreshProbeEnabled"].(bool)
+	postRefreshProbeModel, _ := siteData["postRefreshProbeModel"].(string)
+	postRefreshProbeScope, _ := siteData["postRefreshProbeScope"].(string)
+	if postRefreshProbeScope == "" {
+		postRefreshProbeScope = "single"
+	}
+	postRefreshProbeLatencyThresholdMs := int64(0)
+	switch v := siteData["postRefreshProbeLatencyThresholdMs"].(type) {
+	case int64:
+		postRefreshProbeLatencyThresholdMs = v
+	case int:
+		postRefreshProbeLatencyThresholdMs = int64(v)
+	case float64:
+		postRefreshProbeLatencyThresholdMs = int64(v)
+	}
+	status, _ := siteData["status"].(string)
+	if status == "" {
+		status = "active"
+	}
+	globalWeight := 1.0
+	switch v := siteData["globalWeight"].(type) {
+	case float64:
+		globalWeight = v
+	case float32:
+		globalWeight = float64(v)
+	case int:
+		globalWeight = float64(v)
+	case int64:
+		globalWeight = float64(v)
+	}
+
 	// Use RETURNING so PostgreSQL (no LastInsertId) and SQLite both get a real id
 	// inside the open transaction before apiEndpoints FK inserts.
 	var siteID int64
@@ -291,11 +324,11 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id`),
 		name, urlStr, platform,
-		siteData["proxyUrl"], siteData["useSystemProxy"], siteData["customHeaders"],
-		siteData["externalCheckinUrl"], siteData["status"], siteData["isPinned"],
-		sortOrder, siteData["globalWeight"], maxConcurrency,
-		siteData["postRefreshProbeEnabled"], siteData["postRefreshProbeModel"],
-		siteData["postRefreshProbeScope"], siteData["postRefreshProbeLatencyThresholdMs"],
+		siteData["proxyUrl"], useSystemProxy, siteData["customHeaders"],
+		siteData["externalCheckinUrl"], status, isPinned,
+		sortOrder, globalWeight, maxConcurrency,
+		postRefreshProbeEnabled, postRefreshProbeModel,
+		postRefreshProbeScope, postRefreshProbeLatencyThresholdMs,
 		now, now,
 	).Scan(&siteID)
 	if err != nil {
