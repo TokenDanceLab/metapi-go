@@ -143,10 +143,23 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate initializationPresetId against detected platform
-	// TODO(P4): cross-reference with preset registry for full validation
-	if body.InitializationPresetID != nil && *body.InitializationPresetID != "" {
-		_ = body.InitializationPresetID // reserved for P4 preset validation
+	// Validate initializationPresetId against registry (platform + URL match rules).
+	var initializationPresetID string
+	if body.InitializationPresetID != nil {
+		initializationPresetID = strings.TrimSpace(*body.InitializationPresetID)
+	}
+	if initializationPresetID != "" {
+		if err := service.ValidateSiteInitializationPreset(initializationPresetID, platform, body.URL); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else {
+		// Auto-detect preset when client omitted it but URL is a known vendor entry.
+		if preset := service.DetectSiteInitializationPreset(body.URL, platform); preset != nil {
+			initializationPresetID = preset.ID
+		} else if preset := service.DetectSiteInitializationPreset(canonicalURL, platform); preset != nil {
+			initializationPresetID = preset.ID
+		}
 	}
 
 	// Check for duplicate (platform, url)
@@ -228,6 +241,9 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 		slog.Error("LoadSiteWithEndpoints returned nil after create", "site_id", createdID)
 		writeError(w, http.StatusInternalServerError, "Create site failed")
 		return
+	}
+	if initializationPresetID != "" {
+		result["initializationPresetId"] = initializationPresetID
 	}
 	routing.InvalidateCache()
 	writeJSON(w, http.StatusOK, result)

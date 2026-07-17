@@ -64,16 +64,29 @@ func TestDetectSite_Gemini(t *testing.T) {
 }
 
 func TestDetectSite_DeepSeek(t *testing.T) {
+	// Official OpenAI-compatible entry is covered by initialization presets.
 	result := DetectSite("https://api.deepseek.com")
+	if result == nil || result.Platform != "openai" {
+		t.Fatalf("expected preset platform 'openai', got %v", result)
+	}
+	if result.InitializationPresetID == nil || *result.InitializationPresetID != "deepseek-openai" {
+		t.Fatalf("expected initializationPresetId deepseek-openai, got %v", result.InitializationPresetID)
+	}
+
+	// Non-preset deepseek host still uses vendor heuristic.
+	result = DetectSite("https://platform.deepseek.com")
 	if result == nil || result.Platform != "deepseek" {
-		t.Fatalf("expected 'deepseek', got %v", result)
+		t.Fatalf("expected vendor heuristic 'deepseek', got %v", result)
 	}
 }
 
 func TestDetectSite_Moonshot(t *testing.T) {
 	result := DetectSite("https://api.moonshot.cn/v1")
-	if result == nil || result.Platform != "moonshot" {
-		t.Fatalf("expected 'moonshot', got %v", result)
+	if result == nil || result.Platform != "openai" {
+		t.Fatalf("expected preset platform 'openai', got %v", result)
+	}
+	if result.InitializationPresetID == nil || *result.InitializationPresetID != "moonshot-openai" {
+		t.Fatalf("expected initializationPresetId moonshot-openai, got %v", result.InitializationPresetID)
 	}
 }
 
@@ -142,9 +155,21 @@ func TestDetectSite_SiliconFlow(t *testing.T) {
 }
 
 func TestDetectSite_ModelScope(t *testing.T) {
+	// Bare modelscope inference root maps to the Claude-compatible preset.
 	result := DetectSite("https://api-inference.modelscope.cn")
-	if result == nil || result.Platform != "modelscope" {
-		t.Fatalf("expected 'modelscope', got %v", result)
+	if result == nil || result.Platform != "claude" {
+		t.Fatalf("expected preset platform 'claude', got %v", result)
+	}
+	if result.InitializationPresetID == nil || *result.InitializationPresetID != "modelscope-claude" {
+		t.Fatalf("expected initializationPresetId modelscope-claude, got %v", result.InitializationPresetID)
+	}
+
+	result = DetectSite("https://api-inference.modelscope.cn/v1")
+	if result == nil || result.Platform != "openai" {
+		t.Fatalf("expected preset platform 'openai', got %v", result)
+	}
+	if result.InitializationPresetID == nil || *result.InitializationPresetID != "modelscope-openai" {
+		t.Fatalf("expected initializationPresetId modelscope-openai, got %v", result.InitializationPresetID)
 	}
 }
 

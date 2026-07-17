@@ -872,6 +872,118 @@ func TestSites_BatchDisable_WithStatusSideEffects(t *testing.T) {
 	}
 }
 
+// ---- Initialization preset validation / detect enrichment ----
+
+func TestSites_Create_ValidInitializationPreset(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":                   "DeepSeek Official",
+		"url":                    "https://api.deepseek.com/v1",
+		"platform":               "openai",
+		"initializationPresetId": "deepseek-openai",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if created["platform"] != "openai" {
+		t.Fatalf("platform=%v", created["platform"])
+	}
+	if created["initializationPresetId"] != "deepseek-openai" {
+		t.Fatalf("initializationPresetId=%v", created["initializationPresetId"])
+	}
+}
+
+func TestSites_Create_UnknownInitializationPreset(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":                   "Bad preset",
+		"url":                    "https://api.openai.com",
+		"platform":               "openai",
+		"initializationPresetId": "not-a-real-preset",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "Unknown initializationPresetId") {
+		t.Fatalf("unexpected body: %s", resp.Body.String())
+	}
+}
+
+func TestSites_Create_MismatchedInitializationPresetPlatform(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":                   "Mismatch platform",
+		"url":                    "https://api.deepseek.com/v1",
+		"platform":               "claude",
+		"initializationPresetId": "deepseek-openai",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "does not match platform") {
+		t.Fatalf("unexpected body: %s", resp.Body.String())
+	}
+}
+
+func TestSites_Create_MismatchedInitializationPresetURL(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name":                   "Mismatch URL",
+		"url":                    "https://api.openai.com",
+		"platform":               "openai",
+		"initializationPresetId": "deepseek-openai",
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), "does not match site URL") {
+		t.Fatalf("unexpected body: %s", resp.Body.String())
+	}
+}
+
+func TestSites_Create_AutoDetectsInitializationPreset(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites", map[string]any{
+		"name": "CodingPlan auto",
+		"url":  "https://coding.dashscope.aliyuncs.com/v1",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var created map[string]any
+	json.Unmarshal(resp.Body.Bytes(), &created)
+	if created["platform"] != "openai" {
+		t.Fatalf("platform=%v want openai", created["platform"])
+	}
+	if created["initializationPresetId"] != "codingplan-openai" {
+		t.Fatalf("initializationPresetId=%v", created["initializationPresetId"])
+	}
+}
+
+func TestSites_Detect_ReturnsInitializationPresetId(t *testing.T) {
+	_, r := setupSitesTest(t)
+	resp := doPostJSON(t, r, "/api/sites/detect", map[string]any{
+		"url": "https://api.moonshot.cn/anthropic",
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if result["platform"] != "claude" {
+		t.Fatalf("platform=%v want claude", result["platform"])
+	}
+	if result["initializationPresetId"] != "moonshot-claude" {
+		t.Fatalf("initializationPresetId=%v", result["initializationPresetId"])
+	}
+}
+
 // ---- HTTP Helpers ----
 
 func doGet(t *testing.T, r chi.Router, path string) *httptest.ResponseRecorder {
