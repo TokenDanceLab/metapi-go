@@ -4,9 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/service"
+	"github.com/tokendancelab/metapi-go/service/balance"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -17,7 +20,7 @@ const (
 )
 
 // Sub2APIRefreshScheduler periodically refreshes Sub2API managed authentication
-// tokens for eligible accounts.
+// tokens for eligible accounts via balance.RefreshBalance (#261).
 type Sub2APIRefreshScheduler struct {
 	cfg          *config.Config
 	ticker       *time.Ticker
@@ -84,6 +87,7 @@ func (s *Sub2APIRefreshScheduler) Stop() error {
 // Sub2ApiRefreshResult is the result of a refresh pass.
 type Sub2ApiRefreshResult struct {
 	Scanned             int
+	Eligible            int
 	Refreshed           int
 	Failed              int
 	Skipped             int
@@ -118,13 +122,6 @@ func (s *Sub2APIRefreshScheduler) runPass() {
 func (s *Sub2APIRefreshScheduler) runPassLocked(dbw *store.DB) {
 	slog.Info("sub2api-refresh: running pass")
 
-	// Residual honesty (#246): this pass is scaffolding only.
-	// What runs: SQL scan of active sub2api accounts (id + extra_config) under
-	// the scheduler lease. What does NOT run: extraConfig.sub2apiAuth parsing,
-	// due-window filter (refreshToken + tokenExpiresAt), concurrency pool, or
-	// any call into balance.refreshSub2ApiManagedSessionSingleflight.
-	// Logs always report refreshed=0 / failed=0 — not fake success, just no work.
-	// Full managed-auth product is out of scope here; see residual-sub2api-auth.md.
 	rows, err := dbw.Query(`
 		SELECT a.id, a.extra_config
 		FROM accounts a
@@ -140,32 +137,80 @@ func (s *Sub2APIRefreshScheduler) runPassLocked(dbw *store.DB) {
 	defer rows.Close()
 
 	type candidate struct {
-		id          int64
-		extraConfig *string
+		id int64
 	}
 
-	var candidates []candidate
+	var scanned int
+	var eligible []candidate
 	for rows.Next() {
-		var c candidate
-		if err := rows.Scan(&c.id, &c.extraConfig); err != nil {
+		var id int64
+		var extraConfig *string
+		if err := rows.Scan(&id, &extraConfig); err != nil {
 			continue
 		}
-		// Residual (#246): extraConfig is loaded but not parsed.
-		// TODO residual (not wired): parse extraConfig.sub2apiAuth and keep only
-		// candidates with non-empty refreshToken + due tokenExpiresAt.
-		// Until then every active sub2api account is treated as a scan candidate
-		// and none are refreshed.
-		_ = c.extraConfig
-		candidates = append(candidates, c)
+		scanned++
+		if !isSub2APIRefreshCandidate(extraConfig) {
+			continue
+		}
+		eligible = append(eligible, candidate{id: id})
 	}
 
-	// Residual (#246): no refresh side effects. singleflight helper lives in
-	// service/balance but is not invoked from this scheduler.
-	// TODO residual (not wired): call refreshSub2ApiManagedSessionSingleflight
-	// with concurrency=sub2apiRefreshConcurrency; do not invent success counts.
-	slog.Info("sub2api-refresh: pass complete (scan-only residual; no tokens refreshed)",
-		"scanned", len(candidates),
-		"refreshed", 0,
-		"failed", 0,
+	if len(eligible) == 0 {
+		slog.Info("sub2api-refresh: pass complete",
+			"scanned", scanned,
+			"eligible", 0,
+			"refreshed", 0,
+			"failed", 0,
+		)
+		return
+	}
+
+	concurrency := sub2apiRefreshConcurrency
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	var refreshed atomic.Int64
+	var failed atomic.Int64
+
+	for _, c := range eligible {
+		c := c
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			_, err := balance.RefreshBalance(s.cfg, dbw.DB, c.id)
+			if err != nil {
+				failed.Add(1)
+				slog.Warn("sub2api-refresh: RefreshBalance failed",
+					"account_id", c.id, "error", err)
+				return
+			}
+			refreshed.Add(1)
+		}()
+	}
+	wg.Wait()
+
+	slog.Info("sub2api-refresh: pass complete",
+		"scanned", scanned,
+		"eligible", len(eligible),
+		"refreshed", refreshed.Load(),
+		"failed", failed.Load(),
 	)
+}
+
+// isSub2APIRefreshCandidate reports whether extraConfig carries managed Sub2API
+// auth that is due for refresh (#261).
+func isSub2APIRefreshCandidate(extraConfig *string) bool {
+	auth := service.GetSub2ApiAuthFromExtraConfig(extraConfig)
+	if auth == nil {
+		return false
+	}
+	rt, ok := service.NormalizeManagedRefreshToken(auth["refreshToken"])
+	if !ok || rt == "" {
+		return false
+	}
+	return service.IsManagedSub2ApiTokenDue(auth["tokenExpiresAt"])
 }

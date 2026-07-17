@@ -43,6 +43,9 @@ const (
 	DefaultProxyLogRetentionPruneIntervalMinutes  = 30
 	DefaultProxyFileRetentionDays                 = 30
 	DefaultProxyFileRetentionPruneIntervalMinutes = 60
+	// Video task mappings: default 0 = retention disabled (no silent mass delete).
+	DefaultProxyVideoTaskRetentionDays                 = 0
+	DefaultProxyVideoTaskRetentionPruneIntervalMinutes = 60
 
 	DefaultProxyDebugRetentionHours = 24
 	DefaultProxyDebugMaxBodyBytes   = 262144
