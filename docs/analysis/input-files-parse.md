@@ -1,8 +1,8 @@
 # Input Files Parse (`ParseInputFiles`)
 
 **Date**: 2026-07-17  
-**Issue**: [#228](https://github.com/TokenDanceLab/metapi-go/issues/228)  
-**Lane**: p86 input_files parse
+**Issues**: [#228](https://github.com/TokenDanceLab/metapi-go/issues/228) (parse), [#238](https://github.com/TokenDanceLab/metapi-go/issues/238) (`ResolveInputFile` residual)  
+**Lane**: p86 input_files parse / p87 resolve residual
 
 ## Scope landed
 
@@ -29,11 +29,12 @@ proxy helpers stay dependency-light.
    owner-scoped input-file upload that inlined refs. Go does **not** add that
    route this wave. Durable file I/O goes through the existing **`/v1/files`**
    proxy surface (`docs/analysis/files-proxy.md`).
-2. **`ResolveInputFile` remains a residual stub** — returns `(nil, nil)`.
-   There is no multi-tenant local file vault, no disk dump of customer bytes,
-   and no automatic fetch of `file_url` / decode of `file_data`. Callers that
-   need content should use upstream `file_id` / `file_url` as-is or the
-   `/v1/files` proxy.
+2. **`ResolveInputFile` is an honest residual** (#238) — returns
+   `(nil, ErrInputFileResolveResidual)`, **not** silent `(nil, nil)` success
+   theater. There is no multi-tenant local file vault, no disk dump of
+   customer bytes, and no automatic fetch of `file_url` / decode of
+   `file_data`. Callers that need content should use upstream `file_id` /
+   `file_url` as-is or the `/v1/files` proxy.
 3. **`file_data` is not materialized into `InputFile.Data`** — parse only
    surfaces identity fields (`FileID` / `FileURL` / `Filename`). Base64
    payloads stay in the original body for transform/upstream paths.
@@ -52,7 +53,7 @@ proxy helpers stay dependency-light.
 - top-level `input` array (nested content + direct part)
 - nested `file` object identifiers
 - empty typed parts / image_url ignored
-- `ResolveInputFile` residual stub
+- `ResolveInputFile` → `ErrInputFileResolveResidual` (nil data)
 
 Verify:
 

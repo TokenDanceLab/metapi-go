@@ -1,6 +1,7 @@
 package proxyhandler
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -138,11 +139,11 @@ func TestResolveInputFile_Stub(t *testing.T) {
 		Filename: "test.txt",
 	}
 	data, err := ResolveInputFile(file)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if !errors.Is(err, ErrInputFileResolveResidual) {
+		t.Errorf("expected ErrInputFileResolveResidual, got %v", err)
 	}
 	if data != nil {
-		t.Errorf("expected nil data (stub), got %d bytes", len(data))
+		t.Errorf("expected nil data (residual), got %d bytes", len(data))
 	}
 }
 
