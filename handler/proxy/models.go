@@ -25,6 +25,15 @@ type AvailableModelsSource interface {
 	GetAvailableModels(ctx context.Context) ([]string, error)
 }
 
+// AvailableModelContextLengthsSource is an optional router capability that maps
+// exposed model ids to token_routes.context_length when set. Production
+// routing.TokenRouter implements this; unit mocks may omit it so listing keeps
+// knownModelContextLength heuristics only. Values are metadata for /v1/models —
+// they do not enforce max tokens on the proxy path.
+type AvailableModelContextLengthsSource interface {
+	GetAvailableModelContextLengths(ctx context.Context) (map[string]int64, error)
+}
+
 var emptyModelsCatalogLogOnce sync.Once
 
 // HandleModels handles GET /v1/models.
@@ -44,9 +53,10 @@ func HandleModels(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 
 	if wantsClaude {
+		// Claude Models API shape has no context_length field; route metadata is OpenAI-only.
 		writeJSON(w, 200, buildClaudeModelsResponse(models, now))
 	} else {
-		writeJSON(w, 200, buildOpenAIModelsResponse(models, now))
+		writeJSON(w, 200, buildOpenAIModelsResponse(models, now, resolveOwnedModelContextLengths(r.Context())))
 	}
 }
 
@@ -56,7 +66,14 @@ func HandleModels(w http.ResponseWriter, r *http.Request) {
 //
 // Optional context_length is included when known so OpenAI-compatible clients
 // (Hermes and similar) can auto-detect context windows from /v1/models.
-func buildOpenAIModelsResponse(models []string, now time.Time) map[string]any {
+//
+// Preference order for context_length:
+//  1. Positive value from routeCtx (token_routes.context_length via TokenRouter)
+//  2. knownModelContextLength family heuristics
+//  3. omit field
+//
+// routeCtx may be nil when the router does not expose context lengths.
+func buildOpenAIModelsResponse(models []string, now time.Time, routeCtx map[string]int64) map[string]any {
 	items := make([]map[string]any, 0, len(models))
 	created := now.Unix()
 	for _, m := range models {
@@ -65,6 +82,13 @@ func buildOpenAIModelsResponse(models []string, now time.Time) map[string]any {
 			"object":   "model",
 			"created":  created,
 			"owned_by": modelsOwnedBy,
+		}
+		if routeCtx != nil {
+			if ctxLen, ok := routeCtx[m]; ok && ctxLen > 0 {
+				item["context_length"] = ctxLen
+				items = append(items, item)
+				continue
+			}
 		}
 		if ctxLen, ok := knownModelContextLength(m); ok {
 			item["context_length"] = ctxLen
@@ -189,6 +213,36 @@ func availableModelsSourceFromConfig(cfg *UpstreamConfig) AvailableModelsSource 
 	return src
 }
 
+// resolveOwnedModelContextLengths loads optional route-level context_length values
+// for OpenAI /v1/models. Missing capability or errors yield nil (heuristic-only).
+func resolveOwnedModelContextLengths(ctx context.Context) map[string]int64 {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cfg := getUpstreamConfig()
+	src := availableModelContextLengthsSourceFromConfig(cfg)
+	if src == nil {
+		return nil
+	}
+	lengths, err := src.GetAvailableModelContextLengths(ctx)
+	if err != nil {
+		slog.Warn("getAvailableModelContextLengths: router lookup failed; using heuristics only", "err", err)
+		return nil
+	}
+	if len(lengths) == 0 {
+		return nil
+	}
+	return lengths
+}
+
+func availableModelContextLengthsSourceFromConfig(cfg *UpstreamConfig) AvailableModelContextLengthsSource {
+	if cfg == nil || cfg.Router == nil {
+		return nil
+	}
+	src, _ := cfg.Router.(AvailableModelContextLengthsSource)
+	return src
+}
+
 // lastResortStubCatalog is used only when route-backed listing is unavailable
 // (proxy stub tests / selection-only mocks). Production with TokenRouter uses
 // GetAvailableModels instead.
@@ -231,8 +285,8 @@ func normalizeModelCatalog(models []string) []string {
 // in the owned listing. Unknown models omit the field (clients fall back to their
 // own defaults/probes). Values are token counts, not bytes.
 //
-// When route-level token_routes.context_length is wired into this handler, that
-// value should take precedence over these defaults.
+// Route-level token_routes.context_length (via resolveOwnedModelContextLengths)
+// takes precedence over these defaults when set to a positive value.
 func knownModelContextLength(model string) (int64, bool) {
 	// Exact matches first for the owned stub catalog.
 	switch model {

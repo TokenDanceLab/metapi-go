@@ -42,8 +42,8 @@ Implications:
 
 Residual / future hardening:
 
-- Admin CRUD for route metadata: `POST/PUT /api/routes` accept camelCase `contextLength`; list/summary/lite echo it when set (`#320`). Stored on `token_routes.context_length` (SC2). **Metadata only** — no proxy max-token truncation/enforcement is wired from this field yet.
-- Prefer `token_routes.context_length` over built-in defaults when set in `/v1/models`; today `knownModelContextLength` still supplies family defaults/heuristics only (route-level not consumed by models listing yet).
+- Admin CRUD for route metadata: `POST/PUT /api/routes` accept camelCase `contextLength`; list/summary/lite echo it when set (`#320`). Stored on `token_routes.context_length` (SC2). **Metadata only** — no proxy max-token truncation/enforcement is wired from this field.
+- OpenAI `/v1/models` prefers positive `token_routes.context_length` over `knownModelContextLength` heuristics when the route is enabled/visible (`#327`). Same exposed id from multiple routes → max. NULL / absent → heuristic (or omit). Claude listing path unchanged (no `context_length` field).
 - Optionally merge per-site discovered context metadata from platform model refresh.
 - Route-ID-aware listing when policy has only `AllowedRouteIDs` (currently empty until joined).
 
@@ -79,9 +79,9 @@ Residual / future hardening:
 
 | Field | Location | Notes |
 |-------|----------|--------|
-| `context_length` | item | Token window when known. Omitted for unknown/custom IDs so clients can fall back to their own defaults/probes. |
+| `context_length` | item | Token window when known. Preference: positive route `context_length` → family heuristic → omit. Omitted for unknown/custom IDs without route metadata so clients can fall back to their own defaults/probes. Metadata only (no proxy max-token enforcement). |
 
-`context_length` addresses upstream #507 / Hermes auto-detection: Hermes and similar agents scan `/v1/models` for keys such as `context_length`, `max_model_len`, `n_ctx`, etc. MetAPI emits the common OpenRouter-style key `context_length` for known catalog models.
+`context_length` addresses upstream #507 / Hermes auto-detection: Hermes and similar agents scan `/v1/models` for keys such as `context_length`, `max_model_len`, `n_ctx`, etc. MetAPI emits the common OpenRouter-style key `context_length` when route metadata or a family heuristic is available.
 
 ## Claude-compatible shape
 
