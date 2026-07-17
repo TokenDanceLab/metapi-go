@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 )
 
 // RegisterSettingsRoutes registers all /api/settings routes (runtime, brand-list, system-proxy/test).
@@ -655,15 +657,32 @@ func (h *settingsHandler) updateRuntime(w http.ResponseWriter, r *http.Request) 
 
 // GET /api/settings/brand-list
 func (h *settingsHandler) brandList(w http.ResponseWriter, r *http.Request) {
-	// Stub: return known brands
-	brands := []string{"new-api", "one-api", "veloera", "lobechat", "openwebui"}
+	// Canonical registered platforms + a few UI-facing product brands.
+	seen := map[string]bool{}
+	brands := make([]string, 0, 16)
+	for _, a := range platform.ListAdapters() {
+		name := strings.TrimSpace(a.PlatformName())
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		brands = append(brands, name)
+	}
+	// Keep operator-facing client brands that are not adapters.
+	for _, extra := range []string{"lobechat", "openwebui"} {
+		if !seen[extra] {
+			brands = append(brands, extra)
+			seen[extra] = true
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"brands": brands})
 }
 
 // POST /api/settings/system-proxy/test
 func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		ProxyUrl *string `json:"proxyUrl"`
+		ProxyUrl  *string `json:"proxyUrl"`
+		TargetUrl *string `json:"targetUrl"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"success": false, "message": "Invalid request body"})
@@ -674,7 +693,6 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 	if body.ProxyUrl != nil {
 		proxyURL = strings.TrimSpace(*body.ProxyUrl)
 	}
-
 	if proxyURL == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{
 			"success": false,
@@ -683,15 +701,62 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Stub: actual proxy testing would require HTTP client
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":    true,
+	target := "https://www.gstatic.com/generate_204"
+	if body.TargetUrl != nil && strings.TrimSpace(*body.TargetUrl) != "" {
+		target = strings.TrimSpace(*body.TargetUrl)
+	}
+
+	result := probeSystemProxy(r.Context(), proxyURL, target)
+	writeJSON(w, http.StatusOK, result)
+}
+
+// probeSystemProxy performs a bounded HTTP GET via the given proxy URL.
+// Injectable for tests via systemProxyProbeFn.
+var systemProxyProbeFn = defaultSystemProxyProbe
+
+func probeSystemProxy(ctx context.Context, proxyURL, target string) map[string]any {
+	return systemProxyProbeFn(ctx, proxyURL, target)
+}
+
+func defaultSystemProxyProbe(ctx context.Context, proxyURL, target string) map[string]any {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return map[string]any{
+			"success":   false,
+			"proxyUrl":  proxyURL,
+			"targetUrl": target,
+			"reachable": false,
+			"ok":        false,
+			"message":   err.Error(),
+		}
+	}
+	started := time.Now()
+	resp, err := platform.DoWithProxy(ctx, req, &platform.ProxyConfig{ProxyURL: proxyURL})
+	latency := time.Since(started).Milliseconds()
+	if err != nil {
+		return map[string]any{
+			"success":   false,
+			"proxyUrl":  proxyURL,
+			"targetUrl": target,
+			"reachable": false,
+			"ok":        false,
+			"latencyMs": latency,
+			"message":   err.Error(),
+		}
+	}
+	defer resp.Body.Close()
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 400
+	return map[string]any{
+		"success":    ok,
 		"proxyUrl":   proxyURL,
+		"targetUrl":  target,
 		"reachable":  true,
-		"ok":         true,
-		"statusCode": 204,
-		"latencyMs":  100,
-	})
+		"ok":         ok,
+		"statusCode": resp.StatusCode,
+		"latencyMs":  latency,
+	}
 }
 
 func extractClientIP(r *http.Request) string {
