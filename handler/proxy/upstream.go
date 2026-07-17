@@ -573,10 +573,12 @@ func dispatchEndpointAttemptWithContinue(
 		return true, nil, false
 	}
 	req.Header.Set("Content-Type", contentType)
+	// Custom headers first (deny-list skips Authorization/Host/hop-by-hop), then
+	// Bearer so site custom_headers can never override the selected token (#356).
+	applyProxyCustomHeaders(req, proxyConfig)
 	if selected.TokenValue != "" {
 		req.Header.Set("Authorization", "Bearer "+selected.TokenValue)
 	}
-	applyProxyCustomHeaders(req, proxyConfig)
 
 	resp, err := sendUpstreamRequest(cfg, req, proxyConfig, firstByteTimeoutMs)
 	latencyMs := time.Since(startedAt).Milliseconds()
@@ -820,13 +822,8 @@ func applyProxyCustomHeaders(req *http.Request, proxyConfig *platform.ProxyConfi
 	if proxyConfig == nil {
 		return
 	}
-	for k, v := range proxyConfig.CustomHeaders {
-		// Preference control headers are site marks only — never forward upstream.
-		if proxy.IsMetapiControlHeader(k) {
-			continue
-		}
-		req.Header.Set(k, v)
-	}
+	// Shared deny-list: Authorization/Host/hop-by-hop/Cookie/Proxy-*/metapi control (#356).
+	platform.ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
 }
 
 // sendUpstreamRequest dispatches an upstream HTTP request with optional observed
