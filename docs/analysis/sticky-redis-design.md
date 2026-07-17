@@ -134,7 +134,7 @@ When both LB pin and Redis sticky exist:
 2. Redis sticky does not require LB pin; LB pin does not require Redis sticky.
 3. Single-node fleets leave Redis sticky disabled (or `REDIS_URL` empty) and keep process-local only.
 
-## Fail-open on Redis errors
+## Fail-open on Redis errors (not a hard dependency)
 
 Mirror the **sharedcount admission** failure class (`docs/analysis/redis-shared-state.md`, `auth.ConfigureSharedAdmissionFromRedisURL`):
 
@@ -142,8 +142,8 @@ Mirror the **sharedcount admission** failure class (`docs/analysis/redis-shared-
 |-----------|----------|
 | `REDIS_URL` empty | Sticky = process-local only (today’s behavior). No Redis calls. |
 | Bad URL at startup | Disable shared sticky mode; log warning; local map only. Same class as “redis admission: disabled (bad REDIS_URL)”. |
-| Runtime timeout / network / RESP error on `GET` | Treat as miss → fall through to local map, then normal selection if still empty. **Never** fail the proxy request solely because sticky Redis is down. |
-| Runtime error on `SET` / `DEL` | Best-effort; local map still updated (bind/clear). Request continues. |
+| Request-time timeout / network / RESP error on `GET` | Treat as miss → fall through to local map, then normal selection if still empty. Sticky Redis is **not** a hard dependency; **never** fail the proxy request solely because sticky store is down. |
+| Request-time error on `SET` / `DEL` | Best-effort; local map still updated (bind/clear). Request continues. Sticky Redis is **not** required for success. |
 | Redis returns non-integer / garbage value | Treat as miss; optional best-effort `DEL`; do not panic. |
 
 ### Read path (proposed)
@@ -262,7 +262,7 @@ Admin bulk invalidation can be a later ops tool (`SCAN metapi:sticky:*` is expen
 - Sticky must **not** use INCR windows; it is not a rate limit.
 - Admin `Snapshot()` under-report residual for RPM/TPM does not apply 1:1; sticky has no admin usage snapshot requirement in v1.
 
-## Selection revalidation (still required with Redis)
+## Selection revalidation (still needed even if sticky uses Redis)
 
 Even with a perfect Redis hit, `SelectProxyChannelForAttempt` must keep existing guards:
 
