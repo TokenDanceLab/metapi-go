@@ -10,6 +10,9 @@ import (
 
 const credentialExportFormatVersion = "1.0.0"
 
+// exportKey is an intentional export-secret product path: it returns the full
+// downstream key inside adapter profiles for operator copy/export. List/summary/
+// overview redaction (#355/#367) intentionally does not apply here.
 func (h *downstreamKeysHandler) exportKey(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

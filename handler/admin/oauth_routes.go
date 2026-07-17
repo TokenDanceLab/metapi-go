@@ -209,6 +209,10 @@ func (h *oauthHandler) listConnections(w http.ResponseWriter, r *http.Request) {
 		 WHERE a.oauth_provider IS NOT NULL
 		 ORDER BY a.id ASC LIMIT ? OFFSET ?`,
 		limit, offset)
+	// Fallback list path (tests / no oauth service DB): redact secrets (#367).
+	for _, row := range rows {
+		redactAccountSecrets(row)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"connections": normalizeSlice(rows),

@@ -184,14 +184,7 @@ func (h *tokenRoutesHandler) listRoutes(w http.ResponseWriter, r *http.Request) 
 				"weight":           ch["weight"],
 				"enabled":          ch["enabled"],
 				"manualOverride":   ch["manualOverride"],
-				"account": map[string]any{
-					"id":          ch["accountId"],
-					"username":    ch["username"],
-					"accessToken": ch["accessToken"],
-					"apiToken":    ch["apiToken"],
-					"balance":     ch["balance"],
-					"status":      ch["accountStatus"],
-				},
+				"account": enrichRouteChannelAccount(ch),
 				"site": map[string]any{
 					"id":       ch["siteId"],
 					"name":     ch["siteName"],
@@ -546,14 +539,7 @@ func (h *tokenRoutesHandler) getRouteChannels(w http.ResponseWriter, r *http.Req
 			"weight":           ch["weight"],
 			"enabled":          ch["enabled"],
 			"manualOverride":   ch["manualOverride"],
-			"account": map[string]any{
-				"id":          ch["accountId"],
-				"username":    ch["username"],
-				"accessToken": ch["accessToken"],
-				"apiToken":    ch["apiToken"],
-				"balance":     ch["balance"],
-				"status":      ch["accountStatus"],
-			},
+			"account": enrichRouteChannelAccount(ch),
 			"site": map[string]any{
 				"id":       ch["siteId"],
 				"name":     ch["siteName"],

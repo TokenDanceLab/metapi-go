@@ -116,6 +116,13 @@ func (h *searchHandler) search(w http.ResponseWriter, r *http.Request) {
 		 ORDER BY account_count DESC LIMIT ?`,
 		likePattern, perCategory)
 
+	// Search is a list/summary surface: redact account + token secrets (#367).
+	for _, row := range accounts {
+		redactAccountSecrets(row)
+	}
+	for _, row := range accountTokens {
+		redactAccountTokenSecrets(row)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"accounts":      normalizeSlice(accounts),
 		"accountTokens": normalizeSlice(accountTokens),

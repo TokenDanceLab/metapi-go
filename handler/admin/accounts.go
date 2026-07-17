@@ -118,6 +118,10 @@ func (h *accountsHandler) listAccounts(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to load accounts"})
 		return
 	}
+	// List/get snapshot must not return plaintext credentials (#367).
+	for _, account := range accounts {
+		redactAccountSecrets(account)
+	}
 
 	// Also fetch sites for the response
 	var sites []store.Site
@@ -289,6 +293,8 @@ func (h *accountsHandler) createAccount(w http.ResponseWriter, r *http.Request) 
 	caps := service.BuildCapabilitiesForAccount(&account)
 	routing.InvalidateCache()
 	globalAccountsCache.clear()
+	// Create-once: echo the credential just entered. No plaintext apiToken field;
+	// presence is indicated by apiTokenFound only (#367).
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id":               account.ID,
 		"siteId":           account.SiteID,
@@ -636,18 +642,19 @@ func (h *accountsHandler) loginAccount(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "Failed to load account."})
 		return
 	}
+	// Login mutation: echo the session just obtained. Scrub nested extraConfig
+	// secrets and omit apiToken plaintext (use apiTokenFound) (#367).
 	loginAcctMap := map[string]any{
 		"id":             loginAcct.ID,
 		"siteId":         loginAcct.SiteID,
 		"username":       loginAcct.Username,
 		"accessToken":    loginAcct.AccessToken,
-		"apiToken":       loginAcct.APIToken,
 		"balance":        loginAcct.Balance,
 		"status":         loginAcct.Status,
 		"isPinned":       loginAcct.IsPinned,
 		"sortOrder":      loginAcct.SortOrder,
 		"checkinEnabled": loginAcct.CheckinEnabled,
-		"extraConfig":    loginAcct.ExtraConfig,
+		"extraConfig":    redactExtraConfigSecrets(loginAcct.ExtraConfig),
 		"createdAt":      loginAcct.CreatedAt,
 		"updatedAt":      loginAcct.UpdatedAt,
 	}
@@ -714,6 +721,11 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Probe response: mask any discovered API token; FE only needs presence/prefix (#367).
+	apiTokenPreview := ""
+	if result.APIToken != "" {
+		apiTokenPreview = maskAccountSecret(result.APIToken)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":       true,
 		"tokenType":     result.TokenType,
@@ -721,7 +733,7 @@ func (h *accountsHandler) verifyToken(w http.ResponseWriter, r *http.Request) {
 		"models":        result.Models,
 		"userInfo":      result.UserInfo,
 		"balance":       result.Balance,
-		"apiToken":      result.APIToken,
+		"apiToken":      apiTokenPreview,
 		"apiTokenFound": result.APIToken != "",
 	})
 }
@@ -911,18 +923,19 @@ func (h *accountsHandler) rebindSession(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"success": false, "message": "failed to read updated account"})
 		return
 	}
+	// Rebind mutation: echo the new session token just written. Scrub nested
+	// extraConfig secrets; omit apiToken plaintext (#367).
 	rebindAcctMap := map[string]any{
 		"id":             rebindAcct.ID,
 		"siteId":         rebindAcct.SiteID,
 		"username":       rebindAcct.Username,
 		"accessToken":    rebindAcct.AccessToken,
-		"apiToken":       rebindAcct.APIToken,
 		"balance":        rebindAcct.Balance,
 		"status":         rebindAcct.Status,
 		"isPinned":       rebindAcct.IsPinned,
 		"sortOrder":      rebindAcct.SortOrder,
 		"checkinEnabled": rebindAcct.CheckinEnabled,
-		"extraConfig":    rebindAcct.ExtraConfig,
+		"extraConfig":    redactExtraConfigSecrets(rebindAcct.ExtraConfig),
 		"createdAt":      rebindAcct.CreatedAt,
 		"updatedAt":      rebindAcct.UpdatedAt,
 	}
@@ -1132,12 +1145,13 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 	if recovery && modelRefreshSucceeded(modelRefresh) {
 		hasDiscoveredModels = true
 	}
+	// Update/get-style response: never return plaintext credentials (#367).
 	resp := map[string]any{
 		"id":                 updated.ID,
 		"siteId":             updated.SiteID,
 		"username":           updated.Username,
-		"accessToken":        updated.AccessToken,
-		"apiToken":           updated.APIToken,
+		"accessToken":        maskAccountSecret(updated.AccessToken),
+		"apiToken":           maskOptionalAccountSecret(updated.APIToken),
 		"balance":            updated.Balance,
 		"balanceUsed":        updated.BalanceUsed,
 		"quota":              updated.Quota,
@@ -1152,7 +1166,7 @@ func (h *accountsHandler) updateAccount(w http.ResponseWriter, r *http.Request) 
 		"oauthProvider":      updated.OAuthProvider,
 		"oauthAccountKey":    updated.OAuthAccountKey,
 		"oauthProjectId":     updated.OAuthProjectID,
-		"extraConfig":        updated.ExtraConfig,
+		"extraConfig":        redactExtraConfigSecrets(updated.ExtraConfig),
 		"createdAt":          updated.CreatedAt,
 		"updatedAt":          updated.UpdatedAt,
 		"credentialMode":     string(service.ResolveStoredCredentialMode(&updated)),

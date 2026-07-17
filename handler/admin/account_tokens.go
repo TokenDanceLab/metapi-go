@@ -500,9 +500,15 @@ func (h *accountTokensHandler) updateToken(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "读取令牌失败")
 		return
 	}
+	// Update response is a list/get-style surface: return masked token only (#367).
+	var site store.Site
+	var ownerAcct store.Account
+	if err := h.db.Get(&ownerAcct, h.db.Rebind("SELECT * FROM accounts WHERE id = ?"), latest.AccountID); err == nil {
+		_ = h.db.Get(&site, h.db.Rebind("SELECT "+service.SiteSelectColumns+" FROM sites WHERE id = ?"), ownerAcct.SiteID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
-		"token":   latest,
+		"token":   tokenToMap(*latest, site.Platform),
 	})
 }
 
@@ -599,6 +605,8 @@ func (h *accountTokensHandler) getTokenValue(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Intentional export-secret path: full token returned only on explicit /value
+	// fetch after admin auth. List/create/update use tokenMasked instead (#367).
 	displayToken := service.NormalizeTokenForDisplay(token.Token, site.Platform)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":     true,
