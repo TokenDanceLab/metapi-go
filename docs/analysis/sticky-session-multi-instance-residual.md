@@ -1,8 +1,8 @@
-# Residual: Sticky session multi-instance honesty (#237, #282)
+# Residual: Sticky session multi-instance honesty (#237, #282, #292)
 
 **Date**: 2026-07-17  
-**Issues**: [#237](https://github.com/TokenDanceLab/metapi-go/issues/237) (honesty residual), [#282](https://github.com/TokenDanceLab/metapi-go/issues/282) (product-path evaluation)  
-**Lane**: p87 residual honesty → p90 product-path eval  
+**Issues**: [#237](https://github.com/TokenDanceLab/metapi-go/issues/237) (honesty residual), [#282](https://github.com/TokenDanceLab/metapi-go/issues/282) (product-path evaluation), [#292](https://github.com/TokenDanceLab/metapi-go/issues/292) (Option B Redis design spike)  
+**Lane**: p87 residual honesty → p90 product-path eval → p91 Redis sticky design  
 **SSOT code**: `proxy/session.go` (`ProxyChannelCoordinator.stickyBindings`)
 
 ## Goal
@@ -103,7 +103,10 @@ If multi-instance sticky becomes product-critical and LB affinity is unavailable
    - Using DB as the sticky hot path.
    - Claiming perfect affinity if channel was force-disabled / cooldowned on another instance without selection revalidation.
 
-**Forbidden in residual waves**: shipping Redis sticky product code, partial wiring without tests, or docs that imply `REDIS_URL` already enables sticky sharing.
+**Full Option B product spike (key schema, TTL, fail-open, multi-instance invalidation, sharedcount interaction, v0.8.14 non-goals):**  
+[`docs/analysis/sticky-redis-design.md`](sticky-redis-design.md) — [#292](https://github.com/TokenDanceLab/metapi-go/issues/292).
+
+**Forbidden in residual waves / v0.8.14**: shipping Redis sticky product code, partial wiring without tests, or docs that imply `REDIS_URL` already enables sticky sharing.
 
 ### Option C rejection notes
 
@@ -149,11 +152,13 @@ Implications:
 3. Explicit statement that channel leases remain process-local unless separately designed.
 4. No silent theater: metrics/logs must not claim shared sticky when Redis is disabled.
 
+Design details and **v0.8.14 non-goals** are locked in [`sticky-redis-design.md`](sticky-redis-design.md) (#292). That spike does **not** authorize product code.
+
 **Option C** is rejected for the hot path.
 
 ## Out of scope
 
-1. Implementing distributed sticky (Redis, DB table, or other shared store) in this wave.
+1. Implementing distributed sticky (Redis, DB table, or other shared store) in this wave **or in v0.8.14** unless separately approved (#292 non-goals).
 2. Changing sticky key shape, TTL, bind/clear semantics, or channel selection.
 3. Claiming multi-instance sticky correctness without LB affinity or a future
    shared store that is tested end-to-end.
@@ -165,16 +170,19 @@ Implications:
   [`docs/specs/review/audits/audit-multi-instance.md`](../specs/review/audits/audit-multi-instance.md)
 - Optional Redis shared state (RPM/TPM only today; fail-open pattern for any future sticky map):  
   [`docs/analysis/redis-shared-state.md`](redis-shared-state.md)
+- Option B Redis sticky product spike (key schema, TTL, fail-open, invalidation, sharedcount interaction, v0.8.14 non-goals):  
+  [`docs/analysis/sticky-redis-design.md`](sticky-redis-design.md) (#292)
 - Channel recovery residual (process-local active set + scheduler lease):  
   [`docs/analysis/scheduler-residual-todos.md`](scheduler-residual-todos.md)
 - Responses WebSocket product-path eval (sticky/WS affinity note):  
   [`docs/analysis/responses-websocket-residual.md`](responses-websocket-residual.md)
 - Code: `proxy/session.go` — `ProxyChannelCoordinator.stickyBindings` comment
-- Issues: [#237](https://github.com/TokenDanceLab/metapi-go/issues/237), [#282](https://github.com/TokenDanceLab/metapi-go/issues/282)
+- Issues: [#237](https://github.com/TokenDanceLab/metapi-go/issues/237), [#282](https://github.com/TokenDanceLab/metapi-go/issues/282), [#292](https://github.com/TokenDanceLab/metapi-go/issues/292)
 
 ## Verify
 
 ```bash
 go test ./proxy -count=1 -run Sticky
 test -f docs/analysis/sticky-session-multi-instance-residual.md
+test -f docs/analysis/sticky-redis-design.md
 ```
