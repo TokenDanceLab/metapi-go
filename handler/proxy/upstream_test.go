@@ -39,6 +39,10 @@ type upstreamTestSuccess struct {
 	modelName *string
 }
 
+func (r *upstreamTestRouter) GetAvailableModels(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (r *upstreamTestRouter) SelectChannel(_ context.Context, _ string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
 	r.policies = append(r.policies, policy)
 	return &r.selected, nil
@@ -605,7 +609,6 @@ func TestSiteConcurrencySaturateSkipsWithoutFailure(t *testing.T) {
 		t.Fatalf("expected channel 202 success, got %d", router.successes[0].channelID)
 	}
 }
-
 
 func TestNonStreamSuccessPersistsUsageTokensToProxyLog(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

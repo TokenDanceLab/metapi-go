@@ -1,11 +1,14 @@
 package proxyhandler
 
 import (
+	"context"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/proxy"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 // ---- matchModelPattern ----
@@ -207,7 +210,7 @@ func TestBuildClaudeModelsResponse_Empty(t *testing.T) {
 // ---- getAvailableModels ----
 
 func TestGetAvailableModels(t *testing.T) {
-	models := getAvailableModels(auth.EmptyDownstreamRoutingPolicy)
+	models := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
 	if len(models) == 0 {
 		t.Error("expected non-empty model list")
 	}
@@ -229,7 +232,7 @@ func TestGetAvailableModels(t *testing.T) {
 
 func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 	denyAll := auth.DownstreamRoutingPolicy{DenyAllWhenEmpty: true}
-	if got := getAvailableModels(denyAll); len(got) != 0 {
+	if got := getAvailableModels(context.Background(), denyAll); len(got) != 0 {
 		t.Fatalf("deny-all policy returned %v, want empty", got)
 	}
 
@@ -237,7 +240,7 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		SupportedModels:  []string{"gpt-4o"},
 		DenyAllWhenEmpty: true,
 	}
-	got := getAvailableModels(supported)
+	got := getAvailableModels(context.Background(), supported)
 	if len(got) != 1 || got[0] != "gpt-4o" {
 		t.Fatalf("supported policy returned %v, want [gpt-4o]", got)
 	}
@@ -246,7 +249,7 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		SupportedModels:  []string{"claude-*"},
 		DenyAllWhenEmpty: true,
 	}
-	got = getAvailableModels(wildcard)
+	got = getAvailableModels(context.Background(), wildcard)
 	if len(got) == 0 {
 		t.Fatal("wildcard supported policy returned empty, want Claude models")
 	}
@@ -260,7 +263,7 @@ func TestGetAvailableModelsAppliesManagedPolicy(t *testing.T) {
 		AllowedRouteIDs:  []int64{1},
 		DenyAllWhenEmpty: true,
 	}
-	if got := getAvailableModels(routeOnly); len(got) != 0 {
+	if got := getAvailableModels(context.Background(), routeOnly); len(got) != 0 {
 		t.Fatalf("route-only policy returned %v, want empty until route-aware model listing is available", got)
 	}
 }
@@ -459,5 +462,45 @@ func TestHandleModels_Unauthorized(t *testing.T) {
 
 	if rec.Code != 401 {
 		t.Errorf("expected 401, got %d", rec.Code)
+	}
+}
+
+type fakeModelsRouter struct {
+	proxy.TokenRouterInterface
+	models []string
+	err    error
+}
+
+func (f *fakeModelsRouter) GetAvailableModels(ctx context.Context) ([]string, error) {
+	return f.models, f.err
+}
+
+func (f *fakeModelsRouter) SelectChannel(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (f *fakeModelsRouter) SelectNextChannel(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (f *fakeModelsRouter) SelectPreferredChannel(ctx context.Context, requestedModel string, preferredChannelID int64, policy routing.DownstreamRoutingPolicy, excludeChannelIDs []int64) (*routing.SelectedChannel, error) {
+	return nil, nil
+}
+func (f *fakeModelsRouter) RecordSuccess(ctx context.Context, channelID int64, latencyMs float64, cost float64, modelName *string, actualAccountID *int64) error {
+	return nil
+}
+func (f *fakeModelsRouter) RecordFailure(ctx context.Context, channelID int64, failureCtx routing.SiteRuntimeFailureContext, actualAccountID *int64) error {
+	return nil
+}
+
+func TestGetAvailableModels_RouterBacked(t *testing.T) {
+	SetUpstreamConfig(&UpstreamConfig{Router: &fakeModelsRouter{models: []string{"alpha-model", "beta-model"}}})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+	got := getAvailableModels(context.Background(), auth.EmptyDownstreamRoutingPolicy)
+	if len(got) != 2 {
+		t.Fatalf("got=%v", got)
+	}
+	policy := auth.DownstreamRoutingPolicy{SupportedModels: []string{"alpha*"}}
+	got = getAvailableModels(context.Background(), policy)
+	if len(got) != 1 || got[0] != "alpha-model" {
+		t.Fatalf("filtered=%v", got)
 	}
 }

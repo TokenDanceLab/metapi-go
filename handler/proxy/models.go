@@ -1,6 +1,8 @@
 package proxyhandler
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -26,7 +28,7 @@ func HandleModels(w http.ResponseWriter, r *http.Request) {
 	wantsClaude := r.Header.Get("anthropic-version") != "" || r.Header.Get("x-api-key") != ""
 
 	// Build model list (MetAPI-owned listing; see docs/analysis/models-response-shape.md)
-	models := getAvailableModels(authCtx.Policy)
+	models := getAvailableModels(r.Context(), authCtx.Policy)
 	now := time.Now().UTC()
 
 	if wantsClaude {
@@ -92,28 +94,30 @@ func buildClaudeModelsResponse(models []string, now time.Time) map[string]any {
 	}
 
 	return map[string]any{
-		"data":      items,
-		"first_id":  firstID,
-		"last_id":   lastID,
-		"has_more":  false,
+		"data":     items,
+		"first_id": firstID,
+		"last_id":  lastID,
+		"has_more": false,
 	}
 }
 
 // getAvailableModels returns the list of available model names.
-// This is the MetAPI-owned listing path (not a live upstream /v1/models proxy).
-// Stub: returns common model names until tokenRouter-backed listing is wired here.
-func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
-	// Stub model list. In production, this queries the tokenRouter.
-	models := []string{
-		"gpt-4o",
-		"gpt-4o-mini",
-		"gpt-4-turbo",
-		"gpt-3.5-turbo",
-		"claude-sonnet-4-20250514",
-		"claude-3-5-sonnet-latest",
-		"gemini-2.5-pro",
-		"gemini-2.5-flash",
+// Prefer TokenRouter-backed listing when UpstreamConfig is wired; otherwise fall back
+// to a small owned catalog for tests/unconfigured process (#169).
+func getAvailableModels(ctx context.Context, policy auth.DownstreamRoutingPolicy) []string {
+	var models []string
+	if cfg := getUpstreamConfig(); cfg != nil && cfg.Router != nil {
+		live, err := cfg.Router.GetAvailableModels(ctx)
+		if err != nil {
+			slog.Warn("models: GetAvailableModels failed; using empty list", "error", err)
+		} else {
+			models = live
+		}
+	} else {
+		// Last-resort owned catalog when router is not wired (unit tests / early boot).
+		models = append([]string(nil), fallbackOwnedModelCatalog...)
 	}
+
 	if len(policy.SupportedModels) == 0 && len(policy.AllowedRouteIDs) == 0 {
 		if policy.DenyAllWhenEmpty {
 			return []string{}
@@ -121,6 +125,8 @@ func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
 		return models
 	}
 	if len(policy.SupportedModels) == 0 {
+		// Route-id allowlists without supportedModels: return empty at listing layer
+		// (selection still enforces AllowedRouteIDs at dispatch time).
 		return []string{}
 	}
 
@@ -131,6 +137,18 @@ func getAvailableModels(policy auth.DownstreamRoutingPolicy) []string {
 		}
 	}
 	return filtered
+}
+
+// fallbackOwnedModelCatalog is only used when TokenRouter is not configured.
+var fallbackOwnedModelCatalog = []string{
+	"gpt-4o",
+	"gpt-4o-mini",
+	"gpt-4-turbo",
+	"gpt-3.5-turbo",
+	"claude-sonnet-4-20250514",
+	"claude-3-5-sonnet-latest",
+	"gemini-2.5-pro",
+	"gemini-2.5-flash",
 }
 
 // knownModelContextLength returns a published context window for well-known models

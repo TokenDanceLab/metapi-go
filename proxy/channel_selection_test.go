@@ -18,6 +18,9 @@ type mockRouter struct {
 	selectPreferredChannel func(ctx context.Context, requestedModel string, preferredChannelID int64, policy routing.DownstreamRoutingPolicy, excludeChannelIDs []int64) (*routing.SelectedChannel, error)
 }
 
+func (m *mockRouter) GetAvailableModels(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
 func (m *mockRouter) SelectChannel(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
 	if m.selectChannel != nil {
 		return m.selectChannel(ctx, requestedModel, policy)
@@ -47,8 +50,8 @@ func (m *mockRouter) RecordFailure(ctx context.Context, channelID int64, failure
 }
 
 type mockRouteRefresher struct {
-	called   bool
-	refresh  func(ctx context.Context) error
+	called  bool
+	refresh func(ctx context.Context) error
 }
 
 func (m *mockRouteRefresher) RefreshModelsAndRebuildRoutes(ctx context.Context) error {
@@ -154,7 +157,7 @@ func TestTesterHelpers(t *testing.T) {
 	t.Run("GetTesterForcedChannelID", func(t *testing.T) {
 		t.Run("valid forced channel", func(t *testing.T) {
 			headers := map[string]string{
-				"x-metapi-tester-request":        "1",
+				"x-metapi-tester-request":           "1",
 				"x-metapi-tester-forced-channel-id": "42",
 			}
 			id := GetTesterForcedChannelID(headers, "127.0.0.1")
@@ -165,7 +168,7 @@ func TestTesterHelpers(t *testing.T) {
 
 		t.Run("invalid channel ID", func(t *testing.T) {
 			headers := map[string]string{
-				"x-metapi-tester-request":        "1",
+				"x-metapi-tester-request":           "1",
 				"x-metapi-tester-forced-channel-id": "abc",
 			}
 			id := GetTesterForcedChannelID(headers, "127.0.0.1")
@@ -176,7 +179,7 @@ func TestTesterHelpers(t *testing.T) {
 
 		t.Run("zero channel ID", func(t *testing.T) {
 			headers := map[string]string{
-				"x-metapi-tester-request":        "1",
+				"x-metapi-tester-request":           "1",
 				"x-metapi-tester-forced-channel-id": "0",
 			}
 			id := GetTesterForcedChannelID(headers, "127.0.0.1")
@@ -187,7 +190,7 @@ func TestTesterHelpers(t *testing.T) {
 
 		t.Run("negative channel ID", func(t *testing.T) {
 			headers := map[string]string{
-				"x-metapi-tester-request":        "1",
+				"x-metapi-tester-request":           "1",
 				"x-metapi-tester-forced-channel-id": "-1",
 			}
 			id := GetTesterForcedChannelID(headers, "127.0.0.1")
@@ -198,7 +201,7 @@ func TestTesterHelpers(t *testing.T) {
 
 		t.Run("non-loopback", func(t *testing.T) {
 			headers := map[string]string{
-				"x-metapi-tester-request":        "1",
+				"x-metapi-tester-request":           "1",
 				"x-metapi-tester-forced-channel-id": "42",
 			}
 			id := GetTesterForcedChannelID(headers, "192.168.1.1")
