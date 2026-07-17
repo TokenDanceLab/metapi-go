@@ -67,6 +67,9 @@ func StartBackgroundServices() {
 	// ---- Scheduler 13: Proxy File Retention ----
 	newRegistry.Register(scheduler.NewProxyFileRetentionScheduler(cfg))
 
+	// ---- Scheduler 13b: Proxy Video Task Retention (#262) ----
+	newRegistry.Register(scheduler.NewProxyVideoTaskRetentionScheduler(cfg))
+
 	// ---- Scheduler 14: Proxy Log Retention (legacy fallback) ----
 	newRegistry.Register(scheduler.NewProxyLogRetentionScheduler(cfg))
 
