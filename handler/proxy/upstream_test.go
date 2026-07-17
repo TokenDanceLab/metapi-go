@@ -1387,7 +1387,10 @@ func TestTruncateErrTextBoundsLength(t *testing.T) {
 func TestApplyUpstreamStreamIncludeUsage_InjectsWhenMissing(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
-	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	out, expect := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	if !expect {
+		t.Fatal("expected expectStreamUsage=true after inject")
+	}
 	var body map[string]any
 	if err := json.Unmarshal(out, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -1404,7 +1407,10 @@ func TestApplyUpstreamStreamIncludeUsage_InjectsWhenMissing(t *testing.T) {
 func TestApplyUpstreamStreamIncludeUsage_ForcesFalseToTrueAndPreservesKeys(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"model":"gpt-4o","stream":true,"stream_options":{"include_usage":false,"foo":"bar"}}`)
-	out := applyUpstreamStreamIncludeUsage(in, "new-api", "/v1/chat/completions", true)
+	out, expect := applyUpstreamStreamIncludeUsage(in, "new-api", "/v1/chat/completions", true)
+	if !expect {
+		t.Fatal("expected expectStreamUsage=true after force inject")
+	}
 	var body map[string]any
 	if err := json.Unmarshal(out, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -1421,7 +1427,10 @@ func TestApplyUpstreamStreamIncludeUsage_ForcesFalseToTrueAndPreservesKeys(t *te
 func TestApplyUpstreamStreamIncludeUsage_NoopWhenAlreadyTrue(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"stream":true,"stream_options":{"include_usage":true,"foo":1}}`)
-	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	out, expect := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/chat/completions", true)
+	if !expect {
+		t.Fatal("already-true include_usage still expects stream usage")
+	}
 	if string(out) != string(in) {
 		t.Fatalf("expected identical bytes when already true, got %s want %s", out, in)
 	}
@@ -1430,15 +1439,15 @@ func TestApplyUpstreamStreamIncludeUsage_NoopWhenAlreadyTrue(t *testing.T) {
 func TestApplyUpstreamStreamIncludeUsage_SkipNonChatAndNonStream(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"stream":true,"input":"hi"}`)
-	if got := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/responses", true); string(got) != string(in) {
-		t.Fatalf("responses path should skip: %s", got)
+	if got, expect := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/responses", true); string(got) != string(in) || expect {
+		t.Fatalf("responses path should skip: body=%s expect=%v", got, expect)
 	}
-	if got := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/messages", true); string(got) != string(in) {
-		t.Fatalf("messages path should skip: %s", got)
+	if got, expect := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/messages", true); string(got) != string(in) || expect {
+		t.Fatalf("messages path should skip: body=%s expect=%v", got, expect)
 	}
 	chat := []byte(`{"stream":false,"messages":[]}`)
-	if got := applyUpstreamStreamIncludeUsage(chat, "openai", "/v1/chat/completions", false); string(got) != string(chat) {
-		t.Fatalf("non-stream should skip: %s", got)
+	if got, expect := applyUpstreamStreamIncludeUsage(chat, "openai", "/v1/chat/completions", false); string(got) != string(chat) || expect {
+		t.Fatalf("non-stream should skip: body=%s expect=%v", got, expect)
 	}
 }
 
@@ -1446,8 +1455,8 @@ func TestApplyUpstreamStreamIncludeUsage_SkipCodexSub2API(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"stream":true,"messages":[{"role":"user","content":"x"}]}`)
 	for _, plat := range []string{"codex", "CODEX", "sub2api", "chatgpt-codex"} {
-		if got := applyUpstreamStreamIncludeUsage(in, plat, "/v1/chat/completions", true); string(got) != string(in) {
-			t.Fatalf("platform %q should skip stream_options inject: %s", plat, got)
+		if got, expect := applyUpstreamStreamIncludeUsage(in, plat, "/v1/chat/completions", true); string(got) != string(in) || expect {
+			t.Fatalf("platform %q should skip stream_options inject: body=%s expect=%v", plat, got, expect)
 		}
 	}
 }
@@ -1455,7 +1464,10 @@ func TestApplyUpstreamStreamIncludeUsage_SkipCodexSub2API(t *testing.T) {
 func TestApplyUpstreamStreamIncludeUsage_CompletionsPath(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"model":"gpt-3.5-turbo-instruct","stream":true,"prompt":"hi"}`)
-	out := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/completions", true)
+	out, expect := applyUpstreamStreamIncludeUsage(in, "openai", "/v1/completions", true)
+	if !expect {
+		t.Fatal("completions path should expect stream usage")
+	}
 	var body map[string]any
 	if err := json.Unmarshal(out, &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -1468,11 +1480,69 @@ func TestApplyUpstreamStreamIncludeUsage_CompletionsPath(t *testing.T) {
 		t.Fatalf("include_usage = %#v", opts["include_usage"])
 	}
 	// nested suffix
-	out2 := applyUpstreamStreamIncludeUsage(in, "openai", "/proxy/v1/completions", true)
+	out2, expect2 := applyUpstreamStreamIncludeUsage(in, "openai", "/proxy/v1/completions", true)
+	if !expect2 {
+		t.Fatal("suffix completions path should expect stream usage")
+	}
 	if err := json.Unmarshal(out2, &body); err != nil {
 		t.Fatalf("unmarshal2: %v", err)
 	}
 	if body["stream_options"].(map[string]any)["include_usage"] != true {
 		t.Fatalf("suffix path failed: %#v", body)
+	}
+}
+
+func TestShouldWarnMissingStreamUsage(t *testing.T) {
+	t.Parallel()
+	if shouldWarnMissingStreamUsage(false, ParsedUsage{Source: usageSourceUnknown}) {
+		t.Fatal("no warn when include_usage was not expected")
+	}
+	if !shouldWarnMissingStreamUsage(true, ParsedUsage{Source: usageSourceUnknown}) {
+		t.Fatal("warn when expected and usage not found")
+	}
+	if !shouldWarnMissingStreamUsage(true, ParsedUsage{Found: true, Source: usageSourceUpstream}) {
+		t.Fatal("warn when expected and usage is all zeros")
+	}
+	if shouldWarnMissingStreamUsage(true, ParsedUsage{
+		Found:            true,
+		Source:           usageSourceUpstream,
+		PromptTokens:     11,
+		CompletionTokens: 22,
+		TotalTokens:      33,
+	}) {
+		t.Fatal("no warn when usable tokens present")
+	}
+}
+
+func TestParseUsageFromSSEEvents_FakeStreamWithoutUsage(t *testing.T) {
+	t.Parallel()
+	// Fake OpenAI chat stream that never emits a usage-bearing chunk (provider ignored include_usage).
+	events := []SseEvent{
+		{Data: `{"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}`},
+		{Data: `{"id":"chatcmpl-x","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`},
+		{Data: "[DONE]"},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if got.Found {
+		t.Fatalf("fake stream without usage must not invent tokens: %+v", got)
+	}
+	if !shouldWarnMissingStreamUsage(true, got) {
+		t.Fatal("expected warn when include_usage path ends without usage")
+	}
+	// Incremental analyzer path (production stream relay).
+	a := newIncrementalSseAnalyzer()
+	for _, ev := range events {
+		if ev.Data == "[DONE]" {
+			a.Push([]byte("data: [DONE]\n\n"))
+			continue
+		}
+		a.Push([]byte("data: " + ev.Data + "\n\n"))
+	}
+	result := a.Result()
+	if result.Usage.Found {
+		t.Fatalf("incremental analyzer must not invent tokens: %+v", result.Usage)
+	}
+	if !shouldWarnMissingStreamUsage(true, result.Usage) {
+		t.Fatal("expected warn from incremental path without usage")
 	}
 }
