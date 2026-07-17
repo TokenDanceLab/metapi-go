@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -19,10 +20,12 @@ import (
 
 // ConfigureProxyUpstream wires the /v1 data plane to the runtime database.
 // Without this, proxy handlers can parse requests but cannot select real channels.
+// Also publishes the TokenRouter / RouteDecisionService for admin decision APIs.
 func ConfigureProxyUpstream(cfg *config.Config) error {
 	db := store.GetDB()
 	if db == nil {
 		proxyhandler.SetUpstreamConfig(nil)
+		setTokenRouteDecisionRuntime(nil, nil)
 		return fmt.Errorf("proxy upstream: database is not initialized")
 	}
 	coord := proxy.NewProxyChannelCoordinator(cfg)
@@ -42,7 +45,10 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 	}
 	auth.ConfigureSharedAdmissionFromRedisURL(cfg.RedisURL)
 
-	router := routing.NewTokenRouter(newProxyRoutingStore(db), cfg, nil, proxyLoadProvider{coord: coord})
+	routingStore := newProxyRoutingStore(db)
+	router := routing.NewTokenRouter(routingStore, cfg, nil, proxyLoadProvider{coord: coord})
+	decisionService := routing.NewRouteDecisionService(router, routingStore)
+	setTokenRouteDecisionRuntime(router, decisionService)
 	proxyhandler.SetUpstreamConfig(&proxyhandler.UpstreamConfig{
 		Router:      router,
 		Coordinator: coord,
@@ -54,6 +60,28 @@ func ConfigureProxyUpstream(cfg *config.Config) error {
 		},
 	})
 	return nil
+}
+
+var (
+	tokenRouteDecisionMu      sync.RWMutex
+	tokenRouteDecisionRouter  *routing.TokenRouter
+	tokenRouteDecisionService *routing.RouteDecisionService
+)
+
+func setTokenRouteDecisionRuntime(router *routing.TokenRouter, decisions *routing.RouteDecisionService) {
+	tokenRouteDecisionMu.Lock()
+	defer tokenRouteDecisionMu.Unlock()
+	tokenRouteDecisionRouter = router
+	tokenRouteDecisionService = decisions
+}
+
+// TokenRouteDecisionRuntime returns the TokenRouter and RouteDecisionService
+// published by ConfigureProxyUpstream. Both may be nil when upstream is not wired.
+// Used by router/admin registration without creating an app↔admin import cycle.
+func TokenRouteDecisionRuntime() (*routing.TokenRouter, *routing.RouteDecisionService) {
+	tokenRouteDecisionMu.RLock()
+	defer tokenRouteDecisionMu.RUnlock()
+	return tokenRouteDecisionRouter, tokenRouteDecisionService
 }
 
 type proxyLoadProvider struct {
@@ -452,6 +480,52 @@ func (s *proxyRoutingStore) ClearChannelFailureStates(ctx context.Context, chann
 		return err
 	}
 	_, err = s.execContext(ctx, query, args...)
+	return err
+}
+
+// UpdateRouteDecisionSnapshot persists a route decision explanation snapshot.
+func (s *proxyRoutingStore) UpdateRouteDecisionSnapshot(ctx context.Context, routeID int64, snapshot string, refreshedAt string) error {
+	if strings.TrimSpace(refreshedAt) == "" {
+		refreshedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	_, err := s.execContext(ctx, `
+		UPDATE token_routes
+		SET decision_snapshot = ?, decision_refreshed_at = ?, updated_at = ?
+		WHERE id = ?`, snapshot, refreshedAt, refreshedAt, routeID)
+	return err
+}
+
+// ClearRouteDecisionSnapshot clears one route decision snapshot.
+func (s *proxyRoutingStore) ClearRouteDecisionSnapshot(ctx context.Context, routeID int64) error {
+	_, err := s.execContext(ctx, `
+		UPDATE token_routes
+		SET decision_snapshot = NULL, decision_refreshed_at = NULL
+		WHERE id = ?`, routeID)
+	return err
+}
+
+// ClearRouteDecisionSnapshots clears decision snapshots for the given route IDs.
+func (s *proxyRoutingStore) ClearRouteDecisionSnapshots(ctx context.Context, routeIDs []int64) error {
+	if len(routeIDs) == 0 {
+		return nil
+	}
+	query, args, err := sqlx.In(`
+		UPDATE token_routes
+		SET decision_snapshot = NULL, decision_refreshed_at = NULL
+		WHERE id IN (?)`, routeIDs)
+	if err != nil {
+		return err
+	}
+	_, err = s.execContext(ctx, query, args...)
+	return err
+}
+
+// ClearAllRouteDecisionSnapshots clears every route decision snapshot.
+func (s *proxyRoutingStore) ClearAllRouteDecisionSnapshots(ctx context.Context) error {
+	_, err := s.execContext(ctx, `
+		UPDATE token_routes
+		SET decision_snapshot = NULL, decision_refreshed_at = NULL
+		WHERE decision_snapshot IS NOT NULL OR decision_refreshed_at IS NOT NULL`)
 	return err
 }
 

@@ -75,7 +75,7 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 			admin.RegisterSiteAnnouncementsRoutes(r, db.DB)
 			admin.RegisterAuthSettingsRoutes(r, db.DB, cfg)
 			admin.RegisterCheckinRoutes(r, db.DB, cfg)
-			admin.RegisterTokenRoutes(r, db.DB)
+			admin.RegisterTokenRoutesWithDeps(r, db.DB, tokenRoutesDeps())
 			admin.RegisterChannelTestRoutes(r, db.DB, cfg)
 			admin.RegisterUpdateCenterRoutes(r)
 			admin.RegisterOauthRoutes(r, db.DB)
@@ -115,6 +115,22 @@ func New(cfg *config.Config, webFS embed.FS) chi.Router {
 	setupSPAFallback(r, webFS)
 
 	return r
+}
+
+// tokenRoutesDeps bridges app-published TokenRouter/RouteDecisionService into
+// admin handlers without creating an app↔admin import cycle.
+// Only assign non-nil concrete pointers so interface fields stay truly nil
+// (avoid typed-nil interface traps).
+func tokenRoutesDeps() admin.TokenRoutesDeps {
+	router, decisions := app.TokenRouteDecisionRuntime()
+	deps := admin.TokenRoutesDeps{}
+	if router != nil {
+		deps.Router = router
+	}
+	if decisions != nil {
+		deps.Decisions = decisions
+	}
+	return deps
 }
 
 // setupSPAFallback configures static asset serving and SPA fallback.

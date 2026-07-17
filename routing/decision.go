@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // RouteDecisionService handles route decision snapshots.
@@ -13,11 +15,10 @@ type RouteDecisionService struct {
 }
 
 // DecisionDB defines the DB operations for decision snapshots.
+// FindAllEnabledRoutes reuses the TokenRoute shape so the same store
+// adapter that backs TokenRouter can also back snapshot refresh.
 type DecisionDB interface {
-	FindAllEnabledRoutes(ctx context.Context) ([]struct {
-		ID           int64
-		ModelPattern string
-	}, error)
+	FindAllEnabledRoutes(ctx context.Context) ([]store.TokenRoute, error)
 	UpdateRouteDecisionSnapshot(ctx context.Context, routeID int64, snapshot string, refreshedAt string) error
 	ClearRouteDecisionSnapshot(ctx context.Context, routeID int64) error
 	ClearRouteDecisionSnapshots(ctx context.Context, routeIDs []int64) error
