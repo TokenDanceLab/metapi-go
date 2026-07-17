@@ -16,6 +16,7 @@
 | Active milestone | closed Milestone 34 (v0.8.25) — next residual wave TBD |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
+| M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388) |
 | Gap matrix | `docs/analysis/original-gap-matrix.md` |
 | Architecture | `docs/architecture.md` · design `docs/design/BACKEND.md` |
 
@@ -41,7 +42,9 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean after v0.8.25; next residual only with ACs |
+| [#388](https://github.com/TokenDanceLab/metapi-go/issues/388) | docs/review | M35 multi-lane residual review synthesis |
+| [#389](https://github.com/TokenDanceLab/metapi-go/issues/389) | security | Site API endpoint URL metadata/link-local early reject |
+| [#390](https://github.com/TokenDanceLab/metapi-go/issues/390) | reliability/test | Multi-route list regression for batch channel load |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 
@@ -83,7 +86,7 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Close Milestone 34: #382 IsValidHTTPURL metadata · #383 routes N+1 batch · #384 residual honesty.
+1. Land M35 review synthesis (#388 → `docs/analysis/enterprise-review-m35.md`); then #389 endpoint early-reject · #390 routes multi-route regression.
 2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
 3. Optional later: P0-585 load-proof / site-model breaker; P0-555 media/lag; proxy max-token enforce from contextLength.
 4. Keep MASTER slim; docs map at `docs/README.md`.
