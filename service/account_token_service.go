@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/store"
 )
 
@@ -461,6 +463,84 @@ type TokenSyncResult struct {
 	PendingTokenIDs []int64
 	Total           int
 	DefaultTokenID  *int64
+}
+
+// PlatformAPITokensToUpstream converts platform.ApiTokenInfo values to the
+// local UpstreamAPIToken shape used by SyncTokensFromUpstream.
+func PlatformAPITokensToUpstream(tokens []platform.ApiTokenInfo) []UpstreamAPIToken {
+	if len(tokens) == 0 {
+		return nil
+	}
+	out := make([]UpstreamAPIToken, 0, len(tokens))
+	for _, token := range tokens {
+		key := strings.TrimSpace(token.Key)
+		if key == "" {
+			continue
+		}
+		out = append(out, UpstreamAPIToken{
+			Name:       strings.TrimSpace(token.Name),
+			Key:        key,
+			Enabled:    token.Enabled,
+			TokenGroup: strings.TrimSpace(token.TokenGroup),
+		})
+	}
+	return out
+}
+
+// ResolvePlatformUserIDPtr returns a *int platform user id when one can be
+// resolved from account extraConfig or a numeric username.
+func ResolvePlatformUserIDPtr(account *store.Account) *int {
+	if account == nil {
+		return nil
+	}
+	if id, ok := GetPlatformUserIdFromExtraConfig(account.ExtraConfig); ok && id > 0 {
+		v := int(id)
+		return &v
+	}
+	if id := GuessPlatformUserIdFromUsername(account.Username); id > 0 {
+		v := int(id)
+		return &v
+	}
+	if id := ResolvePlatformUserID(account.ExtraConfig, account.Username); id > 0 {
+		v := int(id)
+		return &v
+	}
+	return nil
+}
+
+// FetchUpstreamAPITokens loads tokens via adapter.GetAPITokens, falling back to
+// adapter.GetAPIToken when the list endpoint returns nothing.
+func FetchUpstreamAPITokens(
+	ctx context.Context,
+	adapter platform.PlatformAdapter,
+	baseURL, accessToken string,
+	platformUserID *int,
+	proxy *platform.ProxyConfig,
+) ([]UpstreamAPIToken, error) {
+	if adapter == nil {
+		return nil, fmt.Errorf("platform adapter is nil")
+	}
+	tokens, err := adapter.GetAPITokens(ctx, baseURL, accessToken, platformUserID, proxy)
+	if err != nil {
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		single, singleErr := adapter.GetAPIToken(ctx, baseURL, accessToken, platformUserID, proxy)
+		if singleErr != nil {
+			return nil, singleErr
+		}
+		if single != nil {
+			key := strings.TrimSpace(*single)
+			if key != "" {
+				tokens = []platform.ApiTokenInfo{{
+					Name:    "default",
+					Key:     key,
+					Enabled: true,
+				}}
+			}
+		}
+	}
+	return PlatformAPITokensToUpstream(tokens), nil
 }
 
 // SyncTokensFromUpstream upserts account tokens from upstream listings.
