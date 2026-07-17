@@ -1,30 +1,38 @@
-# Residual: Videos GET/DELETE honest passthrough (#225)
+# Residual: Videos proxy publicId mapping (#225 / #235)
 
 **Date**: 2026-07-17  
-**Issue**: [#225](https://github.com/TokenDanceLab/metapi-go/issues/225)  
-**Lane**: p86 / honest residual  
-**SSOT code**: `handler/proxy/videos.go`
+**Issues**: [#225](https://github.com/TokenDanceLab/metapi-go/issues/225) (GET/DELETE passthrough), [#235](https://github.com/TokenDanceLab/metapi-go/issues/235) (create mapping)  
+**Lane**: p87 / videos create rewrite  
+**SSOT code**: `handler/proxy/videos.go`, success hook in `handler/proxy/upstream.go`
 
 ## Goal
 
-Stop store-gated theater on video GET/DELETE:
+1. **#225** — Stop store-gated theater on video GET/DELETE (missing map ≠ hard 404).
+2. **#235** — On successful create, save process-local `ProxyVideoTask` and rewrite response `id` to opaque `publicId`.
 
-- `HandleVideosCreate` already dispatches upstream but **does not** save
-  `ProxyVideoTask` or rewrite the response `id` to a publicId.
-- Clients that hold a real upstream video id were still hard-404'd with
-  `"Video task not found"` solely because the in-memory map was empty.
-- Prefer honest upstream passthrough over local-only mapping theater.
-- Full multi-instance durable video store is **out of scope**.
-
-## Behavior after #225
+## Behavior after #235
 
 | Surface | Behavior |
 |---------|----------|
-| `POST /v1/videos` | `PrepareCtx` + `dispatchUpstream` (unchanged). No mapping save / publicId rewrite yet. |
-| `GET /v1/videos/{id}` | Always `PrepareCtx` + `dispatchUpstream`. If local mapping exists and `UpstreamVideoID` differs from `{id}`, path uses `UpstreamVideoID`; otherwise `{id}` is passed through. **Missing mapping is not a 404.** |
-| `DELETE /v1/videos/{id}` | Delete local mapping if present (idempotent). Always `PrepareCtx` + `dispatchUpstream` DELETE with the same path rewrite rule as GET. Prefer upstream status over a local-only 204 residual. |
+| `POST /v1/videos` | `PrepareCtx` + `dispatchUpstream`. On **non-stream buffered 2xx**, parse upstream JSON `id`, generate `video_<hex>`, `SaveProxyVideoTask`, rewrite body `id` → publicId. Parse miss / non-JSON → body unchanged (best-effort). |
+| `GET /v1/videos/{id}` | Always dispatch. If local mapping exists and `UpstreamVideoID` differs from `{id}`, path uses `UpstreamVideoID`; otherwise `{id}` passthrough. **Missing mapping is not a 404.** |
+| `DELETE /v1/videos/{id}` | Delete local mapping if present. Always dispatch DELETE with same path rewrite rule. Prefer upstream status over local-only 204. |
 
-### Path rewrite rule
+### Create rewrite rule
+
+```
+on success POST /v1/videos (path equal, ignore trailing slash):
+  upstreamID = JSON.body.id (string, non-empty)
+  publicID   = "video_" + hex(16 random bytes)
+  SaveProxyVideoTask({
+    PublicID, UpstreamVideoID: upstreamID,
+    SiteURL, TokenValue, RequestedModel, ActualModel,
+    ChannelID, AccountID
+  })
+  body.id = publicID
+```
+
+### Path rewrite rule (GET/DELETE)
 
 ```
 upstreamPathID = publicID
@@ -38,37 +46,27 @@ DownstreamPath = "/v1/videos/" + upstreamPathID
 
 ## What is still residual (not claimed)
 
-1. **Create does not save `ProxyVideoTask`** — response `id` is whatever upstream
-   returns (or stub). No publicId generation/rewrite on the write path.
-2. **In-memory process-local store only** — no Redis / DB multi-instance video
-   task store. Mapping is an optional rewrite aid when something else seeds it
-   (tests, future create wiring).
-3. **No sticky site/token restore from mapping** — even when a mapping row has
-   `SiteURL` / `TokenValue` / channel ids, GET/DELETE still go through normal
-   channel selection (`PrepareCtx` + router). Sticky pin is future work.
-4. **Stub mode** — when upstream is unconfigured and proxy stub is enabled,
-   GET/DELETE return the generic stub JSON (non-404), same as other surfaces.
-   Production without upstream config still returns 503 from `dispatchUpstream`.
+1. **In-memory process-local store only** — no Redis / DB multi-instance video task store. Schema table `proxy_video_tasks` exists for future durability but is **not** written this wave.
+2. **No sticky site/token restore from mapping** — even when a mapping row has `SiteURL` / `TokenValue` / channel ids, GET/DELETE still go through normal channel selection (`PrepareCtx` + router). Sticky pin is future work.
+3. **Stub mode** — when upstream is unconfigured and proxy stub is enabled, create returns generic stub JSON without mapping rewrite (no selected channel). Production without upstream config still returns 503 from `dispatchUpstream`.
+4. **Response fields other than `id`** — only top-level `id` is rewritten; nested ids (if any) are left as upstream sent them.
 
 ## TS parity note
 
-TS MetAPI saves mapping on create and rewrites `id` in the create response, then
-uses the mapping on GET/DELETE. Go currently only has the optional mapping
-helpers + passthrough path rewrite. Closing the create-side mapping + id rewrite
-is a separate follow-up, not required for honest GET/DELETE.
+TS MetAPI saves mapping on create and rewrites `id` in the create response, then uses the mapping on GET/DELETE. Go now matches the create-side process-local mapping + id rewrite path; durable multi-instance store and sticky pin remain residual (same honesty bar as sticky/admin tasks).
 
 ## Tests
 
 | Case | Expectation |
 |------|-------------|
-| GET with mapping | 200 stub (or upstream); path may use UpstreamVideoID |
-| GET without mapping (auth ok) | **not** hard 404; stub/upstream path proceeds |
-| DELETE with mapping | local mapping cleared; dispatchUpstream (stub non-404) |
-| DELETE without mapping | **not** hard 404; dispatchUpstream proceeds |
-| Create model required / multipart | unchanged |
+| Create with mock upstream | 200; body `id` is `video_*`; raw upstream id not present; mapping saved |
+| Multipart create forwards form | same rewrite + mapping |
+| GET with mapping | path may use UpstreamVideoID; no hard 404 |
+| GET without mapping | not hard 404; stub/upstream proceeds |
+| Non-videos success body | rewrite helper no-ops |
 
 Verify:
 
 ```bash
-go test ./handler/proxy -count=1 -run Video
+go test ./handler/proxy -count=1 -run 'Video|Videos'
 ```

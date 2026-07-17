@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/tokendancelab/metapi-go/routing"
+	"github.com/tokendancelab/metapi-go/store"
 )
 
 // chiRouterForVideo creates a chi router that registers video routes with auth injection.
@@ -35,12 +37,95 @@ func TestHandleVideosCreate_JSONBody(t *testing.T) {
 	}
 
 	// With upstream forwarding not wired, stub returns generic response.
+	// Stub path does not rewrite publicId (no selected channel).
 	m := unmarshalResponse(t, rec)
 	if m == nil {
 		t.Fatal("expected non-nil response")
 	}
 	if m["model"] != "sora-2" {
 		t.Errorf("model = %v", m["model"])
+	}
+}
+
+func TestHandleVideosCreate_RewritesPublicIDAndSavesMapping(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/videos" {
+			t.Fatalf("upstream path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"upstream_vid_abc","object":"video","status":"queued"}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:     store.RouteChannel{ID: 99, Enabled: true},
+			Account:     store.Account{ID: 11, Status: "active"},
+			Site:        store.Site{ID: 5, URL: upstream.URL, Status: "active"},
+			TokenValue:  "sk-video-create",
+			ActualModel: "sora-upstream",
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	r := chiRouterForVideo()
+	req := makeProxyReq("POST", "/v1/videos", `{"model":"sora-2","prompt":"a cat"}`)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	m := unmarshalResponse(t, rec)
+	publicID, _ := m["id"].(string)
+	if publicID == "" || publicID == "upstream_vid_abc" {
+		t.Fatalf("expected rewritten publicId, got %q body=%v", publicID, m)
+	}
+	if !strings.HasPrefix(publicID, "video_") {
+		t.Fatalf("publicId prefix: %q", publicID)
+	}
+	if m["object"] != "video" {
+		t.Fatalf("object = %v", m["object"])
+	}
+
+	task := GetProxyVideoTaskByPublicID(publicID)
+	if task == nil {
+		t.Fatal("expected mapping saved")
+	}
+	t.Cleanup(func() { DeleteProxyVideoTaskByPublicID(publicID) })
+	if task.UpstreamVideoID != "upstream_vid_abc" {
+		t.Fatalf("UpstreamVideoID = %q", task.UpstreamVideoID)
+	}
+	if task.ChannelID != 99 || task.AccountID != 11 {
+		t.Fatalf("channel/account = %d/%d", task.ChannelID, task.AccountID)
+	}
+	if task.TokenValue != "sk-video-create" {
+		t.Fatalf("TokenValue = %q", task.TokenValue)
+	}
+	if task.RequestedModel != "sora-2" || task.ActualModel != "sora-upstream" {
+		t.Fatalf("models requested=%q actual=%q", task.RequestedModel, task.ActualModel)
+	}
+
+	// resolve path uses UpstreamVideoID for subsequent GET.
+	if got := resolveVideoUpstreamID(publicID); got != "upstream_vid_abc" {
+		t.Fatalf("resolve = %q", got)
+	}
+}
+
+func TestMaybeRewriteVideosCreateResponse_NonVideosPathUnchanged(t *testing.T) {
+	body := []byte(`{"id":"chatcmpl-1"}`)
+	out := maybeRewriteVideosCreateResponse(
+		&Ctx{DownstreamPath: "/v1/chat/completions", RequestedModel: "gpt"},
+		&routing.SelectedChannel{
+			Channel: store.RouteChannel{ID: 1},
+			Account: store.Account{ID: 2},
+			Site:    store.Site{URL: "https://example.test"},
+		},
+		"/v1/chat/completions",
+		body,
+	)
+	if string(out) != string(body) {
+		t.Fatalf("chat body rewritten unexpectedly: %s", out)
 	}
 }
 
