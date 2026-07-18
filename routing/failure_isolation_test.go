@@ -329,6 +329,85 @@ func isolationChannel(id, routeID, accountID int64) store.RouteChannel {
 	}
 }
 
+// TestRecordFailure_RoundRobinConsecutiveFailThreshold proves #511: callers pass raw
+// consecutiveFailCount into ApplyRoundRobinCooldown (helper alone does +1). After N=1,2
+// failures consecutive=1 then 2 with no cooldownUntil; after N=3 consecutive resets to 0,
+// cooldownLevel advances, and cooldownUntil is set.
+func TestRecordFailure_RoundRobinConsecutiveFailThreshold(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	db := newIsolationDB()
+	route := isolationRoute(1, "round_robin")
+	ch := isolationChannel(501, 1, 5001)
+	acc := isolationAccount(5001, 50)
+	db.seedChannel(ch, acc, route)
+
+	tr := newIsolationRouter(db)
+	ctx := context.Background()
+	status := 500
+	errText := "upstream error"
+	model := "gpt-test"
+	failCtx := SiteRuntimeFailureContext{
+		Status:    &status,
+		ErrorText: &errText,
+		ModelName: &model,
+	}
+
+	// N=1: consecutive=1, no cooldown yet
+	if err := tr.RecordFailure(ctx, 501, failCtx, nil); err != nil {
+		t.Fatalf("RecordFailure #1: %v", err)
+	}
+	got := db.getChannel(501)
+	if got == nil {
+		t.Fatal("expected channel 501 present")
+	}
+	if got.ConsecutiveFailCount != 1 {
+		t.Fatalf("after 1 RR failure consecutive=%d, want 1", got.ConsecutiveFailCount)
+	}
+	if got.CooldownLevel != 0 {
+		t.Fatalf("after 1 RR failure cooldownLevel=%d, want 0", got.CooldownLevel)
+	}
+	if got.CooldownUntil != nil {
+		t.Fatalf("after 1 RR failure cooldownUntil=%v, want nil", *got.CooldownUntil)
+	}
+
+	// N=2: consecutive=2, still no cooldown
+	if err := tr.RecordFailure(ctx, 501, failCtx, nil); err != nil {
+		t.Fatalf("RecordFailure #2: %v", err)
+	}
+	got = db.getChannel(501)
+	if got.ConsecutiveFailCount != 2 {
+		t.Fatalf("after 2 RR failures consecutive=%d, want 2", got.ConsecutiveFailCount)
+	}
+	if got.CooldownLevel != 0 {
+		t.Fatalf("after 2 RR failures cooldownLevel=%d, want 0", got.CooldownLevel)
+	}
+	if got.CooldownUntil != nil {
+		t.Fatalf("after 2 RR failures cooldownUntil=%v, want nil", *got.CooldownUntil)
+	}
+
+	// N=3: threshold reached — consecutive resets, level advances, cooldownUntil set
+	if err := tr.RecordFailure(ctx, 501, failCtx, nil); err != nil {
+		t.Fatalf("RecordFailure #3: %v", err)
+	}
+	got = db.getChannel(501)
+	if got.ConsecutiveFailCount != 0 {
+		t.Fatalf("after 3 RR failures consecutive=%d, want 0 (reset)", got.ConsecutiveFailCount)
+	}
+	if got.CooldownLevel != 1 {
+		t.Fatalf("after 3 RR failures cooldownLevel=%d, want 1", got.CooldownLevel)
+	}
+	if got.CooldownUntil == nil || *got.CooldownUntil == "" {
+		t.Fatal("after 3 RR failures cooldownUntil should be set")
+	}
+	// failCount still accumulates independently of RR consecutive counter
+	if got.FailCount != 3 {
+		t.Fatalf("after 3 RR failures failCount=%d, want 3", got.FailCount)
+	}
+}
+
 // TestRecordFailure_DoesNotCascadeToSiblingChannels proves a single non-usage-limit
 // failure only mutates the failed channel's cooldown/failCount fields (channel-scoped
 // exclude — no credential expand). See also P0-585 credential usage-limit honesty

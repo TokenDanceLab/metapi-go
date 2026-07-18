@@ -42,7 +42,8 @@ func SelectRoundRobinCandidate(candidates []RouteChannelCandidate) *RouteChannel
 }
 
 // ApplyRoundRobinCooldown applies tiered cooldown to a failure-aware struct.
-// Increments consecutiveFailCount, and if threshold is reached, increments cooldownLevel and resets.
+// Callers must pass the raw consecutiveFailCount (no pre-increment); this helper alone does +1.
+// If the post-increment count reaches RoundRobinFailureThreshold, increments cooldownLevel and resets count.
 // Returns the updated values and cooldownUntil ISO string.
 func ApplyRoundRobinCooldown(
 	consecutiveFailCount int64,
