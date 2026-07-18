@@ -286,6 +286,167 @@ export default function DesignSystemGallery() {
         </Surface>
       </section>
 
+      <section className="ds-gallery__section" aria-labelledby="ds-form-states">
+        <h2 id="ds-form-states" className="ds-gallery__section-title">Form states · Phase 4</h2>
+        <div className="ds-gallery__grid">
+          <Surface variant="solid" padding="md">
+            <Stack gap={4}>
+              <div className="ds-gallery__form-states">
+                <div className="form-field">
+                  <label className="form-label" htmlFor="gallery-form-focus">
+                    Focus / default
+                  </label>
+                  <input
+                    id="gallery-form-focus"
+                    className="form-input"
+                    defaultValue="ops-comfortable · 36px"
+                    aria-describedby="gallery-form-focus-hint"
+                  />
+                  <p id="gallery-form-focus-hint" className="form-hint">
+                    Uses --radius-control + --color-focus-ring-strong
+                  </p>
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="gallery-form-error">
+                    Error
+                  </label>
+                  <input
+                    id="gallery-form-error"
+                    className="form-input is-invalid"
+                    defaultValue=""
+                    placeholder="Missing site endpoint"
+                    aria-invalid="true"
+                    aria-describedby="gallery-form-error-hint"
+                  />
+                  <p id="gallery-form-error-hint" className="form-hint--error">
+                    Endpoint is required for route binding
+                  </p>
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="gallery-form-disabled">
+                    Disabled
+                  </label>
+                  <input
+                    id="gallery-form-disabled"
+                    className="form-input"
+                    value="shared-tiny pool"
+                    disabled
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="gallery-form-notes">
+                    Textarea
+                  </label>
+                  <textarea
+                    id="gallery-form-notes"
+                    className="form-input"
+                    rows={3}
+                    defaultValue="Ops notes stay readable at comfortable density."
+                  />
+                </div>
+              </div>
+
+              <div className="form-section" aria-label="Settings group sample">
+                <div className="form-section-header">
+                  <h3 className="form-section-title">Connection defaults</h3>
+                  <p className="form-section-desc">
+                    Apple-style group list · ops-comfortable spacing · no compact mode
+                  </p>
+                </div>
+                <div className="form-group-list__body" style={{ paddingTop: 0, paddingBottom: 0, gap: 0 }}>
+                  <div className="form-group-list__row">
+                    <div className="form-group-list__row-copy">
+                      <div className="form-group-list__row-title">Default pool</div>
+                      <div className="form-group-list__row-meta">shared-tiny · lease-aware</div>
+                    </div>
+                    <div className="form-group-list__row-control">
+                      <select className="form-input" defaultValue="shared-tiny" aria-label="Default pool">
+                        <option value="shared-tiny">shared-tiny</option>
+                        <option value="shared-std">shared-std</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-group-list__row">
+                    <div className="form-group-list__row-copy">
+                      <div className="form-group-list__row-title">Fail-closed on pressure</div>
+                      <div className="form-group-list__row-meta">Optional guard for 53300 storms</div>
+                    </div>
+                    <div className="form-group-list__row-control">
+                      <input className="form-input" defaultValue="enabled" readOnly aria-label="Fail-closed" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Stack>
+          </Surface>
+
+          <Surface variant="solid" padding="md">
+            <Stack gap={4}>
+              <div>
+                <h3 className="ds-gallery__section-title" style={{ marginBottom: 'var(--space-2)' }}>
+                  Drawer surface
+                </h3>
+                <p className="form-hint" style={{ marginTop: 0 }}>
+                  Glass panel + elevated solid fallbacks for reduced transparency
+                </p>
+              </div>
+              <div className="ds-gallery__drawer-mock" aria-hidden="true">
+                <div className="ds-gallery__drawer-mock-scrim" />
+                <div className="ds-gallery__drawer-mock-panel drawer-surface">
+                  <div>
+                    <p className="ds-gallery__drawer-mock-title">Downstream key</p>
+                    <p className="ds-gallery__drawer-mock-meta">sk-**** · main group</p>
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Display name</label>
+                    <input className="form-input" defaultValue="prod-edge-01" readOnly />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Notes</label>
+                    <textarea className="form-input" rows={3} defaultValue="Glass drawer chrome · token-only" readOnly />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="ds-gallery__section-title" style={{ marginBottom: 'var(--space-2)' }}>
+                  Modal surface
+                </h3>
+              </div>
+              <div className="ds-gallery__modal-mock" aria-hidden="true">
+                <div className="ds-gallery__modal-mock-card">
+                  <div className="form-stack">
+                    <div>
+                      <div className="modal-title" style={{ fontSize: 'var(--text-lg)' }}>
+                        Rotate token
+                      </div>
+                      <p className="form-hint">Modal content uses glass-strong + focus-safe controls</p>
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">New token</label>
+                      <input className="form-input" defaultValue="••••••••••••" readOnly />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Confirm</label>
+                      <input className="form-input is-invalid" defaultValue="" placeholder="Repeat token" aria-invalid="true" readOnly />
+                      <p className="form-hint--error">Tokens must match</p>
+                    </div>
+                    <Inline gap={2} justify="end">
+                      <Button variant="secondary" size="sm">
+                        Cancel
+                      </Button>
+                      <Button variant="primary" size="sm">
+                        Save
+                      </Button>
+                    </Inline>
+                  </div>
+                </div>
+              </div>
+            </Stack>
+          </Surface>
+        </div>
+      </section>
+
       <section className="ds-gallery__section" aria-labelledby="ds-tokens">
         <h2 id="ds-tokens" className="ds-gallery__section-title">Token swatches</h2>
         <div className="ds-gallery__grid">

@@ -704,6 +704,10 @@ body {
     background: var(--color-bg-elevated);
   }
 
+  .modal-content {
+    background: var(--color-bg-elevated);
+  }
+
   .login-tools,
   .login-surface,
   .login-auth-panel {
@@ -735,8 +739,23 @@ body {
   }
 
   .mobile-drawer-panel {
-    background: var(--color-bg-card);
-    border-color: var(--color-border-light);
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .modal-content {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .modal-backdrop,
+  .mobile-drawer-backdrop {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
@@ -1312,6 +1331,31 @@ body {
   animation: drawer-slide-in-right var(--duration-moderate) var(--ease-emphasized) both;
 }
 
+/* Ops drawer surface (right-side detail; reuses modal portal pattern) */
+.drawer-surface {
+  background: var(--glass-bg-strong);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .drawer-surface {
+    background: var(--color-bg-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .drawer-surface {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
 .mobile-drawer-root.is-closing .mobile-drawer-panel {
   animation: drawer-slide-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
 }
@@ -1366,8 +1410,8 @@ body {
 .mobile-drawer-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 20px 16px;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--color-border-light);
   flex-shrink: 0;
 }
@@ -1375,12 +1419,12 @@ body {
 .mobile-drawer-header img {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 .mobile-drawer-header span {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   letter-spacing: -0.01em;
 }
@@ -2282,21 +2326,21 @@ body {
 .downstream-key-modal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .downstream-key-modal-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 .downstream-key-modal-label {
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.4;
-  font-weight: 500;
-  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
 }
 
 .downstream-key-modal-field-full {
@@ -2387,11 +2431,11 @@ body {
 
 .downstream-key-advanced-panel {
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: 12px;
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   background: var(--color-bg-card);
 }
 
@@ -2399,7 +2443,10 @@ body {
 .downstream-key-modal-grid textarea,
 .downstream-key-advanced input,
 .downstream-key-advanced textarea {
-  font-size: 13px;
+  font-size: var(--text-base);
+  min-height: 36px;
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
 }
 
 .downstream-key-modal-grid input::placeholder,
@@ -2812,15 +2859,35 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
   background: var(--color-info);
 }
 
-/* ===== Form Inputs ===== */
+/* ===== Form Inputs (Phase 4 · ops-comfortable density) ===== */
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  transition:
-    border-color var(--duration-normal) var(--ease-standard),
-    box-shadow var(--duration-normal) var(--ease-standard),
-    background-color var(--duration-normal) var(--ease-standard);
+  box-sizing: border-box;
   font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  transition:
+    border-color var(--motion-swift),
+    box-shadow var(--motion-swift),
+    background-color var(--motion-swift);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select {
+  min-height: 36px;
+  border-radius: var(--radius-control);
+}
+
+textarea {
+  min-height: 84px;
+  border-radius: var(--radius-control);
+  resize: vertical;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled):not([aria-invalid='true']),
+select:hover:not(:disabled):not([aria-invalid='true']),
+textarea:hover:not(:disabled):not([aria-invalid='true']) {
+  border-color: var(--color-border-strong);
 }
 
 input:not([type="checkbox"]):not([type="radio"]):focus-visible,
@@ -2831,26 +2898,67 @@ textarea:focus-visible {
   box-shadow: var(--color-focus-ring-strong);
 }
 
+input:not([type="checkbox"]):not([type="radio"]):disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+}
+
+input:not([type="checkbox"]):not([type="radio"])[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'],
+input:not([type="checkbox"]):not([type="radio"]).is-invalid,
+select.is-invalid,
+textarea.is-invalid,
+.form-input.is-invalid {
+  border-color: var(--color-danger);
+}
+
+input:not([type="checkbox"]):not([type="radio"])[aria-invalid='true']:focus-visible,
+select[aria-invalid='true']:focus-visible,
+textarea[aria-invalid='true']:focus-visible,
+input:not([type="checkbox"]):not([type="radio"]).is-invalid:focus-visible,
+select.is-invalid:focus-visible,
+textarea.is-invalid:focus-visible,
+.form-input.is-invalid:focus-visible {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 35%, transparent);
+}
+
 .form-label {
   display: block;
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: var(--space-1);
 }
 
 .form-input {
   width: 100%;
-  padding: 10px 14px;
+  min-height: 36px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-md);
+  border-radius: var(--radius-control);
+  font-size: var(--text-base);
+  line-height: 1.4;
   outline: none;
-  background: var(--color-bg);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
   transition:
-    border-color var(--duration-normal) var(--ease-standard),
-    box-shadow var(--duration-normal) var(--ease-standard);
+    border-color var(--motion-swift),
+    box-shadow var(--motion-swift),
+    background-color var(--motion-swift);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.form-input:hover:not(:disabled):not([aria-invalid='true']):not(.is-invalid) {
+  border-color: var(--color-border-strong);
 }
 
 .form-input:focus-visible {
@@ -2861,12 +2969,128 @@ textarea:focus-visible {
 .form-input:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+}
+
+textarea.form-input {
+  min-height: 84px;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+}
+
+.form-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.form-hint--error,
+.form-error {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: var(--color-danger);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .form-stack {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
+}
+
+/* Apple-detail settings group list / form section cards */
+.form-section,
+.form-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.form-section-header,
+.form-group-list__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+  background: color-mix(in srgb, var(--color-bg-secondary) 72%, transparent);
+}
+
+.form-section-title,
+.form-group-list__title {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.form-section-desc,
+.form-group-list__desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.form-section-body,
+.form-group-list__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.form-group-list__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
+}
+
+.form-group-list__row:last-child {
+  border-bottom: none;
+}
+
+.form-group-list__row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-group-list__row-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.form-group-list__row-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.form-group-list__row-control {
+  flex: 0 0 auto;
+  min-width: min(220px, 42%);
 }
 
 .chip-filter {
@@ -3570,19 +3794,28 @@ textarea:focus-visible {
 .oauth-input,
 .oauth-textarea {
   width: 100%;
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
-  font-size: 13px;
+  font-size: var(--text-base);
+  line-height: 1.4;
+}
+
+.oauth-textarea {
+  min-height: 84px;
+  padding: var(--space-2) var(--space-3);
   line-height: 1.5;
 }
 
 .oauth-input:disabled,
 .oauth-textarea:disabled {
-  background: var(--color-bg-card);
-  opacity: 0.7;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .oauth-textarea {
@@ -4489,7 +4722,7 @@ textarea:focus-visible {
   color: var(--color-text-muted);
 }
 
-/* ===== Modal / Dialog ===== */
+/* ===== Modal / Dialog (Phase 4 glass overlay panels) ===== */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -4502,6 +4735,7 @@ textarea:focus-visible {
   overflow-y: auto;
   animation: fade-in var(--duration-normal) var(--ease-standard) both;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 
 .modal-backdrop.is-closing {
@@ -4510,16 +4744,18 @@ textarea:focus-visible {
 }
 
 .modal-content {
-  background: var(--color-bg-card);
+  background: var(--glass-bg-strong);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-glass);
+  border: 1px solid var(--glass-border);
   width: min(90vw, 500px);
   max-width: 500px;
   max-height: calc(100vh - 32px);
   margin: auto;
   overflow-y: auto;
   animation: scale-in 0.25s var(--ease-emphasized) both;
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .modal-content.is-closing {
@@ -4550,25 +4786,25 @@ textarea:focus-visible {
   font-size: 24px;
   line-height: 1;
   padding: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-full);
   transition:
-    background var(--duration-normal) var(--ease-standard),
-    color var(--duration-normal) var(--ease-standard);
+    background var(--motion-swift),
+    color var(--motion-swift);
 }
 
 .modal-close-button:hover {
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
 }
 
 .modal-close-button:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--color-focus-ring-strong);
 }
 
 .modal-body {
@@ -4626,27 +4862,31 @@ textarea:focus-visible {
 
 .modern-select-trigger {
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-2);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  transition:
+    border-color var(--motion-swift),
+    box-shadow var(--motion-swift),
+    background-color var(--motion-swift),
+    transform var(--duration-fast) var(--ease-standard);
 }
 
 .modern-select.is-sm .modern-select-trigger {
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
 }
 
 .modern-select-trigger:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  border-color: var(--color-border-strong);
 }
 
 .modern-select-trigger:focus-visible {
@@ -4699,6 +4939,8 @@ textarea:focus-visible {
 .modern-select.is-disabled .modern-select-trigger {
   opacity: 0.6;
   cursor: not-allowed;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
 }
 
 .modern-select-panel {
@@ -4707,16 +4949,36 @@ textarea:focus-visible {
   left: 0;
   right: 0;
   z-index: 160;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius-sm) + 2px);
-  box-shadow: var(--shadow-lg);
-  padding: 6px;
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-glass);
+  padding: var(--space-1);
   overflow: auto;
   opacity: 0;
   transform: translateY(-6px) scale(0.98);
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    opacity var(--motion-soft),
+    transform var(--motion-soft);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .modern-select-panel {
+    background: var(--color-bg-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .modern-select-panel {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .modern-select.is-open .modern-select-panel {
@@ -4738,15 +5000,17 @@ textarea:focus-visible {
 .modern-select-search-input {
   width: calc(100% - 12px);
   margin: 6px;
-  min-height: 34px;
+  min-height: 36px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
-  padding: 0 10px;
-  font-size: 12px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color var(--motion-swift),
+    box-shadow var(--motion-swift);
 }
 
 .modern-select-search-input:focus {
