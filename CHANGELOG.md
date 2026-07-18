@@ -5,6 +5,20 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.36] — 2026-07-18
+
+### Security
+- Clear meta_monitor_auth cookie on successful admin AuthToken change (defense-in-depth; HMAC already invalidates) (#484 / #489)
+
+### UI
+- Tokenize residual monitor-hint / route-enable-disabled / stat-summary / topbar brand hex to design tokens (#485 / #490)
+
+### Tests / Observability
+- P0-555 Claude/Anthropic stream message_delta usage merge honesty tests (never invents tokens) (#486 / #488)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 46 post-product landings; SEC-MONITOR-TOKEN-CLEAR + UI-CSS-RESIDUAL + REL-P0555-STREAM-TESTS present · board #484–#487 closed (#487 / #491)
+
 ## [v0.8.35] — 2026-07-18
 
 ### UI
