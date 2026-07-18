@@ -4,7 +4,7 @@
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: GitHub Issues + Milestones (SDD) · product **maintenance**  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
-**Milestone**: [50](https://github.com/TokenDanceLab/metapi-go/milestone/50) closed with **v0.8.43**; **#531 → v0.8.44** in flight
+**Milestone**: [50](https://github.com/TokenDanceLab/metapi-go/milestone/50) closed with **v0.8.43**; **#531 closed** in **v0.8.44**
 
 > **开放项 + 硬门禁**。现状 → [`../STATE.md`](../STATE.md) · 日志 → [`../log.md`](../log.md) · shortlist → [`../analysis/high-value-next.md`](../analysis/high-value-next.md)
 
@@ -12,7 +12,7 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#531](https://github.com/TokenDanceLab/metapi-go/issues/531) | Reliability/Ops | PG pool profiles + 53300 lease pressure (v0.8.44) |
+| — | — | **Empty** after #531 / v0.8.44 |
 
 ## Hard gates
 

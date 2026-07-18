@@ -70,7 +70,7 @@ docs/
 
 ## Residual board (post v0.8.43 / M50)
 
-- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.43** (v0.8.44 #531 pending).
+- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.44**.
 - **Next shortlist**: [`analysis/high-value-next.md`](analysis/high-value-next.md).
 - **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md).
 - **Still not product without ACs**: WS-1, STICKY-B, UC-1.
