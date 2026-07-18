@@ -34,6 +34,24 @@ type DB struct {
 	Dialect string
 }
 
+// PostgresPoolConfig is the application-side connection budget. MaxOpenConns
+// must not exceed the production role CONNECTION LIMIT.
+type PostgresPoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+}
+
+func DefaultPostgresPoolConfig() PostgresPoolConfig {
+	return PostgresPoolConfig{
+		MaxOpenConns:    20,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 30 * time.Minute,
+		ConnMaxIdleTime: 5 * time.Minute,
+	}
+}
+
 // Exec executes a query that does not return rows. For PostgreSQL, the query
 // string is rebound from ? to $N placeholders before execution.
 func (db *DB) Exec(query string, args ...any) (sql.Result, error) {
@@ -170,6 +188,17 @@ func Open(dialect string, dsn string, sslMode bool) (*DB, error) {
 // OpenWithPostgresSSLMode opens a database connection pool and, for PostgreSQL,
 // applies an explicit sslmode without duplicating existing DSN parameters.
 func OpenWithPostgresSSLMode(dialect string, dsn string, sslMode string) (*DB, error) {
+	return OpenWithPostgresSSLModeAndPool(dialect, dsn, sslMode, DefaultPostgresPoolConfig())
+}
+
+// OpenWithPostgresSSLModeAndPool opens a database connection pool and applies
+// an explicit PostgreSQL budget. SQLite ignores the PostgreSQL pool settings.
+func OpenWithPostgresSSLModeAndPool(
+	dialect string,
+	dsn string,
+	sslMode string,
+	pool PostgresPoolConfig,
+) (*DB, error) {
 	var driverName string
 	var connStr string
 
@@ -211,7 +240,7 @@ func OpenWithPostgresSSLMode(dialect string, dsn string, sslMode string) (*DB, e
 			return nil, fmt.Errorf("store: failed to apply SQLite pragmas: %w", err)
 		}
 	case DialectPostgres:
-		if err := configurePostgresPool(db); err != nil {
+		if err := configurePostgresPool(db, pool); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("store: failed to configure Postgres pool: %w", err)
 		}
@@ -279,11 +308,20 @@ func applySQLitePragmas(db *DB) error {
 }
 
 // configurePostgresPool sets connection pool defaults for PostgreSQL.
-func configurePostgresPool(db *DB) error {
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	db.SetConnMaxIdleTime(2 * time.Minute)
+func configurePostgresPool(db *DB, pool PostgresPoolConfig) error {
+	if pool.MaxOpenConns < 1 {
+		return fmt.Errorf("max open connections must be >= 1")
+	}
+	if pool.MaxIdleConns < 0 || pool.MaxIdleConns > pool.MaxOpenConns {
+		return fmt.Errorf("max idle connections must be between 0 and max open connections")
+	}
+	if pool.ConnMaxLifetime < 0 || pool.ConnMaxIdleTime < 0 {
+		return fmt.Errorf("connection lifetimes must be >= 0")
+	}
+	db.SetMaxOpenConns(pool.MaxOpenConns)
+	db.SetMaxIdleConns(pool.MaxIdleConns)
+	db.SetConnMaxLifetime(pool.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(pool.ConnMaxIdleTime)
 	return nil
 }
 

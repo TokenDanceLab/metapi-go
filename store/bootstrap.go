@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
 )
@@ -66,7 +67,13 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 	}
 
 	// Open database connection.
-	db, err := OpenWithPostgresSSLMode(dialect, dsn, cfg.PostgresSSLMode())
+	pool := PostgresPoolConfig{
+		MaxOpenConns:    cfg.DbMaxOpenConns,
+		MaxIdleConns:    cfg.DbMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DbConnMaxLifetimeSec) * time.Second,
+		ConnMaxIdleTime: time.Duration(cfg.DbConnMaxIdleTimeSec) * time.Second,
+	}
+	db, err := OpenWithPostgresSSLModeAndPool(dialect, dsn, cfg.PostgresSSLMode(), pool)
 	if err != nil {
 		return fmt.Errorf("bootstrap: failed to open database: %w", err)
 	}
@@ -80,7 +87,16 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 	activeDB = db
 	initialized = true
 
-	slog.Info("bootstrap: database ready", "dialect", dialect)
+	logAttrs := []any{"dialect", dialect}
+	if dialect == DialectPostgres {
+		logAttrs = append(logAttrs,
+			"max_open_conns", pool.MaxOpenConns,
+			"max_idle_conns", pool.MaxIdleConns,
+			"conn_max_lifetime_sec", cfg.DbConnMaxLifetimeSec,
+			"conn_max_idle_time_sec", cfg.DbConnMaxIdleTimeSec,
+		)
+	}
+	slog.Info("bootstrap: database ready", logAttrs...)
 	return nil
 }
 

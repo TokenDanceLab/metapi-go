@@ -172,6 +172,8 @@ Cron 定时执行（默认每日 08:00），智能解析奖励金额，签到失
 | `DB_TYPE` | `sqlite` | 数据库类型（`sqlite` / `postgres`）；提供 PostgreSQL URL 时可自动推断为 `postgres` |
 | `DATABASE_URL` / `DB_URL` | 空 | PostgreSQL 连接串或 SQLite 文件路径；`DB_URL` 优先，`DATABASE_URL` 用于兼容部署平台 |
 | `DB_SSLMODE` | 空 | PostgreSQL TLS 模式；支持 `disable`、`allow`、`prefer`、`require`、`verify-ca`、`verify-full`；非空时覆盖连接串中的 `sslmode` |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `5` | PostgreSQL 应用池预算；生产值不得超过数据库 role connection limit |
+| `DB_CONN_MAX_LIFETIME_SEC` / `DB_CONN_MAX_IDLE_TIME_SEC` | `1800` / `300` | PostgreSQL 连接寿命与空闲回收时间（秒） |
 | `TRUSTED_PROXY_CIDRS` | 空 | 允许提供 `X-Forwarded-For` / `X-Real-IP` 的反向代理 CIDR CSV；默认忽略 forwarded headers |
 | `ADMIN_CORS_ALLOWED_ORIGINS` | 空 | 允许跨域访问 `/api/*` 管理接口的精确 `http(s)` origin CSV；默认只支持同源管理 UI，禁止 `*` |
 | `CHECKIN_CRON` | `0 8 * * *` | 签到时间 |

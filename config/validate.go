@@ -54,6 +54,38 @@ func (c *Config) Validate() []error {
 			critical: true,
 		})
 	}
+	if c.DbMaxOpenConns < 1 {
+		errs = append(errs, &configError{
+			field:    "db_max_open_conns",
+			value:    fmt.Sprintf("%d", c.DbMaxOpenConns),
+			msg:      "must be >= 1",
+			critical: true,
+		})
+	}
+	if c.DbMaxIdleConns < 0 || c.DbMaxIdleConns > c.DbMaxOpenConns {
+		errs = append(errs, &configError{
+			field:    "db_max_idle_conns",
+			value:    fmt.Sprintf("%d", c.DbMaxIdleConns),
+			msg:      "must be between 0 and db_max_open_conns",
+			critical: true,
+		})
+	}
+	if c.DbConnMaxLifetimeSec < 0 {
+		errs = append(errs, &configError{
+			field:    "db_conn_max_lifetime_sec",
+			value:    fmt.Sprintf("%d", c.DbConnMaxLifetimeSec),
+			msg:      "must be >= 0",
+			critical: true,
+		})
+	}
+	if c.DbConnMaxIdleTimeSec < 0 {
+		errs = append(errs, &configError{
+			field:    "db_conn_max_idle_time_sec",
+			value:    fmt.Sprintf("%d", c.DbConnMaxIdleTimeSec),
+			msg:      "must be >= 0",
+			critical: true,
+		})
+	}
 
 	// --- Warning: Cron expressions must be parseable ---
 	if !validateCronExpr(c.CheckinCron) {
