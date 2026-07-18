@@ -27,6 +27,11 @@ import {
   type Range,
   type SummaryItem,
 } from './downstream-keys/shared.js';
+import {
+  formatDownstreamKeyProxyIndicator,
+  hasCustomDownstreamKeyProxy,
+  parseDownstreamKeyProxyUrl,
+} from './helpers/downstreamKeyProxyUrl.js';
 
 type Status = 'all' | 'enabled' | 'disabled';
 
@@ -49,6 +54,8 @@ type DownstreamApiKeyItem = {
   siteWeightMultipliers: Record<number, number>;
   excludedSiteIds: number[];
   excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  /** Per-key egress proxy; null/empty inherits site/account/system. */
+  proxyUrl?: string | null;
   lastUsedAt: string | null;
 };
 
@@ -347,6 +354,7 @@ function buildEditorForm(
     maxRequests: item?.maxRequests === null || item?.maxRequests === undefined ? '' : String(item.maxRequests),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
+    proxyUrl: item?.proxyUrl ?? '',
     selectedModels: uniqStrings(selectedModels),
     selectedGroupRouteIds: uniqIds(selectedGroupRouteIds),
     siteWeightMultipliersText: JSON.stringify(item?.siteWeightMultipliers || {}, null, 2),
@@ -628,6 +636,7 @@ export default function DownstreamKeys() {
         siteWeightMultipliers: raw?.siteWeightMultipliers ?? item.siteWeightMultipliers,
         excludedSiteIds: raw?.excludedSiteIds ?? item.excludedSiteIds,
         excludedCredentialRefs: raw?.excludedCredentialRefs ?? item.excludedCredentialRefs,
+        proxyUrl: raw?.proxyUrl ?? item.proxyUrl ?? null,
         lastUsedAt: raw?.lastUsedAt ?? item.lastUsedAt,
       };
     })
@@ -801,6 +810,12 @@ export default function DownstreamKeys() {
       return;
     }
 
+    const parsedProxy = parseDownstreamKeyProxyUrl(editorForm.proxyUrl);
+    if (!parsedProxy.valid) {
+      toast.info(parsedProxy.error || '代理地址格式无效');
+      return;
+    }
+
     let siteWeightMultipliers: Record<number, number> = {};
     const rawWeights = editorForm.siteWeightMultipliersText.trim();
     if (rawWeights && rawWeights !== '{}') {
@@ -833,6 +848,7 @@ export default function DownstreamKeys() {
         expiresAt: editorForm.expiresAt ? new Date(editorForm.expiresAt).toISOString() : null,
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
+        proxyUrl: parsedProxy.value,
         supportedModels: uniqStrings(editorForm.selectedModels),
         allowedRouteIds: uniqIds(editorForm.selectedGroupRouteIds).filter((id) => routeMap.has(id) && isGroupRouteOption(routeMap.get(id)!)),
         siteWeightMultipliers,
@@ -1177,6 +1193,13 @@ export default function DownstreamKeys() {
                   {row.description ? <MobileField label="备注" value={row.description} stacked /> : null}
                   <MobileField label="主分组" value={row.groupName || '未分组'} />
                   <MobileField label="标签" value={summarizeTags(row.tags || [])} stacked />
+                  {hasCustomDownstreamKeyProxy(row.proxyUrl) ? (
+                    <MobileField
+                      label="出口代理"
+                      value={formatDownstreamKeyProxyIndicator(row.proxyUrl) || '已设置'}
+                      stacked
+                    />
+                  ) : null}
                   <MobileField label="模型" value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label="群组" value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
                   <MobileField label="倍率" value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
@@ -1229,6 +1252,15 @@ export default function DownstreamKeys() {
                             {row.groupName ? `主分组 · ${row.groupName}` : '未分组'}
                           </span>
                           <TagChips tags={row.tags || []} maxVisible={3} />
+                          {hasCustomDownstreamKeyProxy(row.proxyUrl) ? (
+                            <span
+                              className="badge badge-info"
+                              style={{ fontSize: 11 }}
+                              title={formatDownstreamKeyProxyIndicator(row.proxyUrl) || '已设置'}
+                            >
+                              代理 · {formatDownstreamKeyProxyIndicator(row.proxyUrl) || '已设置'}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td>

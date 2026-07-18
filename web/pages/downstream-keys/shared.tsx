@@ -23,6 +23,8 @@ export type SummaryItem = {
     | { kind: 'account_token'; siteId: number; accountId: number; tokenId: number }
     | { kind: 'default_api_key'; siteId: number; accountId: number }
   >;
+  /** Per-key egress proxy; null/empty inherits site/account/system. */
+  proxyUrl?: string | null;
   lastUsedAt: string | null;
   createdAt: string | null;
   updatedAt: string | null;

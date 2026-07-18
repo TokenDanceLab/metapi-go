@@ -906,4 +906,181 @@ describe('DownstreamKeys page', () => {
       root?.unmount();
     }
   });
+
+  it('hydrates custom proxyUrl into editor and shows compact list indicator', async () => {
+    apiMock.getDownstreamApiKeysSummary.mockResolvedValue({
+      success: true,
+      items: [buildSummaryItem({
+        proxyUrl: 'http://user:s3cret@proxy.example.com:8080',
+      })],
+    });
+    apiMock.getDownstreamApiKeys.mockResolvedValue({
+      success: true,
+      items: [buildRawItem({
+        proxyUrl: 'http://user:s3cret@proxy.example.com:8080',
+      })],
+    });
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const pageText = collectText(root!.root);
+      expect(pageText).toContain('代理 · proxy.example.com:8080');
+      expect(pageText).not.toContain('s3cret');
+
+      const editBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node) === '编辑')[0];
+      await act(async () => {
+        editBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const proxyInput = root!.root.findAllByType('input').find((node) =>
+        String(node.props.placeholder || '').includes('留空继承站点/系统代理'),
+      );
+      expect(proxyInput?.props.value).toBe('http://user:s3cret@proxy.example.com:8080');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('saves proxyUrl on create and clears it with empty string as null', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs = root!.root.findAllByType('input');
+      const nameInput = inputs.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput = inputs.find((node) => node.props.placeholder === 'sk-...');
+      const proxyInput = inputs.find((node) =>
+        String(node.props.placeholder || '').includes('留空继承站点/系统代理'),
+      );
+      expect(proxyInput).toBeTruthy();
+      expect(proxyInput?.props.value).toBe('');
+
+      await act(async () => {
+        nameInput!.props.onChange({ target: { value: 'proxy-key' } });
+        keyInput!.props.onChange({ target: { value: 'sk-proxy-key-0466' } });
+        proxyInput!.props.onChange({ target: { value: '  socks5://127.0.0.1:1080  ' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'proxy-key',
+        key: 'sk-proxy-key-0466',
+        proxyUrl: 'socks5://127.0.0.1:1080',
+      }));
+
+      // Re-open create form and save with empty proxy → null inherit.
+      apiMock.createDownstreamApiKey.mockClear();
+      const createBtn2 = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn2.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs2 = root!.root.findAllByType('input');
+      const nameInput2 = inputs2.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput2 = inputs2.find((node) => node.props.placeholder === 'sk-...');
+      const proxyInput2 = inputs2.find((node) =>
+        String(node.props.placeholder || '').includes('留空继承站点/系统代理'),
+      );
+      await act(async () => {
+        nameInput2!.props.onChange({ target: { value: 'inherit-key' } });
+        keyInput2!.props.onChange({ target: { value: 'sk-inherit-key-0466' } });
+        proxyInput2!.props.onChange({ target: { value: '   ' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn2 = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn2.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'inherit-key',
+        key: 'sk-inherit-key-0466',
+        proxyUrl: null,
+      }));
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('rejects invalid proxyUrl scheme before calling create API', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs = root!.root.findAllByType('input');
+      const nameInput = inputs.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput = inputs.find((node) => node.props.placeholder === 'sk-...');
+      const proxyInput = inputs.find((node) =>
+        String(node.props.placeholder || '').includes('留空继承站点/系统代理'),
+      );
+
+      await act(async () => {
+        nameInput!.props.onChange({ target: { value: 'bad-proxy-key' } });
+        keyInput!.props.onChange({ target: { value: 'sk-bad-proxy-0466' } });
+        proxyInput!.props.onChange({ target: { value: 'ftp://not-supported' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).not.toHaveBeenCalled();
+    } finally {
+      root?.unmount();
+    }
+  });
 });

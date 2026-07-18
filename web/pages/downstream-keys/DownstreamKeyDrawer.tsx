@@ -17,6 +17,10 @@ import {
   type Range,
   type SummaryItem,
 } from './shared.js';
+import {
+  formatDownstreamKeyProxyIndicator,
+  hasCustomDownstreamKeyProxy,
+} from '../helpers/downstreamKeyProxyUrl.js';
 
 const DownstreamKeyTrendChart = lazy(() => import('../../components/charts/DownstreamKeyTrendChart.js'));
 type DownstreamKeyTrendBucket = import('../../components/charts/DownstreamKeyTrendChart.js').DownstreamKeyTrendBucket;
@@ -188,6 +192,14 @@ export default function DownstreamKeyDrawer({
                 <div>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>主分组</div>
                   <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>{item?.groupName || '未分组'}</div>
+                </div>
+                <div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>出口代理</div>
+                  <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                    {hasCustomDownstreamKeyProxy(item?.proxyUrl)
+                      ? (formatDownstreamKeyProxyIndicator(item?.proxyUrl) || '已设置')
+                      : '继承站点/系统'}
+                  </div>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 6 }}>标签</div>
