@@ -2,11 +2,11 @@
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410); post-v0.8.27 honesty [#418](https://github.com/TokenDanceLab/metapi-go/issues/418); post-v0.8.28 honesty [#426](https://github.com/TokenDanceLab/metapi-go/issues/426); post-v0.8.29 honesty [#435](https://github.com/TokenDanceLab/metapi-go/issues/435); post-v0.8.30 honesty [#443](https://github.com/TokenDanceLab/metapi-go/issues/443); post-v0.8.31 honesty [#451](https://github.com/TokenDanceLab/metapi-go/issues/451); post-v0.8.32 honesty [#459](https://github.com/TokenDanceLab/metapi-go/issues/459); post-M44 product honesty [#469](https://github.com/TokenDanceLab/metapi-go/issues/469); post-M45 product honesty [#478](https://github.com/TokenDanceLab/metapi-go/issues/478); post-M46 product honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487)  
-**Context**: **v0.8.33 shipped** (Milestone 43 closed): #456 UI-STAT-TOKENS (PR #460), #457 UI-SITE-CONC (PR #461), #458 CTX-520-GEMINI (PR #462), #459 residual honesty (PR #464) + release gate. **v0.8.34 shipped** (Milestone 44 closed): #466 UI-KEY-PROXY DownstreamKeys proxyUrl UI (PR #471), #467 UI-ROUTE-CTX TokenRoutes contextLength UI (PR #472), #468 UI-TOKEN-DEBT high-value CSS hex clusters → design tokens (PR #470), #469 residual honesty (PR #473) + release gate. **v0.8.35 shipped** (Milestone 45 closed): #475–#478 (PRs #479–#483). **Milestone 46 product landed on master** (not tagged yet): #484 SEC-MONITOR-TOKEN-CLEAR (PR #489 / 1f3a674), #485 UI-CSS-RESIDUAL (PR #490 / a2432da), #486 REL-P0555-STREAM-TESTS (PR #488 / b84a9ea); docs honesty #487 this pass. Prior **v0.8.32**: #449–#451 (PRs #452/#454/#453). Prior **v0.8.31**: #440–#443 (PRs #444–#447). Prior **v0.8.30**: #433–#435 (PRs #436/#438/#437). Prior **v0.8.29**: #423–#426 (PRs #427/#428/#430/#431). Prior **v0.8.28**: #416–#418 (PRs #419–#421). Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code. **Program foundations already closed** (M-STACK / M-UI / M-BACKEND / M-SCHEMA / M-FEATURE): M46 is residual polish, not greenfield modernization.  
+**Context**: **v0.8.33 shipped** (Milestone 43 closed): #456 UI-STAT-TOKENS (PR #460), #457 UI-SITE-CONC (PR #461), #458 CTX-520-GEMINI (PR #462), #459 residual honesty (PR #464) + release gate. **v0.8.34 shipped** (Milestone 44 closed): #466 UI-KEY-PROXY DownstreamKeys proxyUrl UI (PR #471), #467 UI-ROUTE-CTX TokenRoutes contextLength UI (PR #472), #468 UI-TOKEN-DEBT high-value CSS hex clusters → design tokens (PR #470), #469 residual honesty (PR #473) + release gate. **v0.8.35 shipped** (Milestone 45 closed): #475–#478 (PRs #479–#483). **v0.8.36 shipped** (Milestone 46 closed): #484 SEC-MONITOR-TOKEN-CLEAR (PR #489), #485 UI-CSS-RESIDUAL (PR #490), #486 REL-P0555-STREAM-TESTS (PR #488), #487 residual honesty (PR #491) + release gate. Prior **v0.8.32**: #449–#451 (PRs #452/#454/#453). Prior **v0.8.31**: #440–#443 (PRs #444–#447). Prior **v0.8.30**: #433–#435 (PRs #436/#438/#437). Prior **v0.8.29**: #423–#426 (PRs #427/#428/#430/#431). Prior **v0.8.28**: #416–#418 (PRs #419–#421). Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code. **Program foundations already closed** (M-STACK / M-UI / M-BACKEND / M-SCHEMA / M-FEATURE): M46 is residual polish, not greenfield modernization.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)  
-**Active wave**: M46 product board empty after #487; next is **v0.8.36** release gate (latest tag still **v0.8.35**)
+**Active wave**: none (M46 closed; sequencing **v0.8.37+** optional residual with ACs only)
 
 ## Purpose
 
@@ -76,11 +76,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.36 release gate + v0.8.37+)
+## Recommended sequencing (v0.8.37+)
 
 1. **Shipped in v0.8.35 (M45 closed)**: #475-#478 (PRs #479-#483). Latest release **v0.8.35**.
-2. **M46 product landed on master (not tagged)**: #484 SEC-MONITOR-TOKEN-CLEAR (PR #489) · #485 UI-CSS-RESIDUAL (PR #490) · #486 REL-P0555-STREAM-TESTS (PR #488); docs honesty #487 this pass.
-3. **Active wave**: none after products. Next operator step is **v0.8.36** release gate. Optional residual **v0.8.37+** only with dedicated ACs.
+2. **M46 / v0.8.36 closed**: #484–#487 (PRs #488–#491) present on master with tag.
+3. **Active wave**: none. Optional residual **v0.8.37+** only with dedicated ACs.
 4. **SEC-MONITOR-TOKEN-CLEAR** / **UI-CSS-RESIDUAL** / **REL-P0555-STREAM-TESTS** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
@@ -127,11 +127,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming admin AuthToken change still leaves meta_monitor_auth uncleared after #484/#489.
 - Claiming residual monitor-hint / stat-summary / topbar brand hex still hard-coded after #485/#490.
 - Claiming P0-555 Anthropic stream usage merge honesty tests are missing after #486/#488 (still not perfect billing).
-- Claiming **v0.8.36** released before the release gate (products landed; tag is separate).
+- Claiming **v0.8.37** product without dedicated ACs.
 ## Links
 
-- Release: [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · prior [v0.8.34](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.34) · next **v0.8.36** release gate after this honesty pass (then optional residual **v0.8.37+** with ACs only)
-- Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **open** until release gate (board #484–#487; product issues closed; docs #487 this pass)
+- Release: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · prior [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · next optional residual **v0.8.37+** (with ACs only)
+- Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (board #484–#487; issues closed; GH milestone close is operator step after tag)
 - Prior milestone: [Enterprise UI/reliability residual polish v0.8.35](https://github.com/TokenDanceLab/metapi-go/milestone/45) · **closed**
 - Prior milestone: [Enterprise UI schema-product residual polish v0.8.34](https://github.com/TokenDanceLab/metapi-go/milestone/44) · **closed**
 - Matrix: `docs/analysis/original-gap-matrix.md`
