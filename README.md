@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Go" src="https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go">
-  <a href="https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go"><img alt="Docker" src="https://img.shields.io/badge/ghcr-v0.8.39-blue?logo=docker"></a>
+  <a href="https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go"><img alt="Docker" src="https://img.shields.io/badge/ghcr-v0.8.42-blue?logo=docker"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 

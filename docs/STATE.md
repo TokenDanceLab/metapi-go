@@ -12,13 +12,13 @@
 
 | Fact | Value |
 |:-----|:------|
-| Latest release tag | **[v0.8.41](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.41)** (2026-07-18) |
-| Tip | `origin/master` @ v0.8.41 (PG pool #526 + request_id index upgrade fix) |
-| Production pin (ops) | hk3 `ghcr.io/tokendancelab/metapi-go:0.8.41` — server `projects/metapi/STATE.md` |
+| Latest release tag | **[v0.8.42](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.42)** (2026-07-18) |
+| Tip | `origin/master` @ v0.8.42 (cron validate + prior pool/index fixes) |
+| Production pin (ops) | hk3 `ghcr.io/tokendancelab/metapi-go:0.8.42` — server `projects/metapi/STATE.md` |
 | Active milestone | **none** |
 | Open issues / PRs | **0 / 0** |
 | Mode | **Maintenance** — optional residual only with dedicated ACs |
-| GHCR public badge series | README may lag; latest ship **0.8.41** |
+| GHCR public badge series | **v0.8.42** (README) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)

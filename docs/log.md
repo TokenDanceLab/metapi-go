@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-18] v0.8.42 cron validation + prod roll-forward
+
+- Fix: config `validateCronExpr` accepts default 5-field crons (parity with scheduler normalize).
+- Ship/tag v0.8.42; deploy hk3 pin 0.8.42; generate `ACCOUNT_CREDENTIAL_SECRET` when missing (no OAuth client invent).
+- Residual: OAuth client placeholders remain intentional until real client IDs are configured.
+
 ## [2026-07-18] deploy v0.8.41 to hk3 (0.6.5 → 0.8.41)
 
 - Tags: v0.8.40 (PG pool + docs) · **v0.8.41** (request_id index upgrade fix for old DBs).
