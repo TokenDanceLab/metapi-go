@@ -704,7 +704,8 @@ func (tr *TokenRouter) RecordProbeFailure(ctx context.Context, channelID int64, 
 			}
 
 			var cooldownUntil *string
-			consecutiveFailCount := max64(0, memberRow.Member.ConsecutiveFailCount) + 1
+			// Pass raw consecutiveFailCount; ApplyRoundRobinCooldown alone does +1.
+			consecutiveFailCount := max64(0, memberRow.Member.ConsecutiveFailCount)
 			cooldownLevel := max64(0, memberRow.Member.CooldownLevel)
 
 			if routeUnitStrategy == "round_robin" {
@@ -740,7 +741,8 @@ func (tr *TokenRouter) RecordProbeFailure(ctx context.Context, channelID int64, 
 	affectedChannelIDs := []int64{channelID}
 
 	var cooldownUntil *string
-	consecutiveFailCount := max64(0, ch.ConsecutiveFailCount) + 1
+	// Pass raw consecutiveFailCount; ApplyRoundRobinCooldown alone does +1.
+	consecutiveFailCount := max64(0, ch.ConsecutiveFailCount)
 	cooldownLevel := max64(0, ch.CooldownLevel)
 
 	if routeStrategy == StrategyRoundRobin {
@@ -818,7 +820,8 @@ func (tr *TokenRouter) RecordFailure(ctx context.Context, channelID int64, failu
 			}
 
 			var cooldownUntil *string
-			consecutiveFailCount := max64(0, memberRow.Member.ConsecutiveFailCount) + 1
+			// Pass raw consecutiveFailCount; ApplyRoundRobinCooldown alone does +1.
+			consecutiveFailCount := max64(0, memberRow.Member.ConsecutiveFailCount)
 			cooldownLevel := max64(0, memberRow.Member.CooldownLevel)
 
 			if shortWindowCooldown != nil {
@@ -876,7 +879,8 @@ func (tr *TokenRouter) RecordFailure(ctx context.Context, channelID int64, failu
 	}
 
 	var cooldownUntil *string
-	consecutiveFailCount := max64(0, ch.ConsecutiveFailCount) + 1
+	// Pass raw consecutiveFailCount; ApplyRoundRobinCooldown alone does +1.
+	consecutiveFailCount := max64(0, ch.ConsecutiveFailCount)
 	cooldownLevel := max64(0, ch.CooldownLevel)
 
 	if shortWindowCooldown != nil {
