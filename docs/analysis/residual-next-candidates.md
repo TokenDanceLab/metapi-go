@@ -2,11 +2,11 @@
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.37 shipped** (Milestone 47 closed): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499), #497 residual honesty (PR #501) + release gate. Prior **v0.8.36** (M46 closed): #484-#487 present. Residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
+**Context**: **v0.8.37 shipped** (Milestone 47 closed): #494-#497 present. **Milestone 48 product landed on master** (not tagged yet): #503 DOCS-REDIS-TRUTH (PR #507), #504 DOCS-DOCKER-BADGE + #505 DOCS-RESIDUAL-LATEST (PR #508); docs honesty #506 this pass. Prior **v0.8.36** (M46 closed): #484-#487 present. Residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (M47 closed; sequencing **v0.8.38+** optional residual with ACs only)
+**Active wave**: M48 product board empty after #506; next is **v0.8.38** release gate (latest tag still **v0.8.37**)
 
 ## Purpose
 
@@ -56,6 +56,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | UI-CSS-RESIDUAL | monitor-hint / route-enable-disabled / stat-summary / topbar brand hex to tokens | **present** (#485/#490) | web/index.css uses --color-brand-gradient, warning/stat tokens, primary-hover; marketing login gradients may remain | Done for listed residual clusters | Residual pure marketing gradients only with AC |
 | REL-P0555-STREAM-TESTS | P0-555 Anthropic stream message_delta usage merge honesty tests | **present** (#486/#488) | handler/proxy/usage_test.go locks early input + later output merge; no invent when usage absent | Done for honesty residual tests | P0-555 still present-with-residual (not perfect billing) |
 | DOCS-STACK-TRUTH | README/README_EN stack badge truth | **present** (#494/#498) | Go badge + tech stack table align to go.mod 1.26.5 and React 19 / Vite 8 | Done for public stack truth | Residual other marketing badges only with AC |
+| DOCS-REDIS-TRUTH | Public Redis admission truth (not sticky) | **present** (#503/#507) | README/README_EN/deployment: optional REDIS_URL for multi-instance RPM/TPM admission via sharedcount fail-open; sticky remains process-local | Done for public Redis honesty | STICKY-B still design-only |
+| DOCS-DOCKER-BADGE | ghcr public badge current release | **present** (#504/#508) | README ghcr badge v0.8.37 (was stale v0.6.5) | Done for badge truth | Residual other marketing badges only with AC |
+| DOCS-RESIDUAL-LATEST | residual inventory latest release line | **present** (#505/#508) | sequencing Latest release points at v0.8.37 | Done | residual inventory churn only |
 | REL-TPM-ESTIMATE | Best-effort TPM admission estimate when maxTPM set | **present** (#495/#500) | auth ProxyAuth passes best-effort estimatedTokens when maxTPM>0; empty body keeps 0; never invents large defaults | Done for TPM soft-limit not no-op | Residual perfect tokenizer only with AC |
 | REL-CRED-USAGE-HONESTY | P0-585 credential usage-limit multi-channel cool honesty tests | **present** (#496/#499) | routing tests document same-credential siblings cool only; non-usage-limit stays channel-scoped | Done for honesty residual tests | P0-585 still partial (load-proof) |
 | KEY-578 | Per-key outbound proxy | **present** (backend #281; admin UI #466/#471) | `proxy/key_proxy.go` + `downstream_api_keys.proxy_url`; DownstreamKeys create/edit/list wires `proxyUrl` (empty/null inherits site/system) via #466/#471 | Done for backend + DownstreamKeys admin UI | Residual novel key-proxy surfaces only with AC |
@@ -79,12 +82,12 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.38+)
+## Recommended sequencing (v0.8.38 release gate + v0.8.39+)
 
 1. **Latest release**: **v0.8.37** (M47 closed).
-2. **M47 product present**: #494–#497 (PRs #498–#501) on master with tag; prior M46 / v0.8.36 (#484–#487) closed.
-3. **Active wave**: none. Optional residual **v0.8.38+** only with dedicated ACs.
-4. **DOCS-STACK-TRUTH** / **REL-TPM-ESTIMATE** / **REL-CRED-USAGE-HONESTY** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
+2. **M48 product landed on master (not tagged)**: #503 DOCS-REDIS-TRUTH (PR #507) · #504/#505 docker badge + residual latest (PR #508); docs honesty #506 this pass.
+3. **Active wave**: none after products. Next operator step is **v0.8.38** release gate. Optional residual **v0.8.39+** only with dedicated ACs.
+4. **DOCS-REDIS-TRUTH** (optional Redis admission honesty, not sticky product) / **DOCS-DOCKER-BADGE** / **DOCS-RESIDUAL-LATEST** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Sticky Redis remains **not** product (fail-open admission only).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 7. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
@@ -108,13 +111,17 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming public Docker/ghcr badge still shows stale **v0.6.5** after #504.
 - Claiming residual sequencing still lists Latest release as **v0.8.36** after #505.
 
+- Claiming Redis is completely absent after #503/#507 (admission optional; sticky still residual).
+- Claiming public ghcr badge is still v0.6.5 after #504/#508.
+- Claiming residual inventory latest release is still v0.8.36 after #505/#508.
+- Claiming **v0.8.38** released before the release gate (products landed; tag is separate).
 ## Links
 
-- Release: [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · prior [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · next optional residual **v0.8.38+** (with ACs only)
+- Release: [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · prior [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · next **v0.8.38** release gate after this honesty pass (then optional residual **v0.8.39+** with ACs only)
 - Milestone: [Enterprise residual polish v0.8.37](https://github.com/TokenDanceLab/metapi-go/milestone/47) · **closed** (#494–#497)
 - Prior milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388; historical)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #494, #495, #496, #497, #504, #505, see closed M45/M46/M47 boards (#475–#478, #484–#487, #494–#497) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
+- Related issues: #503, #504, #505, #506, #507, #508, #494, #495, #496, #497, #504, #505, see closed M45/M46/M47 boards (#475–#478, #484–#487, #494–#497) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
