@@ -1,12 +1,12 @@
-# Residual next candidates (post v0.8.32 / M43 product landed)
+# Residual next candidates (post v0.8.33 / M43 closed)
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410); post-v0.8.27 honesty [#418](https://github.com/TokenDanceLab/metapi-go/issues/418); post-v0.8.28 honesty [#426](https://github.com/TokenDanceLab/metapi-go/issues/426); post-v0.8.29 honesty [#435](https://github.com/TokenDanceLab/metapi-go/issues/435); post-v0.8.30 honesty [#443](https://github.com/TokenDanceLab/metapi-go/issues/443); post-v0.8.31 honesty [#451](https://github.com/TokenDanceLab/metapi-go/issues/451); post-v0.8.32 honesty [#459](https://github.com/TokenDanceLab/metapi-go/issues/459)  
-**Context**: **v0.8.32 shipped** (#449 SEC-PROXY-TEST-TARGET system-proxy/test rejects metadata/link-local targetUrl, #450 CTX-520-RESPONSES OpenAI /v1/responses max_output_tokens vs context_length, #451 residual honesty; PRs #452/#454/#453). Milestone 42 board **#449–#451** closed. **Milestone 43 product landed on master** (not tagged yet): #456 UI-STAT-TOKENS (PR #460 / f777cf8), #457 UI-SITE-CONC (PR #461 / 03dff96), #458 CTX-520-GEMINI (PR #462 / a26021a); docs honesty #459 this pass. Prior **v0.8.31**: #440–#443 (PRs #444–#447). Prior **v0.8.30**: #433–#435 (PRs #436/#438/#437). Prior **v0.8.29**: #423–#426 (PRs #427/#428/#430/#431). Prior **v0.8.28**: #416–#418 (PRs #419–#421). Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code. **Program foundations already closed** (M-STACK / M-UI / M-BACKEND / M-SCHEMA / M-FEATURE): M43 is residual polish, not greenfield modernization.  
+**Context**: **v0.8.32 shipped** (#449 SEC-PROXY-TEST-TARGET system-proxy/test rejects metadata/link-local targetUrl, #450 CTX-520-RESPONSES OpenAI /v1/responses max_output_tokens vs context_length, #451 residual honesty; PRs #452/#454/#453). Milestone 42 board **#449–#451** closed. **v0.8.33 shipped** (Milestone 43 closed): #456 UI-STAT-TOKENS (PR #460), #457 UI-SITE-CONC (PR #461), #458 CTX-520-GEMINI (PR #462), #459 residual honesty (PR #464) + release gate. Prior **v0.8.31**: #440–#443 (PRs #444–#447). Prior **v0.8.30**: #433–#435 (PRs #436/#438/#437). Prior **v0.8.29**: #423–#426 (PRs #427/#428/#430/#431). Prior **v0.8.28**: #416–#418 (PRs #419–#421). Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code. **Program foundations already closed** (M-STACK / M-UI / M-BACKEND / M-SCHEMA / M-FEATURE): M43 is residual polish, not greenfield modernization.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)  
-**Active wave**: M43 product board empty after #459; next is **v0.8.33** release gate (latest tag still **v0.8.32**)
+**Active wave**: none (M43 closed; sequencing **v0.8.34+** optional residual with ACs only)
 
 ## Purpose
 
@@ -67,11 +67,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.33 release gate next)
+## Recommended sequencing (v0.8.34+)
 
 1. **Shipped in v0.8.32 (M42 closed)**: #449–#451 (PRs #452/#454/#453) — SEC-PROXY-TEST-TARGET system-proxy/test targetUrl metadata/link-local guard · CTX-520-RESPONSES OpenAI `/v1/responses` max_output_tokens vs context_length · residual honesty. Prior v0.8.31: #440–#443. Prior v0.8.30: #433–#435. Prior v0.8.29: #423–#426. Prior v0.8.28: #416–#418. Prior v0.8.27: #407–#410. Prior v0.8.26: #397–#400. M35–M42 closed.
-2. **M43 product landed on master (release pending)**: #456 UI-STAT-TOKENS (PR #460 / f777cf8) · #457 UI-SITE-CONC (PR #461 / 03dff96) · #458 CTX-520-GEMINI (PR #462 / a26021a) · #459 residual honesty (this docs pass). Product issues closed with PRs; Milestone 43 stays open until **v0.8.33** tag. Latest release remains **v0.8.32**.
-3. **Next**: **v0.8.33** release gate (tag + milestone close). No further product board items required for M43.
+2. **Shipped in v0.8.33 (M43 closed)**: #456–#459 (PRs #460–#462 / #464) — UI-STAT-TOKENS · UI-SITE-CONC Sites maxConcurrency UI · CTX-520-GEMINI · residual honesty. Latest release **v0.8.33**.
+3. **Active wave**: none. Optional residual **v0.8.34+** only with dedicated ACs.
 4. **SEC-PROXY-TEST-TARGET** fully **present**. **CTX-520-RESPONSES** fully **present**. **CTX-520-GEMINI** fully **present**. **UI-STAT-TOKENS** / **UI-SITE-CONC** fully **present**. **SITE-594** fully **present** (backend + Sites admin UI). **CTX-520** stays **present-with-residual** only for further non-covered dialects (OpenAI chat + Claude + Responses + Gemini max-token reject shipped). **SEC-PROXY-UTIL-REDIR** / **SEC-SITEPROXY-REDIR** / **SEC-KEY-MUTATE** fully **present**. **SEC-REDIR** fully **present** for RuntimeExecutor + bare probe/harness/defaultUpstreamClient + OAuth/notify + ProxyAwareHTTPClient + SiteProxy constructors (no residual bare redirect clients remain for these surfaces). **SEC-KEY** list + mutation **present** (create/export once-echo intentional). **SEC-OAUTH-NOTIFY-REDIR** / **REL-SOURCE-MODEL** fully **present**. **REL-PREFERRED-BREAKER** / **REL-COOLDOWN-TS** / **REL-CONDUCTOR-BUDGET** fully **present**. **SEC-MONITOR** fully **present** for opaque session + logout clear (rotate/invalidate on auth_token change only with product AC). **SEC-AUTH-TIMING** fully **present**. **P0-555** stays **present-with-residual** (warn shipped; provider-ignore / media / lag / orphan join residual).
 5. **P0-585** remains **partial** until production load-proof / empty-filter / credential-scope ACs land (M39 slices #423–#425 present; M40 REL-SOURCE-MODEL is selection mapping only, not cascade; M41 security residual only; M42 security/product residual only; M43 UI/product residual only — do not claim #585 present).
 6. **Optional residual later**: P0-585 production load-proof / empty-filter residual; deeper billing polish; further dialect context_length enforce beyond OpenAI chat/Claude/Responses/Gemini (dedicated ACs only).
@@ -107,12 +107,12 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming stat-icon colors still use hard-coded hex after #456/#460.
 - Claiming P0-585 cascade is fully present (stays partial; REL-SOURCE-MODEL is not a cascade close).
 - Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; M43 is residual polish only).
-- Claiming **v0.8.33** is released before the release gate / tag.
+- Claiming **v0.8.34** product without dedicated ACs.
 
 ## Links
 
-- Release: [v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32) · prior [v0.8.31](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.31) · next residual board **v0.8.33** (no tag until release gate)
-- Milestone: [Enterprise UI/schema/product residual polish v0.8.33](https://github.com/TokenDanceLab/metapi-go/milestone/43) · product #456–#458 landed (PRs #460–#462); docs #459; open until tag
+- Release: [v0.8.33](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.33) · prior [v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32) · next optional residual **v0.8.34+** (with ACs only)
+- Milestone: [Enterprise UI/schema/product residual polish v0.8.33](https://github.com/TokenDanceLab/metapi-go/milestone/43) · **closed** (board #456–#459; issues closed; GH milestone close is operator step after tag)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388)

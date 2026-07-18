@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32)** (2026-07-18)
+**Latest release**: **[v0.8.33](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.33)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 43](https://github.com/TokenDanceLab/metapi-go/milestone/43) open until **v0.8.33** release gate |
+| Active milestone | none (board clean; next residual only with ACs) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -45,25 +45,24 @@
 | Enterprise residual client/routing polish **v0.8.30** | ✅ closed | #433–#435 (PRs #436–#438); tag **v0.8.30** |
 | Enterprise residual security polish **v0.8.31** | ✅ closed | #440–#443 (PRs #444–#447); tag **v0.8.31** |
 | Enterprise residual security/product polish **v0.8.32** | ✅ closed | #449–#451 (PRs #452–#454); tag **v0.8.32** |
-| Enterprise UI/schema/product residual polish **v0.8.33** | 🔄 product landed / release pending | Milestone 43 · product #456–#458 (PRs #460–#462) on master; docs #459 this PR; **tag pending** |
+| Enterprise UI/schema/product residual polish **v0.8.33** | ✅ closed | #456–#459 (PRs #460–#462 / #464); tag **v0.8.33** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Product board empty after this PR closes #459; next is **v0.8.33** release gate |
+| — | — | Board clean (no open residual product board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35–M42 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, or #449–#451 as active work (landed on master with v0.8.32).
-**M43 product landed on master**: #456 UI-STAT-TOKENS (PR #460 / f777cf8) · #457 UI-SITE-CONC (PR #461 / 03dff96) · #458 CTX-520-GEMINI (PR #462 / a26021a). Issues closed with those PRs; docs honesty is #459 (this PR).
-**Milestone 43**: remains open until release gate / **v0.8.33** tag — do not claim v0.8.33 released.
-**Latest release**: stays **v0.8.32** until the M43 release gate.
+**M35–M43 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, #449–#451, or #456–#459 as active work (landed on master with v0.8.33).
+**Latest release**: **v0.8.33** after this release gate (tag is a separate operator step).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.33](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.33) | 43 | stat-icon design tokens · Sites maxConcurrency UI · Gemini maxOutputTokens · residual honesty |
 | [v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32) | 42 | system-proxy/test targetUrl guard · Responses max_output_tokens vs context_length · residual honesty |
 | [v0.8.31](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.31) | 41 | ProxyAware/SiteProxy CheckRedirect · key mutate redact · residual honesty |
 | [v0.8.30](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.30) | 40 | OAuth/Telegram CheckRedirect · source-model fallback · residual honesty |
@@ -98,15 +97,15 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.32
+gh release view v0.8.33
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. After this docs PR closes #459: M43 product board is empty on master; run **v0.8.33** release gate (tag + milestone close). Latest release remains **v0.8.32** until then.
-2. Optional later residual only with ACs (P0-585 load-proof / empty-filter; deeper P0-555 media/lag polish; further dialect context_length enforce beyond OpenAI chat/Claude/Responses/Gemini). P0-585 stays partial; do not invent WS/sticky/update-center.
-3. Product Milestones only with ACs: full Responses WS Codex (WS-1); Redis sticky Option B (STICKY-B); update-center registry (UC-1).
+1. Board clean after **v0.8.33**. Optional residual **v0.8.34+** only with dedicated ACs.
+2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
+3. Optional later: P0-585 production load-proof / empty-filter residual; deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
 4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
