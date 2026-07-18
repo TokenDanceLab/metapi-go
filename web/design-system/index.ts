@@ -15,6 +15,9 @@ export type { BadgeProps, BadgeTone } from './Badge.js';
 export { Input } from './Input.js';
 export type { InputProps } from './Input.js';
 
+export { EmptyState } from './EmptyState.js';
+export type { EmptyStateProps, EmptyStateTone } from './EmptyState.js';
+
 export { Stack } from './Stack.js';
 export type { StackAlign, StackGap, StackJustify, StackProps } from './Stack.js';
 

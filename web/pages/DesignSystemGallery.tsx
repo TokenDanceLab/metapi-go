@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   Inline,
   Input,
   Stack,
@@ -748,6 +749,44 @@ export default function DesignSystemGallery() {
                 </div>
               </div>
             </Stack>
+          </Surface>
+        </div>
+      </section>
+
+      <section className="ds-gallery__section" aria-labelledby="ds-empty">
+        <h2 id="ds-empty" className="ds-gallery__section-title">Empty / error · Phase 5 polish (#541)</h2>
+        <div className="ds-gallery__grid">
+          <Surface variant="solid" padding="none">
+            <EmptyState
+              tone="neutral"
+              icon="◇"
+              title="暂无站点"
+              description="导入 NewAPI / OneHub 站点后即可管理账号、令牌与路由。"
+              action={<Button size="sm" variant="primary">新建站点</Button>}
+            />
+          </Surface>
+          <Surface variant="solid" padding="none">
+            <EmptyState
+              tone="info"
+              icon="ℹ"
+              title="筛选结果为空"
+              description="当前筛选条件下没有匹配的通道。试试放宽品牌或站点过滤。"
+              action={<Button size="sm" variant="secondary">清除筛选</Button>}
+            />
+          </Surface>
+          <Surface variant="solid" padding="none">
+            <EmptyState
+              tone="danger"
+              icon="!"
+              title="加载失败"
+              description="无法读取路由摘要（网络或鉴权错误）。重试不会修改数据。"
+              action={
+                <Inline gap={2}>
+                  <Button size="sm" variant="primary">重试</Button>
+                  <Button size="sm" variant="ghost">查看日志</Button>
+                </Inline>
+              }
+            />
           </Surface>
         </div>
       </section>

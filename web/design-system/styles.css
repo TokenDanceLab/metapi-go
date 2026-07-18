@@ -313,6 +313,83 @@
   border-color: var(--color-border);
 }
 
+/* ===== Empty / soft-error (#541) ===== */
+.ds-empty {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--color-text-primary);
+}
+
+.ds-empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-card);
+  font-size: var(--text-xl);
+  line-height: 1;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--motion-soft),
+    box-shadow var(--motion-soft),
+    background-color var(--motion-swift);
+}
+
+.ds-empty--info .ds-empty__icon {
+  background: var(--color-info-soft);
+  color: var(--color-info-ink);
+  border-color: color-mix(in srgb, var(--color-info) 18%, transparent);
+}
+
+.ds-empty--warn .ds-empty__icon {
+  background: var(--color-warn-soft);
+  color: var(--color-warn-ink);
+  border-color: color-mix(in srgb, var(--color-warn) 18%, transparent);
+}
+
+.ds-empty--danger .ds-empty__icon {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-ink);
+  border-color: color-mix(in srgb, var(--color-danger) 18%, transparent);
+}
+
+.ds-empty__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.ds-empty__description {
+  margin: 0;
+  max-width: 42ch;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.ds-empty__action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
 /* ===== Input ===== */
 .ds-input-field {
   display: flex;

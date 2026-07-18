@@ -120,6 +120,31 @@ Classes: `ds-badge`, `ds-badge--{tone}`.
 
 Classes: `ds-input-field`, `ds-input-label`, `ds-input`, `ds-input-hint`.
 
+### EmptyState
+
+```tsx
+import { EmptyState, Button } from '../design-system/index.js';
+
+<EmptyState
+  tone="neutral"
+  icon="◇"
+  title="暂无站点"
+  description="导入站点后即可管理账号与路由。"
+  action={<Button size="sm" variant="primary">新建站点</Button>}
+/>
+```
+
+| Prop | Values / notes | Default |
+|------|----------------|---------|
+| `tone` | `neutral` \| `info` \| `warn` \| `danger` | `neutral` |
+| `icon` | Optional glyph / node | — |
+| `title` | Required heading | — |
+| `description` | Supporting copy | — |
+| `action` | Single primary (or compact secondary pair) | — |
+
+Classes: `ds-empty`, `ds-empty--{tone}`, slots `ds-empty__icon|title|description|action`.  
+`role="alert"` when `tone="danger"`, otherwise `role="status"`. Prefer over legacy `.empty-state` for new surfaces (#541).
+
 ### Stack
 
 Vertical flex layout.

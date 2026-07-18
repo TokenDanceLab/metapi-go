@@ -4739,29 +4739,45 @@ textarea.form-input {
   }
 }
 
-/* ===== Empty State ===== */
+/* ===== Empty State (legacy class; prefer ds-empty / EmptyState #541) ===== */
 .empty-state {
   text-align: center;
-  padding: 48px 20px;
+  padding: var(--space-10) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .empty-state-icon {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 16px;
-  opacity: 0.4;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-1);
+  border-radius: var(--radius-card);
+  opacity: 1;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-light);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
 }
 
 .empty-state-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 4px;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 0;
+  letter-spacing: -0.01em;
 }
 
 .empty-state-desc {
-  font-size: 13px;
-  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 42ch;
+  margin: 0;
 }
 
 /* ===== Modal / Dialog (Phase 4 glass overlay panels) ===== */

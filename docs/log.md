@@ -3,6 +3,13 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] UI-REFRESH Phase 4/5/shell **source** merge + EmptyState
+
+- Fixed incomplete prior tip: worktree source for #537/#540/#538 actually merged to product tree (forms/a11y/shell mock).
+- #541: `EmptyState` ds primitive + gallery samples; legacy `.empty-state` retokenized.
+- Playwright e2e 7/7; gallery score axes 5/5; win32 baselines refreshed.
+- Residual: #539 Linux CI baselines; real authed Dashboard/Sites/Settings; focus-trap/hex.
+
 ## [2026-07-19] UI-REFRESH Phase 4/5 + shell mock integrated
 
 - Phase 4 (#537): form/drawer/modal Apple-detail density (36px controls, glass chrome, gallery samples).
