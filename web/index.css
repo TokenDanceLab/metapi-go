@@ -23,6 +23,22 @@ body {
   min-height: 100vh;
 }
 
+/* ===== a11y: prefers-reduced-motion (#540 / Phase 5) =====
+ * Hard-cut non-essential motion (hardcoded durations + token-based).
+ * Keep animation-fill end-state via near-zero duration so enter/exit classes still settle.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ===== Animations ===== */
 @keyframes spin {
   to {
@@ -709,8 +725,23 @@ body {
   .login-auth-panel {
     background: var(--color-bg-elevated);
   }
+
+  .toast {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-drawer-backdrop,
+  .modal-backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
+/* Solid elevated fallbacks when transparency is reduced (#540).
+ * Glass tokens are already solidified in tokens.css; strip remaining
+ * hardcoded backdrop blurs (toast / overlay scrims).
+ */
 @media (prefers-reduced-transparency: reduce) {
   .topbar {
     background: var(--color-bg-elevated);
@@ -727,7 +758,7 @@ body {
   }
 
   .user-dropdown {
-    background: var(--color-bg-card);
+    background: var(--color-bg-elevated);
     border-color: var(--color-border);
     box-shadow: var(--shadow-lg);
     -webkit-backdrop-filter: none;
@@ -735,14 +766,15 @@ body {
   }
 
   .mobile-drawer-panel {
-    background: var(--color-bg-card);
-    border-color: var(--color-border-light);
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
   .login-tools {
-    background: var(--color-bg-card);
+    background: var(--color-bg-elevated);
     border-color: var(--color-border);
     box-shadow: var(--shadow-md);
     -webkit-backdrop-filter: none;
@@ -750,7 +782,7 @@ body {
   }
 
   .login-surface {
-    background: var(--color-bg-card);
+    background: var(--color-bg-elevated);
     border-color: var(--color-border);
     box-shadow: var(--shadow-lg);
     -webkit-backdrop-filter: none;
@@ -758,9 +790,20 @@ body {
   }
 
   .login-auth-panel {
-    background: var(--color-bg-card);
+    background: var(--color-bg-elevated);
     border-color: var(--color-border);
     box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .toast {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-drawer-backdrop,
+  .modal-backdrop {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }

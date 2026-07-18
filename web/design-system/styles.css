@@ -81,7 +81,7 @@
     border-color: var(--color-border);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-elevated);
   }
 }
 
@@ -124,13 +124,16 @@
 
 @media (prefers-reduced-transparency: reduce) {
   .ds-card--glass {
-    background: var(--color-bg-card);
+    background: var(--color-bg-elevated);
     border-color: var(--color-border);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-elevated);
   }
 }
+
+/* prefers-reduced-motion: duration tokens collapse in tokens.css;
+ * global hard-cut lives in web/index.css (#540). */
 
 .ds-card__header {
   display: flex;

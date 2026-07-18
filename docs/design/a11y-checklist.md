@@ -4,8 +4,8 @@
 **Issue**: #15 (U3)  
 **Related SSOT**: `docs/design/DESIGN.md`, `web/styles/tokens.css`  
 **Scope**: Enterprise ops control-plane chrome + shared components  
-**Last updated**: 2026-07-17  
-**Status**: checklist + critical chrome fixes landed; page-level residual debt tracked below
+**Last updated**: 2026-07-19  
+**Status**: checklist + critical chrome fixes + Phase 5 reduced-motion/transparency pass (#540); page-level residual debt tracked below
 
 This document is the U3 acceptance checklist. It records keyboard, name, contrast, and responsive expectations, plus residual debt that is intentionally out of scope for this issue.
 
@@ -189,11 +189,12 @@ Breakpoints used by product:
 
 ---
 
-## 6. Reduced motion & semantics (U3 alignment)
+## 6. Reduced motion & semantics (U3 + Phase 5 / #540)
 
 | Topic | Expectation | Status |
 |-------|-------------|--------|
-| `prefers-reduced-motion: reduce` | Collapse non-essential transitions/animations | Residual (called out in DESIGN.md §7) |
+| `prefers-reduced-motion: reduce` | Collapse non-essential transitions/animations | **Pass (Phase 5)** — token durations → ~0 in `tokens.css`; global hard-cut `animation/transition-duration` in `web/index.css` |
+| `prefers-reduced-transparency: reduce` | Glass → solid elevated; strip backdrop blur | **Pass (Phase 5)** — glass family + sidebar/topbar tokens solidify; shell/login/toast/overlay blur stripped in `index.css` + design-system glass surfaces |
 | Dialog semantics | `role="dialog"` + `aria-modal` for blocking overlays | Mobile drawer pass; SearchModal improved in U3; not all legacy overlays |
 | Live regions | Toasts/errors announced | Residual |
 | Language | `t()` for user-visible chrome strings; `aria-label` included in i18n attr list | Pass pattern |
@@ -206,7 +207,7 @@ Tracked for follow-up issues (not blocking U3 checklist doc):
 
 1. **Focus trap** inside SearchModal / CenteredModal / notification panel (Tab cycles within overlay).
 2. **Global `:focus-visible`** utility applied to all `.btn`, `.sidebar-item`, topbar controls.
-3. **`prefers-reduced-motion`** hard cutover for `fade-in` / `slide-up` / drawer transitions.
+3. ~~**`prefers-reduced-motion`** hard cutover for `fade-in` / `slide-up` / drawer transitions.~~ **Done in #540** (global + token collapse). Residual: intentional essential-motion exceptions only if product later needs them.
 4. **Page-level icon actions** (copy, open external, row kebab, route drag handles) — many labeled, inventory incomplete across Accounts/Sites/Routes/Logs.
 5. **Muted/tertiary text** used as primary content in a few dense tables — content audit.
 6. **Notification panel** keyboard model (arrow keys, Esc, focus return to bell).
@@ -216,6 +217,7 @@ Tracked for follow-up issues (not blocking U3 checklist doc):
 10. **i18n entries** for newer chrome strings (e.g. `展开侧边栏`) if EN surface shows Chinese fallback.
 11. **Automated axe/playwright a11y CI** gate — not wired.
 12. **Full 375 walkthrough** of every page table → card path (U2 density work residual).
+13. **Residual hex hygiene** in pages/components (brand logos, chart series, route-card dark gradients) — sequential; no new brand hex allowed.
 
 ---
 
@@ -265,10 +267,13 @@ No package bumps. No Go changes. No wholesale page redesign.
 
 ---
 
-## 10. Definition of done (U3)
+## 10. Definition of done (U3 + Phase 5 slice)
 
 - [x] Checklist committed under `docs/design/`
 - [x] Critical shared/chrome icon-only gaps fixed (search close, sidebar collapse)
 - [x] Topbar existing labels verified (no regression)
 - [x] Residual debt listed for follow-up
-- [ ] Full page inventory + focus trap + reduced-motion CSS (future issues)
+- [x] `prefers-reduced-motion` hard-cut + duration token collapse (#540)
+- [x] `prefers-reduced-transparency` solid glass fallbacks complete for shell/login/toast/ds-glass (#540)
+- [ ] Full page inventory + focus trap (future issues)
+- [ ] Residual page hex sweep + dual-theme soft-badge contrast lab measurement (follow-up under #540 residual)
