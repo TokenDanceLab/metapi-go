@@ -73,9 +73,18 @@
   --color-danger-soft: #fee2e2;
   --color-info: #2563eb;
   --color-info-soft: #dbeafe;
+  /* Soft-surface ink (badges/alerts/toasts) — dual-theme readable */
+  --color-success-ink: #15803d;
+  --color-warning-ink: #b45309;
+  --color-danger-ink: #b91c1c;
+  --color-info-ink: #1d4ed8;
+  --color-purple: #7c3aed;
+  --color-purple-soft: var(--color-stat-purple);
+  --color-purple-ink: var(--color-stat-purple-ink);
   /* DESIGN.md warn alias */
   --color-warn: var(--color-warning);
   --color-warn-soft: var(--color-warning-soft);
+  --color-warn-ink: var(--color-warning-ink);
 
   /* Chart categorical series (shared across themes) */
   --color-chart-1: #1a73e8;
@@ -226,8 +235,17 @@
   --color-danger-soft: #450a0a;
   --color-info: #60a5fa;
   --color-info-soft: #172554;
+  /* Soft-surface ink: use bright semantic itself on dark soft fills */
+  --color-success-ink: var(--color-success);
+  --color-warning-ink: var(--color-warning);
+  --color-danger-ink: var(--color-danger);
+  --color-info-ink: var(--color-info);
+  --color-purple: #a78bfa;
+  --color-purple-soft: var(--color-stat-purple);
+  --color-purple-ink: var(--color-stat-purple-ink);
   --color-warn: var(--color-warning);
   --color-warn-soft: var(--color-warning-soft);
+  --color-warn-ink: var(--color-warning-ink);
 
   /* Chart series intentionally unchanged for operator continuity */
   --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));

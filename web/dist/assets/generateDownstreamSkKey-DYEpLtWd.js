@@ -1,0 +1,1 @@
+function e(e){let t=new Uint8Array(32);return crypto.getRandomValues(t),`${e}${Array.from(t,e=>e.toString(16).padStart(2,`0`)).join(``)}`}export{e as t};

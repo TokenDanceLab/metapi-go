@@ -1,7 +1,7 @@
 # UI/UX refresh — GCP × frosted glass × Apple detail
 
 **Date**: 2026-07-19  
-**Status**: Phase 1–2 + token/card density **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536  
+**Status**: Phase 1–3 + token/card density **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536  
 **Product**: MetAPI admin (`web/`)  
 **Supersedes direction of**: closed U0–U2 token polish (#12/#14 等) — **new visual language**, keep token-first architecture  
 **Related**: [`../design/DESIGN.md`](../design/DESIGN.md) · [`../design/a11y-checklist.md`](../design/a11y-checklist.md) · `web/styles/tokens.css` · [`formal-readiness.md`](./formal-readiness.md)
@@ -177,12 +177,12 @@
 
 ### Phase 3 — Data surfaces（P1）
 
-| Work | AC |
-|:-----|:---|
-| 通用 Table / Filter bar / Pagination | token 化 |
-| KPI cards | 轻玻璃或实色二选一（性能：表多页可实色） |
-| Status badges / alerts / toasts | 语义 soft 全暗可用 |
-| Charts 轴色 | 已有 theme hook；校验新底色对比度 |
+| Work | AC | Status |
+|:-----|:---|:------:|
+| 通用 Table / Filter bar / Pagination | token 化 | **done** (`data-table` sticky thead no row blur; filter-chip / pill-tab / pagination tokens) |
+| KPI cards | 轻玻璃或实色二选一（性能：表多页可实色） | **done** solid KPI in gallery (perf-safe) |
+| Status badges / alerts / toasts | 语义 soft 全暗可用 | **done** `*-ink` dual-theme + purple/danger/primary aliases |
+| Charts 轴色 | 已有 theme hook；校验新底色对比度 | residual (theme hook exists; explicit chart contrast pass deferred) |
 
 ### Phase 4 — Forms & density（P1）
 
@@ -287,7 +287,7 @@
 ## 13. Next action
 
 1. ~~开 Milestone + Issues~~ **done** M51 · #532–#536  
-2. ~~Phase 1 FOUC + DS + harness~~ **in tree** (commit next)  
-3. Commit/push Phase 1; comment issues with evidence; close #535 when FOUC e2e green on CI  
-4. Generate + commit gallery baselines (`npm run test:visual:update` on Linux) → close #534 fragment  
-5. Phase 2 shell glass PR (topbar/sidebar/login) with light/dark screenshots
+2. ~~Phase 1–3 foundation/shell/data surfaces~~ **in tree** (win32 visual + e2e green)  
+3. Open Phase 4/5 Issues (forms/drawers · a11y/reduced-motion · shell page screenshots · Linux baselines)  
+4. Commit Linux gallery baselines on CI (`*-chromium-linux.png`) → close #534 fragment when green  
+5. Phase 4 forms/drawers + Dashboard/Sites/Settings light/dark screenshot pass  

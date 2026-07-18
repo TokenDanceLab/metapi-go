@@ -3,9 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] UI-REFRESH Phase 3 data surfaces + scored gallery
 
-
-
+- Token-only polish: dual-theme semantic `*-ink`, purple badge family; tables/filters/pagination/toasts/badges retokenized in `index.css`.
+- Gallery sample: filter chips + pill tabs + data-table + pagination; win32 visual baselines refreshed; `npm run test:e2e` 7/7 green.
+- Capture script `web/scripts/capture-ui-shots.mjs` + `docs/analysis/ui-shots/*` (login/gallery light+dark).
+- Residual: Linux baselines, Dashboard/Sites/Settings shell screenshots, Phase 4 forms/drawers.
 
 ## [2026-07-19] UI-REFRESH GCP/Apple token + card density
 

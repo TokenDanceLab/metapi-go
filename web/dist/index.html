@@ -3,27 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
   <meta name="description" content="Metapi - 中转站的中转站，聚合多个 AI API 中转站为统一网关" />
   <title>Metapi</title>
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <script type="module" crossorigin src="/assets/index-B1O-QZyd.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/vchart-vendor-BG0XOKAT.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-C61ep-sx.css">
-</head>
-<body class="min-h-screen">
+  <!-- FOUC: theme_mode-first bootstrap before any CSS/fonts (mirrors web/themeBootstrap.ts) -->
   <script>
-    (function(){
-      var t = localStorage.getItem('theme');
-      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else {
-        document.documentElement.setAttribute('data-theme', 'light');
+    (function () {
+      try {
+        var mode = localStorage.getItem('theme_mode');
+        var theme;
+        if (mode === 'light' || mode === 'dark') {
+          theme = mode;
+        } else if (mode === 'system') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } else {
+          var legacy = localStorage.getItem('theme');
+          if (legacy === 'light' || legacy === 'dark') {
+            theme = legacy;
+          } else {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+        }
+        var root = document.documentElement;
+        root.setAttribute('data-theme', theme);
+        root.style.colorScheme = theme;
+        var bg = theme === 'dark' ? '#0b0f14' : '#eef2f6';
+        root.style.backgroundColor = bg;
+        if (document.body) {
+          document.body.style.backgroundColor = bg;
+        } else {
+          document.addEventListener('DOMContentLoaded', function () {
+            if (document.body) document.body.style.backgroundColor = bg;
+          });
+        }
+      } catch (e) {
+        /* storage / matchMedia unavailable — leave browser defaults */
       }
     })();
   </script>
-  <div id="root"></div>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script type="module" crossorigin src="/assets/index-CUUQc41N.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-CNC7AqOf.js">
+  <link rel="modulepreload" crossorigin href="/assets/vchart-vendor-D8_Fgf8F.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-Bur72kD1.css">
+</head>
+<body class="min-h-screen">
+  <div id="root"></div>
 </body>
 </html>

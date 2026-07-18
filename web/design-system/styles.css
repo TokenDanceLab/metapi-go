@@ -282,25 +282,25 @@
 
 .ds-badge--success {
   background: var(--color-success-soft);
-  color: var(--color-success);
+  color: var(--color-success-ink);
   border-color: color-mix(in srgb, var(--color-success) 18%, transparent);
 }
 
 .ds-badge--warn {
   background: var(--color-warn-soft);
-  color: var(--color-warn);
+  color: var(--color-warn-ink);
   border-color: color-mix(in srgb, var(--color-warn) 18%, transparent);
 }
 
 .ds-badge--danger {
   background: var(--color-danger-soft);
-  color: var(--color-danger);
+  color: var(--color-danger-ink);
   border-color: color-mix(in srgb, var(--color-danger) 18%, transparent);
 }
 
 .ds-badge--info {
   background: var(--color-info-soft);
-  color: var(--color-info);
+  color: var(--color-info-ink);
   border-color: color-mix(in srgb, var(--color-info) 18%, transparent);
 }
 
@@ -548,4 +548,27 @@
 
 .ds-gallery__fake-table > div:nth-child(3n + 2) {
   background: color-mix(in srgb, var(--color-border-strong) 35%, var(--color-bg-secondary));
+}
+
+.ds-gallery__filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ds-gallery__table-wrap {
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg-card);
+}
+
+.ds-gallery__table-wrap .data-table {
+  min-width: 520px;
+}
+
+.ds-gallery__table-wrap .pagination {
+  justify-content: flex-start;
+  padding-bottom: 0;
 }

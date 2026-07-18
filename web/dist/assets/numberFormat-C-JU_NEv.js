@@ -1,0 +1,1 @@
+function e(e){return typeof e!=`number`||Number.isNaN(e)||!Number.isFinite(e)?0:e}function t(e){return e.replace(/\.0$/,``)}function n(n){let r=Math.round(e(n)),i=Math.abs(r);return i>=1e9?`${t((r/1e9).toFixed(1))}B`:i>=1e6?`${t((r/1e6).toFixed(1))}M`:i>=1e3?`${t((r/1e3).toFixed(1))}K`:r.toLocaleString()}export{n as t};

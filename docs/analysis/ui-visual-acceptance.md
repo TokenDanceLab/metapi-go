@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-19  
 **Backlog:** [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) · [#536](https://github.com/TokenDanceLab/metapi-go/issues/536)  
-**Status:** harness present; `/__design__` gallery scaffolded (#533); baselines still to commit after first green run  
+**Status:** harness green; win32 gallery baselines committed/refreshed; Linux CI baselines residual  
 **Code:** `web/playwright.config.ts` · `web/e2e/**` · `web/pages/DesignSystemGallery.tsx`
 
 ## Goal

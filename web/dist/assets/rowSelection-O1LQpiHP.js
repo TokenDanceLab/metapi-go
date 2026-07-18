@@ -1,0 +1,1 @@
+function e(e){return!!e?.closest?.(`button, a, input, textarea, select, label, [role="button"]`)}export{e as t};

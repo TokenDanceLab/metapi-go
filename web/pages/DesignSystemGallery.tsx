@@ -186,7 +186,87 @@ export default function DesignSystemGallery() {
             <Badge tone="danger">danger</Badge>
             <Badge tone="info">info</Badge>
             <Badge tone="neutral">neutral</Badge>
+            <span className="badge badge-purple">purple</span>
           </Inline>
+        </Surface>
+      </section>
+
+      <section className="ds-gallery__section" aria-labelledby="ds-data">
+        <h2 id="ds-data" className="ds-gallery__section-title">Data surfaces</h2>
+        <Surface variant="solid" padding="md">
+          <Stack gap={4}>
+            <div className="ds-gallery__filter-row" role="group" aria-label="Sample filters">
+              <button type="button" className="filter-chip active">
+                <span className="filter-chip-label">All sites</span>
+                <span className="filter-chip-count">103</span>
+              </button>
+              <button type="button" className="filter-chip">
+                <span className="filter-chip-label">Healthy</span>
+                <span className="filter-chip-count">98</span>
+              </button>
+              <button type="button" className="filter-chip">
+                <span className="filter-chip-label">Degraded</span>
+                <span className="filter-chip-count">5</span>
+              </button>
+              <div className="pill-tabs" role="tablist" aria-label="View mode">
+                <button type="button" className="pill-tab active" role="tab" aria-selected="true">
+                  Table
+                </button>
+                <button type="button" className="pill-tab" role="tab" aria-selected="false">
+                  Cards
+                </button>
+              </div>
+            </div>
+
+            <div className="ds-gallery__table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Site</th>
+                    <th scope="col">Platform</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Pool</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="row-selected">
+                    <td>hk3-prod</td>
+                    <td>New API</td>
+                    <td><span className="badge badge-success">healthy</span></td>
+                    <td>shared-tiny</td>
+                  </tr>
+                  <tr>
+                    <td>us1-standby</td>
+                    <td>OneHub</td>
+                    <td><span className="badge badge-warning">idle</span></td>
+                    <td>normal</td>
+                  </tr>
+                  <tr>
+                    <td>azure-pg</td>
+                    <td>Meta</td>
+                    <td><span className="badge badge-error">53300</span></td>
+                    <td>1 / 1</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="pagination" aria-label="Pagination sample">
+              <button type="button" className="pagination-btn" disabled aria-label="Previous page">
+                ‹
+              </button>
+              <button type="button" className="pagination-btn active" aria-current="page">
+                1
+              </button>
+              <button type="button" className="pagination-btn">
+                2
+              </button>
+              <button type="button" className="pagination-btn" aria-label="Next page">
+                ›
+              </button>
+              <span className="pagination-info">1–3 of 103</span>
+            </div>
+          </Stack>
         </Surface>
       </section>
 

@@ -13,7 +13,7 @@
 | Issue | Track | Title |
 |------:|:------|:------|
 | — | — | **Empty product board** after #531 / v0.8.44 |
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–2 in tree: FOUC · DS+gallery · Playwright · shell glass (Linux baselines + page screenshots residual) |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–3 in tree: FOUC · DS+gallery · Playwright · shell glass · data surfaces (Linux baselines + shell page shots + Phase 4 forms residual) |
 
 ## Hard gates
 

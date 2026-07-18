@@ -133,3 +133,4 @@ Checklist: [`a11y-checklist.md`](./a11y-checklist.md).
 |------|--------|
 | 2026-07-16 | U0 token freeze (indigo era) |
 | 2026-07-19 | UI-REFRESH: FOUC canvas, glass family, GCP primary, card density, shell glass |
+| 2026-07-19 | Phase 3: dual-theme semantic ink, purple badge, table/filter/pagination/toast retokenize |
