@@ -181,6 +181,132 @@ func TestEnforceMaxTokensAgainstContextLength(t *testing.T) {
 			wantLimit:     100,
 			wantField:     "max_tokens",
 		},
+		// Gemini generationConfig.maxOutputTokens (issue #458)
+		{
+			name: "generationConfig.maxOutputTokens over limit rejects",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(9000),
+				},
+			},
+			contextLength: ptrInt64(8192),
+			wantErr:       true,
+			wantMax:       9000,
+			wantLimit:     8192,
+			wantField:     "generationConfig.maxOutputTokens",
+		},
+		{
+			name: "generationConfig.maxOutputTokens equal limit passes",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(8192),
+				},
+			},
+			contextLength: ptrInt64(8192),
+			wantErr:       false,
+		},
+		{
+			name: "generationConfig.maxOutputTokens under limit passes",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(100),
+				},
+			},
+			contextLength: ptrInt64(8192),
+			wantErr:       false,
+		},
+		{
+			name: "null generationConfig.maxOutputTokens skips",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": nil,
+				},
+			},
+			contextLength: ptrInt64(100),
+			wantErr:       false,
+		},
+		{
+			name: "unparseable generationConfig.maxOutputTokens skips",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": "lots",
+				},
+			},
+			contextLength: ptrInt64(100),
+			wantErr:       false,
+		},
+		{
+			name: "snake generation_config.max_output_tokens over limit rejects",
+			body: map[string]any{
+				"generation_config": map[string]any{
+					"max_output_tokens": float64(4097),
+				},
+			},
+			contextLength: ptrInt64(4096),
+			wantErr:       true,
+			wantMax:       4097,
+			wantLimit:     4096,
+			wantField:     "generation_config.max_output_tokens",
+		},
+		{
+			name: "string generationConfig.maxOutputTokens over limit rejects",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": "200",
+				},
+			},
+			contextLength: ptrInt64(100),
+			wantErr:       true,
+			wantMax:       200,
+			wantLimit:     100,
+			wantField:     "generationConfig.maxOutputTokens",
+		},
+		{
+			name: "gemini CLI request.generationConfig.maxOutputTokens over limit rejects",
+			body: map[string]any{
+				"model": "gemini-2.5-pro",
+				"request": map[string]any{
+					"generationConfig": map[string]any{
+						"maxOutputTokens": float64(2048),
+					},
+				},
+			},
+			contextLength: ptrInt64(1024),
+			wantErr:       true,
+			wantMax:       2048,
+			wantLimit:     1024,
+			wantField:     "generationConfig.maxOutputTokens",
+		},
+		{
+			name: "nested generationConfig preferred over top-level max_tokens",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(9000),
+				},
+				"max_tokens": float64(50), // under limit; must not mask nested over-limit
+			},
+			contextLength: ptrInt64(8192),
+			wantErr:       true,
+			wantMax:       9000,
+			wantLimit:     8192,
+			wantField:     "generationConfig.maxOutputTokens",
+		},
+		{
+			name: "omitted generationConfig skips",
+			body: map[string]any{
+				"contents": []any{},
+			},
+			contextLength: ptrInt64(8192),
+			wantErr:       false,
+		},
+		{
+			name: "non-object generationConfig skips",
+			body: map[string]any{
+				"generationConfig": "nope",
+			},
+			contextLength: ptrInt64(100),
+			wantErr:       false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -233,22 +359,32 @@ func asMaxTokensErr(err error, out *maxTokensOverContextError) bool {
 func TestShouldEnforceMaxTokensOnPath(t *testing.T) {
 	t.Parallel()
 	cases := map[string]bool{
-		"/v1/chat/completions":             true,
-		"/chat/completions":                true,
-		"/v1/completions":                  true,
-		"/completions":                     true,
-		"/v1/messages":                     true,
-		"/messages":                        true,
-		"/v1/messages/count_tokens":        false,
-		"/v1/responses":                    true,
-		"/responses":                       true,
-		"/v1/responses/compact":            true,
-		"/responses/compact":               true,
-		"/openai/v1/responses":             true,
-		"/openai/v1/responses/compact":     true,
-		"/v1/embeddings":                   false,
-		"/v1beta/models/x:generateContent": false,
-		"":                                 false,
+		"/v1/chat/completions":                      true,
+		"/chat/completions":                         true,
+		"/v1/completions":                           true,
+		"/completions":                              true,
+		"/v1/messages":                              true,
+		"/messages":                                 true,
+		"/v1/messages/count_tokens":                 false,
+		"/v1/responses":                             true,
+		"/responses":                                true,
+		"/v1/responses/compact":                     true,
+		"/responses/compact":                        true,
+		"/openai/v1/responses":                      true,
+		"/openai/v1/responses/compact":              true,
+		"/v1/embeddings":                            false,
+		// Gemini generateContent / streamGenerateContent (issue #458)
+		"/v1beta/models/x:generateContent":          true,
+		"/v1beta/models/gemini-2.5-pro:generateContent": true,
+		"/v1beta/models/x:streamGenerateContent":    true,
+		"/gemini/v1alpha/models/x:generateContent":  true,
+		"/v1internal::generateContent":              true,
+		"/v1internal::streamGenerateContent":        true,
+		"/v1internal:generateContent":               true,
+		// countTokens must not enforce
+		"/v1beta/models/x:countTokens":              false,
+		"/v1internal::countTokens":                  false,
+		"":                                          false,
 	}
 	for path, want := range cases {
 		if got := shouldEnforceMaxTokensOnPath(path); got != want {
@@ -710,6 +846,80 @@ func TestBodyOutputTokenLimit(t *testing.T) {
 			wantField:   "max_tokens",
 			wantPresent: true,
 		},
+		// Gemini nested generationConfig (issue #458)
+		{
+			name: "generationConfig.maxOutputTokens present",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(256),
+				},
+			},
+			wantValue:   256,
+			wantField:   "generationConfig.maxOutputTokens",
+			wantPresent: true,
+		},
+		{
+			name: "snake generation_config.max_output_tokens present",
+			body: map[string]any{
+				"generation_config": map[string]any{
+					"max_output_tokens": float64(128),
+				},
+			},
+			wantValue:   128,
+			wantField:   "generation_config.max_output_tokens",
+			wantPresent: true,
+		},
+		{
+			name: "prefer nested generationConfig over top-level max_tokens",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": float64(10),
+				},
+				"max_tokens": float64(99),
+			},
+			wantValue:   10,
+			wantField:   "generationConfig.maxOutputTokens",
+			wantPresent: true,
+		},
+		{
+			name: "gemini CLI request.generationConfig.maxOutputTokens present",
+			body: map[string]any{
+				"model": "gemini-2.5-pro",
+				"request": map[string]any{
+					"generationConfig": map[string]any{
+						"maxOutputTokens": float64(512),
+					},
+				},
+			},
+			wantValue:   512,
+			wantField:   "generationConfig.maxOutputTokens",
+			wantPresent: true,
+		},
+		{
+			name: "null nested maxOutputTokens skips",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": nil,
+				},
+			},
+			wantPresent: false,
+		},
+		{
+			name: "unparseable nested maxOutputTokens skips",
+			body: map[string]any{
+				"generationConfig": map[string]any{
+					"maxOutputTokens": "nope",
+				},
+			},
+			wantPresent: false,
+		},
+		{
+			name: "non-object generationConfig skips",
+			body: map[string]any{
+				"generationConfig": "nope",
+			},
+			wantPresent: false,
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -718,6 +928,62 @@ func TestBodyOutputTokenLimit(t *testing.T) {
 			got, field, present := bodyOutputTokenLimit(tt.body)
 			if present != tt.wantPresent {
 				t.Fatalf("present = %v, want %v (got=%d field=%q)", present, tt.wantPresent, got, field)
+			}
+			if !tt.wantPresent {
+				return
+			}
+			if got != tt.wantValue || field != tt.wantField {
+				t.Fatalf("got (%d, %q), want (%d, %q)", got, field, tt.wantValue, tt.wantField)
+			}
+		})
+	}
+}
+
+func TestBodyGeminiMaxOutputTokens(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		body        map[string]any
+		wantValue   int64
+		wantField   string
+		wantPresent bool
+	}{
+		{
+			name: "camel nested present",
+			body: map[string]any{
+				"generationConfig": map[string]any{"maxOutputTokens": float64(77)},
+			},
+			wantValue:   77,
+			wantField:   "generationConfig.maxOutputTokens",
+			wantPresent: true,
+		},
+		{
+			name: "mixed camel config + snake token key",
+			body: map[string]any{
+				"generationConfig": map[string]any{"max_output_tokens": float64(88)},
+			},
+			wantValue:   88,
+			wantField:   "generationConfig.max_output_tokens",
+			wantPresent: true,
+		},
+		{
+			name:        "empty body",
+			body:        map[string]any{},
+			wantPresent: false,
+		},
+		{
+			name:        "nil body",
+			body:        nil,
+			wantPresent: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, field, present := bodyGeminiMaxOutputTokens(tt.body)
+			if present != tt.wantPresent {
+				t.Fatalf("present = %v, want %v", present, tt.wantPresent)
 			}
 			if !tt.wantPresent {
 				return
@@ -961,5 +1227,285 @@ func TestResponses_NoContextLengthDoesNotEnforce(t *testing.T) {
 	}
 	if upstreamHits != 1 {
 		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+}
+
+func TestGeminiGenerateContent_MaxOutputTokensOverContextLengthReturns400(t *testing.T) {
+	// Issue #458: Gemini generateContent must reject generationConfig.maxOutputTokens
+	// above positive route context_length with honest 400 (no silent clamp).
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(1024)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-pro",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:generateContent",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":2048}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "maxOutputTokens") || !strings.Contains(body, "context_length") {
+		t.Fatalf("body = %q, want clear maxOutputTokens/context_length error", body)
+	}
+	if !strings.Contains(body, "invalid_request_error") {
+		t.Fatalf("body = %q, want invalid_request_error", body)
+	}
+	if upstreamHits != 0 {
+		t.Fatalf("upstream was called %d times; expected 0 (must not silent-forward)", upstreamHits)
+	}
+}
+
+func TestGeminiStreamGenerateContent_MaxOutputTokensOverContextLengthReturns400(t *testing.T) {
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(512)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-flash",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":1024}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "maxOutputTokens") {
+		t.Fatalf("body = %q, want maxOutputTokens wording", rec.Body.String())
+	}
+	if upstreamHits != 0 {
+		t.Fatalf("upstream was called; expected rejection before forward")
+	}
+}
+
+func TestGeminiCLIGenerateContent_MaxOutputTokensOverContextLengthReturns400(t *testing.T) {
+	// Gemini CLI internal path (/v1internal::generateContent). Nested may live
+	// at top-level or under request{} envelope.
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(256)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini-cli"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-pro",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1internal::generateContent",
+		`{"model":"gemini-2.5-pro","request":{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":512}}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiCLIGenerateContent(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "maxOutputTokens") || !strings.Contains(rec.Body.String(), "context_length") {
+		t.Fatalf("body = %q, want nested maxOutputTokens/context_length wording", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "invalid_request_error") {
+		t.Fatalf("body = %q, want invalid_request_error", rec.Body.String())
+	}
+	if upstreamHits != 0 {
+		t.Fatalf("upstream was called; expected rejection before forward")
+	}
+}
+
+func TestGeminiGenerateContent_MaxOutputTokensAtContextLengthPassesThrough(t *testing.T) {
+	upstreamHits := 0
+	var sawMaxOutput any
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		var payload map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		if gc, ok := payload["generationConfig"].(map[string]any); ok {
+			sawMaxOutput = gc["maxOutputTokens"]
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(2048)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-pro",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:generateContent",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":2048}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+	// No silent clamp: original maxOutputTokens must be forwarded unchanged.
+	if sawMaxOutput != float64(2048) {
+		t.Fatalf("upstream maxOutputTokens = %v (%T), want 2048 (no clamp)", sawMaxOutput, sawMaxOutput)
+	}
+}
+
+func TestGeminiGenerateContent_OmittedMaxOutputTokensDoesNotEnforce(t *testing.T) {
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(128)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-pro",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:generateContent",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+}
+
+func TestGeminiGenerateContent_NoContextLengthDoesNotEnforce(t *testing.T) {
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:     store.RouteChannel{ID: 1, Enabled: true},
+			Account:     store.Account{ID: 1, Status: "active"},
+			Site:        store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:  "upstream-token",
+			ActualModel: "gemini-2.5-pro",
+			// ContextLength nil → no enforce
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:generateContent",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":999999}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1", upstreamHits)
+	}
+}
+
+func TestGeminiCountTokens_DoesNotEnforceMaxOutputTokens(t *testing.T) {
+	// countTokens path must not apply the generateContent maxOutputTokens gate.
+	upstreamHits := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamHits++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"totalTokens":3}`))
+	}))
+	t.Cleanup(upstream.Close)
+
+	limit := int64(64)
+	SetUpstreamConfig(&UpstreamConfig{
+		Router: &upstreamTestRouter{selected: routing.SelectedChannel{
+			Channel:       store.RouteChannel{ID: 1, Enabled: true},
+			Account:       store.Account{ID: 1, Status: "active"},
+			Site:          store.Site{ID: 1, URL: upstream.URL, Status: "active", Platform: "gemini"},
+			TokenValue:    "upstream-token",
+			ActualModel:   "gemini-2.5-pro",
+			ContextLength: &limit,
+		}},
+	})
+	t.Cleanup(func() { SetUpstreamConfig(nil) })
+
+	// Even if a client oddly includes generationConfig, countTokens path must skip enforce.
+	req := makeProxyReq("POST", "/v1internal::countTokens",
+		`{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"maxOutputTokens":999999}}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiCLICountTokens(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if upstreamHits != 1 {
+		t.Fatalf("upstream hits = %d, want 1 (countTokens must not enforce)", upstreamHits)
 	}
 }

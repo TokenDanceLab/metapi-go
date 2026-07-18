@@ -210,11 +210,12 @@ func dispatchSelectedUpstream(
 	if requestID == "" {
 		requestID = proxy.RequestIDFromContext(r.Context())
 	}
-	// Optional max_tokens / max_output_tokens vs route context_length
-	// (issue #399 / #409 / #450 / CTX-520 residual). Enforce on OpenAI
-	// chat/completions (+ legacy completions), Anthropic /v1/messages, and
-	// OpenAI /v1/responses (+ /compact) when the selected route publishes a
-	// positive context_length and the body includes a parseable token cap
+	// Optional max_tokens / max_output_tokens / generationConfig.maxOutputTokens
+	// vs route context_length (issue #399 / #409 / #450 / #458 / CTX-520 residual).
+	// Enforce on OpenAI chat/completions (+ legacy completions), Anthropic
+	// /v1/messages, OpenAI /v1/responses (+ /compact), and Gemini
+	// generateContent / streamGenerateContent when the selected route publishes
+	// a positive context_length and the body includes a parseable token cap
 	// above that limit. Never silent-clamp.
 	if ctx != nil && selected != nil && shouldEnforceMaxTokensOnPath(upstreamPath) {
 		if err := enforceMaxTokensAgainstContextLength(ctx.Body, selected.ContextLength); err != nil {
