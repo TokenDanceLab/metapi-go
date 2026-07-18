@@ -2,11 +2,11 @@
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484-#487 present. **Milestone 47 product landed on master** (not tagged yet): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499); docs honesty #497 this pass. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
+**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484-#487 present. **v0.8.37 shipped** (Milestone 47 closed): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499), #497 residual honesty (PR #501) + release gate. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: M47 product board empty after #497; next is **v0.8.37** release gate (latest tag still **v0.8.36**)
+**Active wave**: none (M47 closed; sequencing **v0.8.38+** optional residual with ACs only)
 
 ## Purpose
 
@@ -79,11 +79,11 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.37 release gate + v0.8.38+)
+## Recommended sequencing (v0.8.38+)
 
 1. **Latest release**: **v0.8.36** (M46 closed).
-2. **M47 product landed on master (not tagged)**: #494 DOCS-STACK-TRUTH (PR #498) · #495 REL-TPM-ESTIMATE (PR #500) · #496 REL-CRED-USAGE-HONESTY (PR #499); docs honesty #497 this pass.
-3. **Active wave**: none after products. Next operator step is **v0.8.37** release gate. Optional residual **v0.8.38+** only with dedicated ACs.
+2. **M47 / v0.8.37 closed**: #494–#497 (PRs #498–#501) present on master with tag.
+3. **Active wave**: none. Optional residual **v0.8.38+** only with dedicated ACs.
 4. **DOCS-STACK-TRUTH** / **REL-TPM-ESTIMATE** / **REL-CRED-USAGE-HONESTY** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
@@ -107,10 +107,10 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming README still shows Go 1.26.4 / React 18 after #494/#498.
 - Claiming maxTPM soft admission is a no-op after #495/#500 (estimate is best-effort, not perfect tokenizer).
 - Claiming P0-585 credential usage-limit honesty tests are missing after #496/#499 (cascade still partial).
-- Claiming **v0.8.37** released before the release gate (products landed; tag is separate).
+- Claiming **v0.8.38** product without dedicated ACs.
 ## Links
 
-- Release: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · prior [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · next **v0.8.37** release gate after this honesty pass (then optional residual **v0.8.38+** with ACs only)
+- Release: [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · prior [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · next optional residual **v0.8.38+** (with ACs only)
 - Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
 - Prior milestone: [Enterprise UI/reliability residual polish v0.8.35](https://github.com/TokenDanceLab/metapi-go/milestone/45) · **closed**
 - Matrix: `docs/analysis/original-gap-matrix.md`
