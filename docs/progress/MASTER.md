@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | none (board clean; next residual only with ACs) |
+| Active milestone | [Milestone 43](https://github.com/TokenDanceLab/metapi-go/milestone/43) open until **v0.8.33** release gate |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -45,16 +45,19 @@
 | Enterprise residual client/routing polish **v0.8.30** | ✅ closed | #433–#435 (PRs #436–#438); tag **v0.8.30** |
 | Enterprise residual security polish **v0.8.31** | ✅ closed | #440–#443 (PRs #444–#447); tag **v0.8.31** |
 | Enterprise residual security/product polish **v0.8.32** | ✅ closed | #449–#451 (PRs #452–#454); tag **v0.8.32** |
+| Enterprise UI/schema/product residual polish **v0.8.33** | 🔄 product landed / release pending | Milestone 43 · product #456–#458 (PRs #460–#462) on master; docs #459 this PR; **tag pending** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean (no open residual product board) |
+| — | — | Product board empty after this PR closes #459; next is **v0.8.33** release gate |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 **M35–M42 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, or #449–#451 as active work (landed on master with v0.8.32).
-**Latest release**: **v0.8.32** after this release gate (tag is a separate operator step).
+**M43 product landed on master**: #456 UI-STAT-TOKENS (PR #460 / f777cf8) · #457 UI-SITE-CONC (PR #461 / 03dff96) · #458 CTX-520-GEMINI (PR #462 / a26021a). Issues closed with those PRs; docs honesty is #459 (this PR).
+**Milestone 43**: remains open until release gate / **v0.8.33** tag — do not claim v0.8.33 released.
+**Latest release**: stays **v0.8.32** until the M43 release gate.
 
 
 ## Residual releases (pointer only)
@@ -101,9 +104,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Board clean after M42 / **v0.8.32**. Optional later residual only with ACs (P0-585 load-proof / empty-filter; deeper P0-555 media/lag polish; further dialect context_length enforce for Gemini etc.). P0-585 stays partial; do not invent WS/sticky/update-center.
-2. Product Milestones only with ACs: full Responses WS Codex (WS-1); Redis sticky Option B (STICKY-B); update-center registry (UC-1).
-3. Keep MASTER slim; docs map at `docs/README.md`.
+1. After this docs PR closes #459: M43 product board is empty on master; run **v0.8.33** release gate (tag + milestone close). Latest release remains **v0.8.32** until then.
+2. Optional later residual only with ACs (P0-585 load-proof / empty-filter; deeper P0-555 media/lag polish; further dialect context_length enforce beyond OpenAI chat/Claude/Responses/Gemini). P0-585 stays partial; do not invent WS/sticky/update-center.
+3. Product Milestones only with ACs: full Responses WS Codex (WS-1); Redis sticky Option B (STICKY-B); update-center registry (UC-1).
+4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
