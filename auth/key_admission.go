@@ -204,7 +204,6 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 					if _, rerr := l.sharedRPM.Decr(context.Background(), rpmKey, time.Minute); rerr != nil {
 						slog.Debug("redis admission: rpm rollback after tpm deny failed", "key_id", keyID, "error", rerr)
 					}
-					sharedRPMCounted = false
 				}
 				return AdmissionDecision{
 					Allowed:    false,
