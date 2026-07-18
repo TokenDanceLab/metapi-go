@@ -330,7 +330,9 @@ func isolationChannel(id, routeID, accountID int64) store.RouteChannel {
 }
 
 // TestRecordFailure_DoesNotCascadeToSiblingChannels proves a single non-usage-limit
-// failure only mutates the failed channel's cooldown/failCount fields.
+// failure only mutates the failed channel's cooldown/failCount fields (channel-scoped
+// exclude — no credential expand). See also P0-585 credential usage-limit honesty
+// residual tests below: usage-limit intentionally expands to same-credential siblings.
 func TestRecordFailure_DoesNotCascadeToSiblingChannels(t *testing.T) {
 	ResetSiteRuntimeHealthState()
 	// Mark health as loaded so EnsureSiteRuntimeHealthStateLoaded is a no-op
@@ -435,7 +437,10 @@ func TestRecordFailure_DoesNotCascadeToSiblingChannels(t *testing.T) {
 }
 
 // TestRecordFailure_UsageLimitScopesCredentialSiblingsOnly proves short-window
-// usage-limit cooldowns credential-scoped siblings, not whole-route/site peers.
+// usage-limit cooldowns same-credential siblings only — not whole-site / whole-route
+// peers. Multi-channel impact under a shared credential is intentional shared-key
+// truth (P0-585 residual honesty), not cascade poison to "fix" without product AC.
+// Do not remove credential-scope or flip inventory P0-585 to present based on this alone.
 func TestRecordFailure_UsageLimitScopesCredentialSiblingsOnly(t *testing.T) {
 	ResetSiteRuntimeHealthState()
 	siteRuntimeHealthLoaded = true
@@ -1316,6 +1321,200 @@ func TestP0585Honesty_EmptyFilter_DoesNotClaimCascadeComplete(t *testing.T) {
 	// 2) Per-layer strict demotion is shipped; global re-exposure is still residual.
 	// 3) Passing these honesty tests does NOT flip P0-585 from partial → present.
 	const residualNote = "P0-585 honesty residual: empty-filter global full-set fallback is documented behavior, not cascade-complete"
+	if residualNote == "" {
+		t.Fatal("unreachable")
+	}
+	t.Log(residualNote)
+}
+
+// =============================================================================
+// P0-585 honesty residual — credential usage-limit multi-channel cool (#496)
+//
+// These tests document intentional residual behavior, NOT cascade-complete.
+// Short-window usage-limit cools same-credential siblings only (shared-key truth).
+// Multi-channel impact under a shared credential is intentional — do not "fix"
+// by removing credential-scope without product AC. Non-usage-limit failures stay
+// channel-scoped. Do not flip inventory P0-585 to present based on this suite alone.
+// =============================================================================
+
+// TestP0585Honesty_UsageLimitCoolsCredentialSiblingsOnly_NotSiteOrRoutePeers is the
+// P0-585 honesty residual for credential-scoped usage-limit multi-channel cool:
+// a short-window usage-limit on channel 101 cools same-credential sibling 102,
+// but does NOT cool same-site different-credential 103, same-route other-account
+// peers, or other-site channels.
+//
+// Multi-channel impact under shared credential is intentional shared-key truth,
+// not cascade poison. This does NOT claim cascade-complete or close P0-585.
+func TestP0585Honesty_UsageLimitCoolsCredentialSiblingsOnly_NotSiteOrRoutePeers(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	db := newIsolationDB()
+	route := isolationRoute(1, "weighted")
+
+	// Same credential siblings: 101 + 102 (account 1001, site 10)
+	// Same site, different credential: 103 (account 1002, site 10)
+	// Same route, other site: 201 (account 2001, site 20)
+	// Second route peer same site different credential: 104 (account 1003)
+	ch101 := isolationChannel(101, 1, 1001)
+	ch102 := isolationChannel(102, 1, 1001)
+	ch103 := isolationChannel(103, 1, 1002)
+	ch104 := isolationChannel(104, 1, 1003)
+	ch201 := isolationChannel(201, 1, 2001)
+
+	accSame := isolationAccount(1001, 10)
+	accPeer := isolationAccount(1002, 10)
+	accPeer2 := isolationAccount(1003, 10)
+	accSiteB := isolationAccount(2001, 20)
+
+	db.seedChannel(ch101, accSame, route)
+	db.seedChannel(ch102, accSame, route)
+	db.seedChannel(ch103, accPeer, route)
+	db.seedChannel(ch104, accPeer2, route)
+	db.seedChannel(ch201, accSiteB, route)
+	// Credential scope for 101 is only 101+102 — not whole site/route.
+	db.credentialScope[101] = []int64{101, 102}
+
+	tr := newIsolationRouter(db)
+	status := 429
+	errText := "usage_limit_reached"
+	model := "gpt-test"
+
+	if err := tr.RecordFailure(context.Background(), 101, SiteRuntimeFailureContext{
+		Status:    &status,
+		ErrorText: &errText,
+		ModelName: &model,
+	}, nil); err != nil {
+		t.Fatalf("RecordFailure: %v", err)
+	}
+
+	if db.cooldownCalls != 1 {
+		t.Fatalf("expected 1 cooldown update, got %d", db.cooldownCalls)
+	}
+	if len(db.lastCooldownIDs) != 2 {
+		t.Fatalf("P0-585 honesty residual: expected credential-scoped [101,102] only, got %v", db.lastCooldownIDs)
+	}
+	seen := map[int64]bool{}
+	for _, id := range db.lastCooldownIDs {
+		seen[id] = true
+	}
+	if !seen[101] || !seen[102] {
+		t.Fatalf("expected same-credential siblings 101+102 cooled, got %v", db.lastCooldownIDs)
+	}
+	if seen[103] || seen[104] || seen[201] {
+		t.Fatalf("usage-limit must not cool whole-site/route peers outside credential scope, got %v", db.lastCooldownIDs)
+	}
+
+	// Same-credential siblings carry short-window cooldown (intentional multi-channel).
+	for _, id := range []int64{101, 102} {
+		c := db.getChannel(id)
+		if c == nil {
+			t.Fatalf("missing channel %d", id)
+		}
+		if c.CooldownUntil == nil || *c.CooldownUntil == "" {
+			t.Errorf("credential sibling %d missing short-window cooldown", id)
+		}
+		if c.FailCount != 0 {
+			t.Errorf("credential sibling %d failCount=%d want 0 under short-window path", id, c.FailCount)
+		}
+	}
+
+	// Same-site / same-route peers with different credentials must stay clean.
+	for _, id := range []int64{103, 104, 201} {
+		c := db.getChannel(id)
+		if c == nil {
+			t.Fatalf("missing channel %d", id)
+		}
+		if c.FailCount != 0 || c.LastFailAt != nil || c.CooldownUntil != nil {
+			t.Errorf("non-credential peer %d poisoned: failCount=%d lastFailAt=%v cooldownUntil=%v",
+				id, c.FailCount, c.LastFailAt, c.CooldownUntil)
+		}
+	}
+}
+
+// TestP0585Honesty_NonUsageLimitFailureRemainsChannelScopedExclude is the P0-585
+// honesty residual for non-usage-limit failures: a 500/bad-gateway on channel 101
+// must write cooldown only to that channel ID — no LoadCredentialScoped expand,
+// even when credentialScope would return siblings. Contrasts intentional
+// usage-limit multi-channel cool (shared-key truth) with channel-scoped exclude.
+//
+// Residual honesty only — does not flip P0-585 partial → present.
+func TestP0585Honesty_NonUsageLimitFailureRemainsChannelScopedExclude(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	db := newIsolationDB()
+	route := isolationRoute(1, "weighted")
+
+	// Same credential siblings exist and are registered in credentialScope, but a
+	// non-usage-limit failure must NOT expand to them.
+	ch101 := isolationChannel(101, 1, 1001)
+	ch102 := isolationChannel(102, 1, 1001)
+	ch103 := isolationChannel(103, 1, 1002)
+
+	accSame := isolationAccount(1001, 10)
+	accOther := isolationAccount(1002, 10)
+
+	db.seedChannel(ch101, accSame, route)
+	db.seedChannel(ch102, accSame, route)
+	db.seedChannel(ch103, accOther, route)
+	// If non-usage-limit wrongly used credential expand, 102 would be cooled.
+	db.credentialScope[101] = []int64{101, 102}
+
+	tr := newIsolationRouter(db)
+	status := 500
+	errText := "bad gateway"
+	model := "gpt-test"
+
+	if err := tr.RecordFailure(context.Background(), 101, SiteRuntimeFailureContext{
+		Status:    &status,
+		ErrorText: &errText,
+		ModelName: &model,
+	}, nil); err != nil {
+		t.Fatalf("RecordFailure: %v", err)
+	}
+
+	if db.cooldownCalls != 1 {
+		t.Fatalf("expected 1 cooldown update, got %d", db.cooldownCalls)
+	}
+	if len(db.lastCooldownIDs) != 1 || db.lastCooldownIDs[0] != 101 {
+		t.Fatalf("P0-585 honesty residual: non-usage-limit must stay channel-scoped exclude [101], got %v", db.lastCooldownIDs)
+	}
+
+	failed := db.getChannel(101)
+	sibling := db.getChannel(102)
+	peer := db.getChannel(103)
+	if failed == nil || sibling == nil || peer == nil {
+		t.Fatal("expected all seeded channels present")
+	}
+	if failed.FailCount != 1 {
+		t.Errorf("failed channel failCount=%d, want 1", failed.FailCount)
+	}
+	if failed.CooldownUntil == nil || *failed.CooldownUntil == "" {
+		t.Error("failed channel cooldownUntil should be set (fibonacci path)")
+	}
+	if sibling.FailCount != 0 || sibling.LastFailAt != nil || sibling.CooldownUntil != nil {
+		t.Errorf("same-credential sibling must NOT cool on non-usage-limit: failCount=%d lastFailAt=%v cooldownUntil=%v",
+			sibling.FailCount, sibling.LastFailAt, sibling.CooldownUntil)
+	}
+	if peer.FailCount != 0 || peer.LastFailAt != nil || peer.CooldownUntil != nil {
+		t.Errorf("different-credential peer poisoned: failCount=%d lastFailAt=%v cooldownUntil=%v",
+			peer.FailCount, peer.LastFailAt, peer.CooldownUntil)
+	}
+}
+
+// TestP0585Honesty_CredentialUsageLimit_DoesNotClaimCascadeComplete is a
+// documentation sentinel for the credential usage-limit residual: multi-channel
+// cool under shared credential is intentional; inventory P0-585 stays partial.
+func TestP0585Honesty_CredentialUsageLimit_DoesNotClaimCascadeComplete(t *testing.T) {
+	// Residual contract (do not "fix" product status here):
+	// 1) Usage-limit cools same-credential siblings only (shared-key truth).
+	// 2) Non-usage-limit remains channel-scoped exclude (no credential expand).
+	// 3) Multi-channel impact under shared credential is intentional, not a bug.
+	// 4) Passing these honesty tests does NOT flip P0-585 from partial → present.
+	const residualNote = "P0-585 honesty residual: credential-scoped usage-limit multi-channel cool is intentional shared-key truth, not cascade-complete"
 	if residualNote == "" {
 		t.Fatal("unreachable")
 	}
