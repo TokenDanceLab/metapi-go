@@ -15,11 +15,11 @@
 | [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–5 **source on master** (forms/a11y/shell mock/empty) |
 | #532 | UX | Epic UI-REFRESH |
 | #533–#536 | UX | Phase 1 foundation — in tree unreleased |
-| #537 | UX | Phase 4 forms/drawers — **source merged** (close after release) |
+| #537 | UX | Phase 4 forms/drawers — **closed** on master |
 | #538 | UX | Shell mock shots — **source merged**; residual real authed shots |
 | #539 | UX | Linux Playwright gallery baselines (CI SSOT) — residual |
-| #540 | UX | Phase 5 a11y — **source merged**; residual focus-trap/hex |
-| #541 | UX | Empty/error `EmptyState` — primitive + DownstreamKeys/CheckinLog/Models adopted |
+| #540 | UX | Phase 5 a11y core — **closed**; residual focus-trap/hex |
+| #541 | UX | Empty/error — **closed** (primitive + 3 pages); residual other pages |
 
 ## Hard gates
 
