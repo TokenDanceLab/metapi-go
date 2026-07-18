@@ -4,6 +4,7 @@ import { MobileCard, MobileField } from "../components/MobileCard.js";
 import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
 import { useToast } from "../components/Toast.js";
 import { useIsMobile } from "../components/useIsMobile.js";
+import { EmptyState, Button as DsButton } from "../design-system/index.js";
 import {
   formatCheckinLogTime,
   parseServerUtcDateTime,
@@ -548,23 +549,22 @@ export default function CheckinLog() {
         )}
 
         {!loading && filtered.length === 0 && (
-          <div className="empty-state">
-            <svg
-              className="empty-state-icon"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div className="empty-state-title">暂无签到记录</div>
-            <div className="empty-state-desc">点击“运行所有签到”开始执行</div>
-          </div>
+          <EmptyState
+            tone="info"
+            icon="✓"
+            title="暂无签到记录"
+            description="点击“运行所有签到”开始执行"
+            action={(
+              <DsButton
+                size="sm"
+                variant="primary"
+                onClick={handleTriggerAll}
+                disabled={triggering}
+              >
+                {triggering ? "触发中..." : "运行所有签到"}
+              </DsButton>
+            )}
+          />
         )}
       </div>
     </div>

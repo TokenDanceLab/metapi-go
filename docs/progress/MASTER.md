@@ -19,7 +19,7 @@
 | #538 | UX | Shell mock shots — **source merged**; residual real authed shots |
 | #539 | UX | Linux Playwright gallery baselines (CI SSOT) — residual |
 | #540 | UX | Phase 5 a11y — **source merged**; residual focus-trap/hex |
-| #541 | UX | Empty/error `EmptyState` primitive — **in tree** |
+| #541 | UX | Empty/error `EmptyState` — primitive + DownstreamKeys/CheckinLog/Models adopted |
 
 ## Hard gates
 

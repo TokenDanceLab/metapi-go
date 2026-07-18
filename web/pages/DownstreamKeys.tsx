@@ -8,6 +8,7 @@ import ResponsiveBatchActionBar from '../components/ResponsiveBatchActionBar.js'
 import { useToast } from '../components/Toast.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import { tr } from '../i18n.js';
 import DownstreamKeyEditorModal, {
   TagInput,
@@ -1172,10 +1173,17 @@ export default function DownstreamKeys() {
         {loading ? (
           <div className="skeleton" style={{ width: '100%', height: 280, borderRadius: 'var(--radius-sm)' }} />
         ) : empty ? (
-          <div className="empty-state" style={{ padding: 40 }}>
-            <div className="empty-state-title">暂无下游密钥</div>
-            <div className="empty-state-desc">可以先新增一条密钥，或调整筛选条件查看已有数据。</div>
-          </div>
+          <EmptyState
+            tone="neutral"
+            icon="◇"
+            title="暂无下游密钥"
+            description="可以先新增一条密钥，或调整筛选条件查看已有数据。"
+            action={(
+              <DsButton size="sm" variant="primary" onClick={openCreate}>
+                + 新增下游密钥
+              </DsButton>
+            )}
+          />
         ) : isMobile ? (
           <div className="mobile-card-list">
             {visibleItems.map((row) => {

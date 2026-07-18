@@ -3,6 +3,11 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] #541 EmptyState page adoption (DownstreamKeys/CheckinLog/Models)
+
+- Migrated empty surfaces to design-system `EmptyState` + primary action.
+- Residual: remaining pages (Accounts/Sites/Logs/OAuth/…); Tokens panel is redirect-only.
+
 ## [2026-07-19] UI-REFRESH Phase 4/5/shell **source** merge + EmptyState
 
 - Fixed incomplete prior tip: worktree source for #537/#540/#538 actually merged to product tree (forms/a11y/shell mock).
