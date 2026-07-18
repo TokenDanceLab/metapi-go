@@ -94,6 +94,11 @@ func (h *authSettingsHandler) changeToken(w http.ResponseWriter, r *http.Request
 	// Update runtime config
 	h.cfg.AuthToken = body.NewToken
 
+	// Defense-in-depth: expire HttpOnly meta_monitor_auth so browsers drop the
+	// dead cookie after AuthToken rotation (HMAC already invalidates server-side).
+	// Only on success — failed change must not clear a still-valid session cookie.
+	clearMonitorAuthCookies(w, r)
+
 	// Log the change event
 	h.db.Exec(`INSERT INTO events (type, title, message, level, related_type, created_at, read)
 		VALUES ('token', '管理员登录令牌已更新', '管理员登录 Token 已被修改，请使用新 Token 登录。', 'warning', 'settings', ?, 0)`, now)
