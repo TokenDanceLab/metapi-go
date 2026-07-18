@@ -1,70 +1,50 @@
-# MASTER.md — MetAPI Go
+# MASTER.md — MetAPI Go open gates
 
-**Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery  
-**Mode**: GitHub Issues + Milestones (SDD)  
+**Last verified**: 2026-07-18  
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
-**Latest release**: **[v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39)** (2026-07-18)
+**Mode**: GitHub Issues + Milestones (SDD) · product **maintenance**
 
-> 本文件是**进度基线 / 会话入口**，不是变更日志。细节进 Issue / PR / CHANGELOG。  
-> 文档地图：[`docs/README.md`](../README.md)
+> **开放项 + 硬门禁**（不是现状全文，也不是日志）。  
+> 现状 → [`../STATE.md`](../STATE.md)  
+> 时间线 → [`../log.md`](../log.md)  
+> 文档地图 → [`../README.md`](../README.md)  
+> 禁止把临时 HANDOFF / session 摘要当 SSOT。
 
-## Progress baseline (verified 2026-07-18)
-
-| Fact | Value |
-|:-----|:------|
-| Tip | `origin/master` @ release docs commit for **v0.8.39** |
-| Tag / Release | **v0.8.39** published · GHCR badge series **v0.8.39** |
-| Active milestone | **none** (M49 closed; 0 open milestones) |
-| Open issues / PRs | **0 / 0** (board clean) |
-| Mode | **Maintenance** — optional **v0.8.40+** only with dedicated ACs |
-| Honesty holds | **P0-585 partial** · **P0-555 present-with-residual** · no invent WS-1 / STICKY-B / UC-1 |
-
-## Tracking
-
-| Item | URL |
-|:-----|:----|
-| Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Residual backlog (honesty SSOT) | `docs/analysis/residual-next-candidates.md` |
-| Program map (closed foundations) | `docs/plan/enterprise-program.md` |
-| Gap matrix | `docs/analysis/original-gap-matrix.md` |
-| Architecture | `docs/architecture.md` · design `docs/design/BACKEND.md` |
-| M35 review (historical) | `docs/analysis/enterprise-review-m35.md` (#388) |
-
-## Current Status (2026-07-18)
-
-| Track | Status | Notes |
-|:------|:-------|:------|
-| Rewrite P0–P13 | ✅ | Single-binary Go + embed SPA |
-| Program foundations (STACK / GAP / BACKEND / UI / SCHEMA / RELIABILITY / FEATURE) | ✅ | Closed; residual polish only |
-| Enterprise residual train **v0.8.18–v0.8.39** (M27–M49) | ✅ closed | Narrative → `CHANGELOG.md` + GitHub Releases |
-
-## Active work
+## Open product board
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean (no open residual product board) |
+| — | — | **Empty** — no open residual product milestone |
 
-**Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
+## Hard gates (do not violate)
 
-## Latest residual releases (pointer only)
+1. **No invent**: WS-1 / STICKY-B Redis sticky / UC-1 updateAvailable without dedicated Milestone + ACs.
+2. **Honesty**: keep **P0-585 partial**; **P0-555 present-with-residual**.
+3. **v0.8.40+** only with dedicated ACs — default is maintenance.
+4. **Pre-push**: `go vet ./... && go test ./... -count=1 -race` (hook enforced).
+5. **One Issue per topic**; no conflict markers in squash merges.
+6. **Ops pin ≠ tip**: production image/host lives in server `projects/metapi/STATE.md`; do not claim fleet is on tip without ops evidence.
 
-| Tag | Milestone | Highlights |
-|:----|:----------|:-----------|
-| [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) | 49 | RR fail-count · used_requests 429 order · Redis admit rollback · max_cost wire · Gemini path/stream · retention RFC3339 · residual honesty |
-| [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) | 48 | Redis admission truth · docker badge · residual latest sequencing · residual honesty |
-| older | ≤47 | See GitHub Releases / `CHANGELOG.md` |
+## Optional residual candidates (not scheduled)
 
-## Architecture entry points
+SSOT inventory: [`../analysis/residual-next-candidates.md`](../analysis/residual-next-candidates.md)
 
-| Concern | SSOT |
+| Priority if AC arrives | Candidate |
+|:-----------------------|:----------|
+| Reliability | P0-585 multi-channel load-proof |
+| Billing polish | P0-555 residual media / multi-instance lag |
+| Product | WS-1 · STICKY-B · UC-1 (each needs product AC) |
+
+## Tracking surfaces
+
+| Surface | Role |
 |:--------|:-----|
-| Package map / request path | `docs/architecture.md` |
-| Backend philosophy / boundaries | `docs/design/BACKEND.md` |
-| UI design system | `docs/design/DESIGN.md` |
-| Engineering rules | root `AGENTS.md` |
-| Public API surface | `docs/api.md` |
-| Deploy | `docs/deployment.md` |
-| Residual honesty (what is NOT product yet) | `docs/analysis/residual-next-candidates.md` |
+| [`../STATE.md`](../STATE.md) | 现状 |
+| This file | 开放项 + 硬门禁 |
+| [`../log.md`](../log.md) | 进度日志（append-only） |
+| GitHub Issues/Milestones | Task SSOT when board reopens |
+| `CHANGELOG.md` | Release narrative |
+| `AGENTS.md` | Engineering rules |
 
 ## Quick status commands
 
@@ -74,21 +54,3 @@ gh pr list --state open
 gh release view v0.8.39
 git log --oneline origin/master -10
 ```
-
-## Next Steps
-
-1. Stay in **maintenance** after **v0.8.39**. Optional residual **v0.8.40+** only with dedicated ACs.
-2. Do **not** invent WS-1 / STICKY-B Redis sticky / UC-1 product without dedicated ACs.
-3. Keep **P0-585 partial** and **P0-555 present-with-residual**; load-proof / media polish only with ACs.
-
-## Governance
-
-| Surface | Role |
-|:--------|:-----|
-| `AGENTS.md` | Agent hard rules (parity, dual dialect, pre-push) |
-| GitHub Issues/Milestones | Task SSOT |
-| `docs/progress/MASTER.md` | Progress baseline + session resume (this file) |
-| `CHANGELOG.md` | Version narrative |
-| Native Claude project memory | Optional short pointers only |
-
-Telemetry / drift: Milestone descriptions + Issue comments (SDD adaptive control).

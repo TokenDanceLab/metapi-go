@@ -1,6 +1,6 @@
 # Milestones — Production Hardening
 
-> **Status: closed / superseded** (original v0.4.0 target; product is **v0.8.39+**). Do not treat M1–M5 as open production board. Progress baseline: `docs/progress/MASTER.md`. Residual train: `docs/analysis/residual-next-candidates.md` + `CHANGELOG.md`.
+> **Status: closed / superseded** (original v0.4.0 target; product is **v0.8.39+**). Do not treat M1–M5 as open production board. 现状: `docs/STATE.md` · 开放门禁: `docs/progress/MASTER.md`. Residual train: `docs/analysis/residual-next-candidates.md` + `CHANGELOG.md`.
 
 | # | Milestone | After | Criteria | Status |
 |:--|:----------|:------|:---------|:-------|

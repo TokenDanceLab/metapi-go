@@ -1,6 +1,6 @@
 # MetAPI-Go Enterprise Modernization Program
 
-> **Status: closed / historical program map** (foundations closed; residual train closed through M49 / **v0.8.39**). Living residual queue: `docs/analysis/residual-next-candidates.md`. Progress baseline: `docs/progress/MASTER.md`. Do not schedule greenfield modernization from this file.
+> **Status: closed / historical program map** (foundations closed; residual train closed through M49 / **v0.8.39**). Living residual queue: `docs/analysis/residual-next-candidates.md`. 现状: `docs/STATE.md` · 开放门禁: `docs/progress/MASTER.md`. Do not schedule greenfield modernization from this file.
 
 **Goal**: 彻底完成 MetAPI 的现代化升级与企业级改造 — 前端风格统一与 UI/UX、后端理念与结构清晰、schema 兼容原版且可升级、功能全面、边界条件干净。
 

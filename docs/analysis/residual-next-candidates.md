@@ -4,9 +4,10 @@
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#517](https://github.com/TokenDanceLab/metapi-go/issues/517) (trail via MASTER / CHANGELOG)  
 **Context**: **v0.8.39 shipped** (Milestone 49 closed; Issues #511–#517 / PRs #518–#525 on master + tag). M49 reliability: RR fail-count, used_requests 429 order, Redis admit rollback, max_cost wire, Gemini path/stream, retention RFC3339, residual honesty. Residual train **v0.8.18–v0.8.39** is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
-**Map**: [`docs/README.md`](../README.md) · progress baseline [`docs/progress/MASTER.md`](../progress/MASTER.md)  
+**Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (board clean; optional residual **v0.8.40+** only with dedicated ACs)
+**Active wave**: none (board clean; optional residual **v0.8.40+** only with dedicated ACs)  
+**Tip note**: master may include post-**v0.8.39** commits (e.g. #526 PG pool budget) before the next tag — see STATE.
 
 ## Purpose
 
@@ -130,5 +131,5 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Progress baseline: [`docs/progress/MASTER.md`](../progress/MASTER.md)
+- 现状: [`docs/STATE.md`](../STATE.md) · 开放门禁: [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志: [`docs/log.md`](../log.md)
 - Release: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · prior [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · optional residual **v0.8.40+** (with ACs only)

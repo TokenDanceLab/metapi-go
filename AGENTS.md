@@ -83,7 +83,9 @@ golangci-lint run --timeout=3m        # Lint check
 
 | Path | Role |
 |------|------|
-| `docs/progress/MASTER.md` | Progress baseline + slim session index (not a changelog) |
+| `docs/STATE.md` | **现状 SSOT** (verified product facts; keep slim) |
+| `docs/progress/MASTER.md` | **开放项 + 硬门禁** (not a changelog) |
+| `docs/log.md` | **进度日志** append-only (never overrides STATE) |
 | `docs/architecture.md` | As-built package map (proxy/transform/routing; not proxycore/protocol) |
 | `docs/design/BACKEND.md` | Backend philosophy, dependency rules, forbidden imports |
 | `docs/design/DESIGN.md` | UI design system SSOT |
@@ -93,6 +95,8 @@ golangci-lint run --timeout=3m        # Lint check
 | `docs/specs/` | Rewrite-era phase specs (large; historical) |
 | `CHANGELOG.md` | Version narrative |
 
+**Progress roles:** STATE = 现状 · MASTER = 开放门禁 · LOG = 时间线。Temporary HANDOFF/session summaries are **not** SSOT — archive or delete after use.  
+**Ops host/image pin** lives in server `projects/metapi/STATE.md` (may lag this repo tip).  
 **Honesty:** Prefer 501 / documented residual over stub theater. Do not claim cluster-wide sticky or WS product without the matching Milestone.
 
 ## Related References
