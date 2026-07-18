@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/platform"
 	"github.com/tokendancelab/metapi-go/service"
 )
 
@@ -45,13 +46,15 @@ func (c *TelegramChannel) Send(cfg *config.Config, title, message, level, timeFo
 
 	body, _ := json.Marshal(bodyMap)
 
-	// Use system proxy if configured
+	// Use system proxy if configured. Always reject cross-origin redirects so a
+	// compromised/misconfigured Telegram API base cannot SSRF via 302.
 	var client *http.Client
 	if cfg.TelegramUseSystemProxy && cfg.SystemProxyUrl != "" {
 		client = service.ProxyAwareHTTPClient(cfg.SystemProxyUrl, 30*time.Second)
 	} else {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
+	client.CheckRedirect = platform.RejectCrossOriginRedirect
 
 	resp, err := client.Post(reqURL, "application/json", strings.NewReader(string(body)))
 	if err != nil {

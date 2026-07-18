@@ -194,3 +194,36 @@ func TestTelegramRejectsOversizedResponseBody(t *testing.T) {
 		t.Fatalf("error = %q, want telegram response read failure", err)
 	}
 }
+
+func TestTelegramRejectsCrossOriginRedirect(t *testing.T) {
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	err := (&TelegramChannel{}).Send(&config.Config{
+		TelegramEnabled:    true,
+		TelegramBotToken:   "bot-token",
+		TelegramChatId:     "123",
+		TelegramApiBaseUrl: source.URL,
+	}, "title", "message", "info", "time")
+	if err == nil {
+		t.Fatal("expected cross-origin telegram redirect to fail")
+	}
+	if !strings.Contains(err.Error(), "telegram request failed") {
+		t.Fatalf("error = %q, want telegram request failure", err)
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %q, want cross-origin", err)
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was called")
+	}
+}
