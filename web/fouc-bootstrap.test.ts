@@ -18,7 +18,7 @@ describe('FOUC bootstrap (index.html)', () => {
     expect(head).toContain("setAttribute('data-theme'");
     expect(head).toContain('colorScheme');
     expect(head).toContain('#0b0f14');
-    expect(head).toContain('#f4f6f8');
+    expect(head).toContain('#eef2f6');
     expect(head).toMatch(/<meta\s+name=["']color-scheme["']\s+content=["']light dark["']\s*\/?>/i);
   });
 

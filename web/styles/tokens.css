@@ -27,9 +27,9 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Surfaces — canvas matches FOUC bootstrap (#535): #f4f6f8 */
-  --color-bg: #f4f6f8;
-  --color-bg-secondary: #eef1f4;
+  /* Surfaces — canvas matches FOUC bootstrap (#535): cool GCP gray */
+  --color-bg: #eef2f6;
+  --color-bg-secondary: #e4eaf0;
   --color-bg-card: #ffffff;
   --color-bg-sidebar: rgba(255, 255, 255, 0.86);
   --color-bg-topbar: rgba(255, 255, 255, 0.78);
@@ -41,28 +41,28 @@
   --color-surface-2: var(--color-bg-secondary);
   --color-surface-subtle: var(--color-bg-secondary);
 
-  /* Borders */
-  --color-border: #e8e8e8;
-  --color-border-light: #f0f0f0;
-  --color-border-strong: #d4d4d4;
+  /* Borders — cool GCP hairlines */
+  --color-border: #e3e8ee;
+  --color-border-light: #eef2f6;
+  --color-border-strong: #c9d2dc;
 
   /* Text */
-  --color-text-primary: #1a1a1a;
-  --color-text-secondary: #666666;
-  --color-text-tertiary: #8a8a8a;
-  --color-text-muted: #999999;
+  --color-text-primary: #202124;
+  --color-text-secondary: #5f6368;
+  --color-text-tertiary: #80868b;
+  --color-text-muted: #9aa0a6;
   --color-text-inverse: #ffffff;
   --color-text-link: var(--color-primary);
 
-  /* Brand */
-  --color-primary: #4f46e5;
-  --color-primary-light: #eef2ff;
-  --color-primary-hover: #4338ca;
+  /* Brand — GCP blue-gray (UI-REFRESH), not saturated indigo marketing */
+  --color-primary: #1a73e8;
+  --color-primary-light: #e8f0fe;
+  --color-primary-hover: #1557b0;
   --color-primary-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  --color-accent: #06b6d4;
-  --color-accent-soft: #ecfeff;
-  --color-accent-hover: var(--color-primary-hover);
-  --color-brand-gradient: linear-gradient(135deg, #4f46e5, #06b6d4);
+  --color-accent: #5f6368;
+  --color-accent-soft: #f1f3f4;
+  --color-accent-hover: #3c4043;
+  --color-brand-gradient: linear-gradient(135deg, #1a73e8 0%, #4285f4 55%, #669df6 100%);
 
   /* Semantic */
   --color-success: #16a34a;
@@ -78,14 +78,14 @@
   --color-warn-soft: var(--color-warning-soft);
 
   /* Chart categorical series (shared across themes) */
-  --color-chart-1: #4f46e5;
-  --color-chart-2: #06b6d4;
-  --color-chart-3: #10b981;
-  --color-chart-4: #f59e0b;
-  --color-chart-5: #ef4444;
-  --color-chart-6: #8b5cf6;
-  --color-chart-7: #ec4899;
-  --color-chart-8: #14b8a6;
+  --color-chart-1: #1a73e8;
+  --color-chart-2: #12b5cb;
+  --color-chart-3: #1e8e3e;
+  --color-chart-4: #f9ab00;
+  --color-chart-5: #d93025;
+  --color-chart-6: #a142f4;
+  --color-chart-7: #e52592;
+  --color-chart-8: #e8710a;
   --color-chart-1-soft: color-mix(in srgb, var(--color-chart-1) 25%, transparent);
   --color-chart-1-faint: color-mix(in srgb, var(--color-chart-1) 2%, transparent);
   --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));
@@ -109,14 +109,14 @@
   --color-stat-cyan-ink: #0891b2;
 
   /* Focus / overlay */
-  --color-focus-ring: rgba(79, 70, 229, 0.45);
+  --color-focus-ring: rgba(26, 115, 232, 0.42);
   --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
-  --color-overlay: rgba(15, 15, 15, 0.45);
-  --color-scrollbar: #cfcfcf;
+  --color-overlay: rgba(32, 33, 36, 0.42);
+  --color-scrollbar: #dadce0;
   --color-on-primary: #ffffff;
   --color-spinner-track-on-primary: rgba(255, 255, 255, 0.3);
 
-  /* Spacing scale (4px base) */
+  /* Spacing scale (4px base) — ops-comfortable Apple rhythm */
   --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;
@@ -127,42 +127,49 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
-  --space-main: 24px;
+  --space-main: 28px;
   --gap-tight: 4px;
-  --gap-default: 8px;
-  --gap-section: 16px;
+  --gap-default: 10px;
+  --gap-section: 20px;
 
-  /* Radius ladder */
+  /* Radius ladder — control 10 / card 14 / shell 16 */
   --radius-xs: 4px;
   --radius-sm: 8px;
+  --radius-control: 10px;
   --radius-md: 12px;
+  --radius-card: 14px;
   --radius-lg: 16px;
+  --radius-shell: 16px;
   --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Elevation */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.04);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04);
+  /* Elevation — dual soft ambient + key (Apple-like), cards must read clearly on canvas */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06);
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.07);
+  --shadow-elevated: 0 14px 36px rgba(15, 23, 42, 0.14), 0 2px 10px rgba(15, 23, 42, 0.07);
 
   /* Glass material family (#533 / UI-REFRESH) */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-bg-strong: rgba(255, 255, 255, 0.86);
   --glass-border: rgba(255, 255, 255, 0.55);
-  --glass-blur: 16px;
-  --glass-saturate: 1.2;
-  --shadow-glass: 0 8px 24px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+  --glass-blur: 18px;
+  --glass-saturate: 1.25;
+  --shadow-glass: 0 8px 28px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255, 255, 255, 0.62) inset;
 
-  /* Motion */
+  /* Motion — calm spring-ish, never bouncy */
   --duration-instant: 100ms;
   --duration-fast: 150ms;
   --duration-normal: 200ms;
-  --duration-moderate: 300ms;
-  --duration-slow: 450ms;
+  --duration-moderate: 280ms;
+  --duration-slow: 420ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.15, 0.64, 1);
   --ease-linear: linear;
+  --motion-swift: var(--duration-fast) var(--ease-standard);
+  --motion-soft: var(--duration-moderate) var(--ease-emphasized);
 
   /* Layout chrome */
   --topbar-height: 56px;
@@ -190,25 +197,26 @@
   --color-bg-hover: rgba(255, 255, 255, 0.05);
   --color-bg-active: rgba(255, 255, 255, 0.08);
 
-  --color-border: #2a2a2a;
-  --color-border-light: #222222;
-  --color-border-strong: #3a3a3a;
+  --color-border: #2a323c;
+  --color-border-light: #1f262e;
+  --color-border-strong: #3d4754;
 
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #a0a0a0;
-  --color-text-tertiary: #7a7a7a;
-  --color-text-muted: #666666;
-  --color-text-inverse: #0f0f0f;
+  --color-text-primary: #e8eaed;
+  --color-text-secondary: #9aa0a6;
+  --color-text-tertiary: #80868b;
+  --color-text-muted: #5f6368;
+  --color-text-inverse: #0b0f14;
   --color-text-link: var(--color-primary);
 
-  --color-primary: #6366f1;
-  --color-primary-light: #1e1b4b;
-  --color-primary-hover: #818cf8;
+  /* Brand — GCP blue, dark-elevated */
+  --color-primary: #8ab4f8;
+  --color-primary-light: #1a2b45;
+  --color-primary-hover: #aecbfa;
   --color-primary-soft: color-mix(in srgb, var(--color-primary) 18%, transparent);
-  --color-accent: #22d3ee;
-  --color-accent-soft: #083344;
-  --color-accent-hover: var(--color-primary-hover);
-  --color-brand-gradient: linear-gradient(135deg, #6366f1, #22d3ee);
+  --color-accent: #9aa0a6;
+  --color-accent-soft: #1f262e;
+  --color-accent-hover: #bdc1c6;
+  --color-brand-gradient: linear-gradient(135deg, #8ab4f8 0%, #669df6 55%, #4285f4 100%);
 
   --color-success: #4ade80;
   --color-success-soft: #052e16;
@@ -241,17 +249,18 @@
   --color-stat-cyan: #083344;
   --color-stat-cyan-ink: #22d3ee;
 
-  --color-focus-ring: rgba(99, 102, 241, 0.55);
+  --color-focus-ring: rgba(138, 180, 248, 0.5);
   --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
   --color-overlay: rgba(0, 0, 0, 0.65);
   --color-scrollbar: #3a3a3a;
-  --color-on-primary: #ffffff;
-  --color-spinner-track-on-primary: rgba(255, 255, 255, 0.3);
+  --color-on-primary: #0b0f14;
+  --color-spinner-track-on-primary: rgba(11, 15, 20, 0.3);
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-elevated: 0 14px 36px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.05);
 
   /* Glass material family (#533 / UI-REFRESH) */
   --glass-bg: rgba(22, 27, 34, 0.72);

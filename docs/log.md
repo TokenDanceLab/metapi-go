@@ -7,6 +7,12 @@
 
 
 
+## [2026-07-19] UI-REFRESH GCP/Apple token + card density
+
+- Primary remapped to GCP blue (`#1a73e8` / dark `#8ab4f8`); cool gray accent; FOUC canvas retained.
+- New semantic radius (`control`/`card`/`shell`), dual soft shadows, `motion-swift`/`motion-soft`.
+- Cards/stat-cards/page-header + design-system primitives consume new tokens; DESIGN.md rewritten.
+
 ## [2026-07-19] UI-REFRESH Phase 2 shell glass
 
 - CSS-only glass chrome in `web/index.css`: topbar, sidebar, user-dropdown, mobile drawer, login surfaces.

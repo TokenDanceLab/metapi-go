@@ -11,7 +11,7 @@ export type DataTheme = 'light' | 'dark';
 
 export type ThemeStorageGetItem = (key: string) => string | null;
 
-const CANVAS_BG_LIGHT = '#f4f6f8';
+const CANVAS_BG_LIGHT = '#eef2f6';
 const CANVAS_BG_DARK = '#0b0f14';
 
 function isDataTheme(value: string | null | undefined): value is DataTheme {

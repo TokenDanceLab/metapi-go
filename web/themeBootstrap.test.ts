@@ -77,7 +77,7 @@ describe('themeBootstrap', () => {
 
   describe('canvasBackgroundForTheme', () => {
     it('returns design canvas colors for light and dark', () => {
-      expect(canvasBackgroundForTheme('light')).toBe('#f4f6f8');
+      expect(canvasBackgroundForTheme('light')).toBe('#eef2f6');
       expect(canvasBackgroundForTheme('dark')).toBe('#0b0f14');
     });
   });

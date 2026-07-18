@@ -18,6 +18,11 @@ function readDocumentTheme(): ThemeChoice {
 
 function setDocumentTheme(theme: ThemeChoice) {
   document.documentElement.setAttribute('data-theme', theme);
+  try {
+    document.documentElement.style.colorScheme = theme;
+  } catch {
+    /* ignore incomplete CSSOM */
+  }
 }
 
 /**
@@ -46,14 +51,25 @@ export default function DesignSystemGallery() {
     [],
   );
 
+  const kpis = useMemo(
+    () => [
+      { label: 'Requests / min', value: '12.4k', delta: '+6.2%', tone: 'success' as const },
+      { label: 'Error rate', value: '0.18%', delta: '−0.04%', tone: 'success' as const },
+      { label: 'Active sites', value: '103', delta: '+2', tone: 'info' as const },
+      { label: 'Pool pressure', value: '1 / 1', delta: 'shared-tiny', tone: 'warn' as const },
+    ],
+    [],
+  );
+
   return (
     <div className="ds-gallery" data-testid="design-system-gallery">
       <header className="ds-gallery__header">
         <div>
+          <p className="ds-gallery__eyebrow">UI-REFRESH · M51</p>
           <h1 className="ds-gallery__title">MetAPI Design System</h1>
           <p className="ds-gallery__subtitle">
-            Primitive inventory for visual acceptance. Classes use <code>ds-</code> prefix and
-            token vars <code>var(--color-*)</code>.
+            GCP console calm + frosted glass + Apple detail. Primitives use the <code>ds-</code> prefix
+            and token vars only — no page-level hex.
           </p>
         </div>
         <Inline gap={2}>
@@ -76,6 +92,19 @@ export default function DesignSystemGallery() {
         </Inline>
       </header>
 
+      <section className="ds-gallery__section" aria-labelledby="ds-kpis">
+        <h2 id="ds-kpis" className="ds-gallery__section-title">KPI cards</h2>
+        <div className="ds-gallery__kpi-grid">
+          {kpis.map((kpi) => (
+            <article key={kpi.label} className="ds-gallery__kpi">
+              <div className="ds-gallery__kpi-label">{kpi.label}</div>
+              <div className="ds-gallery__kpi-value">{kpi.value}</div>
+              <Badge tone={kpi.tone}>{kpi.delta}</Badge>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="ds-gallery__section" aria-labelledby="ds-buttons">
         <h2 id="ds-buttons" className="ds-gallery__section-title">Button</h2>
         <Surface variant="solid" padding="md">
@@ -91,7 +120,7 @@ export default function DesignSystemGallery() {
               </Inline>
             </div>
             <div>
-              <p className="ds-gallery__swatch-meta" style={{ marginBottom: 8 }}>size=sm</p>
+              <p className="ds-gallery__swatch-meta" style={{ marginBottom: 8 }}>size=sm · calm motion</p>
               <Inline gap={2}>
                 <Button variant="primary" size="sm">Primary</Button>
                 <Button variant="secondary" size="sm">Secondary</Button>
@@ -104,14 +133,15 @@ export default function DesignSystemGallery() {
       </section>
 
       <section className="ds-gallery__section" aria-labelledby="ds-surfaces">
-        <h2 id="ds-surfaces" className="ds-gallery__section-title">Surface</h2>
+        <h2 id="ds-surfaces" className="ds-gallery__section-title">Surface material</h2>
         <div className="ds-gallery__grid">
           {sampleSurfaces.map((item) => (
             <Surface key={item.variant} variant={item.variant} padding="md">
-              <Stack gap={1}>
+              <Stack gap={2}>
                 <strong>{item.label}</strong>
-                <span className="ds-gallery__swatch-meta">variant=&quot;{item.variant}&quot;</span>
-                <span>Token-backed surface for panels and chrome.</span>
+                <span className="ds-gallery__swatch-meta">
+                  Glass for shell/modal only; solid for dense tables; sunken for wells.
+                </span>
               </Stack>
             </Surface>
           ))}
@@ -119,27 +149,30 @@ export default function DesignSystemGallery() {
       </section>
 
       <section className="ds-gallery__section" aria-labelledby="ds-cards">
-        <h2 id="ds-cards" className="ds-gallery__section-title">Card</h2>
+        <h2 id="ds-cards" className="ds-gallery__section-title">Card hierarchy</h2>
         <div className="ds-gallery__grid">
-          <Card
-            title="Solid card"
-            description="Default elevated content container."
-            footer={(
-              <Inline gap={2} justify="end">
-                <Button variant="ghost" size="sm">Cancel</Button>
-                <Button variant="primary" size="sm">Save</Button>
-              </Inline>
-            )}
-          >
-            Body uses design tokens for text, border, and shadow.
+          <Card title="Sites" description="Primary data surface with hairline border and soft dual shadow.">
+            <Inline gap={2}>
+              <Badge tone="success">healthy</Badge>
+              <Badge tone="info">103 online</Badge>
+            </Inline>
+            <div className="ds-gallery__fake-table" aria-hidden="true">
+              <div /><div /><div />
+              <div /><div /><div />
+            </div>
           </Card>
-          <Card
-            glass
-            title="Glass card"
-            description="Optional glass material for sticky chrome."
-            footer={<Badge tone="info">glass</Badge>}
-          >
-            Falls back to solid when reduced-transparency is preferred.
+          <Card title="Routes" description="Secondary card with actions.">
+            <Inline gap={2}>
+              <Button size="sm" variant="primary">Create</Button>
+              <Button size="sm" variant="secondary">Import</Button>
+            </Inline>
+          </Card>
+          <Card title="Alerts" description="Soft semantic badges stay dark-safe.">
+            <Inline gap={2}>
+              <Badge tone="warn">degraded</Badge>
+              <Badge tone="danger">53300</Badge>
+              <Badge tone="neutral">idle</Badge>
+            </Inline>
           </Card>
         </div>
       </section>
@@ -160,50 +193,39 @@ export default function DesignSystemGallery() {
       <section className="ds-gallery__section" aria-labelledby="ds-inputs">
         <h2 id="ds-inputs" className="ds-gallery__section-title">Input</h2>
         <Surface variant="solid" padding="md">
-          <div className="ds-gallery__grid">
+          <div className="ds-gallery__form-grid">
             <Input
-              label="Default"
-              placeholder="Type a value"
+              label="Application name"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              hint="Uses --color-border / --color-text-*"
+              hint="Token-backed control radius 10px · 36px height"
             />
-            <Input
-              label="With error"
-              defaultValue="invalid"
-              error="This field is required"
-            />
-            <Input
-              label="Disabled"
-              defaultValue="read-only sample"
-              disabled
-            />
+            <Input label="Disabled" value="read-only pool" disabled />
+            <Input label="Invalid" value="" error="Required for Azure role LIMIT" />
           </div>
         </Surface>
       </section>
 
-      <section className="ds-gallery__section" aria-labelledby="ds-layout">
-        <h2 id="ds-layout" className="ds-gallery__section-title">Stack / Inline</h2>
+      <section className="ds-gallery__section" aria-labelledby="ds-tokens">
+        <h2 id="ds-tokens" className="ds-gallery__section-title">Token swatches</h2>
         <div className="ds-gallery__grid">
-          <Surface variant="sunken" padding="md">
-            <Stack gap={2}>
-              <strong>Stack (column)</strong>
-              <Badge tone="info">gap=2</Badge>
-              <Badge tone="neutral">align=stretch</Badge>
-              <Badge tone="success">justify=start</Badge>
-            </Stack>
-          </Surface>
-          <Surface variant="sunken" padding="md">
-            <Stack gap={2}>
-              <strong>Inline (row)</strong>
-              <Inline gap={2} wrap>
-                <Badge tone="success">one</Badge>
-                <Badge tone="warn">two</Badge>
-                <Badge tone="danger">three</Badge>
-                <Badge tone="info">four</Badge>
-              </Inline>
-            </Stack>
-          </Surface>
+          {[
+            ['--color-primary', 'var(--color-primary)'],
+            ['--color-bg', 'var(--color-bg)'],
+            ['--color-bg-card', 'var(--color-bg-card)'],
+            ['--color-success', 'var(--color-success)'],
+            ['--color-warn', 'var(--color-warn)'],
+            ['--color-danger', 'var(--color-danger)'],
+          ].map(([name, value]) => (
+            <div
+              key={name}
+              className="ds-gallery__swatch"
+              style={{ background: value }}
+            >
+              <span className="ds-gallery__swatch-name">{name}</span>
+              <span className="ds-gallery__swatch-meta">token-only</span>
+            </div>
+          ))}
         </div>
       </section>
     </div>
