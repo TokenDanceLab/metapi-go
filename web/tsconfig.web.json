@@ -11,6 +11,8 @@
     "*.tsx",
     "components/**/*.ts",
     "components/**/*.tsx",
+    "design-system/**/*.ts",
+    "design-system/**/*.tsx",
     "pages/**/*.ts",
     "pages/**/*.tsx",
     "shared/**/*.ts",
@@ -23,6 +25,8 @@
     "**/*.test.tsx",
     "**/*.architecture.test.ts",
     "**/*.architecture.test.tsx",
+    "playwright.config.ts",
+    "e2e/**",
     "node_modules",
     "dist"
   ]

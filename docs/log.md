@@ -7,6 +7,13 @@
 
 
 
+## [2026-07-19] UI-REFRESH Phase 1 foundation in tree
+
+- FOUC #535: `themeBootstrap` + head script theme_mode-first; canvas #0b0f14/#f4f6f8; unit + e2e contracts.
+- Design system #533: `web/design-system/*` primitives (ds-*) + `/__design__` gallery (auth-free when DEV or `metapi_design_gallery=1`); glass tokens.
+- Visual/e2e #534/#536: Playwright harness (`web/e2e/*`, Makefile `ui-e2e`/`ui-visual`, CI `ui-visual.yml`); vitest excludes e2e.
+- Residual: gallery snapshot baselines, DESIGN.md full rewrite, shell glass Phase 2.
+
 ## [2026-07-19] UI-REFRESH M51 opened + multi-lane kickoff
 
 - Milestone 51 UI-REFRESH; issues #532 epic, #535 FOUC, #533 design-system, #534 visual, #536 e2e.

@@ -13,7 +13,7 @@
 | Issue | Track | Title |
 |------:|:------|:------|
 | — | — | **Empty product board** after #531 / v0.8.44 |
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · #535 FOUC · #533 design-system · #534 visual · #536 e2e |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1 in tree: #535 FOUC · #533 DS+gallery · #534/#536 Playwright harness (baselines + shell Phase 2 residual) |
 
 ## Hard gates
 

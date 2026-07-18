@@ -37,6 +37,10 @@ const ModelTester = lazy(() => import('./pages/ModelTester.js'));
 const Monitors = lazy(() => import('./pages/Monitors.js'));
 const OAuthManagement = lazy(() => import('./pages/OAuthManagement.js'));
 const SiteAnnouncements = lazy(() => import('./pages/SiteAnnouncements.js'));
+const DesignSystemGallery = lazy(() => import('./pages/DesignSystemGallery.js'));
+const designGalleryEnabled =
+  import.meta.env.DEV ||
+  (typeof localStorage !== 'undefined' && localStorage.getItem('metapi_design_gallery') === '1');
 
 type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -493,6 +497,7 @@ function RouteLoadingFallback() {
 
 function AppShell() {
   const { language, toggleLanguage, t } = useI18n();
+  const location = useLocation();
   const [authed, setAuthed] = useState(() => hasValidAuthSession(localStorage));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -516,6 +521,10 @@ function AppShell() {
   const resolvedTheme: 'light' | 'dark' = themeMode === 'system'
     ? (systemPrefersDark ? 'dark' : 'light')
     : themeMode;
+  // Design gallery is intentionally reachable without auth for Vite/Playwright
+  // visual acceptance (#533 / #534). Still gated by DEV or localStorage flag.
+  const showDesignGallery =
+    designGalleryEnabled && location.pathname === '/__design__';
   const rawDisplayName = (userProfile.name || '').trim();
   const displayName = rawDisplayName ? (rawDisplayName === '管理员' ? t('管理员') : rawDisplayName) : t('管理员');
   const resolvedThemeLabel = resolvedTheme === 'dark' ? t('深色') : t('浅色');
@@ -536,12 +545,21 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', resolvedTheme);
+    const root = document.documentElement;
+    root.setAttribute('data-theme', resolvedTheme);
+    // react-test-renderer may not expose a CSSStyleDeclaration; guard for FOUC-6.
+    if (root.style && typeof root.style === 'object') {
+      try {
+        root.style.colorScheme = resolvedTheme;
+      } catch {
+        /* ignore incomplete CSSOM in test renderers */
+      }
+    }
     localStorage.setItem(THEME_MODE_STORAGE_KEY, themeMode);
     if (themeMode === 'system') {
-      localStorage.removeItem('theme');
+      localStorage.removeItem(LEGACY_THEME_STORAGE_KEY);
     } else {
-      localStorage.setItem('theme', themeMode);
+      localStorage.setItem(LEGACY_THEME_STORAGE_KEY, themeMode);
     }
   }, [resolvedTheme, themeMode]);
 
@@ -674,6 +692,14 @@ function AppShell() {
     setShowProfileModal(false);
     toast.success(t('个人信息已保存'));
   };
+
+  if (showDesignGallery) {
+    return (
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <DesignSystemGallery />
+      </Suspense>
+    );
+  }
 
   if (!authed) {
     return <Login t={t} onLogin={(token) => {
@@ -935,6 +961,9 @@ function AppShell() {
                 <Route path="/models" element={<Models />} />
                 <Route path="/playground" element={<ModelTester />} />
                 <Route path="/about" element={<About />} />
+                {designGalleryEnabled && (
+                  <Route path="/__design__" element={<DesignSystemGallery />} />
+                )}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </Suspense>

@@ -23,6 +23,16 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
+    // Playwright e2e specs live under e2e/ and must not be collected by vitest.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/e2e/**',
+      '**/*.e2e.*',
+      '**/playwright.config.*',
+      '**/playwright-report/**',
+      '**/test-results/**',
+    ],
     // Avoid flaky EnvironmentTeardownError under concurrent React19 + chart stubs.
     fileParallelism: false,
     maxWorkers: 1,

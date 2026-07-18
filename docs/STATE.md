@@ -17,9 +17,9 @@
 | Tip | `origin/master` @ v0.8.44 (#531 pool profiles + lease pressure) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
-| Active milestone | none (M50 closed) |
-| Open issues / PRs | board clean after M50 close |
-| Mode | **Maintenance** |
+| Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** (Phase 1 foundation in tree, unreleased) |
+| Open issues / PRs | #532 epic · #533 DS · #534 visual · #535 FOUC · #536 e2e |
+| Mode | **UI-REFRESH** (Track A ops stable on 0.8.44) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)
@@ -32,10 +32,12 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
+| UI-REFRESH Phase 1 | **in tree unreleased** | FOUC + DS gallery + Playwright harness; baselines + shell Phase 2 residual |
 
 ## Next-wave pointer
 
 Prioritized **ours vs original** shortlist: [`analysis/high-value-next.md`](analysis/high-value-next.md)  
+UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md)  
 Full residual inventory: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md)  
 Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)
 
@@ -47,7 +49,7 @@ Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`
 | Open gates / next | [`progress/MASTER.md`](progress/MASTER.md) |
 | High-value next | [`analysis/high-value-next.md`](analysis/high-value-next.md) |
 | Formal readiness | [`analysis/formal-readiness.md`](analysis/formal-readiness.md) — Track A 对内正式 / Track B 对外完备 |
-| UI/UX refresh | [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) — design-only until Milestone |
+| UI/UX refresh | [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) — M51 Phase 1 in tree |
 | Residual inventory | [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) |
 | Agent rules | root [`AGENTS.md`](../AGENTS.md) |
 | Deploy vars | [`deployment.md`](deployment.md) |

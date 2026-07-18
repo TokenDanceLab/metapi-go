@@ -1,4 +1,4 @@
-.PHONY: build test race race-integration vet lint vuln mod-verify docs-hygiene bench-routing coverage verify verify-race docker-verify run docker-build clean web-build migrate-build
+.PHONY: build test race race-integration vet lint vuln mod-verify docs-hygiene bench-routing coverage verify verify-race docker-verify run docker-build clean web-build migrate-build ui-visual ui-e2e
 
 # Build the server binary (requires web/dist/ to exist for go:embed)
 build:
@@ -64,6 +64,14 @@ docker-build:
 # Build the React frontend (requires Node.js)
 web-build:
 	cd web && npm ci --ignore-scripts && npm run build:web
+
+# Playwright UX e2e smoke (theme / FOUC / login surface) — requires Node + Chromium
+ui-e2e:
+	cd web && npm run test:e2e
+
+# Playwright visual baselines for /__design__ (skips if gallery route missing)
+ui-visual:
+	cd web && npm run test:visual
 
 # Build the standalone migration tool
 migrate-build:

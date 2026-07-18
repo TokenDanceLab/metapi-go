@@ -1,7 +1,7 @@
 # UI/UX refresh — GCP × frosted glass × Apple detail
 
 **Date**: 2026-07-19  
-**Status**: scheduled — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536; implementation in progress  
+**Status**: Phase 1 foundation **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536  
 **Product**: MetAPI admin (`web/`)  
 **Supersedes direction of**: closed U0–U2 token polish (#12/#14 等) — **new visual language**, keep token-first architecture  
 **Related**: [`../design/DESIGN.md`](../design/DESIGN.md) · [`../design/a11y-checklist.md`](../design/a11y-checklist.md) · `web/styles/tokens.css` · [`formal-readiness.md`](./formal-readiness.md)
@@ -148,19 +148,21 @@
 ### Phase 0 — Spec freeze（0.5–1d）
 
 - [x] 本文 + formal-readiness 定位  
-- [ ] 开 Milestone + Issue 史诗（勿直接巨型 PR）  
-- [ ] 冻结：token 命名表、FOUC AC、非目标  
+- [x] 开 Milestone + Issue 史诗（#532–#536）  
+- [x] 冻结：token 命名表、FOUC AC、非目标  
 
 ### Phase 1 — Foundation（P0）
 
-| Work | AC |
-|:-----|:---|
-| FOUC 修复 | FOUC-1…6 |
-| tokens 视觉重映射 + glass 家族 | 亮/暗对照表进 DESIGN.md |
-| `color-scheme` / reduced-transparency | checklist |
-| 去首屏阻塞字体风险 | 系统栈或 optional |
+| Work | AC | Status |
+|:-----|:---|:------:|
+| FOUC 修复 | FOUC-1…6 | **done** (`themeBootstrap` + head script + unit/e2e) |
+| tokens 视觉重映射 + glass 家族 | 亮/暗对照表进 DESIGN.md | **partial** — glass family + FOUC canvas colors in `tokens.css`; DESIGN.md full rewrite residual |
+| `color-scheme` / reduced-transparency | checklist | **partial** — color-scheme wired; reduced-transparency residual |
+| 去首屏阻塞字体风险 | 系统栈或 optional | residual |
+| Design system + Vite gallery | primitives + `/__design__` | **done** scaffold (#533) |
+| Visual + UX e2e harness | Playwright list green | **done** harness (#534/#536); baselines not committed |
 
-**Exit**: 暗色硬刷新零闪；壳层旧组件已能吃新 token（即使还不全玻璃）。
+**Exit (Phase 1 code)**: dark hard-refresh zero-flash path in tree; gallery + e2e harness present. **Ship residual**: gallery snapshot commit, DESIGN.md polish, close issues on release.
 
 ### Phase 2 — Shell（P0）
 
@@ -284,10 +286,8 @@
 
 ## 13. Next action
 
-
-
-1. 开 GitHub Milestone **UI-REFRESH** + 史诗 Issue（可拆上表）。  
-2. Phase 1 直接开工：**FOUC + tokens**（小 PR，可跟 v0.8.45）。  
-3. Shell 玻璃化单独 PR，附截图。  
-
-未批准前：本文只作设计 SSOT，不改 `web/` 视觉实现。
+1. ~~开 Milestone + Issues~~ **done** M51 · #532–#536  
+2. ~~Phase 1 FOUC + DS + harness~~ **in tree** (commit next)  
+3. Commit/push Phase 1; comment issues with evidence; close #535 when FOUC e2e green on CI  
+4. Generate + commit gallery baselines (`npm run test:visual:update` on Linux) → close #534 fragment  
+5. Phase 2 shell glass PR (topbar/sidebar/login) with light/dark screenshots

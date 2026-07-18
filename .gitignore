@@ -44,3 +44,9 @@ coverage.out
 
 # E2E runtime data
 /e2e/data/
+
+# Playwright artifacts (web/)
+web/test-results/
+web/playwright-report/
+web/blob-report/
+web/playwright/.cache/

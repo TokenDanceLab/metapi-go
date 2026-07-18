@@ -3,6 +3,9 @@
 /* Design tokens SSOT - see docs/design/DESIGN.md (U0 / #12) */
 @import "./styles/tokens.css";
 
+/* Design-system primitives (ds-*) — gallery + future shell consumers */
+@import "./design-system/styles.css";
+
 /* ===== Base ===== */
 * {
   box-sizing: border-box;
