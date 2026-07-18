@@ -15,6 +15,10 @@ export type SummaryItem = {
   usedCost: number;
   maxRequests: number | null;
   usedRequests: number;
+  /** Optional soft RPM window (learn #116); null = unlimited. */
+  maxRpm?: number | null;
+  /** Optional soft TPM window (learn #116); null = unlimited. */
+  maxTpm?: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;

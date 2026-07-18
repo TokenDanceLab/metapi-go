@@ -25,6 +25,10 @@ export type DownstreamKeyEditorForm = {
   tags: string[];
   maxCost: string;
   maxRequests: string;
+  /** Optional soft RPM; empty = unlimited. */
+  maxRpm: string;
+  /** Optional soft TPM; empty = unlimited. */
+  maxTpm: string;
   expiresAt: string;
   enabled: boolean;
   /** Per-key egress proxy; empty = inherit site/account/system. */
@@ -412,6 +416,28 @@ export default function DownstreamKeyEditorModal({
           <input value={form.maxCost} onChange={(e) => onChange((prev) => ({ ...prev, maxCost: e.target.value }))} placeholder="留空表示不限" style={inputStyle} />
         </div>
         <div className="downstream-key-modal-field">
+          <div className="downstream-key-modal-label">RPM 上限</div>
+          <input
+            value={form.maxRpm}
+            onChange={(e) => onChange((prev) => ({ ...prev, maxRpm: e.target.value }))}
+            placeholder="留空表示不限，例如 60"
+            style={inputStyle}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+        </div>
+        <div className="downstream-key-modal-field">
+          <div className="downstream-key-modal-label">TPM 上限</div>
+          <input
+            value={form.maxTpm}
+            onChange={(e) => onChange((prev) => ({ ...prev, maxTpm: e.target.value }))}
+            placeholder="留空表示不限，例如 100000"
+            style={inputStyle}
+            inputMode="numeric"
+            autoComplete="off"
+          />
+        </div>
+        <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">过期时间</div>
           <input type="datetime-local" value={form.expiresAt} onChange={(e) => onChange((prev) => ({ ...prev, expiresAt: e.target.value }))} style={inputStyle} />
         </div>
@@ -427,6 +453,11 @@ export default function DownstreamKeyEditorModal({
           />
           <div className="downstream-key-modal-help">
             仅影响此密钥的上游出口。填写后优先使用密钥代理；留空则继承站点 / 账号 / 系统代理链路。
+          </div>
+        </div>
+        <div className="downstream-key-modal-field downstream-key-modal-field-full">
+          <div className="downstream-key-modal-help">
+            RPM / TPM 为每分钟软准入窗口（learn #116）。留空或 0 表示不限；正整数生效。
           </div>
         </div>
         <label className="downstream-key-modal-toggle">

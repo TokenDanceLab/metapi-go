@@ -21,6 +21,11 @@ import {
   formatDownstreamKeyProxyIndicator,
   hasCustomDownstreamKeyProxy,
 } from '../helpers/downstreamKeyProxyUrl.js';
+import {
+  formatDownstreamKeyMaxRpm,
+  formatDownstreamKeyMaxTpm,
+  hasDownstreamKeyRateLimit,
+} from '../helpers/downstreamKeyRateLimit.js';
 
 const DownstreamKeyTrendChart = lazy(() => import('../../components/charts/DownstreamKeyTrendChart.js'));
 type DownstreamKeyTrendBucket = import('../../components/charts/DownstreamKeyTrendChart.js').DownstreamKeyTrendBucket;
@@ -201,6 +206,22 @@ export default function DownstreamKeyDrawer({
                       : '继承站点/系统'}
                   </div>
                 </div>
+                {hasDownstreamKeyRateLimit(item?.maxRpm) ? (
+                  <div>
+                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>RPM 上限</div>
+                    <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                      {formatDownstreamKeyMaxRpm(item?.maxRpm)}
+                    </div>
+                  </div>
+                ) : null}
+                {hasDownstreamKeyRateLimit(item?.maxTpm) ? (
+                  <div>
+                    <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>TPM 上限</div>
+                    <div style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>
+                      {formatDownstreamKeyMaxTpm(item?.maxTpm)}
+                    </div>
+                  </div>
+                ) : null}
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 6 }}>标签</div>
                   <TagChips tags={item?.tags || []} accent maxVisible={6} />

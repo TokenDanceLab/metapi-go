@@ -32,6 +32,13 @@ import {
   hasCustomDownstreamKeyProxy,
   parseDownstreamKeyProxyUrl,
 } from './helpers/downstreamKeyProxyUrl.js';
+import {
+  formatDownstreamKeyMaxRpm,
+  formatDownstreamKeyMaxTpm,
+  formatDownstreamKeyRateLimits,
+  hasDownstreamKeyRateLimit,
+  parseQuotaIntOrNull,
+} from './helpers/downstreamKeyRateLimit.js';
 
 type Status = 'all' | 'enabled' | 'disabled';
 
@@ -49,6 +56,10 @@ type DownstreamApiKeyItem = {
   usedCost: number;
   maxRequests: number | null;
   usedRequests: number;
+  /** Optional soft RPM window (learn #116); null = unlimited. */
+  maxRpm?: number | null;
+  /** Optional soft TPM window (learn #116); null = unlimited. */
+  maxTpm?: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
@@ -352,6 +363,8 @@ function buildEditorForm(
     tags: normalizeTags(Array.isArray(item?.tags) ? item!.tags : []),
     maxCost: item?.maxCost === null || item?.maxCost === undefined ? '' : String(item.maxCost),
     maxRequests: item?.maxRequests === null || item?.maxRequests === undefined ? '' : String(item.maxRequests),
+    maxRpm: item?.maxRpm === null || item?.maxRpm === undefined ? '' : String(item.maxRpm),
+    maxTpm: item?.maxTpm === null || item?.maxTpm === undefined ? '' : String(item.maxTpm),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
     proxyUrl: item?.proxyUrl ?? '',
@@ -631,6 +644,8 @@ export default function DownstreamKeys() {
         usedCost: raw?.usedCost ?? item.usedCost,
         maxRequests: raw?.maxRequests ?? item.maxRequests,
         usedRequests: raw?.usedRequests ?? item.usedRequests,
+        maxRpm: raw?.maxRpm ?? item.maxRpm ?? null,
+        maxTpm: raw?.maxTpm ?? item.maxTpm ?? null,
         supportedModels: raw?.supportedModels ?? item.supportedModels,
         allowedRouteIds: raw?.allowedRouteIds ?? item.allowedRouteIds,
         siteWeightMultipliers: raw?.siteWeightMultipliers ?? item.siteWeightMultipliers,
@@ -816,6 +831,17 @@ export default function DownstreamKeys() {
       return;
     }
 
+    const parsedMaxRpm = parseQuotaIntOrNull(editorForm.maxRpm, 'RPM 上限');
+    if (!parsedMaxRpm.valid) {
+      toast.info(parsedMaxRpm.error || 'RPM 上限格式无效');
+      return;
+    }
+    const parsedMaxTpm = parseQuotaIntOrNull(editorForm.maxTpm, 'TPM 上限');
+    if (!parsedMaxTpm.valid) {
+      toast.info(parsedMaxTpm.error || 'TPM 上限格式无效');
+      return;
+    }
+
     let siteWeightMultipliers: Record<number, number> = {};
     const rawWeights = editorForm.siteWeightMultipliersText.trim();
     if (rawWeights && rawWeights !== '{}') {
@@ -848,6 +874,8 @@ export default function DownstreamKeys() {
         expiresAt: editorForm.expiresAt ? new Date(editorForm.expiresAt).toISOString() : null,
         maxCost: editorForm.maxCost.trim() ? Number(editorForm.maxCost.trim()) : null,
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
+        maxRpm: parsedMaxRpm.value,
+        maxTpm: parsedMaxTpm.value,
         proxyUrl: parsedProxy.value,
         supportedModels: uniqStrings(editorForm.selectedModels),
         allowedRouteIds: uniqIds(editorForm.selectedGroupRouteIds).filter((id) => routeMap.has(id) && isGroupRouteOption(routeMap.get(id)!)),
@@ -1200,6 +1228,13 @@ export default function DownstreamKeys() {
                       stacked
                     />
                   ) : null}
+                  {hasDownstreamKeyRateLimit(row.maxRpm) || hasDownstreamKeyRateLimit(row.maxTpm) ? (
+                    <MobileField
+                      label="速率"
+                      value={formatDownstreamKeyRateLimits(row.maxRpm, row.maxTpm) || '--'}
+                      stacked
+                    />
+                  ) : null}
                   <MobileField label="模型" value={summarizeModelLimit(row.supportedModels || [])} stacked />
                   <MobileField label="群组" value={summarizeRouteLimit(row.allowedRouteIds || [], routeMap)} stacked />
                   <MobileField label="倍率" value={summarizeSiteWeightMultipliers(row.siteWeightMultipliers || {})} stacked />
@@ -1261,6 +1296,16 @@ export default function DownstreamKeys() {
                               代理 · {formatDownstreamKeyProxyIndicator(row.proxyUrl) || '已设置'}
                             </span>
                           ) : null}
+                          {hasDownstreamKeyRateLimit(row.maxRpm) ? (
+                            <span className="badge badge-info" style={{ fontSize: 11 }}>
+                              {formatDownstreamKeyMaxRpm(row.maxRpm)}
+                            </span>
+                          ) : null}
+                          {hasDownstreamKeyRateLimit(row.maxTpm) ? (
+                            <span className="badge badge-info" style={{ fontSize: 11 }}>
+                              {formatDownstreamKeyMaxTpm(row.maxTpm)}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td>
@@ -1274,6 +1319,11 @@ export default function DownstreamKeys() {
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                         <div style={{ color: 'var(--color-text-primary)', fontWeight: 700 }}>{row.maxRequests == null ? '不限' : row.maxRequests.toLocaleString()}</div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.maxCost == null ? '成本不限' : `成本 ${formatMoney(row.maxCost)}`}</div>
+                        {formatDownstreamKeyRateLimits(row.maxRpm, row.maxTpm) ? (
+                          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                            {formatDownstreamKeyRateLimits(row.maxRpm, row.maxTpm)}
+                          </div>
+                        ) : null}
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{row.expiresAt ? `到期 ${formatIso(row.expiresAt)}` : '永久有效'}</div>
                       </td>
                       <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>

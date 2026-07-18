@@ -1083,4 +1083,199 @@ describe('DownstreamKeys page', () => {
       root?.unmount();
     }
   });
+
+  it('hydrates maxRpm/maxTpm into editor and shows compact list indicators', async () => {
+    apiMock.getDownstreamApiKeysSummary.mockResolvedValue({
+      success: true,
+      items: [buildSummaryItem({
+        maxRpm: 60,
+        maxTpm: 100_000,
+      })],
+    });
+    apiMock.getDownstreamApiKeys.mockResolvedValue({
+      success: true,
+      items: [buildRawItem({
+        maxRpm: 60,
+        maxTpm: 100_000,
+      })],
+    });
+
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const pageText = collectText(root!.root);
+      expect(pageText).toContain('RPM 60');
+      expect(pageText).toContain('TPM 100k');
+
+      const editBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node) === '编辑')[0];
+      await act(async () => {
+        editBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const rpmInput = root!.root.findAllByType('input').find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 60'),
+      );
+      const tpmInput = root!.root.findAllByType('input').find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 100000'),
+      );
+      expect(rpmInput?.props.value).toBe('60');
+      expect(tpmInput?.props.value).toBe('100000');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('saves maxRpm/maxTpm on create and clears empty values as null', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs = root!.root.findAllByType('input');
+      const nameInput = inputs.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput = inputs.find((node) => node.props.placeholder === 'sk-...');
+      const rpmInput = inputs.find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 60'),
+      );
+      const tpmInput = inputs.find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 100000'),
+      );
+      expect(rpmInput).toBeTruthy();
+      expect(tpmInput).toBeTruthy();
+      expect(rpmInput?.props.value).toBe('');
+      expect(tpmInput?.props.value).toBe('');
+
+      await act(async () => {
+        nameInput!.props.onChange({ target: { value: 'rate-key' } });
+        keyInput!.props.onChange({ target: { value: 'sk-rate-key-0475' } });
+        rpmInput!.props.onChange({ target: { value: '  60  ' } });
+        tpmInput!.props.onChange({ target: { value: '100000' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'rate-key',
+        key: 'sk-rate-key-0475',
+        maxRpm: 60,
+        maxTpm: 100000,
+      }));
+
+      // Re-open create form and save with empty rate limits → null unlimited.
+      apiMock.createDownstreamApiKey.mockClear();
+      const createBtn2 = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn2.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs2 = root!.root.findAllByType('input');
+      const nameInput2 = inputs2.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput2 = inputs2.find((node) => node.props.placeholder === 'sk-...');
+      const rpmInput2 = inputs2.find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 60'),
+      );
+      const tpmInput2 = inputs2.find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 100000'),
+      );
+      await act(async () => {
+        nameInput2!.props.onChange({ target: { value: 'unlimited-key' } });
+        keyInput2!.props.onChange({ target: { value: 'sk-unlimited-key-0475' } });
+        rpmInput2!.props.onChange({ target: { value: '   ' } });
+        tpmInput2!.props.onChange({ target: { value: '0' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn2 = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn2.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'unlimited-key',
+        key: 'sk-unlimited-key-0475',
+        maxRpm: null,
+        maxTpm: null,
+      }));
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('rejects invalid maxRpm before calling create API', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/downstream-keys']}>
+            <ToastProvider>
+              <DownstreamKeys />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const createBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('新增下游密钥'))[0];
+      await act(async () => {
+        createBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const inputs = root!.root.findAllByType('input');
+      const nameInput = inputs.find((node) => node.props.placeholder === '例如：项目 A / 移动端');
+      const keyInput = inputs.find((node) => node.props.placeholder === 'sk-...');
+      const rpmInput = inputs.find((node) =>
+        String(node.props.placeholder || '').includes('留空表示不限，例如 60'),
+      );
+
+      await act(async () => {
+        nameInput!.props.onChange({ target: { value: 'bad-rpm-key' } });
+        keyInput!.props.onChange({ target: { value: 'sk-bad-rpm-0475' } });
+        rpmInput!.props.onChange({ target: { value: '12.5' } });
+      });
+      await flushMicrotasks();
+
+      const saveBtn = root!.root.findAll((node) => node.type === 'button' && collectText(node).includes('创建密钥'))[0];
+      await act(async () => {
+        saveBtn.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.createDownstreamApiKey).not.toHaveBeenCalled();
+    } finally {
+      root?.unmount();
+    }
+  });
 });
