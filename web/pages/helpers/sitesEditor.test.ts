@@ -4,6 +4,8 @@ import {
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
+  formatSiteMaxConcurrency,
+  parseSiteMaxConcurrency,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -26,6 +28,7 @@ describe('buildSiteSaveAction', () => {
         customHeaders: '{"x-site-token":"alpha"}',
         useSystemProxy: false,
         globalWeight: 1.2,
+        maxConcurrency: 0,
         postRefreshProbeEnabled: true,
         postRefreshProbeModel: 'gpt-4o',
         postRefreshProbeScope: 'single',
@@ -48,6 +51,7 @@ describe('buildSiteSaveAction', () => {
         customHeaders: '{"x-site-token":"alpha"}',
         useSystemProxy: false,
         globalWeight: 1.2,
+        maxConcurrency: 0,
         postRefreshProbeEnabled: true,
         postRefreshProbeModel: 'gpt-4o',
         postRefreshProbeScope: 'single',
@@ -69,6 +73,7 @@ describe('buildSiteSaveAction', () => {
         apiEndpoints: [],
         customHeaders: '',
         globalWeight: 0.8,
+        maxConcurrency: 8,
       },
     );
 
@@ -85,6 +90,7 @@ describe('buildSiteSaveAction', () => {
         apiEndpoints: [],
         customHeaders: '',
         globalWeight: 0.8,
+        maxConcurrency: 8,
       },
     });
   });
@@ -103,6 +109,7 @@ describe('buildSiteSaveAction', () => {
           apiEndpoints: [],
           customHeaders: '',
           globalWeight: 1,
+          maxConcurrency: 0,
         },
       ),
     ).toThrow('editingSiteId is required in edit mode');
@@ -125,14 +132,17 @@ describe('buildSiteSaveAction', () => {
       ],
       customHeaders: '{"x-site-token":"alpha"}',
       globalWeight: 1,
+      maxConcurrency: 4,
       apiKey: 'sk-legacy-site-key',
     } as unknown as Parameters<typeof siteFormFromSite>[0];
 
     expect(emptySiteForm()).not.toHaveProperty('apiKey');
+    expect(emptySiteForm().maxConcurrency).toBe('0');
     expect(emptySiteForm().customHeaders).toEqual([emptySiteCustomHeader()]);
     expect(emptySiteForm().apiEndpoints).toEqual([emptySiteApiEndpoint()]);
     expect(emptySiteForm().proxyUrl).toBe('');
     expect(siteFormFromSite(legacySite)).not.toHaveProperty('apiKey');
+    expect(siteFormFromSite(legacySite).maxConcurrency).toBe('4');
     expect(siteFormFromSite({
       proxyUrl: 'http://127.0.0.1:8080',
     }).proxyUrl).toBe('http://127.0.0.1:8080');
@@ -144,6 +154,31 @@ describe('buildSiteSaveAction', () => {
         lastFailureReason: 'HTTP 502',
       },
     ]);
+  });
+
+  it('defaults maxConcurrency to 0 when missing or invalid on hydrate', () => {
+    expect(siteFormFromSite({}).maxConcurrency).toBe('0');
+    expect(siteFormFromSite({ maxConcurrency: -3 }).maxConcurrency).toBe('0');
+    expect(siteFormFromSite({ maxConcurrency: '12.9' }).maxConcurrency).toBe('12');
+  });
+
+  it('parses and formats maxConcurrency for save/list', () => {
+    expect(parseSiteMaxConcurrency('0')).toEqual({ valid: true, value: 0 });
+    expect(parseSiteMaxConcurrency('')).toEqual({ valid: true, value: 0 });
+    expect(parseSiteMaxConcurrency('16')).toEqual({ valid: true, value: 16 });
+    expect(parseSiteMaxConcurrency('-1')).toEqual({
+      valid: false,
+      value: 0,
+      error: '最大并发必须是非负整数（0 = 不限制）',
+    });
+    expect(parseSiteMaxConcurrency('1.5')).toEqual({
+      valid: false,
+      value: 0,
+      error: '最大并发必须是非负整数（0 = 不限制）',
+    });
+    expect(formatSiteMaxConcurrency(0)).toBe('不限制');
+    expect(formatSiteMaxConcurrency(null)).toBe('不限制');
+    expect(formatSiteMaxConcurrency(8)).toBe('8');
   });
 
   it('parses custom headers json into key value rows', () => {
