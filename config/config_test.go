@@ -88,6 +88,46 @@ func TestPostgresSSLModePreservesLegacyDBSSL(t *testing.T) {
 	}
 }
 
+func TestLoadParsesPostgresPoolBudget(t *testing.T) {
+	cfg := Load(map[string]string{
+		"DB_MAX_OPEN_CONNS":         "2",
+		"DB_MAX_IDLE_CONNS":         "1",
+		"DB_CONN_MAX_LIFETIME_SEC":  "1800",
+		"DB_CONN_MAX_IDLE_TIME_SEC": "300",
+	})
+
+	if cfg.DbMaxOpenConns != 2 || cfg.DbMaxIdleConns != 1 {
+		t.Fatalf("pool = %d/%d, want 2/1", cfg.DbMaxOpenConns, cfg.DbMaxIdleConns)
+	}
+	if cfg.DbConnMaxLifetimeSec != 1800 || cfg.DbConnMaxIdleTimeSec != 300 {
+		t.Fatalf(
+			"lifetime/idle = %d/%d, want 1800/300",
+			cfg.DbConnMaxLifetimeSec,
+			cfg.DbConnMaxIdleTimeSec,
+		)
+	}
+}
+
+func TestValidateRejectsPostgresPoolAboveOpenBudget(t *testing.T) {
+	cfg := Load(map[string]string{
+		"AUTH_TOKEN":                "admin-token",
+		"PROXY_TOKEN":               "proxy-token",
+		"ACCOUNT_CREDENTIAL_SECRET": "credential-secret",
+		"CLAUDE_CLIENT_ID":          "claude-client",
+		"CODEX_CLIENT_ID":           "codex-client",
+		"GEMINI_CLI_CLIENT_ID":      "gemini-client",
+		"DB_MAX_OPEN_CONNS":         "2",
+		"DB_MAX_IDLE_CONNS":         "3",
+	})
+
+	for _, err := range cfg.Validate() {
+		if strings.Contains(err.Error(), "db_max_idle_conns") && IsCritical(err) {
+			return
+		}
+	}
+	t.Fatal("Validate did not return critical db_max_idle_conns error")
+}
+
 func TestValidateRejectsInvalidPostgresSSLMode(t *testing.T) {
 	cfg := Load(map[string]string{
 		"AUTH_TOKEN":                "admin-token",

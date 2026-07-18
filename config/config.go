@@ -72,7 +72,13 @@ type Config struct {
 	DbUrl      string
 	DbSsl      bool
 	DbSslMode  string
-	Tz         string
+	// PostgreSQL pool budget. Production operators must size MaxOpenConns no
+	// higher than the database role CONNECTION LIMIT.
+	DbMaxOpenConns       int
+	DbMaxIdleConns       int
+	DbConnMaxLifetimeSec int
+	DbConnMaxIdleTimeSec int
+	Tz                   string
 
 	// Cron (5 fields)
 	CheckinCron          string
@@ -406,6 +412,10 @@ func Load(env map[string]string) *Config {
 	cfg.DbType = inferDbType(get("DB_TYPE"), cfg.DbUrl)
 	cfg.DbSsl = parseBoolean(get("DB_SSL"), false)
 	cfg.DbSslMode = normalizeDbSslMode(get("DB_SSLMODE"))
+	cfg.DbMaxOpenConns = int(math.Trunc(parseNumber(get("DB_MAX_OPEN_CONNS"), 20)))
+	cfg.DbMaxIdleConns = int(math.Trunc(parseNumber(get("DB_MAX_IDLE_CONNS"), 5)))
+	cfg.DbConnMaxLifetimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_LIFETIME_SEC"), 1800)))
+	cfg.DbConnMaxIdleTimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_IDLE_TIME_SEC"), 300)))
 	cfg.Tz = get("TZ")
 
 	// ---- §3.4 Cron ----

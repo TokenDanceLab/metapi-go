@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/tokendancelab/metapi-go/config"
 )
@@ -66,7 +67,8 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 	}
 
 	// Open database connection.
-	db, err := OpenWithPostgresSSLMode(dialect, dsn, cfg.PostgresSSLMode())
+	pool := postgresPoolConfigFromRuntimeConfig(cfg)
+	db, err := OpenWithPostgresSSLModeAndPool(dialect, dsn, cfg.PostgresSSLMode(), pool)
 	if err != nil {
 		return fmt.Errorf("bootstrap: failed to open database: %w", err)
 	}
@@ -80,8 +82,34 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 	activeDB = db
 	initialized = true
 
-	slog.Info("bootstrap: database ready", "dialect", dialect)
+	logAttrs := []any{"dialect", dialect}
+	if dialect == DialectPostgres {
+		logAttrs = append(logAttrs,
+			"max_open_conns", pool.MaxOpenConns,
+			"max_idle_conns", pool.MaxIdleConns,
+			"conn_max_lifetime_sec", cfg.DbConnMaxLifetimeSec,
+			"conn_max_idle_time_sec", cfg.DbConnMaxIdleTimeSec,
+		)
+	}
+	slog.Info("bootstrap: database ready", logAttrs...)
 	return nil
+}
+
+func postgresPoolConfigFromRuntimeConfig(cfg *config.Config) PostgresPoolConfig {
+	// Preserve compatibility for tests and embedders that construct Config
+	// directly instead of using config.Load, which populates all four defaults.
+	if cfg.DbMaxOpenConns == 0 &&
+		cfg.DbMaxIdleConns == 0 &&
+		cfg.DbConnMaxLifetimeSec == 0 &&
+		cfg.DbConnMaxIdleTimeSec == 0 {
+		return DefaultPostgresPoolConfig()
+	}
+	return PostgresPoolConfig{
+		MaxOpenConns:    cfg.DbMaxOpenConns,
+		MaxIdleConns:    cfg.DbMaxIdleConns,
+		ConnMaxLifetime: time.Duration(cfg.DbConnMaxLifetimeSec) * time.Second,
+		ConnMaxIdleTime: time.Duration(cfg.DbConnMaxIdleTimeSec) * time.Second,
+	}
 }
 
 // CloseDatabase closes the active database connection and resets the
