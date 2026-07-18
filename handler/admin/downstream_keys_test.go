@@ -814,3 +814,90 @@ func TestRedactDownstreamKeySecret(t *testing.T) {
 	// nil-safe
 	redactDownstreamKeySecret(nil)
 }
+
+// TestDownstreamKeysUpdateAndResetUsageRedactPlaintextKey covers #440:
+// PUT update and POST reset-usage must return keyMasked only, never plaintext key.
+func TestDownstreamKeysUpdateAndResetUsageRedactPlaintextKey(t *testing.T) {
+	secret := "sk-redact-update-reset-usage-secret"
+	db, r := setupDownstreamKeysTest(t)
+
+	resp := doPostJSON(t, r, "/api/downstream-keys", map[string]any{
+		"name": "mutate-redact-client",
+		"key":  secret,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("create returned %d: %s", resp.Code, resp.Body.String())
+	}
+	var createBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &createBody); err != nil {
+		t.Fatalf("unmarshal create: %v", err)
+	}
+	item, ok := createBody["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("create missing item: %#v", createBody)
+	}
+	// Create still echoes full key once (intentional product path).
+	if item["key"] != secret {
+		t.Fatalf("create should still return full key once, got %#v", item["key"])
+	}
+	keyID := int64(item["id"].(float64))
+
+	assertMutateNoPlaintextKey := func(t *testing.T, surface string, body []byte) map[string]any {
+		t.Helper()
+		raw := string(body)
+		if strings.Contains(raw, secret) {
+			t.Fatalf("%s response body contains full secret", surface)
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatalf("unmarshal %s: %v", surface, err)
+		}
+		row, ok := payload["item"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s missing item: %#v", surface, payload)
+		}
+		if v, present := row["key"]; present && v != nil && v != "" {
+			t.Fatalf("%s must omit key; got %#v", surface, v)
+		}
+		masked, _ := row["keyMasked"].(string)
+		if masked == "" {
+			t.Fatalf("%s missing keyMasked", surface)
+		}
+		if masked == secret {
+			t.Fatalf("%s keyMasked equals full secret", surface)
+		}
+		if masked != maskKey(secret) {
+			t.Fatalf("%s keyMasked = %q, want %q", surface, masked, maskKey(secret))
+		}
+		return row
+	}
+
+	// Update response must redact.
+	resp = doPutJSON(t, r, "/api/downstream-keys/"+itoa(keyID), map[string]any{
+		"name":    "mutate-redact-renamed",
+		"enabled": false,
+	})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("update returned %d: %s", resp.Code, resp.Body.String())
+	}
+	updateItem := assertMutateNoPlaintextKey(t, "update", resp.Body.Bytes())
+	if updateItem["name"] != "mutate-redact-renamed" {
+		t.Fatalf("update name = %#v, want renamed", updateItem["name"])
+	}
+
+	// Seed usage then reset — response must redact.
+	if _, err := db.Exec("UPDATE downstream_api_keys SET used_cost = ?, used_requests = ? WHERE id = ?", 3.5, 9, keyID); err != nil {
+		t.Fatalf("seed usage: %v", err)
+	}
+	resp = doPostJSON(t, r, "/api/downstream-keys/"+itoa(keyID)+"/reset-usage", map[string]any{})
+	if resp.Code != http.StatusOK {
+		t.Fatalf("reset-usage returned %d: %s", resp.Code, resp.Body.String())
+	}
+	resetItem := assertMutateNoPlaintextKey(t, "reset-usage", resp.Body.Bytes())
+	if usedCost, _ := resetItem["usedCost"].(float64); usedCost != 0 {
+		t.Fatalf("reset-usage usedCost = %#v, want 0", resetItem["usedCost"])
+	}
+	if usedRequests, ok := resetItem["usedRequests"].(float64); !ok || int64(usedRequests) != 0 {
+		t.Fatalf("reset-usage usedRequests = %#v, want 0", resetItem["usedRequests"])
+	}
+}
