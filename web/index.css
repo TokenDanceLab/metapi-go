@@ -410,7 +410,7 @@ body {
 .topbar-logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  background: var(--color-brand-gradient);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -2574,7 +2574,7 @@ body[data-tooltip-portal="true"] [data-tooltip]::before {
 
 [data-theme="dark"] .route-enable-toggle.is-disabled:hover {
   background: color-mix(in srgb, var(--color-primary) 18%, var(--color-bg-card));
-  color: #a5b4fc;
+  color: var(--color-primary-hover);
 }
 
 /* ===== Tabs ===== */
@@ -5520,19 +5520,35 @@ textarea:focus-visible {
 }
 
 .stat-summary-purple {
-  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  background: linear-gradient(
+    135deg,
+    var(--color-stat-purple-ink),
+    color-mix(in srgb, var(--color-stat-purple-ink) 45%, white)
+  );
 }
 
 .stat-summary-blue {
-  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  background: linear-gradient(
+    135deg,
+    var(--color-stat-blue-ink),
+    color-mix(in srgb, var(--color-stat-blue-ink) 45%, white)
+  );
 }
 
 .stat-summary-green {
-  background: linear-gradient(135deg, #059669, #34d399);
+  background: linear-gradient(
+    135deg,
+    var(--color-stat-green-ink),
+    color-mix(in srgb, var(--color-stat-green-ink) 45%, white)
+  );
 }
 
 .stat-summary-orange {
-  background: linear-gradient(135deg, #ea580c, #fb923c);
+  background: linear-gradient(
+    135deg,
+    var(--color-stat-orange-ink),
+    color-mix(in srgb, var(--color-stat-orange-ink) 45%, white)
+  );
 }
 
 /* ===== Log Detail Row ===== */
@@ -5831,17 +5847,17 @@ textarea:focus-visible {
 
 .monitor-hint {
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  background: rgba(251, 191, 36, 0.16);
-  color: #92400e;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 76%, black);
   padding: 8px 10px;
   font-size: 12px;
 }
 
 [data-theme="dark"] .monitor-hint {
-  border-color: rgba(250, 204, 21, 0.42);
-  background: rgba(161, 98, 7, 0.25);
-  color: #fbbf24;
+  border-color: color-mix(in srgb, var(--color-warning) 42%, transparent);
+  background: color-mix(in srgb, var(--color-warning-soft) 88%, transparent);
+  color: var(--color-warning);
 }
 
 .monitor-iframe {
