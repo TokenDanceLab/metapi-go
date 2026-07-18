@@ -62,8 +62,9 @@ func (sp *SiteProxy) buildClients() {
 	}
 
 	sp.httpClient = &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
+		Transport:     transport,
+		Timeout:       30 * time.Second,
+		CheckRedirect: RejectCrossOriginRedirect,
 	}
 
 	transportNoTLS := &http.Transport{
@@ -79,8 +80,9 @@ func (sp *SiteProxy) buildClients() {
 	}
 
 	sp.httpClientNoTLS = &http.Client{
-		Transport: transportNoTLS,
-		Timeout:   30 * time.Second,
+		Transport:     transportNoTLS,
+		Timeout:       30 * time.Second,
+		CheckRedirect: RejectCrossOriginRedirect,
 	}
 }
 
@@ -139,8 +141,9 @@ func (sp *SiteProxy) doWithExplicitProxy(ctx context.Context, req *http.Request,
 	}
 
 	client := &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
+		Transport:     transport,
+		Timeout:       30 * time.Second,
+		CheckRedirect: RejectCrossOriginRedirect,
 	}
 
 	return client.Do(req)
