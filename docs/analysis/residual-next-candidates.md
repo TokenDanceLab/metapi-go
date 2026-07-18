@@ -1,12 +1,12 @@
-# Residual next candidates (post v0.8.36 / M46 closed)
+# Residual next candidates (post v0.8.36 / M47 product landed)
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484 SEC-MONITOR-TOKEN-CLEAR, #485 UI-CSS-RESIDUAL, #486 REL-P0555-STREAM-TESTS, #487 residual honesty + release gate. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
+**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484-#487 present. **Milestone 47 product landed on master** (not tagged yet): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499); docs honesty #497 this pass. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (M46 closed; optional **v0.8.37+** residual only with dedicated ACs)
+**Active wave**: M47 product board empty after #497; next is **v0.8.37** release gate (latest tag still **v0.8.36**)
 
 ## Purpose
 
@@ -28,7 +28,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
-| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 slices #423–#425 present; M40 REL-SOURCE-MODEL is selection mapping only — not cascade; M41–M44 residual only — not cascade; M45 empty-filter **honesty tests** #476/#479 present — still not cascade-complete) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests; preferred open-breaker decline (#423/#430); CooldownUntil parse eligibility (#424/#427); conductor hard attempt budget + nil RefreshAuth failover (#425/#431); global empty-filter full-set fallback + priority-layer demotion **regression honesty tests** (#476/#479). **Still residual:** empty-filter global full-set fallback remains intentional starvation guard (not removed); credential-scoped usage-limit multi-channel cool polish; **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Load-proof only with dedicated AC (after **v0.8.35**); do not flip to present from tests alone | Medium residual — do not claim #585 present |
+| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 slices #423–#425 present; M40 REL-SOURCE-MODEL is selection mapping only — not cascade; M41–M44 residual only — not cascade; M45 empty-filter **honesty tests** #476/#479 present; M47 credential usage-limit honesty tests #496/#499 present — still not cascade-complete) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests; preferred open-breaker decline (#423/#430); CooldownUntil parse eligibility (#424/#427); conductor hard attempt budget + nil RefreshAuth failover (#425/#431); global empty-filter full-set fallback + priority-layer demotion **regression honesty tests** (#476/#479). **Still residual:** empty-filter global full-set fallback remains intentional starvation guard (not removed); credential-scoped usage-limit multi-channel cool polish; **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Load-proof only with dedicated AC (after **v0.8.35**); do not flip to present from tests alone | Medium residual — do not claim #585 present |
 | REL-PREFERRED-BREAKER | SelectPreferredChannel ignores open site/model breaker on single preferred | **present** (#423/#430) | Preferred path checks Global/Model breaker directly (does not rely on `FilterSiteRuntimeBrokenCandidatesByModel` len<=1 short-circuit); open breaker + siblings → nil / fall through to normal selection | Done for preferred/sticky open-breaker | Residual novel sticky pin paths only with AC |
 | REL-COOLDOWN-TS | CooldownUntil eligibility lex string compare | **present** (#424/#427) | `IsCooldownActive` parses millis ISO / RFC3339 both sides to ms for selector/explain/OAuth cool; now+500ms still ineligible | Done for eligibility parse | Residual novel cooldown writers only if product AC |
 | REL-CONDUCTOR-BUDGET | Conductor missing hard attempt budget + nil RefreshAuth failover | **present** (#425/#431) | `DefaultProxyConductor` enforces MaxAttempts across same-channel + refresh + failover; caps RefreshAuth successes then fail over; nil/error RefreshAuth → ActionFailover + channel-scoped exclude | Done for hard budget + nil RefreshAuth failover | Residual load-proof / other conductor policies only with AC |
@@ -55,6 +55,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-MONITOR-TOKEN-CLEAR | Clear meta_monitor_auth on AuthToken change | **present** (#484/#489) | changeToken success clears meta_monitor_auth (Path=/monitor-proxy/ + legacy Path=/); failure paths do not clear; HMAC session remains AuthToken-bound | Done for token-change cookie clear | Residual other monitor surfaces only with AC |
 | UI-CSS-RESIDUAL | monitor-hint / route-enable-disabled / stat-summary / topbar brand hex to tokens | **present** (#485/#490) | web/index.css uses --color-brand-gradient, warning/stat tokens, primary-hover; marketing login gradients may remain | Done for listed residual clusters | Residual pure marketing gradients only with AC |
 | REL-P0555-STREAM-TESTS | P0-555 Anthropic stream message_delta usage merge honesty tests | **present** (#486/#488) | handler/proxy/usage_test.go locks early input + later output merge; no invent when usage absent | Done for honesty residual tests | P0-555 still present-with-residual (not perfect billing) |
+| DOCS-STACK-TRUTH | README/README_EN stack badge truth | **present** (#494/#498) | Go badge + tech stack table align to go.mod 1.26.5 and React 19 / Vite 8 | Done for public stack truth | Residual other marketing badges only with AC |
+| REL-TPM-ESTIMATE | Best-effort TPM admission estimate when maxTPM set | **present** (#495/#500) | auth ProxyAuth passes best-effort estimatedTokens when maxTPM>0; empty body keeps 0; never invents large defaults | Done for TPM soft-limit not no-op | Residual perfect tokenizer only with AC |
+| REL-CRED-USAGE-HONESTY | P0-585 credential usage-limit multi-channel cool honesty tests | **present** (#496/#499) | routing tests document same-credential siblings cool only; non-usage-limit stays channel-scoped | Done for honesty residual tests | P0-585 still partial (load-proof) |
 | KEY-578 | Per-key outbound proxy | **present** (backend #281; admin UI #466/#471) | `proxy/key_proxy.go` + `downstream_api_keys.proxy_url`; DownstreamKeys create/edit/list wires `proxyUrl` (empty/null inherits site/system) via #466/#471 | Done for backend + DownstreamKeys admin UI | Residual novel key-proxy surfaces only with AC |
 | REBUILD-588 | Pattern/group rebuild | present | `service/route_rebuild.go` `RebuildRoutesBestEffort` | Done (matrix #281) | — |
 | PRICE-496 | Claude cache_ratio defaults | present | `routing/pricing_cost.go` Claude 0.1 / 1.25 | Done (matrix #281) | — |
@@ -76,15 +79,15 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.37+)
+## Recommended sequencing (v0.8.37 release gate + v0.8.38+)
 
-1. **Latest release**: **v0.8.36** (M46 closed; #484–#487 present on master with tag).
-2. **Active wave**: none. Optional residual **v0.8.37+** only with dedicated ACs.
-3. **Shipped M46**: SEC-MONITOR-TOKEN-CLEAR / UI-CSS-RESIDUAL / REL-P0555-STREAM-TESTS are **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required — do not flip present from tests alone).
-4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
-6. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
-
+1. **Latest release**: **v0.8.36** (M46 closed).
+2. **M47 product landed on master (not tagged)**: #494 DOCS-STACK-TRUTH (PR #498) · #495 REL-TPM-ESTIMATE (PR #500) · #496 REL-CRED-USAGE-HONESTY (PR #499); docs honesty #497 this pass.
+3. **Active wave**: none after products. Next operator step is **v0.8.37** release gate. Optional residual **v0.8.38+** only with dedicated ACs.
+4. **DOCS-STACK-TRUTH** / **REL-TPM-ESTIMATE** / **REL-CRED-USAGE-HONESTY** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
+5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+7. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
 
 ## Explicit non-goals for residual waves
 
@@ -101,13 +104,17 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them (monitor token clear, CSS residual, stream usage honesty tests, etc.).
 
 
+- Claiming README still shows Go 1.26.4 / React 18 after #494/#498.
+- Claiming maxTPM soft admission is a no-op after #495/#500 (estimate is best-effort, not perfect tokenizer).
+- Claiming P0-585 credential usage-limit honesty tests are missing after #496/#499 (cascade still partial).
+- Claiming **v0.8.37** released before the release gate (products landed; tag is separate).
 ## Links
 
-- Release: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · prior [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · next optional residual **v0.8.37+** (with ACs only)
+- Release: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · prior [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · next **v0.8.37** release gate after this honesty pass (then optional residual **v0.8.38+** with ACs only)
 - Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
 - Prior milestone: [Enterprise UI/reliability residual polish v0.8.35](https://github.com/TokenDanceLab/metapi-go/milestone/45) · **closed**
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388; historical)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: see closed M45/M46 boards (#475–#478, #484–#487) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
+- Related issues: #494, #495, #496, #497, #498, #499, #500, see closed M45/M46 boards (#475–#478, #484–#487) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.

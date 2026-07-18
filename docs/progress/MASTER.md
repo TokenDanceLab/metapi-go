@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | none (board clean; next residual only with ACs) |
+| Active milestone | [Milestone 47](https://github.com/TokenDanceLab/metapi-go/milestone/47) open until **v0.8.37** release gate |
 | Program map | `docs/plan/enterprise-program.md` (historical / closed foundations) |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; historical) |
@@ -32,11 +32,12 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean (no open residual product board) |
+| — | — | Product board empty after this PR closes #497; next is **v0.8.37** release gate |
 
-**Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.  
-**Closed train**: M35–M46 (#388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, #449–#451, #456–#459, #466–#469, #475–#478, #484–#487) are **not** active work.  
-**Latest release**: **v0.8.36** (published).
+**Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
+**M35–M46 closed** with v0.8.36. **M47 product landed on master**: #494 DOCS-STACK-TRUTH (PR #498) · #495 REL-TPM-ESTIMATE (PR #500) · #496 REL-CRED-USAGE-HONESTY (PR #499). Docs honesty is #497 (this PR).
+**Milestone 47**: remains open until release gate / **v0.8.37** tag — do not claim v0.8.37 released.
+**Latest release**: stays **v0.8.36** until the M47 release gate.
 
 ## Residual releases (pointer only)
 
@@ -69,9 +70,10 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Board clean after **v0.8.36**. Optional residual **v0.8.37+** only with dedicated ACs.
+1. After this docs PR closes #497: M47 product board is empty on master; run **v0.8.37** release gate (tag + milestone close). Latest release remains **v0.8.36** until then.
 2. Do **not** invent WS-1 / STICKY-B Redis / UC-1 product without dedicated ACs.
 3. Optional later: P0-585 production load-proof; deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
+
 
 ## Governance
 
