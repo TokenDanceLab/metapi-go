@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | none (board clean; next residual only with ACs) |
+| Active milestone | [Milestone 46](https://github.com/TokenDanceLab/metapi-go/milestone/46) open until **v0.8.36** release gate |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -48,16 +48,19 @@
 | Enterprise UI/schema/product residual polish **v0.8.33** | ✅ closed | #456–#459 (PRs #460–#462 / #464); tag **v0.8.33** |
 | Enterprise UI schema-product residual polish **v0.8.34** | ✅ closed | #466–#469 (PRs #470–#473); tag **v0.8.34** |
 | Enterprise UI/reliability residual polish **v0.8.35** | ✅ closed | #475–#478 (PRs #479–#482); tag **v0.8.35** |
+| Enterprise security/UI residual polish **v0.8.36** | 🔄 product landed / release pending | Milestone 46 · product #484–#486 (PRs #489/#490/#488) on master; docs #487 this PR; **tag pending** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean (no open residual product board) |
+| — | — | Product board empty after this PR closes #487; next is **v0.8.36** release gate |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 **M35–M45 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, #449–#451, #456–#459, #466–#469, or #475–#478 as active work (landed on master with v0.8.35).
-**Latest release**: **v0.8.35** after this release gate (tag is a separate operator step if not yet published).
+**M46 product landed on master**: #484 SEC-MONITOR-TOKEN-CLEAR (PR #489 / 1f3a674) · #485 UI-CSS-RESIDUAL (PR #490 / a2432da) · #486 REL-P0555-STREAM-TESTS (PR #488 / b84a9ea). Docs honesty is #487 (this PR).
+**Milestone 46**: remains open until release gate / **v0.8.36** tag — do not claim v0.8.36 released.
+**Latest release**: stays **v0.8.35** until the M46 release gate.
 
 
 ## Residual releases (pointer only)
@@ -107,9 +110,9 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Board clean after **v0.8.35**. Optional residual **v0.8.36+** only with dedicated ACs.
+1. After this docs PR closes #487: M46 product board is empty on master; run **v0.8.36** release gate (tag + milestone close). Latest release remains **v0.8.35** until then.
 2. Do **not** invent WS-1 / STICKY-B Redis / UC-1 product without dedicated ACs.
-3. Optional later: P0-585 production load-proof (empty-filter honesty tests already present); deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
+3. Optional later: P0-585 production load-proof; deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
 
 
 ## Governance
