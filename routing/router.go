@@ -863,12 +863,15 @@ func (tr *TokenRouter) RecordFailure(ctx context.Context, channelID int64, failu
 	routeStrategy := NormalizeRouteRoutingStrategy(route.RoutingStrategy)
 	var affectedChannelIDs []int64
 	if shortWindowCooldown != nil {
+		// P0-585 residual: usage-limit short-window cools credential-scoped siblings
+		// only (shared-key truth) — intentional multi-channel impact, not cascade bug.
 		ids, err := tr.db.LoadCredentialScopedChannelIDs(ctx, ch, account.ID)
 		if err != nil {
 			return err
 		}
 		affectedChannelIDs = ids
 	} else {
+		// Non-usage-limit: channel-scoped only (no credential expand).
 		affectedChannelIDs = []int64{channelID}
 	}
 

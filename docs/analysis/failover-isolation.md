@@ -155,6 +155,8 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
   - `TestRoundRobinAndStableFirstSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback` (**#368**)
   - `TestP0585Honesty_EmptyFilterFullSetStarvationGuard_AllPriorityLayersSoftUnhealthy` (**#476** honesty residual — global full-set fallback still intentional; not cascade-complete)
   - `TestP0585Honesty_PriorityLayerDemotes_DoesNotPinBrokenLayerViaFullSet` (**#476**)
+  - `TestP0585Honesty_UsageLimitCoolsCredentialSiblingsOnly_NotSiteOrRoutePeers` (**#496** honesty residual — credential-scoped multi-channel cool intentional; not cascade-complete)
+  - `TestP0585Honesty_NonUsageLimitFailureRemainsChannelScopedExclude` (**#496**)
 - Existing: `routing/cooldown_test.go`, `routing/runtime_health_test.go`, `routing/algorithm_test.go` (partial/all breaker open)
 
 ## Non-goals (R1 / #299 / #336)
