@@ -2,8 +2,10 @@ package platform
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -221,6 +223,133 @@ func TestDoWithProxy_RejectsCrossOriginRedirect(t *testing.T) {
 	}
 	if targetCalled {
 		t.Fatal("cross-origin redirect target was called")
+	}
+}
+
+func TestSiteProxy_Do_RejectsCrossOriginRedirect(t *testing.T) {
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	sp := NewSiteProxy("")
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source.URL+"/start", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, err := sp.Do(ctx, req, nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("SiteProxy.Do allowed cross-origin redirect")
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was dialed via SiteProxy.Do")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin", err)
+	}
+}
+
+func TestSiteProxy_Do_RejectsCrossOriginRedirect_ExplicitProxy(t *testing.T) {
+	targetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	// HTTP reverse proxy that forwards absolute-form requests (httptest as CONNECT-less HTTP proxy).
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// For non-CONNECT HTTP proxying, net/http client sends absolute URL.
+		if r.Method == http.MethodConnect {
+			http.Error(w, "CONNECT not used in this test", http.StatusMethodNotAllowed)
+			return
+		}
+		targetURL := r.URL
+		if !targetURL.IsAbs() {
+			// Absolute-form path may still be in RequestURI; fall back to Host.
+			targetURL = &url.URL{Scheme: "http", Host: r.Host, Path: r.URL.Path, RawQuery: r.URL.RawQuery}
+		}
+		outReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		outReq.Header = r.Header.Clone()
+		resp, err := http.DefaultTransport.RoundTrip(outReq)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				w.Header().Add(k, v)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, _ = io.Copy(w, resp.Body)
+	}))
+	t.Cleanup(proxy.Close)
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
+	}))
+	t.Cleanup(source.Close)
+
+	sp := NewSiteProxy("")
+	ctx := context.Background()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source.URL+"/start", nil)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	resp, err := sp.Do(ctx, req, &ProxyConfig{ProxyURL: proxy.URL})
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("explicit-proxy SiteProxy.Do allowed cross-origin redirect")
+	}
+	if targetCalled {
+		t.Fatal("cross-origin redirect target was dialed via explicit proxy path")
+	}
+	if !strings.Contains(err.Error(), "cross-origin") {
+		t.Fatalf("error = %v, want cross-origin", err)
+	}
+}
+
+func TestSiteProxy_buildClients_WiresCheckRedirect(t *testing.T) {
+	sp := NewSiteProxy("")
+	if sp.httpClient == nil || sp.httpClient.CheckRedirect == nil {
+		t.Fatal("httpClient.CheckRedirect must be set")
+	}
+	if sp.httpClientNoTLS == nil || sp.httpClientNoTLS.CheckRedirect == nil {
+		t.Fatal("httpClientNoTLS.CheckRedirect must be set")
+	}
+
+	via, err := http.NewRequest(http.MethodGet, "http://api.example.com/start", nil)
+	if err != nil {
+		t.Fatalf("via: %v", err)
+	}
+	to, err := http.NewRequest(http.MethodGet, "http://evil.example.com/land", nil)
+	if err != nil {
+		t.Fatalf("to: %v", err)
+	}
+	if err := sp.httpClient.CheckRedirect(to, []*http.Request{via}); err == nil {
+		t.Fatal("httpClient.CheckRedirect should reject cross-origin")
+	}
+	if err := sp.httpClientNoTLS.CheckRedirect(to, []*http.Request{via}); err == nil {
+		t.Fatal("httpClientNoTLS.CheckRedirect should reject cross-origin")
 	}
 }
 
