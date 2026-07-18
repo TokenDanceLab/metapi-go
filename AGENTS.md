@@ -83,7 +83,7 @@ golangci-lint run --timeout=3m        # Lint check
 
 | Path | Role |
 |------|------|
-| `docs/progress/MASTER.md` | Slim session index (not a changelog) |
+| `docs/progress/MASTER.md` | Progress baseline + slim session index (not a changelog) |
 | `docs/architecture.md` | As-built package map (proxy/transform/routing; not proxycore/protocol) |
 | `docs/design/BACKEND.md` | Backend philosophy, dependency rules, forbidden imports |
 | `docs/design/DESIGN.md` | UI design system SSOT |

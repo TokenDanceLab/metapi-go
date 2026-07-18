@@ -48,7 +48,8 @@ docs/
 
 ## Residual board (post v0.8.39 / M49 closed)
 
-- **Latest release**: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · M49 closed · active milestone **none**.
+- **Progress baseline**: [`progress/MASTER.md`](progress/MASTER.md) (verified board/release facts).
+- **Latest release**: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · M49 closed · active milestone **none** · open issues/PRs **0**.
 - **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) (optional **v0.8.40+** only with dedicated ACs).
 - **Still not product without ACs**: full Responses WS (WS-1), Redis sticky (STICKY-B), update-center remote deploy (UC-1).
 - **Keep partial**: P0-585 cascade (load-proof required; honesty tests do not flip present).

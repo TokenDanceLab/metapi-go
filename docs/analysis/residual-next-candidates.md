@@ -1,15 +1,14 @@
-# Residual next candidates (post v0.8.38 / M48 closed; M49 product landed)
+# Residual next candidates (post v0.8.39 / M49 closed)
 
-**Date**: 2026-07-18
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#517](https://github.com/TokenDanceLab/metapi-go/issues/517) (trail via MASTER / CHANGELOG)
-**Context**: **v0.8.38 shipped** (Milestone 48 closed). **M49 product landings on master** (Issues #511–#516 / PRs #518–#523): RR fail-count, used_requests 429 order, Redis admit rollback, max_cost wire, Gemini path/stream, retention RFC3339. Residual train v0.8.18–v0.8.38 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations closed; residual polish only.
-**Scope**: inventory only — **no product code** in this document.
-**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
-**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only
-**Active wave**: none (M49 / **v0.8.39** shipped; sequencing **v0.8.40+** optional residual with ACs only)
+**Date**: 2026-07-18  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#517](https://github.com/TokenDanceLab/metapi-go/issues/517) (trail via MASTER / CHANGELOG)  
+**Context**: **v0.8.39 shipped** (Milestone 49 closed; Issues #511–#517 / PRs #518–#525 on master + tag). M49 reliability: RR fail-count, used_requests 429 order, Redis admit rollback, max_cost wire, Gemini path/stream, retention RFC3339, residual honesty. Residual train **v0.8.18–v0.8.39** is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations closed; residual polish only.  
+**Scope**: inventory only — **no product code** in this document.  
+**Map**: [`docs/README.md`](../README.md) · progress baseline [`docs/progress/MASTER.md`](../progress/MASTER.md)  
+**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
+**Active wave**: none (board clean; optional residual **v0.8.40+** only with dedicated ACs)
 
 ## Purpose
-
 
 Give the next residual / product wave a single honest backlog of high-leverage leftovers. Status labels:
 
@@ -126,8 +125,10 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming max_cost never advances after #514/#520 (`RecordManagedKeyCostUsage` wired on success).
 - Claiming Gemini path model / streamGenerateContent IsStream still broken after #515/#523.
 - Claiming retention same-day prune still broken (space vs RFC3339) after #516/#521.
-- Claiming **v0.8.39** product without the release gate tag after M49 landings.
+- Claiming Milestone 49 or residual board is still open after **v0.8.39** release + M49 closed.
+- Claiming **v0.8.40+** product without dedicated ACs (maintenance mode is the default).
 
 ## Links
 
+- Progress baseline: [`docs/progress/MASTER.md`](../progress/MASTER.md)
 - Release: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · prior [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · optional residual **v0.8.40+** (with ACs only)

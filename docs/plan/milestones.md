@@ -1,6 +1,6 @@
 # Milestones — MetAPI Go Rewrite
 
-> **Status: historical rewrite-era plan** (P0–P13). Not an open board; product is v0.8.36+. Use MASTER + residual-next-candidates.
+> **Status: historical rewrite-era plan** (P0–P13). Not an open board; product is **v0.8.39+**. Use `docs/progress/MASTER.md` + `docs/analysis/residual-next-candidates.md`.
 
 | Phase | Name | Tasks | Est. Effort | Key Deliverable |
 |:------|:-----|------:|:------------|:----------------|
