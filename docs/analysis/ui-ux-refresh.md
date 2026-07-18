@@ -186,11 +186,11 @@
 
 ### Phase 4 — Forms & density（P1）
 
-| Work | AC |
-|:-----|:---|
-| Drawer / Modal / 表单控件 | focus、错误态、disabled |
-| 设置页分段 | 苹果式 group list 可选 |
-| 密度：默认 ops-comfortable；不先做 compact 模式 |
+| Work | AC | Status |
+|:-----|:---|:------:|
+| Drawer / Modal / 表单控件 | focus、错误态、disabled | **done** glass modal/drawer chrome + 36px controls |
+| 设置页分段 | 苹果式 group list 可选 | **done** `.form-section` / `.form-group-list` samples |
+| 密度：默认 ops-comfortable；不先做 compact 模式 | gallery + tokenized `.form-input` | **done** |
 
 ### Phase 5 — Polish & a11y（P1）
 

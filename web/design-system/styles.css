@@ -347,6 +347,26 @@
     background-color var(--motion-swift);
 }
 
+textarea.ds-input {
+  min-height: 84px;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+select.ds-input {
+  appearance: none;
+  padding-right: calc(var(--space-3) + 12px);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
 .ds-input::placeholder {
   color: var(--color-text-muted);
 }
@@ -368,6 +388,7 @@
   opacity: 0.6;
   cursor: not-allowed;
   background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
 }
 
 .ds-input[aria-invalid='true'] {
@@ -526,6 +547,121 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--space-4);
+}
+
+.ds-gallery__form-states {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.ds-gallery__drawer-mock {
+  position: relative;
+  min-height: 280px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-secondary) 70%, transparent), var(--color-bg-secondary)),
+    var(--color-bg);
+  overflow: hidden;
+}
+
+.ds-gallery__drawer-mock-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--color-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.ds-gallery__drawer-mock-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(72%, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--glass-bg-strong);
+  border-left: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ds-gallery__drawer-mock-panel {
+    background: var(--color-bg-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ds-gallery__drawer-mock-scrim {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .ds-gallery__drawer-mock-panel {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+.ds-gallery__drawer-mock-title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.ds-gallery__drawer-mock-meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.ds-gallery__modal-mock {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 55%),
+    var(--color-bg-secondary);
+  padding: var(--space-5);
+}
+
+.ds-gallery__modal-mock-card {
+  width: min(100%, 360px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-glass);
+  padding: var(--space-5);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ds-gallery__modal-mock-card {
+    background: var(--color-bg-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .ds-gallery__modal-mock-card {
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .ds-gallery__fake-table {
