@@ -426,7 +426,17 @@ func TestFormatTimeToSQL(t *testing.T) {
 	t.Run("normal", func(t *testing.T) {
 		now := time.Date(2026, 7, 4, 12, 30, 45, 0, time.UTC)
 		got := formatTimeToSQL(now)
-		expected := "2026-07-04 12:30:45"
+		expected := "2026-07-04T12:30:45Z"
+		if got != expected {
+			t.Errorf("formatTimeToSQL = %q, want %q", got, expected)
+		}
+	})
+
+	t.Run("converts non-UTC to UTC RFC3339", func(t *testing.T) {
+		loc := time.FixedZone("UTC+8", 8*3600)
+		now := time.Date(2026, 7, 4, 20, 30, 45, 0, loc) // 12:30:45Z
+		got := formatTimeToSQL(now)
+		expected := "2026-07-04T12:30:45Z"
 		if got != expected {
 			t.Errorf("formatTimeToSQL = %q, want %q", got, expected)
 		}
@@ -436,6 +446,23 @@ func TestFormatTimeToSQL(t *testing.T) {
 		got := formatTimeToSQL(time.Time{})
 		if got != "" {
 			t.Errorf("expected empty for zero time, got %q", got)
+		}
+	})
+
+	t.Run("lexicographic same-day compare vs RFC3339 rows", func(t *testing.T) {
+		// Space-format cutoffs shield same-day old rows because 'T' > ' '.
+		row := "2026-07-10T08:00:00Z"
+		spaceCutoff := "2026-07-10 12:00:00"
+		rfcCutoff := formatTimeToSQL(time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC))
+		if row < spaceCutoff {
+			t.Fatalf("precondition failed: RFC3339 row unexpectedly < space cutoff")
+		}
+		if !(row < rfcCutoff) {
+			t.Fatalf("RFC3339 row %q should be < cutoff %q", row, rfcCutoff)
+		}
+		newer := "2026-07-10T14:00:00Z"
+		if newer < rfcCutoff {
+			t.Fatalf("in-window row %q must not be < cutoff %q", newer, rfcCutoff)
 		}
 	})
 }

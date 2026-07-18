@@ -139,9 +139,13 @@ func (s *LogCleanupScheduler) runJobLocked(dbw *store.DB) {
 	)
 }
 
+// formatTimeToSQL formats a retention cutoff for lexicographic compare against
+// TEXT created_at columns written as UTC RFC3339 (e.g. proxy_logs/events/files).
+// Space-separated "2006-01-02 15:04:05" is wrong: 'T' > ' ' so same-day old rows
+// never satisfy created_at < cutoff (#516).
 func formatTimeToSQL(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format("2006-01-02 15:04:05")
+	return t.UTC().Format(time.RFC3339)
 }
