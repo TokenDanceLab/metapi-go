@@ -28,6 +28,9 @@ func TestParseGeminiPath(t *testing.T) {
 		{"/v1beta/not-models/gemini-pro", "v1beta", "", ""},
 		{"/", "", "", ""},
 		{"v1beta/models/gemini-2.5-pro:generateContent", "v1beta", "gemini-2.5-pro", "generateContent"},
+		// Dynamic surface /gemini/{apiVersion}/models/...
+		{"/gemini/v1alpha/models/gemini-2.5-pro:generateContent", "v1alpha", "gemini-2.5-pro", "generateContent"},
+		{"/gemini/v1/models/gemini-2.5-flash:streamGenerateContent", "v1", "gemini-2.5-flash", "streamGenerateContent"},
 	}
 	for _, tt := range tests {
 		ver, model, action := ParseGeminiPath(tt.path)
@@ -293,15 +296,61 @@ func TestHandleGeminiGenerateContent_NonStream(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// With upstream forwarding not wired, stub returns generic chat.completion response.
-	// Verify valid JSON response was received.
+	// Path-only model must populate RequestedModel for channel selection / stub.
 	m := unmarshalResponse(t, rec)
-	if m["model"] == nil && m["object"] == nil {
-		t.Error("expected valid response with model/object fields")
+	if m["model"] != "gemini-2.5-pro" {
+		t.Errorf("model = %v, want path model gemini-2.5-pro", m["model"])
+	}
+	if m["object"] == nil {
+		t.Error("expected valid response with object field")
+	}
+	// generateContent stays non-stream without body stream flag.
+	ct := rec.Header().Get("Content-Type")
+	if ct == "text/event-stream" {
+		t.Errorf("generateContent without body stream must not be SSE, Content-Type = %q", ct)
+	}
+}
+
+func TestHandleGeminiGenerateContent_PathOnlyModel(t *testing.T) {
+	// AC #515: body omits model; path model becomes RequestedModel.
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-flash:generateContent", `{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}`)
+	pathModel, forceStream := geminiPathModelAndStream(req.URL.Path)
+	ctx, errResp := PrepareCtx(req, SurfConfig{
+		Endpoint:       "gemini",
+		DownstreamPath: req.URL.Path,
+		RequireModel:   false,
+		DefaultModel:   pathModel,
+		ForceStream:    forceStream,
+	})
+	if errResp != nil {
+		t.Fatalf("PrepareCtx error: %+v", errResp)
+	}
+	if ctx.RequestedModel != "gemini-2.5-flash" {
+		t.Errorf("RequestedModel = %q, want gemini-2.5-flash from path", ctx.RequestedModel)
+	}
+	if ctx.IsStream {
+		t.Error("generateContent path action must not force IsStream")
+	}
+}
+
+func TestHandleGeminiGenerateContent_StreamActionForcesStream(t *testing.T) {
+	// AC #515: :streamGenerateContent forces IsStream without body.stream.
+	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:streamGenerateContent", `{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiGenerateContent(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	ct := rec.Header().Get("Content-Type")
+	if ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q, want text/event-stream for path stream action", ct)
 	}
 }
 
 func TestHandleGeminiGenerateContent_Stream(t *testing.T) {
+	// Body stream:true still works alongside path stream action.
 	req := makeProxyReq("POST", "/v1beta/models/gemini-2.5-pro:streamGenerateContent", `{"contents":[{"role":"user","parts":[{"text":"hello"}]}],"stream":true}`)
 	rec := httptest.NewRecorder()
 	HandleGeminiGenerateContent(rec, req)
@@ -313,6 +362,25 @@ func TestHandleGeminiGenerateContent_Stream(t *testing.T) {
 	ct := rec.Header().Get("Content-Type")
 	if ct != "text/event-stream" {
 		t.Errorf("Content-Type = %q", ct)
+	}
+}
+
+func TestHandleGeminiGenerateContentDynamic_PathModelAndStream(t *testing.T) {
+	r := chi.NewRouter()
+	r.Post("/gemini/{geminiApiVersion}/models/*", func(w http.ResponseWriter, r *http.Request) {
+		HandleGeminiGenerateContentDynamic(w, r)
+	})
+
+	// Path-only model + stream action on dynamic surface.
+	req := makeProxyReq("POST", "/gemini/v1alpha/models/gemini-2.5-flash:streamGenerateContent", `{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Errorf("dynamic streamGenerateContent Content-Type = %q", rec.Header().Get("Content-Type"))
 	}
 }
 
@@ -358,6 +426,7 @@ func TestHandleGeminiCLIGenerateContent_ModelRequired(t *testing.T) {
 // ---- HandleGeminiCLIStreamGenerateContent ----
 
 func TestHandleGeminiCLIStreamGenerateContent(t *testing.T) {
+	// AC #515: CLI streamGenerateContent forces stream without body.stream.
 	req := makeProxyReq("POST", "/v1internal::streamGenerateContent", `{"model":"gemini-2.5-pro","contents":[{"role":"user","parts":[{"text":"hello"}]}]}`)
 	rec := httptest.NewRecorder()
 	HandleGeminiCLIStreamGenerateContent(rec, req)
@@ -366,11 +435,23 @@ func TestHandleGeminiCLIStreamGenerateContent(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// With upstream forwarding not wired, stub returns generic response.
-	// Stream flag not set in body, so non-stream response is expected.
-	m := unmarshalResponse(t, rec)
-	if m == nil {
-		t.Error("expected non-nil response")
+	ct := rec.Header().Get("Content-Type")
+	if ct != "text/event-stream" {
+		t.Errorf("CLI streamGenerateContent Content-Type = %q, want text/event-stream", ct)
+	}
+}
+
+func TestHandleGeminiCLIGenerateContent_NonStream(t *testing.T) {
+	// generateContent CLI path stays non-stream without body stream flag.
+	req := makeProxyReq("POST", "/v1internal::generateContent", `{"model":"gemini-2.5-pro","contents":[{"role":"user","parts":[{"text":"hello"}]}]}`)
+	rec := httptest.NewRecorder()
+	HandleGeminiCLIGenerateContent(rec, req)
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Content-Type") == "text/event-stream" {
+		t.Error("CLI generateContent without body stream must not be SSE")
 	}
 }
 

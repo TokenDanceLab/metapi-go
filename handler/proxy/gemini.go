@@ -141,11 +141,17 @@ func HandleGeminiModelsListDynamic(w http.ResponseWriter, r *http.Request) {
 
 // HandleGeminiGenerateContent handles POST /v1beta/models/*.
 // Parses {apiVersion}/models/{model}:{action} from the path.
+// Official Gemini clients put the model in the path (not body) and imply
+// streaming via the :streamGenerateContent action (issue #515).
 func HandleGeminiGenerateContent(w http.ResponseWriter, r *http.Request) {
+	pathModel, forceStream := geminiPathModelAndStream(r.URL.Path)
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "gemini",
 		DownstreamPath: r.URL.Path,
 		RequireModel:   false,
+		// Path model fills RequestedModel when body omits model (channel selection).
+		DefaultModel: pathModel,
+		ForceStream:  forceStream,
 	})
 	if errResp != nil {
 		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
@@ -182,11 +188,13 @@ func HandleGeminiCLIGenerateContent(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleGeminiCLIStreamGenerateContent handles POST /v1internal::streamGenerateContent.
+// Path action forces stream even when body omits stream:true (issue #515).
 func HandleGeminiCLIStreamGenerateContent(w http.ResponseWriter, r *http.Request) {
 	ctx, errResp := PrepareCtx(r, SurfConfig{
 		Endpoint:       "gemini-cli",
 		DownstreamPath: "/v1internal::streamGenerateContent",
 		RequireModel:   true,
+		ForceStream:    true,
 	})
 	if errResp != nil {
 		writeJSONError(w, errResp.Status, errResp.Error, errResp.ErrorType)
@@ -194,6 +202,20 @@ func HandleGeminiCLIStreamGenerateContent(w http.ResponseWriter, r *http.Request
 	}
 
 	dispatchUpstream(w, r, ctx)
+}
+
+// geminiPathModelAndStream extracts path model + stream-action force for native
+// Gemini generateContent paths. Body model still wins via PrepareCtx DefaultModel.
+func geminiPathModelAndStream(path string) (model string, forceStream bool) {
+	_, rawModel, action := ParseGeminiPath(path)
+	model = normalizeGeminiModelID(rawModel)
+	forceStream = isGeminiStreamAction(action)
+	return model, forceStream
+}
+
+// isGeminiStreamAction reports whether a Gemini path/CLI action is streaming.
+func isGeminiStreamAction(action string) bool {
+	return strings.EqualFold(strings.TrimSpace(action), "streamGenerateContent")
 }
 
 // HandleGeminiCLICountTokens handles POST /v1internal::countTokens.
@@ -214,8 +236,13 @@ func HandleGeminiCLICountTokens(w http.ResponseWriter, r *http.Request) {
 // ParseGeminiPath parses a Gemini path into apiVersion, model, action.
 // E.g., "/v1beta/models/gemini-2.5-pro:generateContent"
 //   -> apiVersion="v1beta", model="gemini-2.5-pro", action="generateContent"
+// Also accepts the dynamic surface "/gemini/{apiVersion}/models/{model}:{action}".
 func ParseGeminiPath(path string) (apiVersion, model, action string) {
 	path = strings.TrimPrefix(path, "/")
+	// Strip optional /gemini/ prefix used by HandleGeminiGenerateContentDynamic.
+	if strings.HasPrefix(path, "gemini/") {
+		path = strings.TrimPrefix(path, "gemini/")
+	}
 	parts := strings.SplitN(path, "/", 4)
 
 	if len(parts) >= 1 {

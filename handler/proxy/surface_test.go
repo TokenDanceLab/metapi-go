@@ -288,6 +288,27 @@ func TestPrepareCtx_StreamDetection(t *testing.T) {
 	}
 }
 
+func TestPrepareCtx_ForceStream(t *testing.T) {
+	// Path-implied stream (Gemini streamGenerateContent / CLI) without body.stream.
+	req := authRequest("POST", "/v1beta/models/gemini-2.5-pro:streamGenerateContent", []byte(`{"contents":[]}`))
+	ctx, errResp := PrepareCtx(req, SurfConfig{
+		Endpoint:       "gemini",
+		DownstreamPath: "/v1beta/models/gemini-2.5-pro:streamGenerateContent",
+		RequireModel:   false,
+		DefaultModel:   "gemini-2.5-pro",
+		ForceStream:    true,
+	})
+	if errResp != nil {
+		t.Fatalf("unexpected error: %+v", errResp)
+	}
+	if !ctx.IsStream {
+		t.Error("ForceStream must set IsStream=true when body omits stream")
+	}
+	if ctx.RequestedModel != "gemini-2.5-pro" {
+		t.Errorf("RequestedModel = %q, want DefaultModel gemini-2.5-pro", ctx.RequestedModel)
+	}
+}
+
 func TestPrepareCtx_InvalidJSON(t *testing.T) {
 	req := authRequest("POST", "/v1/chat/completions", []byte(`{invalid`))
 

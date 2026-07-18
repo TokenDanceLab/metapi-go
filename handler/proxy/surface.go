@@ -18,10 +18,14 @@ type SurfConfig struct {
 	DownstreamPath string
 	RequireModel   bool
 	DefaultModel   string
-	Method         string
-	ExtraHeaders   map[string]string
-	MaxRetries     int
-	SurfaceFormat  string // "openai", "claude", or empty
+	// ForceStream forces IsStream=true even when the body omits stream:true.
+	// Used by Gemini path action streamGenerateContent and CLI
+	// /v1internal::streamGenerateContent where streaming is path-implied.
+	ForceStream   bool
+	Method        string
+	ExtraHeaders  map[string]string
+	MaxRetries    int
+	SurfaceFormat string // "openai", "claude", or empty
 }
 
 // SurfResult is the result of processing a proxy surface request.
@@ -121,8 +125,11 @@ func PrepareCtx(r *http.Request, cfg SurfConfig) (*Ctx, *SurfResult) {
 		return nil, &SurfResult{OK: false, Status: 403, Error: "model not allowed by downstream policy", ErrorType: "invalid_request_error"}
 	}
 
-	// Check stream flag
+	// Check stream flag (body and optional path/surface force).
 	isStream := isStreamFromBody(body)
+	if cfg.ForceStream {
+		isStream = true
+	}
 
 	// Client detection
 	headers := HeaderMapFromRequest(r.Header)
