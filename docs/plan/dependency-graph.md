@@ -1,5 +1,7 @@
 # Dependency Graph — MetAPI Go Rewrite
 
+> **Status: historical rewrite-era graph**. Counts and package names are archival; living map is `docs/architecture.md`.
+
 ```mermaid
 graph TD
   subgraph Phase0["Phase 0: Foundation"]

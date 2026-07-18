@@ -1,5 +1,7 @@
 # Milestones — Stack Modernization + Gap Inventory
 
+> **Status: closed / historical** (M-STACK + M-GAP closed; MASTER marks both ✅). Wave table below is archival. Living residual: `docs/analysis/residual-next-candidates.md`.
+
 **Program**: dual-track SDD for frontend stack modernization and original-metapi gap inventory  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
 **MASTER**: `docs/progress/MASTER.md`
@@ -23,9 +25,9 @@ This program **does not** implement original-gap product fixes.
 | Wave | Status | Stack lane | Gap lane | Goal |
 |:-----|:-------|:-----------|:---------|:-----|
 | **Wave 0** | ✅ Done | Branch hygiene; labels; project; milestones; issues #3–#11 | same | Tracking surface ready |
-| **Wave 1** | 🔄 Active | **S1** core lock (TS 7.0.2 + React 19.2.7 + Vite 8.1.5) | **G1** issue capture + taxonomy · **G2** gap matrix | Parallel stack bump + gap evidence base |
-| **Wave 2** | 🔄 Active | **S2** React 19 test adaptation · **S3** Vite 8 / vitepress-mermaid tooling | **G3** publish `[backlog]` issues from matrix | Tests + tooling green; backlog visible |
-| **Wave 3** | Pending | **S4** CI / Docker / embed regression gate + CHANGELOG | **G4** gap inventory acceptance (docs-only) | Ship stack gate; freeze inventory |
+| **Wave 1** | ✅ Done | **S1** core lock (TS 7.0.2 + React 19.2.7 + Vite 8.1.5) | **G1** issue capture + taxonomy · **G2** gap matrix | Parallel stack bump + gap evidence base |
+| **Wave 2** | ✅ Done | **S2** React 19 test adaptation · **S3** Vite 8 / vitepress-mermaid tooling | **G3** publish `[backlog]` issues from matrix | Tests + tooling green; backlog visible |
+| **Wave 3** | ✅ Done | **S4** CI / Docker / embed regression gate + CHANGELOG | **G4** gap inventory acceptance (docs-only) | Ship stack gate; freeze inventory |
 
 Parallelism notes:
 

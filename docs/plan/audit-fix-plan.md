@@ -1,5 +1,7 @@
 # Audit Fix Plan
 
+> **Status: historical / superseded** (targets v0.4.0 / LOCAL_ONLY era). Not an open production plan.
+
 **Date**: 2026-07-04 | **Source**: 16-agent audit | **Findings**: 47 total (10 CRITICAL, 12 HIGH, 15 MEDIUM, 10 LOW)
 
 ## CRITICAL Fixes (must fix before v0.2.0)

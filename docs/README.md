@@ -1,6 +1,6 @@
 # docs/ — MetAPI Go documentation map
 
-**Last updated**: 2026-07-17  
+**Last updated**: 2026-07-18  
 **Purpose**: one-screen orientation so humans and agents do not dig 180+ markdown files blindly.
 
 ## Start here
@@ -29,14 +29,13 @@ docs/
   migration.md              ← SQLite → PG / schema upgrade
   design/                   ← living design SSOT (BACKEND, DESIGN, a11y)
   analysis/                 ← evidence audits, residuals, gap matrix
-    residual-next-candidates.md   ← next residual queue (read often)
+    residual-next-candidates.md   ← residual honesty SSOT (read often)
     original-gap-matrix.md        ← parity evidence
     competitive/                  ← peer learning inventory
-  plan/                     ← program / lane / roadmap (historical OK)
+  plan/                     ← program / lane / roadmap (historical / closed)
   progress/                 ← MASTER index only (keep slim)
   specs/                    ← rewrite-era implementation specs (large; archival)
     review/                 ← historical audits/reviews
-  archives/                 ← (optional) completed program dumps
 ```
 
 ## Mental model (reduce load)
@@ -47,27 +46,25 @@ docs/
 4. **`docs/specs/` is heavy rewrite history** — do not treat as day-to-day runbook.
 5. **One Issue per topic**; close duplicates the same day.
 
-## Active residual lanes (v0.8.22)
+## Residual board (post v0.8.36)
 
-See Milestone [Enterprise residual v0.8.22](https://github.com/TokenDanceLab/metapi-go/milestone/31):
-
-- Security: admin key redaction (#355), custom_headers deny-list (#356), RuntimeExecutor redirect SSRF (#357)
-- Reliability: weighted soft-filter empty → next priority layer (#358)
-- Docs: residual honesty board (#359)
-- Explicit non-goals until dedicated Milestone: full Responses WS product, Redis sticky product, update-center remote deploy
+- **Latest release**: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · M46 closed · active milestone **none**.
+- **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) (optional **v0.8.37+** only with dedicated ACs).
+- **Still not product without ACs**: full Responses WS (WS-1), Redis sticky (STICKY-B), update-center remote deploy (UC-1).
+- **Keep partial**: P0-585 cascade (load-proof required; honesty tests do not flip present).
 
 ## Hygiene rules (short)
 
 - Prefer **merge/update** over new parallel analysis files.
-- Absolute dates (`2026-07-17`), not “recently”.
+- Absolute dates (`2026-07-18`), not “recently”.
 - Cross-link residual docs from `residual-next-candidates.md`.
 - `docs/doc_hygiene_test.go` enforces public markdown hygiene (no local paths / false Redis sticky claims).
 
-## Related program docs
+## Related program docs (historical)
 
 | Doc | Role |
 |:----|:-----|
-| `plan/enterprise-program.md` | Multi-lane enterprise program |
-| `plan/lane-charters.md` | File ownership for parallel WFs |
-| `plan/feature-complete-roadmap.md` | Feature track (largely shipped) |
+| `plan/enterprise-program.md` | Closed enterprise program map |
+| `plan/lane-charters.md` | File ownership for parallel WFs (ownership rules still useful) |
+| `plan/feature-complete-roadmap.md` | F0 snapshot (closed / historical) |
 | `plan/gap-inventory-acceptance.md` | G4 acceptance (closed) |

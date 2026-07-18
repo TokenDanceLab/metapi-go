@@ -1,5 +1,7 @@
 # Milestones — Production Hardening
 
+> **Status: closed / superseded** (original v0.4.0 target; product is **v0.8.36+**). Do not treat M1–M5 as open production board. Residual train: `docs/analysis/residual-next-candidates.md` + `CHANGELOG.md`.
+
 | # | Milestone | After | Criteria | Status |
 |:--|:----------|:------|:---------|:-------|
 | M1 | **Critical Fixes Done** | Phase 1 | `http.DefaultClient` 零引用；`panic(` 在 `service/oauth/` 零出现；默认密钥生产告警；SSE >60s 不断 | Pending |

@@ -1,5 +1,7 @@
 # Milestones — MetAPI Go Rewrite
 
+> **Status: historical rewrite-era plan** (P0–P13). Not an open board; product is v0.8.36+. Use MASTER + residual-next-candidates.
+
 | Phase | Name | Tasks | Est. Effort | Key Deliverable |
 |:------|:-----|------:|:------------|:----------------|
 | P0 | Project Skeleton | 1 | 1d | Go binary boots, /health responds, Docker builds |
