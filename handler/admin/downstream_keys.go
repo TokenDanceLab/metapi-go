@@ -505,11 +505,8 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
-	if updated != nil {
-		if k, ok := updated["key"].(string); ok {
-			updated["keyMasked"] = maskKey(k)
-		}
-	}
+	// Update must not return full key; only keyMasked (#440).
+	redactDownstreamKeySecret(updated)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -533,6 +530,8 @@ func (h *downstreamKeysHandler) resetUsage(w http.ResponseWriter, r *http.Reques
 	}
 
 	updated := queryRow(h.db, "SELECT * FROM downstream_api_keys WHERE id = ?", id)
+	// Reset-usage must not return full key; only keyMasked (#440).
+	redactDownstreamKeySecret(updated)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"item":    updated,
@@ -706,8 +705,9 @@ func maskKey(key string) string {
 }
 
 // redactDownstreamKeySecret sets keyMasked from the stored secret and removes
-// plaintext "key" so list/summary/overview JSON never leaks the full secret (#355).
-// Create and export keep intentional full-key returns and do not call this helper.
+// plaintext "key" so list/summary/overview/update/reset-usage JSON never leaks
+// the full secret (#355, #440). Create and export keep intentional full-key
+// returns and do not call this helper.
 func redactDownstreamKeySecret(row map[string]any) {
 	if row == nil {
 		return
