@@ -6,28 +6,38 @@ import (
 	"strings"
 )
 
-// maxTokensOverContextError is returned when body max_tokens exceeds a positive
-// route context_length. Callers must surface an honest 400 (no silent clamp).
+// maxTokensOverContextError is returned when body max_tokens / max_output_tokens
+// exceeds a positive route context_length. Callers must surface an honest 400
+// (no silent clamp).
 type maxTokensOverContextError struct {
 	MaxTokens     int64
 	ContextLength int64
+	// Field is the body key that exceeded the limit ("max_tokens" or
+	// "max_output_tokens") so error text matches the request dialect.
+	Field string
 }
 
 func (e maxTokensOverContextError) Error() string {
+	field := e.Field
+	if field == "" {
+		field = "max_tokens"
+	}
 	return fmt.Sprintf(
-		"max_tokens (%d) exceeds route context_length (%d)",
+		"%s (%d) exceeds route context_length (%d)",
+		field,
 		e.MaxTokens,
 		e.ContextLength,
 	)
 }
 
-// enforceMaxTokensAgainstContextLength rejects max_tokens above a positive
-// route context_length for OpenAI chat/completions-style and Anthropic messages bodies.
+// enforceMaxTokensAgainstContextLength rejects max_tokens / max_output_tokens
+// above a positive route context_length for OpenAI chat/completions-style,
+// Anthropic messages, and OpenAI Responses bodies.
 //
-// Policy (issue #399 / #409 / CTX-520):
+// Policy (issue #399 / #409 / #450 / CTX-520 residual):
 //   - enforce only when context_length > 0
-//   - enforce only when max_tokens is present and parseable as an integer
-//   - skip when max_tokens is omitted, null, or unparseable
+//   - enforce when max_output_tokens or max_tokens is present and parseable
+//   - skip when both fields are omitted, null, or unparseable
 //   - never silent-clamp or invent tokens
 //
 // Returns maxTokensOverContextError when the request must be rejected with 400.
@@ -36,18 +46,25 @@ func enforceMaxTokensAgainstContextLength(body map[string]any, contextLength *in
 	if !ok {
 		return nil
 	}
-	maxTokens, present := bodyMaxTokens(body)
+	// Prefer OpenAI Responses max_output_tokens when both are present; otherwise
+	// accept chat/messages max_tokens for parity.
+	maxTokens, field, present := bodyOutputTokenLimit(body)
 	if !present {
 		return nil
 	}
 	if maxTokens > limit {
-		return maxTokensOverContextError{MaxTokens: maxTokens, ContextLength: limit}
+		return maxTokensOverContextError{
+			MaxTokens:     maxTokens,
+			ContextLength: limit,
+			Field:         field,
+		}
 	}
 	return nil
 }
 
-// shouldEnforceMaxTokensOnPath is true for OpenAI chat/completions (+ legacy completions)
-// and Anthropic Claude /v1/messages (issue #409). count_tokens and other surfaces stay out.
+// shouldEnforceMaxTokensOnPath is true for OpenAI chat/completions (+ legacy
+// completions), Anthropic Claude /v1/messages (issue #409), and OpenAI
+// /v1/responses (+ /compact) (issue #450). count_tokens and other surfaces stay out.
 func shouldEnforceMaxTokensOnPath(downstreamPath string) bool {
 	p := strings.ToLower(strings.TrimSpace(downstreamPath))
 	switch {
@@ -56,6 +73,12 @@ func shouldEnforceMaxTokensOnPath(downstreamPath string) bool {
 	case p == "/v1/completions" || p == "/completions" || strings.HasSuffix(p, "/v1/completions"):
 		return true
 	case p == "/v1/messages" || p == "/messages" || strings.HasSuffix(p, "/v1/messages"):
+		return true
+	// OpenAI Responses (+ compact). Alias /responses is resolved to /v1/responses*
+	// before enforce; still accept suffix/alias-safe forms like the other matchers.
+	case p == "/v1/responses" || p == "/responses" || strings.HasSuffix(p, "/v1/responses"):
+		return true
+	case p == "/v1/responses/compact" || p == "/responses/compact" || strings.HasSuffix(p, "/v1/responses/compact") || strings.HasSuffix(p, "/responses/compact"):
 		return true
 	default:
 		return false
@@ -69,13 +92,36 @@ func positiveContextLength(contextLength *int64) (int64, bool) {
 	return *contextLength, true
 }
 
+// bodyOutputTokenLimit extracts a parseable output-token cap from the body.
+// OpenAI Responses uses max_output_tokens; chat/completions and Claude messages
+// use max_tokens. When both are present, max_output_tokens wins (Responses dialect).
+// Missing / null / empty / non-numeric → not present.
+func bodyOutputTokenLimit(body map[string]any) (value int64, field string, present bool) {
+	if body == nil {
+		return 0, "", false
+	}
+	if n, ok := parseBodyTokenField(body, "max_output_tokens"); ok {
+		return n, "max_output_tokens", true
+	}
+	if n, ok := parseBodyTokenField(body, "max_tokens"); ok {
+		return n, "max_tokens", true
+	}
+	return 0, "", false
+}
+
 // bodyMaxTokens extracts body["max_tokens"] when present as a finite whole number
 // or numeric string. Missing / null / empty / non-numeric → not present.
+// Kept for callers/tests that only care about the chat/messages field.
 func bodyMaxTokens(body map[string]any) (int64, bool) {
+	return parseBodyTokenField(body, "max_tokens")
+}
+
+// parseBodyTokenField reads body[key] as a finite whole number or numeric string.
+func parseBodyTokenField(body map[string]any, key string) (int64, bool) {
 	if body == nil {
 		return 0, false
 	}
-	raw, ok := body["max_tokens"]
+	raw, ok := body[key]
 	if !ok || raw == nil {
 		return 0, false
 	}
