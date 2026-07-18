@@ -5,6 +5,13 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.38] — 2026-07-18
+
+### Docs / Honesty
+- Public Redis claims: optional REDIS_URL for multi-instance RPM/TPM admission (sharedcount fail-open); sticky still process-local residual (#503 / #507)
+- ghcr public badge bumped to v0.8.37 series; residual inventory latest-release sequencing (#504 / #505 / #508)
+- Residual inventory + MASTER for Milestone 48 post-product landings; DOCS-REDIS-TRUTH + DOCS-DOCKER-BADGE + DOCS-RESIDUAL-LATEST present · board #503–#506 closed (#506 / #509)
+
 ## [v0.8.37] — 2026-07-18
 
 ### Docs
