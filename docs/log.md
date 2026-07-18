@@ -6,6 +6,12 @@
 
 
 
+
+## [2026-07-19] UI-REFRESH M51 opened + multi-lane kickoff
+
+- Milestone 51 UI-REFRESH; issues #532 epic, #535 FOUC, #533 design-system, #534 visual, #536 e2e.
+- Session loop every 10m; lanes: FOUC / design-system / visual+e2e harness.
+
 ## [2026-07-19] design: formal readiness + UI-REFRESH
 
 - Added `docs/analysis/formal-readiness.md` — Track A 对内正式可用（已达标）vs Track B 对外完备（未达标）；T0–T4 运行档位；Redis 可选。

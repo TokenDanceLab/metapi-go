@@ -13,7 +13,7 @@
 | Issue | Track | Title |
 |------:|:------|:------|
 | — | — | **Empty product board** after #531 / v0.8.44 |
-| UI-REFRESH (design) | UX | [`ui-ux-refresh.md`](../analysis/ui-ux-refresh.md) — not scheduled until Milestone |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · #535 FOUC · #533 design-system · #534 visual · #536 e2e |
 
 ## Hard gates
 

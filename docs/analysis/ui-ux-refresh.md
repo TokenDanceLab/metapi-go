@@ -1,7 +1,7 @@
 # UI/UX refresh — GCP × frosted glass × Apple detail
 
 **Date**: 2026-07-19  
-**Status**: design only (no wholesale UI rewrite until Milestone + ACs)  
+**Status**: scheduled — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536; implementation in progress  
 **Product**: MetAPI admin (`web/`)  
 **Supersedes direction of**: closed U0–U2 token polish (#12/#14 等) — **new visual language**, keep token-first architecture  
 **Related**: [`../design/DESIGN.md`](../design/DESIGN.md) · [`../design/a11y-checklist.md`](../design/a11y-checklist.md) · `web/styles/tokens.css` · [`formal-readiness.md`](./formal-readiness.md)
@@ -271,7 +271,20 @@
 
 ---
 
-## 12. Next action（需你点头后执行）
+## 12. GitHub board
+
+| Item | Link |
+|:-----|:-----|
+| Milestone | [UI-REFRESH #51](https://github.com/TokenDanceLab/metapi-go/milestone/51) |
+| Epic | [#532](https://github.com/TokenDanceLab/metapi-go/issues/532) |
+| FOUC | [#535](https://github.com/TokenDanceLab/metapi-go/issues/535) |
+| Design system + gallery | [#533](https://github.com/TokenDanceLab/metapi-go/issues/533) |
+| Visual acceptance | [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) |
+| UX e2e | [#536](https://github.com/TokenDanceLab/metapi-go/issues/536) |
+
+## 13. Next action
+
+
 
 1. 开 GitHub Milestone **UI-REFRESH** + 史诗 Issue（可拆上表）。  
 2. Phase 1 直接开工：**FOUC + tokens**（小 PR，可跟 v0.8.45）。  
