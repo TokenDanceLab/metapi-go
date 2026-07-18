@@ -12,8 +12,12 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | **Empty product board** after #531 / v0.8.44 |
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–3 in tree: FOUC · DS+gallery · Playwright · shell glass · data surfaces (Linux baselines + shell page shots + Phase 4 forms residual) |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–3 **on master** (`af3a4d2`) |
+| #537 | UX | Phase 4 forms/drawers · worktree `ui/phase4-forms` |
+| #538 | UX | Shell page screenshots · worktree `ui/shell-page-shots` |
+| #539 | UX | Linux Playwright gallery baselines (CI SSOT) |
+| #540 | UX | Phase 5 a11y + reduced-motion · worktree `ui/phase5-a11y` |
+| #541 | UX | Empty/error states + calm micro-motion |
 
 ## Hard gates
 
