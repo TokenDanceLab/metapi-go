@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tokendancelab/metapi-go/config"
 	"github.com/tokendancelab/metapi-go/platform"
+	"github.com/tokendancelab/metapi-go/service"
 )
 
 // RegisterSettingsRoutes registers all /api/settings routes (runtime, brand-list, system-proxy/test).
@@ -704,6 +705,15 @@ func (h *settingsHandler) testSystemProxy(w http.ResponseWriter, r *http.Request
 	target := "https://www.gstatic.com/generate_204"
 	if body.TargetUrl != nil && strings.TrimSpace(*body.TargetUrl) != "" {
 		target = strings.TrimSpace(*body.TargetUrl)
+		// Guard operator-supplied probe targets against non-http(s) and
+		// cloud metadata / link-local SSRF first-hops (#449).
+		if service.IsForbiddenSiteTargetURL(target) || !service.IsValidHTTPURL(target) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"success": false,
+				"message": "Invalid targetUrl. Cloud metadata / link-local targets are not allowed; expected a valid http(s) URL.",
+			})
+			return
+		}
 	}
 
 	result := probeSystemProxy(r.Context(), proxyURL, target)
