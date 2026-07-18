@@ -1497,83 +1497,43 @@ body {
 }
 
 .stat-icon-blue {
-  background: #dbeafe;
-  color: #2563eb;
+  background: var(--color-stat-blue);
+  color: var(--color-stat-blue-ink);
 }
 
 .stat-icon-green {
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--color-stat-green);
+  color: var(--color-stat-green-ink);
 }
 
 .stat-icon-yellow {
-  background: #fef3c7;
-  color: #d97706;
+  background: var(--color-stat-yellow);
+  color: var(--color-stat-yellow-ink);
 }
 
 .stat-icon-pink {
-  background: #fce7f3;
-  color: #db2777;
+  background: var(--color-stat-pink);
+  color: var(--color-stat-pink-ink);
 }
 
 .stat-icon-red {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--color-stat-red);
+  color: var(--color-stat-red-ink);
 }
 
 .stat-icon-orange {
-  background: #ffedd5;
-  color: #ea580c;
+  background: var(--color-stat-orange);
+  color: var(--color-stat-orange-ink);
 }
 
 .stat-icon-purple {
-  background: #ede9fe;
-  color: #7c3aed;
+  background: var(--color-stat-purple);
+  color: var(--color-stat-purple-ink);
 }
 
 .stat-icon-cyan {
-  background: #cffafe;
-  color: #0891b2;
-}
-
-[data-theme="dark"] .stat-icon-blue {
-  background: #1e3a5f;
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .stat-icon-green {
-  background: #14532d;
-  color: #4ade80;
-}
-
-[data-theme="dark"] .stat-icon-yellow {
-  background: #451a03;
-  color: #fbbf24;
-}
-
-[data-theme="dark"] .stat-icon-pink {
-  background: #500724;
-  color: #f472b6;
-}
-
-[data-theme="dark"] .stat-icon-red {
-  background: #450a0a;
-  color: #f87171;
-}
-
-[data-theme="dark"] .stat-icon-orange {
-  background: #431407;
-  color: #fb923c;
-}
-
-[data-theme="dark"] .stat-icon-purple {
-  background: #2e1065;
-  color: #a78bfa;
-}
-
-[data-theme="dark"] .stat-icon-cyan {
-  background: #083344;
-  color: #22d3ee;
+  background: var(--color-stat-cyan);
+  color: var(--color-stat-cyan-ink);
 }
 
 .stat-label {
