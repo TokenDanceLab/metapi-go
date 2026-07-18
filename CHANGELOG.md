@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.34] — 2026-07-18
+
+### UI
+- Wire DownstreamKeys proxyUrl create/edit/list (backend KEY-578 already present) (#466 / #471)
+- Wire TokenRoutes contextLength create/edit/list badge (backend CTX-520 admin already present) (#467 / #472)
+- Migrate high-value hard-coded CSS hex clusters (checkin-toggle, route-enable, info-tip, model-tag-*, status-dot-*) to design tokens (#468 / #470)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 44 post-product landings; UI-KEY-PROXY + UI-ROUTE-CTX + UI-TOKEN-DEBT present · board #466–#469 closed (#469 / #473)
+
 ## [v0.8.33] — 2026-07-18
 
 ### UI
