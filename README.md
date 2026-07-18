@@ -177,7 +177,7 @@ Cron 定时执行（默认每日 08:00），智能解析奖励金额，签到失
 | `CHECKIN_CRON` | `0 8 * * *` | 签到时间 |
 | `BALANCE_REFRESH_CRON` | `0 * * * *` | 余额刷新频率 |
 
-当前运行时支持两种数据库形态：单进程 SQLite；PostgreSQL 生产部署。PostgreSQL 模式下，产生外部请求、通知、上传、清理或同步副作用的后台任务使用 PG advisory lock，避免多副本重复执行同一批任务。Redis 尚未集成：没有 `REDIS_URL` 配置、Redis 客户端或分布式缓存。
+当前运行时支持两种数据库形态：单进程 SQLite；PostgreSQL 生产部署。PostgreSQL 模式下，产生外部请求、通知、上传、清理或同步副作用的后台任务使用 PG advisory lock，避免多副本重复执行同一批任务。可选 `REDIS_URL` / `METAPI_REDIS_URL` 仅用于多实例下游 Key 的 **RPM/TPM admission** 共享计数（`auth.ConfigureSharedAdmissionFromRedisURL` + `internal/sharedcount`，不可达时 fail-open 回退进程内窗口）；留空则无需 Redis 进程。Sticky session 仍是进程内绑定，**不会**因配置 Redis 而跨实例共享（STICKY-B 仍为 residual，非产品）。详见 [`docs/analysis/redis-shared-state.md`](docs/analysis/redis-shared-state.md)。
 
 代理转发没有配置路由和上游依赖时，生产默认返回 HTTP 503。`METAPI_ENABLE_PROXY_STUB=1` 只用于测试或演示，避免把本地假响应误当成真实上游调用。
 
@@ -198,7 +198,7 @@ Cron 定时执行（默认每日 08:00），智能解析奖励金额，签到失
 |----|------|
 | 后端 | [chi](https://github.com/go-chi/chi) 路由 + `net/http` |
 | 语言 | Go 1.26.5 |
-| 数据库 | SQLite / PostgreSQL + [sqlx](https://github.com/jmoiron/sqlx)，无 Redis 运行时依赖 |
+| 数据库 | SQLite / PostgreSQL + [sqlx](https://github.com/jmoiron/sqlx)；可选 Redis 仅用于 RPM/TPM admission（非必需） |
 | 定时任务 | [robfig/cron](https://github.com/robfig/cron) |
 | 容器化 | Docker（Alpine，15MB 镜像） |
 | 前端 | React 19 + Vite 8 + Tailwind CSS v4（内嵌） |

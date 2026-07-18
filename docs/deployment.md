@@ -34,6 +34,7 @@
 | `METAPI_ENABLE_PROXY_STUB` | _(empty)_ | Test/demo-only local proxy stub. Leave empty in production; unconfigured upstream forwarding returns 503 |
 | `TRUSTED_PROXY_CIDRS` | _(empty)_ | Comma-separated reverse-proxy CIDRs allowed to supply `X-Forwarded-For` / `X-Real-IP`; forwarded headers are ignored when empty |
 | `ADMIN_CORS_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated exact `http(s)` browser origins allowed to call `/api/*`; empty keeps admin API same-origin only, and `*` is rejected |
+| `REDIS_URL` / `METAPI_REDIS_URL` | _(empty)_ | Optional Redis for multi-instance shared downstream-key **RPM/TPM admission** only (`internal/sharedcount`; fail-open). Empty = process-local counters; no Redis process required. Does **not** enable sticky session multi-instance sharing |
 
 ## Docker Compose (Production)
 
@@ -136,7 +137,7 @@ Schema migrations run automatically at startup. Use `metapi-migrate` to transfer
 
 Use PostgreSQL for multi-instance deployments. Side-effecting schedulers use PostgreSQL advisory locks, so only one replica runs each job batch at a time. `admin-snapshot` remains process-local cache warming; `usage-aggregation` uses its own checkpoint lease.
 
-Redis is not part of the current runtime. There is no `REDIS_URL` setting, Redis client, or distributed cache in this build.
+Optional Redis (`REDIS_URL` / `METAPI_REDIS_URL`) is used only for multi-instance shared downstream-key **RPM/TPM admission** via `auth.ConfigureSharedAdmissionFromRedisURL` and `internal/sharedcount`. Admission is fail-open: if Redis is unreachable, counters fall back to process-local windows. Leave empty for single-node deployments — no Redis process is required. Sticky session bindings remain process-local; Redis does **not** share sticky maps across instances (STICKY-B is residual, not product). Details: [`docs/analysis/redis-shared-state.md`](analysis/redis-shared-state.md).
 
 ### Proxy Forwarding
 
