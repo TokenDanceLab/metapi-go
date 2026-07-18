@@ -4,6 +4,12 @@
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
 
+
+## [2026-07-19] ops: hk3 deploy v0.8.44 shared-tiny
+
+- Pin + up `td-metapi` 0.8.44; compose force `DB_PROFILE=shared-tiny` + MaxOpen/Idle 1/1 + `application_name=metapi-hk3`; restart=no.
+- Verified healthy/ready; metrics open=1 errors=0; Azure backends=1; no 53300; NewAPI ok.
+
 ## [2026-07-19] #531 PostgreSQL pool budget profiles + lease pressure
 
 - Product: `DB_PROFILE` shared-tiny/normal/dedicated; default normal 10/3 (dedicated still 20/5 for large DBs).
