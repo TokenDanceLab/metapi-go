@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Go" src="https://img.shields.io/badge/Go-1.26.4-00ADD8?logo=go">
+  <img alt="Go" src="https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go">
   <a href="https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go"><img alt="Docker" src="https://img.shields.io/badge/ghcr-v0.6.5-blue?logo=docker"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
@@ -197,11 +197,11 @@ Cron 定时执行（默认每日 08:00），智能解析奖励金额，签到失
 | 层 | 技术 |
 |----|------|
 | 后端 | [chi](https://github.com/go-chi/chi) 路由 + `net/http` |
-| 语言 | Go 1.26.4 |
+| 语言 | Go 1.26.5 |
 | 数据库 | SQLite / PostgreSQL + [sqlx](https://github.com/jmoiron/sqlx)，无 Redis 运行时依赖 |
 | 定时任务 | [robfig/cron](https://github.com/robfig/cron) |
 | 容器化 | Docker（Alpine，15MB 镜像） |
-| 前端 | React 18 + Vite + Tailwind CSS v4（内嵌） |
+| 前端 | React 19 + Vite 8 + Tailwind CSS v4（内嵌） |
 
 ---
 
