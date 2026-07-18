@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.30] — 2026-07-18
+
+### Security
+- Share RejectCrossOriginRedirect on residual OAuth Codex HTTP client + Telegram notify clients; public-origin 302 to different host rejected (#433 / #436)
+
+### Fixed
+- loadRouteMatch applies source route model_pattern as SourceModel fallback when channel SourceModel blank/nil (group/source eligibility + resolveModel) (#434 / #438)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 40 post v0.8.29; SEC-OAUTH-NOTIFY-REDIR + REL-SOURCE-MODEL present · board #433–#435 closed (#435 / #437)
+
 ## [v0.8.29] — 2026-07-18
 
 ### Fixed
