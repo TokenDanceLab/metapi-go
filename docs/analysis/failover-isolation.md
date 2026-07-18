@@ -41,6 +41,10 @@ Milestone **39** / **v0.8.29** closed three product reliability slices that were
 
 Docs honesty for the board: [#426](https://github.com/TokenDanceLab/metapi-go/issues/426) / PR [#428](https://github.com/TokenDanceLab/metapi-go/pull/428). **P0-585 remains partial** (credential usage-limit scope, empty-filter global fallback, production multi-channel load proof).
 
+### M40 note (v0.8.30) — not a cascade close
+
+Milestone **40** / **v0.8.30** shipped **REL-SOURCE-MODEL** (#434 / PR #438): `loadRouteMatch` applies source route `model_pattern` as SourceModel fallback when channel SourceModel is blank/nil. That is a **selection mapping** fix for group/source eligibility + resolveModel — **not** a P0-585 cascade isolation close. **P0-585 stays partial.**
+
 ## Mechanism map (aligned with code)
 
 | Layer | Mechanism | Code | Scope of poison |
