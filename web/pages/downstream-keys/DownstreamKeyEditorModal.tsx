@@ -27,6 +27,8 @@ export type DownstreamKeyEditorForm = {
   maxRequests: string;
   expiresAt: string;
   enabled: boolean;
+  /** Per-key egress proxy; empty = inherit site/account/system. */
+  proxyUrl: string;
   selectedModels: string[];
   selectedGroupRouteIds: number[];
   siteWeightMultipliersText: string;
@@ -412,6 +414,20 @@ export default function DownstreamKeyEditorModal({
         <div className="downstream-key-modal-field">
           <div className="downstream-key-modal-label">过期时间</div>
           <input type="datetime-local" value={form.expiresAt} onChange={(e) => onChange((prev) => ({ ...prev, expiresAt: e.target.value }))} style={inputStyle} />
+        </div>
+        <div className="downstream-key-modal-field downstream-key-modal-field-full">
+          <div className="downstream-key-modal-label">出口代理（可选）</div>
+          <input
+            value={form.proxyUrl}
+            onChange={(e) => onChange((prev) => ({ ...prev, proxyUrl: e.target.value }))}
+            placeholder="留空继承站点/系统代理，如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080"
+            style={inputStyle}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <div className="downstream-key-modal-help">
+            仅影响此密钥的上游出口。填写后优先使用密钥代理；留空则继承站点 / 账号 / 系统代理链路。
+          </div>
         </div>
         <label className="downstream-key-modal-toggle">
           <input type="checkbox" checked={form.enabled} onChange={(e) => onChange((prev) => ({ ...prev, enabled: e.target.checked }))} />
