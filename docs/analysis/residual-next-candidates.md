@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.36 / M47 product landed)
+# Residual next candidates (post v0.8.37 / M47 closed)
 
 **Date**: 2026-07-18  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484-#487 present. **v0.8.37 shipped** (Milestone 47 closed): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499), #497 residual honesty (PR #501) + release gate. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
+**Context**: **v0.8.37 shipped** (Milestone 47 closed): #494 DOCS-STACK-TRUTH (PR #498), #495 REL-TPM-ESTIMATE (PR #500), #496 REL-CRED-USAGE-HONESTY (PR #499), #497 residual honesty (PR #501) + release gate. Prior **v0.8.36** (M46 closed): #484-#487 present. Residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
@@ -81,8 +81,8 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (v0.8.38+)
 
-1. **Latest release**: **v0.8.36** (M46 closed).
-2. **M47 / v0.8.37 closed**: #494–#497 (PRs #498–#501) present on master with tag.
+1. **Latest release**: **v0.8.37** (M47 closed).
+2. **M47 product present**: #494–#497 (PRs #498–#501) on master with tag; prior M46 / v0.8.36 (#484–#487) closed.
 3. **Active wave**: none. Optional residual **v0.8.38+** only with dedicated ACs.
 4. **DOCS-STACK-TRUTH** / **REL-TPM-ESTIMATE** / **REL-CRED-USAGE-HONESTY** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
@@ -100,21 +100,21 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming P0-585 cascade is fully present (stays **partial**; honesty tests and selection mapping are not cascade-complete).
 - Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; residual polish only).
 - Inventing WS-1 / STICKY-B / UC-1 product without dedicated ACs.
-- Claiming **v0.8.37+** product without dedicated ACs.
+- Claiming **v0.8.38+** product without dedicated ACs.
 - Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them (monitor token clear, CSS residual, stream usage honesty tests, etc.).
-
-
 - Claiming README still shows Go 1.26.4 / React 18 after #494/#498.
 - Claiming maxTPM soft admission is a no-op after #495/#500 (estimate is best-effort, not perfect tokenizer).
 - Claiming P0-585 credential usage-limit honesty tests are missing after #496/#499 (cascade still partial).
-- Claiming **v0.8.38** product without dedicated ACs.
+- Claiming public Docker/ghcr badge still shows stale **v0.6.5** after #504.
+- Claiming residual sequencing still lists Latest release as **v0.8.36** after #505.
+
 ## Links
 
 - Release: [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · prior [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · next optional residual **v0.8.38+** (with ACs only)
-- Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
-- Prior milestone: [Enterprise UI/reliability residual polish v0.8.35](https://github.com/TokenDanceLab/metapi-go/milestone/45) · **closed**
+- Milestone: [Enterprise residual polish v0.8.37](https://github.com/TokenDanceLab/metapi-go/milestone/47) · **closed** (#494–#497)
+- Prior milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
 - M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388; historical)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #494, #495, #496, #497, #498, #499, #500, see closed M45/M46 boards (#475–#478, #484–#487) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
+- Related issues: #494, #495, #496, #497, #504, #505, see closed M45/M46/M47 boards (#475–#478, #484–#487, #494–#497) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
