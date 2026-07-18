@@ -4,6 +4,7 @@ import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useToast } from '../components/Toast.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import ModernSelect from '../components/ModernSelect.js';
 import { tr } from '../i18n.js';
@@ -327,13 +328,17 @@ export default function ProgramLogs() {
                 </MobileCard>
               );
             }) : (
-              <div className="empty-state">
-                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div className="empty-state-title">暂无日志</div>
-                <div className="empty-state-desc">当前筛选条件下没有程序日志。</div>
-              </div>
+              <EmptyState
+                tone="info"
+                icon="◇"
+                title="暂无日志"
+                description="当前筛选条件下没有程序日志。"
+                action={(
+                  <DsButton size="sm" variant="secondary" onClick={() => load(true)} disabled={refreshing}>
+                    {refreshing ? '刷新中...' : '刷新'}
+                  </DsButton>
+                )}
+              />
             )}
           </div>
         ) : visibleRows.length > 0 ? (
@@ -412,13 +417,17 @@ export default function ProgramLogs() {
             </tbody>
           </table>
         ) : (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <div className="empty-state-title">暂无日志</div>
-            <div className="empty-state-desc">当前筛选条件下没有程序日志。</div>
-          </div>
+          <EmptyState
+            tone="info"
+            icon="◇"
+            title="暂无日志"
+            description="当前筛选条件下没有程序日志。"
+            action={(
+              <DsButton size="sm" variant="secondary" onClick={() => load(true)} disabled={refreshing}>
+                {refreshing ? '刷新中...' : '刷新'}
+              </DsButton>
+            )}
+          />
         )}
       </div>
 

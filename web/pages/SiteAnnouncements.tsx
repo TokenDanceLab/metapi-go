@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../components/Toast.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import { clearFocusParams, readFocusAnnouncementId } from './helpers/navigationFocus.js';
 import {
   formatSiteAnnouncementSeenAt,
@@ -198,10 +199,17 @@ export default function SiteAnnouncements() {
             <span className="spinner spinner-sm" />
           </div>
         ) : rows.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center' }}>
-            <div className="empty-state-title">暂无公告</div>
-            <div className="empty-state-desc">当前没有可显示的站点公告。</div>
-          </div>
+          <EmptyState
+            tone="neutral"
+            icon="◇"
+            title="暂无公告"
+            description="当前没有可显示的站点公告。"
+            action={(
+              <DsButton size="sm" variant="secondary" onClick={() => load(true)} disabled={refreshing}>
+                {refreshing ? '刷新中...' : '刷新'}
+              </DsButton>
+            )}
+          />
         ) : (
           rows.map((row, index) => (
             <div

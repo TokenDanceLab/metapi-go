@@ -16,8 +16,8 @@
 | #532 | UX | Epic UI-REFRESH |
 | #533–#536 | UX | Phase 1 foundation — in tree unreleased |
 | #537 | UX | Phase 4 forms/drawers — **closed** on master |
-| #538 | UX | Shell mock shots — **source merged**; residual real authed shots |
-| #539 | UX | Linux Playwright gallery baselines (CI SSOT) — residual |
+| #538 | UX | Shell mock shots done; residual real authed Dashboard/Sites/Settings |
+| #539 | UX | Linux Playwright gallery baselines — **linux snaps committed from CI actuals** |
 | #540 | UX | Phase 5 a11y core — **closed**; residual focus-trap/hex |
 | #541 | UX | Empty/error — **closed** (primitive + 3 pages); residual other pages |
 

@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] #539 Linux gallery baselines + more EmptyState pages
+
+- Committed `design-gallery-*-chromium-linux.png` from CI failure actuals (ubuntu Playwright).
+- EmptyState adoption: ProgramLogs + SiteAnnouncements.
+- Residual: #538 real authed page shots; Accounts/OAuth/ProxyLogs empty migration; focus-trap/hex.
+
 ## [2026-07-19] #541 EmptyState page adoption (DownstreamKeys/CheckinLog/Models)
 
 - Migrated empty surfaces to design-system `EmptyState` + primary action.

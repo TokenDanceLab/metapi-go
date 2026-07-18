@@ -143,7 +143,7 @@ $env:METAPI_PW_FORCE_SERVER = '1'
 npm run test:visual:update
 ```
 
-Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Prefer Linux CI baselines; Windows font AA may drift — CI is the SSOT (`maxDiffPixelRatio: 0.02`).
+Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Linux SSOT files: `design-gallery-{light,dark}-chromium-linux.png` (from CI actuals / Linux runner). Windows font AA may drift — CI is the SSOT (`maxDiffPixelRatio: 0.02`).
 
 **When to refresh gallery baselines:** any intentional change to `/__design__` layout height/composition (including the #538 shell mock section). Skip update for pure docs/script-only changes.
 
@@ -170,6 +170,7 @@ Workflow: [`.github/workflows/ui-visual.yml`](../../.github/workflows/ui-visual.
 - [x] Makefile `ui-visual` / `ui-e2e`
 - [x] GH workflow path-filtered on `web/**`
 - [x] Gallery baselines: win32 committed (`web/e2e/visual-gallery.spec.ts-snapshots/*-win32.png`); **Linux CI SSOT still residual** (`*-linux.png`)
+
 - [x] Shell chrome mock on `/__design__` for Dashboard/Sites/Settings (#538)
 - [x] `capture-ui-shots.mjs` auth env + shell mock shots SOP
 - [x] Document `:4173` reuse pitfall + `METAPI_PW_FORCE_SERVER=1`
