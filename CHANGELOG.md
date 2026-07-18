@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.43] — 2026-07-19
+
+### Tests / Honesty
+- P0-585 multi-channel load-proof honesty: 5xx storm channel-scoped exclude + MaxAttempts bound; 429 same-channel budget policy documented (#527)
+- P0-555 Gemini stream usageMetadata later-wins + empty/zero usage does-not-invent (#530)
+
+### Ops
+- us1 cold standby compose pin + image pull to **0.8.42+** series with pool/credential env wiring (#528)
+
+### Docs
+- M50 residual honesty / high-value-next / MASTER after landings (#529)
+
 ## [v0.8.42] — 2026-07-18
 
 ### Fixed

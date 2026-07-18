@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] M50 v0.8.43 residual honesty + us1 pin
+
+- GitHub Milestone 50 + Project items #527–#530.
+- P0-585 unit load-proof tests (5xx storm + 429 same-channel policy); P0-585 stays partial.
+- P0-555 Gemini SSE usageMetadata honesty tests; stays present-with-residual.
+- us1 `/opt/tokendance-us1` compose pin 0.8.42 + pull; cold no auto-start.
+- Docs: residual / high-value-next / MASTER / STATE / CHANGELOG.
+
 ## [2026-07-18] docs: high-value-next shortlist (ours vs original)
 
 - Add `docs/analysis/high-value-next.md` separating metapi-go residual from cita-777/metapi parity leftovers.

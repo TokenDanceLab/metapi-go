@@ -360,3 +360,46 @@ func TestParseUsageFromBodyJSONNumberSafety(t *testing.T) {
 		t.Fatalf("unexpected found usage: %+v", got)
 	}
 }
+
+// P0-555 residual honesty (#530): Gemini streamGenerateContent-style SSE emits
+// early partial usageMetadata then a final chunk with complete counts. Later
+// non-zero fields must win; intermediate content-only events must not invent tokens.
+// Status remains present-with-residual (no multi-instance lag / media-zero proof).
+func TestParseUsageFromSSEEventsGeminiUsageMetadataLaterWins(t *testing.T) {
+	events := []SseEvent{
+		{Data: `{"candidates":[{"content":{"parts":[{"text":"hi"}]}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":0,"totalTokenCount":10}}`},
+		{Data: `{"candidates":[{"content":{"parts":[{"text":" there"}]}}]}`},
+		{Data: `{"candidates":[{"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":7,"totalTokenCount":17,"thoughtsTokenCount":2}}`},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if !got.Found {
+		t.Fatal("expected usage found from Gemini usageMetadata stream")
+	}
+	if got.PromptTokens != 10 {
+		t.Fatalf("prompt = %d, want 10", got.PromptTokens)
+	}
+	// Completion should reflect final candidates (+ thoughts fold when total present).
+	if got.CompletionTokens < 7 {
+		t.Fatalf("completion = %d, want >= 7 from final chunk", got.CompletionTokens)
+	}
+	if got.TotalTokens < 17 {
+		t.Fatalf("total = %d, want >= 17 from final chunk", got.TotalTokens)
+	}
+	if got.Source != usageSourceUpstream {
+		t.Fatalf("source = %q, want upstream", got.Source)
+	}
+}
+
+// P0-555 residual honesty (#530): empty usage object / zero-only usage must not
+// invent non-zero tokens from content alone.
+func TestParseUsageFromSSEEventsEmptyUsageObjectDoesNotInvent(t *testing.T) {
+	events := []SseEvent{
+		{Data: `{"choices":[{"delta":{"content":"hello"}}],"usage":{}}`},
+		{Data: `{"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}`},
+		{Data: "[DONE]"},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if got.PromptTokens != 0 || got.CompletionTokens != 0 || got.TotalTokens != 0 {
+		t.Fatalf("must not invent non-zero tokens from empty/zero usage: %+v", got)
+	}
+}

@@ -67,13 +67,13 @@ docs/
 6. **One Issue per topic**; close duplicates the same day.
 7. **HANDOFF is temporary** — never leave it as the only status file.
 
-## Residual board (post v0.8.42 / maintenance)
+## Residual board (post v0.8.43 / M50)
 
-- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.42**; prod pin see ops STATE.
+- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.43**.
 - **Next shortlist**: [`analysis/high-value-next.md`](analysis/high-value-next.md).
 - **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md).
 - **Still not product without ACs**: WS-1, STICKY-B, UC-1.
-- **Keep partial**: P0-585 (load-proof required); P0-555 present-with-residual.
+- **Keep partial**: P0-585 (production e2e load-proof); P0-555 present-with-residual.
 
 ## Hygiene rules (short)
 

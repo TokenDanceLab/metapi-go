@@ -1,24 +1,25 @@
 # STATE.md — MetAPI Go product status
 
-**Last verified**: 2026-07-18
+**Last verified**: 2026-07-19
 
 > **现状 SSOT**（产品仓库）。只记当前事实与指针，不写流水账。  
-> 运维主机/compose/镜像 pin 以 **server 仓** `projects/metapi/STATE.md` 为准（生产可能落后本仓 tip）。  
+> 运维主机/compose/镜像 pin / PG role LIMIT 以 **server 仓** `projects/metapi/STATE.md` 为准（可能与本 tip 不同步）。  
 > 进度开放项 → [`progress/MASTER.md`](progress/MASTER.md)  
 > 时间线 → [`log.md`](log.md)  
+> 高价值下一步 → [`analysis/high-value-next.md`](analysis/high-value-next.md)  
 > 版本叙事 → 根 [`CHANGELOG.md`](../CHANGELOG.md)
 
 ## Current
 
 | Fact | Value |
 |:-----|:------|
-| Latest release tag | **[v0.8.42](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.42)** (2026-07-18) |
-| Tip | `origin/master` @ v0.8.42 (cron validate + prior pool/index fixes) |
-| Production pin (ops) | hk3 `ghcr.io/tokendancelab/metapi-go:0.8.42` — server `projects/metapi/STATE.md` |
-| Active milestone | **none** |
-| Open issues / PRs | **0 / 0** |
-| Mode | **Maintenance** — optional residual only with dedicated ACs |
-| GHCR public badge series | **v0.8.42** (README) |
+| Latest release tag | **[v0.8.43](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.43)** (2026-07-19) |
+| Tip | `origin/master` @ v0.8.43 (M50 honesty + us1 pin docs) |
+| Production pin (ops) | server `projects/metapi/STATE.md` (hk3 series **0.8.42+**; verify live) |
+| Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
+| Active milestone | none (M50 closed) |
+| Open issues / PRs | board clean after M50 close |
+| Mode | **Maintenance** |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)

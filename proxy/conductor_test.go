@@ -382,3 +382,156 @@ func TestNewDefaultProxyConductor_Defaults(t *testing.T) {
 		t.Fatalf("maxRefreshAuthSuccesses = %d, want 2", c2.maxRefreshAuthSuccesses)
 	}
 }
+
+// TestConductor_P0585LoadProof_MixedStormChannelScopedExclude is the M50
+// multi-channel load-proof honesty test (#527): under a pure 5xx storm across
+// many channels, exclude lists stay channel-scoped (never site-wide invent),
+// MaxAttempts bounds the walk, and no channel is attempted twice.
+//
+// Note: 429 is intentionally NOT used here — failureActionOf treats 429 as
+// same-channel retry when ShouldRetryProxyRequest is true (always for 429).
+// 5xx is the pure failover path. See TestConductor_P0585LoadProof_429SameChannelThenBudget.
+//
+// Residual honesty only — does not flip inventory P0-585 partial → present.
+func TestConductor_P0585LoadProof_MixedStormChannelScopedExclude(t *testing.T) {
+	const budget = 5
+	const channelCount = 12
+
+	channels := make([]*routing.SelectedChannel, channelCount)
+	for i := 0; i < channelCount; i++ {
+		channels[i] = conductorChannel(int64(i + 1))
+	}
+
+	var excludeSnapshots [][]int64
+	var seen []int64
+	attemptCalls := 0
+
+	c := NewDefaultProxyConductor(ConductorDependencies{
+		MaxAttempts: budget,
+		SelectChannel: func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+			return channels[0], nil
+		},
+		SelectNextChannel: func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+			cp := append([]int64(nil), excludeChannelIDs...)
+			excludeSnapshots = append(excludeSnapshots, cp)
+
+			for _, id := range excludeChannelIDs {
+				if id < 1 || id > int64(channelCount) {
+					t.Fatalf("P0-585 load-proof: exclude contains non-channel id %d", id)
+				}
+			}
+
+			excluded := map[int64]bool{}
+			for _, id := range excludeChannelIDs {
+				excluded[id] = true
+			}
+			for _, ch := range channels {
+				if !excluded[ch.Channel.ID] {
+					return ch, nil
+				}
+			}
+			return nil, nil
+		},
+	})
+
+	result, err := c.Execute(context.Background(), ExecuteInput{
+		RequestedModel: "gpt-4",
+		Attempt: func(ctx context.Context, input AttemptInput) (AttemptResult, error) {
+			attemptCalls++
+			id := input.Selected.Channel.ID
+			seen = append(seen, id)
+			// Pure 5xx → ActionFailover every time.
+			return AttemptResult{OK: false, Status: 503, RawErrorText: "upstream down"}, nil
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.OK {
+		t.Fatal("expected storm failure")
+	}
+	if result.Attempts != budget || attemptCalls != budget {
+		t.Fatalf("attempts/callbacks = %d/%d, want budget %d", result.Attempts, attemptCalls, budget)
+	}
+	if len(seen) != budget {
+		t.Fatalf("seen = %v, want %d entries", seen, budget)
+	}
+
+	seenSet := map[int64]bool{}
+	for _, id := range seen {
+		if seenSet[id] {
+			t.Fatalf("P0-585 load-proof: channel %d attempted twice under storm: %v", id, seen)
+		}
+		seenSet[id] = true
+	}
+
+	if len(excludeSnapshots) != budget-1 {
+		t.Fatalf("exclude snapshots = %d, want %d", len(excludeSnapshots), budget-1)
+	}
+	for i, snap := range excludeSnapshots {
+		if len(snap) != i+1 {
+			t.Fatalf("exclude snapshot[%d] len=%d want %d: %v", i, len(snap), i+1, snap)
+		}
+		for _, id := range snap {
+			found := false
+			for _, s := range seen {
+				if s == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("exclude id %d not in attempted channels %v", id, seen)
+			}
+		}
+	}
+
+	t.Log("P0-585 load-proof honesty: multi-channel 5xx storm stays channel-scoped and budget-bound; inventory remains partial")
+}
+
+// TestConductor_P0585LoadProof_429SameChannelThenBudget documents that bare 429
+// is classified as same-channel retry (ShouldRetryProxyRequest always true for
+// 429), so the conductor burns MaxAttempts on one channel without failover.
+// This is intentional policy — not cascade poison — and keeps P0-585 partial
+// (production multi-channel 429 storms still need e2e evidence).
+func TestConductor_P0585LoadProof_429SameChannelThenBudget(t *testing.T) {
+	ch1 := conductorChannel(1)
+	nextCalls := 0
+	attemptCalls := 0
+
+	c := NewDefaultProxyConductor(ConductorDependencies{
+		MaxAttempts: 3,
+		SelectChannel: func(ctx context.Context, requestedModel string, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+			return ch1, nil
+		},
+		SelectNextChannel: func(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
+			nextCalls++
+			return conductorChannel(2), nil
+		},
+	})
+
+	result, err := c.Execute(context.Background(), ExecuteInput{
+		RequestedModel: "gpt-4",
+		Attempt: func(ctx context.Context, input AttemptInput) (AttemptResult, error) {
+			attemptCalls++
+			return AttemptResult{OK: false, Status: 429, RawErrorText: "peer overload"}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.OK || result.Reason != "failed" {
+		t.Fatalf("expected budget-exhausted failure, got %+v", result)
+	}
+	if result.Attempts != 3 || attemptCalls != 3 {
+		t.Fatalf("attempts=%d attemptCalls=%d, want 3", result.Attempts, attemptCalls)
+	}
+	if nextCalls != 0 {
+		t.Fatalf("429 same-channel path must not failover before budget, nextCalls=%d", nextCalls)
+	}
+	if result.Status != 429 {
+		t.Fatalf("status = %d, want 429", result.Status)
+	}
+	t.Log("P0-585 honesty: 429 burns same-channel budget by design; not a sibling cascade")
+}

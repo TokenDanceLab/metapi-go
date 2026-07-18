@@ -13,7 +13,7 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Single binary, no No
 
 [![CI](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/TokenDanceLab/metapi-go/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.26.5-00ADD8?logo=go)](https://go.dev/)
-[![Docker](https://img.shields.io/badge/ghcr-v0.8.42-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
+[![Docker](https://img.shields.io/badge/ghcr-v0.8.43-blue?logo=docker)](https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 </div>

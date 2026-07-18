@@ -1,14 +1,14 @@
-# Residual next candidates (post v0.8.42 / maintenance)
+# Residual next candidates (post v0.8.43 / M50)
 
-**Date**: 2026-07-18  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG (M49 #517 and later)  
-**Context**: **v0.8.42 shipped** (cron 5-field validate). Prior: v0.8.41 request_id index upgrade; v0.8.40 PG pool env; M49 reliability train through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
+**Date**: 2026-07-19  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG (M49 #517 · M50 #527–#530)  
+**Context**: **v0.8.43 shipped** (P0-585 load-proof honesty tests · P0-555 Gemini stream honesty · us1 pin · M50 docs). Prior: v0.8.42 cron validate; v0.8.41 request_id index; v0.8.40 PG pool; M49 reliability through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
 **Next-wave shortlist (ours vs original)**: [`high-value-next.md`](./high-value-next.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (board clean; optional residual only with dedicated ACs)  
-**Prod pin**: see STATE / server `projects/metapi/STATE.md` (hk3 **0.8.42** at last verify)
+**Active wave**: none after M50 (optional residual only with dedicated ACs)  
+**Prod pin**: see STATE / server `projects/metapi/STATE.md`
 
 ## Purpose
 
@@ -36,7 +36,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
-| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 slices #423–#425 present; M40 REL-SOURCE-MODEL is selection mapping only — not cascade; M41–M44 residual only — not cascade; M45 empty-filter **honesty tests** #476/#479 present; M47 credential usage-limit honesty tests #496/#499 present — still not cascade-complete) | **Shipped:** channel-scoped `excludeChannelIDs`, non-usage-limit cooldown write isolation, 429 failover, same-channel timeout budget, multi-channel same-site conductor + routing isolation tests; preferred open-breaker decline (#423/#430); CooldownUntil parse eligibility (#424/#427); conductor hard attempt budget + nil RefreshAuth failover (#425/#431); global empty-filter full-set fallback + priority-layer demotion **regression honesty tests** (#476/#479). **Still residual:** empty-filter global full-set fallback remains intentional starvation guard (not removed); credential-scoped usage-limit multi-channel cool polish; **no production multi-channel load proof**. Detail: `docs/analysis/failover-isolation.md` §P0-585 honesty | Load-proof only with dedicated AC (after **v0.8.35**); do not flip to present from tests alone | Medium residual — do not claim #585 present |
+| P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 #423–#425; M45 empty-filter honesty #476/#479; M47 credential usage-limit honesty #496/#499; **M50 load-proof honesty #527** unit/integration present — still not cascade-complete) | **Shipped:** channel-scoped exclude + cooldown isolation; 5xx multi-channel storm budget + exclude growth tests (`TestConductor_P0585LoadProof_*`); 429 same-channel budget policy documented; empty-filter / credential-scope honesty tests. **Still residual:** site/model breaker fleet pressure; credential usage-limit multi-channel cool (intentional); empty-filter global full-set fallback (intentional); **no production e2e load proof**. Detail: `docs/analysis/failover-isolation.md` | Production e2e load-proof only with dedicated AC; do not flip to present from unit tests alone | Medium residual — do not claim #585 present |
 | REL-PREFERRED-BREAKER | SelectPreferredChannel ignores open site/model breaker on single preferred | **present** (#423/#430) | Preferred path checks Global/Model breaker directly (does not rely on `FilterSiteRuntimeBrokenCandidatesByModel` len<=1 short-circuit); open breaker + siblings → nil / fall through to normal selection | Done for preferred/sticky open-breaker | Residual novel sticky pin paths only with AC |
 | REL-COOLDOWN-TS | CooldownUntil eligibility lex string compare | **present** (#424/#427) | `IsCooldownActive` parses millis ISO / RFC3339 both sides to ms for selector/explain/OAuth cool; now+500ms still ineligible | Done for eligibility parse | Residual novel cooldown writers only if product AC |
 | REL-CONDUCTOR-BUDGET | Conductor missing hard attempt budget + nil RefreshAuth failover | **present** (#425/#431) | `DefaultProxyConductor` enforces MaxAttempts across same-channel + refresh + failover; caps RefreshAuth successes then fail over; nil/error RefreshAuth → ActionFailover + channel-scoped exclude | Done for hard budget + nil RefreshAuth failover | Residual load-proof / other conductor policies only with AC |
@@ -46,7 +46,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-PROXY-UTIL-REDIR | ProxyAwareHTTPClient bare client lacks CheckRedirect | **present** (#441/#446) | `service/proxy_util.go` `ProxyAwareHTTPClient` sets `CheckRedirect: platform.RejectCrossOriginRedirect`; HTTPGet/Post helpers inherit; Telegram notify patch remains idempotent. Public origin 302 → different host errors | Done for ProxyAwareHTTPClient constructor | Residual novel client constructors only if product AC |
 | SEC-SITEPROXY-REDIR | SiteProxy buildClients + doWithExplicitProxy lack CheckRedirect | **present** (#442/#444) | `platform/site_proxy.go` `buildClients` + `doWithExplicitProxy` share `RejectCrossOriginRedirect` (parity with `newProxyHTTPClient` / `DoWithProxy` hot path). Public origin 302 → different host errors | Done for SiteProxy residual constructors | Residual novel client constructors only if product AC |
 | SEC-PROXY-TEST-TARGET | system-proxy/test accepts operator targetUrl without metadata guard | **present** (#449/#452) | `POST /api/settings/system-proxy/test` non-empty `targetUrl` must pass `IsValidHTTPURL` and fail `IsForbiddenSiteTargetURL` or return 400 without probe; empty/omitted keeps default gstatic. Metadata/link-local rejected before `platform.DoWithProxy` | Done for operator-supplied probe target guard | Residual novel probe targets only if product AC |
-| P0-555 | Token usage statistics inaccurate | **present-with-residual** (#300/#311/#319/#345/#350/#400; stream merge honesty tests #486/#488) | Disconnect partial + failure proxy_logs with usage (#311); aggregation projects non-success tokens into `failed_calls` + `total_tokens` (#319 regression); OpenAI chat + legacy completions stream `stream_options.include_usage` inject (#345/#350); stream-end `slog.Warn` when include_usage requested but no usable tokens extracted (#400 — never invents counts). Residual: provider-ignored flag, media zeros, multi-instance lag, orphan site join — not perfect billing | Residual polish only | Billing/ops trust residual |
+| P0-555 | Token usage statistics inaccurate | **present-with-residual** (#300/#311/#319/#345/#350/#400; stream merge honesty #486/#488; **M50 Gemini stream usageMetadata later-wins + empty/zero no-invent #530**) | Disconnect partial + failure proxy_logs with usage; aggregation; OpenAI/Anthropic stream honesty; Gemini SSE usageMetadata later wins; empty/zero usage does not invent. Residual: provider-ignored flag, media zeros, multi-instance lag, orphan site join — not perfect billing | Residual polish only | Billing/ops trust residual |
 | P1-580 | Gemini thought_signature tool history | **present** (#86 transform + #309 proxy wire) | `NormalizeRequest` / OpenAI↔Gemini rebuild + `sanitizeUpstreamJSONBody` on gemini native/cli generateContent; residual: no multi-instance aggregate store | Done for request-side; session re-attach only if product needs | Residual multi-instance only |
 | P1-538 | Hermes/Codex multi-turn responses content | **present** (core; #50/#310) | `SanitizeResponsesInputItems` + `sanitizeUpstreamJSONBody` inject/preserve content; honest 400; residual: full Responses→chat conversion + no server store + no WS | Done for HTTP multi-turn content | Residual conversion/store/WS only |
 | ROUTE-590 | Route list drag reorder | **present** (v0.8.13) | `token_routes.sort_order` + `PUT /api/routes/reorder` (#284/#288); list `ORDER BY sort_order, id` | Done | — |
@@ -92,14 +92,14 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (maintenance default)
 
-1. **Latest release**: **v0.8.42** (cron validate) · prod pin see STATE.  
-2. **Active wave**: none. Optional residual only with dedicated ACs — shortlist [`high-value-next.md`](./high-value-next.md).  
-3. **M49 reliability present** (v0.8.39): REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.  
-4. **Post-M49 present**: REL-PG-POOL (v0.8.40) · REL-MIG-REQID-IDX (v0.8.41) · REL-CRON-5F (v0.8.42).  
-5. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).  
-6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.  
-7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.  
-8. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.  
+1. **Latest release**: **v0.8.43** (M50) · prod pin see STATE.  
+2. **Active wave**: none after M50. Optional residual only with dedicated ACs — shortlist [`high-value-next.md`](./high-value-next.md).  
+3. **M50 present**: REL-P0585-LOADPROOF (unit/integration honesty #527) · REL-P0555-SLICE Gemini SSE honesty (#530) · OPS-US1-PIN (#528) · DOCS-M50-HONESTY (#529).  
+4. **M49 reliability present** (v0.8.39): REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.  
+5. **Post-M49 present**: REL-PG-POOL (v0.8.40) · REL-MIG-REQID-IDX (v0.8.41) · REL-CRON-5F (v0.8.42).  
+6. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (production e2e load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).  
+7. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.  
+8. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.  
 9. **Original parity** leftovers live in [`high-value-next.md`](./high-value-next.md) §B — matrix is evidence, not the open board.
 
 ## Explicit non-goals for residual waves
@@ -130,13 +130,15 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming Gemini path model / streamGenerateContent IsStream still broken after #515/#523.
 - Claiming retention same-day prune still broken (space vs RFC3339) after #516/#521.
 - Claiming Milestone 49 or residual board is still open after **v0.8.39** release + M49 closed.
-- Claiming residual inventory still tops out at v0.8.39 after **v0.8.40–v0.8.42** ships.
+- Claiming residual inventory still tops out at v0.8.39 after **v0.8.40–v0.8.43** ships.
 - Claiming default 5-field crons are invalid after v0.8.42 validateCronExpr normalize.
-- Claiming **v0.8.43+** product without dedicated ACs (maintenance mode is the default).
+- Claiming P0-585 is fully present after M50 unit load-proof tests alone (production e2e still residual).
+- Claiming P0-555 is perfect billing after Gemini SSE honesty tests (#530).
+- Claiming **v0.8.44+** product without dedicated ACs (maintenance mode is the default).
 - Treating `original-gap-matrix.md` as the live open board (it is historical evidence; use high-value-next + residual inventory).
 
 ## Links
 
 - 现状: [`docs/STATE.md`](../STATE.md) · 开放门禁: [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志: [`docs/log.md`](../log.md)
 - Next shortlist: [`high-value-next.md`](./high-value-next.md)
-- Release: [v0.8.42](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.42) · [v0.8.41](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.41) · [v0.8.40](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.40) · optional residual only with ACs
+- Release: [v0.8.43](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.43) · [v0.8.42](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.42) · optional residual only with ACs
