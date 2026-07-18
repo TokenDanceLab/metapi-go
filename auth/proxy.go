@@ -2,8 +2,8 @@ package auth
 
 import (
 	"net/http"
-	"strconv"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/tokendancelab/metapi-go/config"
@@ -57,7 +57,13 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 					return
 				}
 				// Soft RPM/TPM admission (learn #116). Fail closed with 429 + Retry-After.
-				adm := GlobalKeyAdmission.Allow(result.Key.ID, result.Key.MaxRPM, result.Key.MaxTPM, 0)
+				// When maxTPM is set, reserve a best-effort estimate from the request
+				// body (#495). estimatedTokens=0 skips TPM accounting (no invent).
+				estimatedTokens := int64(0)
+				if result.Key.MaxTPM != nil && *result.Key.MaxTPM > 0 {
+					estimatedTokens = estimateAdmissionTokens(r)
+				}
+				adm := GlobalKeyAdmission.Allow(result.Key.ID, result.Key.MaxRPM, result.Key.MaxTPM, estimatedTokens)
 				if !adm.Allowed {
 					msg := "API key rate limit exceeded"
 					if adm.Reason == "over_tpm" {
