@@ -449,6 +449,8 @@ func selectAcrossPriorityLayers(
 	// pin behavior (FilterRecentlyFailedCandidates returns the input when soft-empty).
 	// Prefer this over returning nil when every candidate is in soft-failure state —
 	// request must still attempt something; hard excludes already ran upstream.
+	// P0-585 residual: this global empty-filter full-set path is intentional
+	// starvation prevention, not cascade-complete (tests: #476 honesty residual).
 	breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolveModel)
 	filteredGlobal := FilterRecentlyFailedCandidates(breakerHealthy,
 		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
