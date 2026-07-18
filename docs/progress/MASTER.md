@@ -12,11 +12,13 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–3 **on master** (`af3a4d2`) |
-| #537 | UX | Phase 4 forms/drawers · worktree `ui/phase4-forms` |
-| #538 | UX | Shell page screenshots · worktree `ui/shell-page-shots` |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–3 **on master** (`af3a4d2`) · Phase 4–5 lanes open |
+| #532 | UX | Epic UI-REFRESH (parent of #533–#541) |
+| #533–#536 | UX | Phase 1 foundation (DS/visual/FOUC/e2e) — in tree unreleased |
+| #537 | UX | Phase 4 forms/drawers · worktree `ui/phase4-forms` (`.worktrees/phase4-forms`) |
+| #538 | UX | Shell page screenshots · worktree `ui/shell-page-shots` (`.worktrees/shell-page-shots`) |
 | #539 | UX | Linux Playwright gallery baselines (CI SSOT) |
-| #540 | UX | Phase 5 a11y + reduced-motion · worktree `ui/phase5-a11y` |
+| #540 | UX | Phase 5 a11y + reduced-motion · worktree `ui/phase5-a11y` (`.worktrees/phase5-a11y`) |
 | #541 | UX | Empty/error states + calm micro-motion |
 
 ## Hard gates

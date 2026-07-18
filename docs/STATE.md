@@ -18,7 +18,7 @@
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** (Phase 1–3 in tree unreleased: FOUC · DS · shell glass · data surfaces) |
-| Open issues / PRs | #532 epic · #533 DS · #534 visual · #535 FOUC · #536 e2e (+ Phase 4/5 issues next) |
+| Open issues / PRs | #532 epic · #533–#536 (P1 foundation) · #537 forms · #538 shell shots · #539 linux baselines · #540 a11y · #541 empty/error |
 | Mode | **UI-REFRESH** (Track A ops stable on 0.8.44) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
@@ -32,7 +32,7 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| UI-REFRESH | **in tree unreleased** | FOUC · DS gallery · Playwright · shell glass · GCP tokens/cards · Phase 3 tables/filters/badges; Linux baselines + Dashboard/Sites/Settings screenshots residual |
+| UI-REFRESH | **in tree unreleased** | Phase 1–3 on master: FOUC · DS · shell glass · GCP tokens/cards · data surfaces; open lanes #537–#541 (forms / shell shots / linux baselines / a11y / empty-error); residual: Linux baselines · real authed page shots · Phase 4–5 product polish |
 
 ## Next-wave pointer
 
@@ -60,5 +60,5 @@ Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`
 | Fact | Value |
 |:-----|:------|
 | Default branch | `master` |
-| Worktrees | main only (agent fleet worktrees pruned 2026-07-18) |
+| Worktrees | master + M51 lanes: `.worktrees/phase4-forms` (`ui/phase4-forms`) · `.worktrees/phase5-a11y` (`ui/phase5-a11y`) · `.worktrees/shell-page-shots` (`ui/shell-page-shots`) |
 | Stale remote feature heads | deleted after merge-PR / abandon sweep 2026-07-18 |

@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] docs: M51 Phase 4–5 board + worktree lanes
+
+- Open issues #537–#541 on Milestone 51 (forms · shell shots · linux baselines · a11y · empty/error).
+- Worktree lanes: `ui/phase4-forms` · `ui/shell-page-shots` · `ui/phase5-a11y` under `.worktrees/*`.
+- MASTER/STATE board lists #532–#541; Phase 1–3 remains on master (`af3a4d2`); Phase 4–5 not yet merged.
+
 ## [2026-07-19] UI-REFRESH Phase 3 data surfaces + scored gallery
 
 - Token-only polish: dual-theme semantic `*-ink`, purple badge family; tables/filters/pagination/toasts/badges retokenized in `index.css`.
