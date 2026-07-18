@@ -57,6 +57,8 @@ import {
   normalizeRouteDisplayIconValue,
   inferEndpointTypesFromPlatform,
   getModelPatternError,
+  contextLengthFormValue,
+  parseRouteContextLength,
 } from './token-routes/utils.js';
 import { applyPriorityRailDrop, isPriorityRailNewLayerId } from './token-routes/priorityRail.js';
 import { useRouteChannels } from './token-routes/useRouteChannels.js';
@@ -82,6 +84,7 @@ type RouteEditorForm = {
   displayIcon: string;
   modelPattern: string;
   sourceRouteIds: number[];
+  contextLength: string;
   advancedOpen: boolean;
 };
 
@@ -91,6 +94,7 @@ const EMPTY_ROUTE_FORM: RouteEditorForm = {
   displayIcon: '',
   modelPattern: '',
   sourceRouteIds: [],
+  contextLength: '',
   advancedOpen: false,
 };
 const DESKTOP_DETAIL_ENTER_MS = 260;
@@ -494,6 +498,11 @@ export default function TokenRoutes() {
     const trimmedDisplayIcon = form.displayIcon.trim() ? form.displayIcon.trim() : undefined;
     const trimmedModelPattern = form.modelPattern.trim();
     const routeMode = normalizeRouteMode(form.routeMode);
+    const parsedContextLength = parseRouteContextLength(form.contextLength);
+    if (!parsedContextLength.valid) {
+      toast.error(parsedContextLength.error || tr('上下文长度无效'));
+      return;
+    }
     if (routeMode === 'explicit_group') {
       if (!trimmedDisplayName) {
         toast.error('请填写对外模型名');
@@ -522,6 +531,7 @@ export default function TokenRoutes() {
           ...(routeMode === 'pattern' ? { modelPattern: trimmedModelPattern } : {}),
           displayName: trimmedDisplayName,
           displayIcon: trimmedDisplayIcon,
+          contextLength: parsedContextLength.value,
           ...(routeMode === 'explicit_group' ? { sourceRouteIds: form.sourceRouteIds } : {}),
         });
         toast.success(routeMode === 'pattern' && modelPatternChanged ? tr('群组已更新并重新匹配通道') : tr('群组已更新'));
@@ -531,6 +541,7 @@ export default function TokenRoutes() {
           ...(routeMode === 'pattern' ? { modelPattern: trimmedModelPattern } : {}),
           displayName: trimmedDisplayName,
           displayIcon: trimmedDisplayIcon,
+          contextLength: parsedContextLength.value,
           ...(routeMode === 'explicit_group' ? { sourceRouteIds: form.sourceRouteIds } : {}),
         });
         toast.success(tr('群组已创建'));
@@ -555,6 +566,7 @@ export default function TokenRoutes() {
       displayName: route.displayName || '',
       displayIcon: normalizeRouteDisplayIconValue(route.displayIcon),
       sourceRouteIds: routeMode === 'explicit_group' ? [...(route.sourceRouteIds || [])] : [],
+      contextLength: contextLengthFormValue(route.contextLength),
       advancedOpen: routeMode === 'pattern',
     });
     setShowManual(true);

@@ -145,6 +145,104 @@ describe('RouteCard', () => {
     expect(text).toContain('route-unit-third');
   });
 
+  it('shows contextLength badge when set and hides it for zero-channel rows', () => {
+    const withContext = create(
+      <RouteCard
+        route={buildRoute({
+          modelPattern: 'gpt-4o',
+          displayName: 'gpt-4o',
+          contextLength: 128000,
+        })}
+        brand={null}
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onClearCooldown={vi.fn()}
+        clearingCooldown={false}
+        onRoutingStrategyChange={vi.fn()}
+        updatingRoutingStrategy={false}
+        channels={undefined}
+        loadingChannels={false}
+        routeDecision={null}
+        loadingDecision={false}
+        candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+        channelTokenDraft={{}}
+        updatingChannel={{}}
+        savingPriority={false}
+        onTokenDraftChange={vi.fn()}
+        onSaveToken={vi.fn()}
+        onDeleteChannel={vi.fn()}
+        onToggleChannelEnabled={vi.fn()}
+        onChannelDragEnd={vi.fn()}
+        missingTokenSiteItems={[]}
+        missingTokenGroupItems={[]}
+        onCreateTokenForMissing={vi.fn()}
+        onAddChannel={vi.fn()}
+        onSiteBlockModel={vi.fn()}
+        expandedSourceGroupMap={{}}
+        onToggleSourceGroup={vi.fn()}
+      />,
+    );
+
+    const badge = withContext.root.find((node) => (
+      node.type === 'span'
+      && node.props['data-testid'] === 'route-context-length-badge'
+    ));
+    expect(collectText(badge)).toBe('128k');
+
+    const zeroChannel = create(
+      <RouteCard
+        route={buildRoute({
+          modelPattern: 'gpt-4o',
+          displayName: 'gpt-4o',
+          contextLength: 128000,
+          kind: 'zero_channel',
+          readOnly: true,
+          isVirtual: true,
+          channelCount: 0,
+          enabledChannelCount: 0,
+        })}
+        brand={null}
+        expanded={false}
+        onToggleExpand={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onClearCooldown={vi.fn()}
+        clearingCooldown={false}
+        onRoutingStrategyChange={vi.fn()}
+        updatingRoutingStrategy={false}
+        channels={undefined}
+        loadingChannels={false}
+        routeDecision={null}
+        loadingDecision={false}
+        candidateView={{ routeCandidates: [], accountOptions: [], tokenOptionsByAccountId: {} }}
+        channelTokenDraft={{}}
+        updatingChannel={{}}
+        savingPriority={false}
+        onTokenDraftChange={vi.fn()}
+        onSaveToken={vi.fn()}
+        onDeleteChannel={vi.fn()}
+        onToggleChannelEnabled={vi.fn()}
+        onChannelDragEnd={vi.fn()}
+        missingTokenSiteItems={[]}
+        missingTokenGroupItems={[]}
+        onCreateTokenForMissing={vi.fn()}
+        onAddChannel={vi.fn()}
+        onSiteBlockModel={vi.fn()}
+        expandedSourceGroupMap={{}}
+        onToggleSourceGroup={vi.fn()}
+      />,
+    );
+
+    expect(() => zeroChannel.root.find((node) => (
+      node.type === 'span'
+      && node.props['data-testid'] === 'route-context-length-badge'
+    ))).toThrow();
+  });
+
   it('truncates the collapsed regex badge while keeping the group name primary', () => {
     const root = create(
       <RouteCard

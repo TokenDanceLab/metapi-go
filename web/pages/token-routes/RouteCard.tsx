@@ -45,6 +45,7 @@ import {
   isExplicitGroupRoute,
   resolveRouteTitle,
   resolveRouteIcon,
+  formatRouteContextLength,
 } from './utils.js';
 import {
   buildPriorityBuckets,
@@ -583,6 +584,7 @@ function RouteCardInner({
   const cachedDecisionTooltip = route.decisionRefreshedAt
     ? `${tr('最近刷新')}: ${formatDateTimeMinuteLocal(route.decisionRefreshedAt)}`
     : undefined;
+  const contextLengthLabel = readOnlyRoute ? null : formatRouteContextLength(route.contextLength);
   const showAddChannelButton = !readOnlyRoute && !channelManagementDisabled;
   const showMissingTokenHints = !channelManagementDisabled && (missingTokenSiteItems.length > 0 || missingTokenGroupItems.length > 0);
   const routeUnits = collectRouteUnits(channels);
@@ -771,6 +773,16 @@ function RouteCardInner({
               {route.channelCount} {tr('通道')}
             </span>
           )}
+          {contextLengthLabel ? (
+            <span
+              className="badge badge-muted"
+              data-testid="route-context-length-badge"
+              data-tooltip={`${tr('上下文长度')}: ${contextLengthLabel} tokens`}
+              style={{ fontSize: 10, flexShrink: 0 }}
+            >
+              {contextLengthLabel}
+            </span>
+          ) : null}
           {hasCachedDecisionSnapshot ? (
             <span
               className="badge badge-success"
@@ -866,6 +878,16 @@ function RouteCardInner({
                 {route.channelCount} {tr('通道')}
               </span>
             )}
+            {contextLengthLabel ? (
+              <span
+                className="badge badge-muted"
+                data-testid="route-context-length-badge"
+                data-tooltip={`${tr('上下文长度')}: ${contextLengthLabel} tokens`}
+                style={{ fontSize: 10 }}
+              >
+                {contextLengthLabel}
+              </span>
+            ) : null}
             {hasCachedDecisionSnapshot ? (
               <span
                 className="badge badge-success"
@@ -947,6 +969,16 @@ function RouteCardInner({
               <span className="badge badge-info" style={{ fontSize: 10 }}>
                 {route.channelCount} {tr('通道')}
               </span>
+              {contextLengthLabel ? (
+                <span
+                  className="badge badge-muted"
+                  data-testid="route-context-length-badge"
+                  data-tooltip={`${tr('上下文长度')}: ${contextLengthLabel} tokens`}
+                  style={{ fontSize: 10 }}
+                >
+                  {contextLengthLabel}
+                </span>
+              ) : null}
               {hasCachedDecisionSnapshot ? (
                 <span
                   className="badge badge-success"

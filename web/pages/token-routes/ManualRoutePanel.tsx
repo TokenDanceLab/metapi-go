@@ -12,6 +12,7 @@ import {
   matchesModelPattern,
   normalizeRouteDisplayIconValue,
   normalizeRouteMode,
+  parseRouteContextLength,
   resolveEndpointTypeIconModel,
   resolveRouteBrand,
   siteAvatarLetters,
@@ -23,6 +24,7 @@ type RouteEditorForm = {
   displayIcon: string;
   modelPattern: string;
   sourceRouteIds: number[];
+  contextLength: string;
   advancedOpen: boolean;
 };
 
@@ -150,6 +152,11 @@ export default function ManualRoutePanel({
     () => getModelPatternError(form.modelPattern),
     [form.modelPattern],
   );
+
+  const contextLengthError = useMemo(() => {
+    const parsed = parseRouteContextLength(form.contextLength);
+    return parsed.valid ? null : (parsed.error || tr('上下文长度无效'));
+  }, [form.contextLength]);
 
   const routeIconOptionValues = useMemo(
     () => new Set(routeIconSelectOptions.map((option) => option.value)),
@@ -602,6 +609,33 @@ export default function ManualRoutePanel({
                     )}
                   </div>
                 </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{tr('上下文长度')}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    data-testid="route-context-length-input"
+                    placeholder={tr('可选，正整数 token（如 128000）；留空表示未知/不强制')}
+                    value={form.contextLength}
+                    onChange={(event) => setForm((current) => ({ ...current, contextLength: event.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      border: `1px solid ${contextLengthError ? 'var(--color-danger)' : 'var(--color-border)'}`,
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: 13,
+                      outline: 'none',
+                      background: 'var(--color-bg)',
+                      color: 'var(--color-text-primary)',
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: contextLengthError ? 'var(--color-danger)' : 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                    {contextLengthError
+                      || tr('用于 max_tokens 上限校验；空 / 0 = 未知，不强制。')}
+                  </span>
+                </label>
               </div>
             </>
           ) : (
@@ -672,6 +706,33 @@ export default function ManualRoutePanel({
                     fontFamily: 'var(--font-mono)',
                   }}
                 />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{tr('上下文长度')}</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  data-testid="route-context-length-input"
+                  placeholder={tr('可选，正整数 token（如 128000）；留空表示未知/不强制')}
+                  value={form.contextLength}
+                  onChange={(event) => setForm((current) => ({ ...current, contextLength: event.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: `1px solid ${contextLengthError ? 'var(--color-danger)' : 'var(--color-border)'}`,
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: 13,
+                    outline: 'none',
+                    background: 'var(--color-bg)',
+                    color: 'var(--color-text-primary)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                />
+                <span style={{ fontSize: 12, color: contextLengthError ? 'var(--color-danger)' : 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                  {contextLengthError
+                    || tr('用于 max_tokens 上限校验；空 / 0 = 未知，不强制。')}
+                </span>
               </label>
 
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4 }}>
