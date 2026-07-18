@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] UI-REFRESH Phase 4/5 + shell mock integrated
+
+- Phase 4 (#537): form/drawer/modal Apple-detail density (36px controls, glass chrome, gallery samples).
+- Phase 5 (#540): prefers-reduced-motion hard-cut + reduced-transparency solid glass fallbacks.
+- #538: auth-free shell chrome mock (Dashboard/Sites/Settings) + capture SOP + METAPI_PW_FORCE_SERVER.
+- Security: TokenRoutes escapeHtml also escapes apostrophe for dialog HTML.
+- e2e 7/7 green; gallery score axes 5/5 after shell mock height growth.
+
 ## [2026-07-19] docs: M51 Phase 4–5 board + worktree lanes
 
 - Open issues #537–#541 on Milestone 51 (forms · shell shots · linux baselines · a11y · empty/error).
