@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.33] — 2026-07-18
+
+### UI
+- Migrate hard-coded .stat-icon-* colors to design tokens (var(--color-stat-*)) for light/dark SSOT (#456 / #460)
+- Wire Sites maxConcurrency in admin create/edit/list (backend limiter already present) (#457 / #461)
+
+### Fixed
+- Gemini generateContent/streamGenerateContent: reject generationConfig.maxOutputTokens above positive route context_length with honest 400 (extends CTX-520) (#458 / #462)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 43 post v0.8.32; UI-STAT-TOKENS + UI-SITE-CONC + CTX-520-GEMINI present · board #456–#459 closed (#459 / #464)
+
 ## [v0.8.32] — 2026-07-18
 
 ### Security
