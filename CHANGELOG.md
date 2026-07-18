@@ -5,6 +5,20 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.37] — 2026-07-18
+
+### Docs
+- Align README/README_EN stack badges to Go 1.26.5 + React 19 + Vite 8 (#494 / #498)
+
+### Reliability
+- Best-effort TPM admission estimate when maxTPM is set (no invent; empty body skips) (#495 / #500)
+
+### Tests / Honesty
+- P0-585 credential usage-limit multi-channel cool honesty tests (intentional shared-key scope; cascade still partial) (#496 / #499)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 47 post-product landings; DOCS-STACK-TRUTH + REL-TPM-ESTIMATE + REL-CRED-USAGE-HONESTY present · board #494–#497 closed (#497 / #501)
+
 ## [v0.8.36] — 2026-07-18
 
 ### Security
