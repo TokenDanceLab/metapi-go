@@ -1262,7 +1262,8 @@ func buildIndexes() []struct {
 		{"proxy_logs_downstream_api_key_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_logs_downstream_api_key_created_at_idx ON proxy_logs (downstream_api_key_id, created_at)`},
 		{"proxy_logs_client_app_id_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_logs_client_app_id_created_at_idx ON proxy_logs (client_app_id, created_at)`},
 		{"proxy_logs_client_family_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_logs_client_family_created_at_idx ON proxy_logs (client_family, created_at)`},
-		{"proxy_logs_request_id_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_logs_request_id_created_at_idx ON proxy_logs (request_id, created_at)`},
+		// proxy_logs_request_id_created_at_idx is created by additive step
+		// sc2_004_proxy_logs_request_id (after the request_id column exists).
 		// proxy_debug_traces
 		{"proxy_debug_traces_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_debug_traces_created_at_idx ON proxy_debug_traces (created_at)`},
 		{"proxy_debug_traces_session_created_at_idx", `CREATE INDEX IF NOT EXISTS proxy_debug_traces_session_created_at_idx ON proxy_debug_traces (session_id, created_at)`},
