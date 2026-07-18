@@ -8,10 +8,16 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/tokendancelab/metapi-go/platform"
 )
 
 // ProxyAwareHTTPClient creates an *http.Client that optionally routes through a proxy.
 // If proxyURL is empty, returns a standard client.
+//
+// The client always wires platform.RejectCrossOriginRedirect so HTTPGet/HTTPPost
+// callers (and Telegram when it reuses this helper) cannot follow a public-origin
+// 302 onto a different host.
 func ProxyAwareHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -31,8 +37,9 @@ func ProxyAwareHTTPClient(proxyURL string, timeout time.Duration) *http.Client {
 	}
 
 	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
+		Transport:     transport,
+		Timeout:       timeout,
+		CheckRedirect: platform.RejectCrossOriginRedirect,
 	}
 }
 
