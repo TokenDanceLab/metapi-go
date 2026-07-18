@@ -5,6 +5,16 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.31] — 2026-07-18
+
+### Security
+- ProxyAwareHTTPClient shares RejectCrossOriginRedirect (HTTPGet/Post helpers inherit; Telegram patch idempotent) (#441 / #446)
+- SiteProxy buildClients + doWithExplicitProxy share RejectCrossOriginRedirect (parity with DoWithProxy hot path) (#442 / #444)
+- Downstream-keys update + reset-usage redact plaintext key (keyMasked only; create/export once-echo unchanged) (#440 / #445)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 41 post v0.8.30; SEC-PROXY-UTIL-REDIR / SEC-SITEPROXY-REDIR / SEC-KEY-MUTATE present · board #440–#443 closed (#443 / #447)
+
 ## [v0.8.30] — 2026-07-18
 
 ### Security
