@@ -34,11 +34,14 @@ describe('downstreamKeyRateLimit', () => {
   });
 
   it('rejects non-integer garbage instead of silently clearing', () => {
-    expect(parseQuotaIntOrNull('abc').valid).toBe(false);
+    const invalid = parseQuotaIntOrNull('abc');
+    expect(invalid.valid).toBe(false);
+    if (!invalid.valid) {
+      expect(invalid.error).toContain('正整数');
+    }
     expect(parseQuotaIntOrNull('12.5').valid).toBe(false);
     expect(parseQuotaIntOrNull('1e3').valid).toBe(false);
     expect(parseQuotaIntOrNull('60rpm').valid).toBe(false);
-    expect(parseQuotaIntOrNull('abc').error).toContain('正整数');
   });
 
   it('formats compact RPM/TPM badges only when set', () => {
