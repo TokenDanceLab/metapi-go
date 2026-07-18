@@ -382,23 +382,19 @@ body {
   border-width: 3px;
 }
 
-/* ===== Topbar ===== */
+/* ===== Topbar (glass chrome — UI-REFRESH Phase 2) ===== */
 .topbar {
   height: var(--topbar-height);
-  background: var(--color-bg-topbar);
-  border-bottom: 1px solid var(--color-border);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   padding: 0 20px;
   position: sticky;
   top: 0;
-  z-index: 100;
-  backdrop-filter: blur(12px);
-  background: rgba(255, 255, 255, 0.85);
-}
-
-[data-theme="dark"] .topbar {
-  background: rgba(20, 20, 20, 0.85);
+  z-index: var(--z-topbar);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .topbar-logo {
@@ -450,12 +446,7 @@ body {
 .topbar-nav a:hover,
 .topbar-nav-item:hover {
   color: var(--color-text-primary);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="dark"] .topbar-nav a:hover,
-[data-theme="dark"] .topbar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-bg-hover);
 }
 
 .topbar-nav a.active,
@@ -487,12 +478,8 @@ body {
 }
 
 .topbar-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--color-bg-hover);
   color: var(--color-text-primary);
-}
-
-[data-theme="dark"] .topbar-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
 }
 
 .topbar-search-trigger {
@@ -591,11 +578,11 @@ body {
   outline-offset: 2px;
 }
 
-/* ===== Sidebar ===== */
+/* ===== Sidebar (glass chrome — UI-REFRESH Phase 2) ===== */
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--color-bg-sidebar);
-  border-right: 1px solid var(--color-border);
+  background: var(--glass-bg-strong);
+  border-right: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
   padding: 12px 10px;
@@ -604,6 +591,8 @@ body {
   height: calc(100vh - var(--topbar-height));
   position: sticky;
   top: var(--topbar-height);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .sidebar.collapsed {
@@ -643,11 +632,7 @@ body {
 
 .sidebar-item:hover {
   color: var(--color-text-primary);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="dark"] .sidebar-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-bg-hover);
 }
 
 .sidebar-item.active {
@@ -698,11 +683,87 @@ body {
 
 .sidebar-collapse-btn:hover {
   color: var(--color-text-secondary);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--color-bg-hover);
 }
 
-[data-theme="dark"] .sidebar-collapse-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+/* Glass chrome fallbacks (parity with ds-surface--glass) */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .topbar {
+    background: var(--color-bg-elevated);
+  }
+
+  .sidebar {
+    background: var(--color-bg-elevated);
+  }
+
+  .user-dropdown {
+    background: var(--color-bg-elevated);
+  }
+
+  .mobile-drawer-panel {
+    background: var(--color-bg-elevated);
+  }
+
+  .login-tools,
+  .login-surface,
+  .login-auth-panel {
+    background: var(--color-bg-elevated);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .topbar {
+    background: var(--color-bg-elevated);
+    border-bottom-color: var(--color-border);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .sidebar {
+    background: var(--color-bg-elevated);
+    border-right-color: var(--color-border);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .user-dropdown {
+    background: var(--color-bg-card);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-drawer-panel {
+    background: var(--color-bg-card);
+    border-color: var(--color-border-light);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .login-tools {
+    background: var(--color-bg-card);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-md);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .login-surface {
+    background: var(--color-bg-card);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .login-auth-panel {
+    background: var(--color-bg-card);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* ===== Layout ===== */
@@ -1221,22 +1282,24 @@ body {
   position: relative;
   width: min(82vw, 300px);
   height: 100%;
-  background: var(--color-bg-card);
-  border-right: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-lg);
+  background: var(--glass-bg-strong);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
   padding: 0;
   overflow-y: auto;
   overflow-x: hidden;
   animation: drawer-slide-in var(--duration-moderate) var(--ease-emphasized) both;
   display: flex;
   flex-direction: column;
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .mobile-drawer-panel-right {
   margin-left: auto;
-  border-left: 1px solid var(--color-border-light);
+  border-left: 1px solid var(--glass-border);
   border-right: none;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-glass);
   animation: drawer-slide-in-right var(--duration-moderate) var(--ease-emphasized) both;
 }
 
@@ -3838,7 +3901,7 @@ textarea:focus-visible {
   padding: 20px;
 }
 
-/* ===== Frontend Skill Surfaces ===== */
+/* ===== Frontend Skill Surfaces (login glass — UI-REFRESH Phase 2) ===== */
 .login-shell {
   min-height: 100vh;
   display: flex;
@@ -3846,9 +3909,9 @@ textarea:focus-visible {
   justify-content: center;
   padding: 32px;
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%),
-    radial-gradient(circle at right 18%, rgba(34, 211, 238, 0.16), transparent 30%),
-    linear-gradient(180deg, #eef4fb 0%, #e9eef7 100%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent 34%),
+    radial-gradient(circle at right 18%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 30%),
+    linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg) 100%);
 }
 
 .login-tools {
@@ -3860,11 +3923,12 @@ textarea:focus-visible {
   align-items: center;
   gap: 4px;
   padding: 4px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
+  border: 1px solid var(--glass-border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-bg-card) 86%, transparent);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(14px);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .login-theme-option {
@@ -3897,9 +3961,9 @@ textarea:focus-visible {
 
 [data-theme="dark"] .login-shell {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 34%),
-    radial-gradient(circle at right 18%, rgba(34, 211, 238, 0.12), transparent 30%),
-    linear-gradient(180deg, #0d1320 0%, #0a1018 100%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent 34%),
+    radial-gradient(circle at right 18%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 30%),
+    linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg) 100%);
 }
 
 .login-surface {
@@ -3908,22 +3972,12 @@ textarea:focus-visible {
   grid-template-columns: minmax(0, 1.16fr) minmax(360px, 440px);
   gap: 24px;
   padding: 20px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(244, 248, 253, 0.88));
-  border: 1px solid rgba(255, 255, 255, 0.58);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 36px;
-  box-shadow:
-    0 24px 60px rgba(148, 163, 184, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-[data-theme="dark"] .login-surface {
-  background:
-    linear-gradient(145deg, rgba(15, 23, 42, 0.88), rgba(10, 18, 30, 0.94));
-  border-color: rgba(148, 163, 184, 0.12);
-  box-shadow:
-    0 24px 80px rgba(2, 6, 23, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .login-brand-panel {
@@ -3940,16 +3994,9 @@ textarea:focus-visible {
 
 .login-brand-panel-light {
   background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 26%),
-    radial-gradient(circle at right 20%, rgba(34, 211, 238, 0.16), transparent 22%),
-    linear-gradient(160deg, #f8fbff 0%, #edf4ff 52%, #e9f0fa 100%);
-}
-
-[data-theme="dark"] .login-brand-panel-light {
-  background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), transparent 28%),
-    radial-gradient(circle at right 20%, rgba(34, 211, 238, 0.16), transparent 24%),
-    linear-gradient(160deg, #111827 0%, #0f172a 52%, #101826 100%);
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-info) 22%, transparent), transparent 26%),
+    radial-gradient(circle at right 20%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 22%),
+    linear-gradient(160deg, var(--color-bg-card) 0%, var(--color-bg-secondary) 52%, var(--color-bg) 100%);
 }
 
 .login-brand-panel::before {
@@ -3959,7 +4006,7 @@ textarea:focus-visible {
   width: 280px;
   height: 280px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.2), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 20%, transparent), transparent 68%);
   pointer-events: none;
 }
 
@@ -3970,7 +4017,7 @@ textarea:focus-visible {
   width: 220px;
   height: 220px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.12), transparent 66%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 66%);
   pointer-events: none;
 }
 
@@ -3993,11 +4040,9 @@ textarea:focus-visible {
   justify-content: center;
   flex-shrink: 0;
   padding: 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(227, 238, 252, 0.84));
-  border: 1px solid rgba(191, 219, 254, 0.6);
-  box-shadow:
-    0 24px 40px rgba(148, 163, 184, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
 }
 
 .brand-mark-frame::after {
@@ -4005,7 +4050,7 @@ textarea:focus-visible {
   position: absolute;
   inset: 6px;
   border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.62);
+  border: 1px solid var(--glass-border);
   pointer-events: none;
 }
 
@@ -4021,10 +4066,8 @@ textarea:focus-visible {
   padding: 10px;
   border-radius: 28px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.92));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 12px 28px rgba(59, 130, 246, 0.1);
+  background: var(--color-bg-card);
+  box-shadow: var(--shadow-sm);
 }
 
 .login-brand-logo {
@@ -4032,7 +4075,7 @@ textarea:focus-visible {
   height: 100%;
   object-fit: contain;
   border-radius: 20px;
-  filter: drop-shadow(0 8px 18px rgba(37, 99, 235, 0.16));
+  filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--color-primary) 16%, transparent));
 }
 
 .login-brand-name {
@@ -4075,7 +4118,7 @@ textarea:focus-visible {
   gap: 0;
   max-width: 44rem;
   margin-top: auto;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .login-capability-row {
@@ -4084,7 +4127,7 @@ textarea:focus-visible {
   gap: 16px;
   align-items: start;
   padding: 18px 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .login-capability-index {
@@ -4129,8 +4172,8 @@ textarea:focus-visible {
   width: 42px;
   height: 42px;
   border-radius: 999px;
-  border: 1px solid rgba(99, 102, 241, 0.12);
-  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 12%, transparent);
+  background: var(--glass-bg-strong);
   color: var(--color-text-primary);
   text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
@@ -4138,8 +4181,8 @@ textarea:focus-visible {
 
 .login-icon-link:hover {
   transform: translateY(-1px);
-  border-color: rgba(99, 102, 241, 0.2);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.12);
+  border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .login-icon-link-svg {
@@ -4153,9 +4196,9 @@ textarea:focus-visible {
   justify-content: center;
   padding: 10px 15px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--glass-bg-strong);
   color: var(--color-primary);
-  border: 1px solid rgba(99, 102, 241, 0.16);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
@@ -4164,7 +4207,7 @@ textarea:focus-visible {
 
 .login-doc-link:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.12);
+  box-shadow: var(--shadow-sm);
 }
 
 .login-auth-stage {
@@ -4174,20 +4217,19 @@ textarea:focus-visible {
   padding: 24px;
   border-radius: 30px;
   background:
-    radial-gradient(circle at top, rgba(125, 211, 252, 0.16), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(241, 245, 249, 0.58));
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-card) 44%, transparent), color-mix(in srgb, var(--color-bg-secondary) 58%, transparent));
 }
 
 .login-auth-panel {
   width: min(100%, 392px);
   padding: 40px 34px 28px;
   border-radius: 28px;
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow:
-    0 28px 50px rgba(148, 163, 184, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--shadow-glass);
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .login-auth-eyebrow {
@@ -4229,7 +4271,7 @@ textarea:focus-visible {
   border-radius: 16px;
   font-size: 14px;
   outline: none;
-  background: rgba(248, 250, 252, 0.92);
+  background: color-mix(in srgb, var(--color-bg-secondary) 92%, transparent);
   color: var(--color-text-primary);
   margin-bottom: 14px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
@@ -4247,7 +4289,7 @@ textarea:focus-visible {
   font-size: 14px;
   font-weight: 700;
   border-radius: 16px;
-  box-shadow: 0 16px 24px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 16px 24px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 
 .login-auth-note {
@@ -4260,51 +4302,19 @@ textarea:focus-visible {
 .login-auth-footer {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid rgba(226, 232, 240, 0.86);
+  border-top: 1px solid var(--color-border-light);
   font-size: 12px;
   color: var(--color-text-muted);
 }
 
-[data-theme="dark"] .login-surface,
-[data-theme="dark"] .brand-mark-frame,
-[data-theme="dark"] .brand-mark-canvas,
-[data-theme="dark"] .login-auth-stage,
-[data-theme="dark"] .login-auth-panel {
-  border-color: color-mix(in srgb, var(--color-border) 86%, transparent);
-}
-
-[data-theme="dark"] .brand-mark-frame,
-[data-theme="dark"] .brand-mark-canvas,
-[data-theme="dark"] .login-auth-stage,
-[data-theme="dark"] .login-auth-panel {
-  background: color-mix(in srgb, var(--color-bg-card) 92%, var(--color-bg));
-}
-
 /* brand/copy/title/kicker/index inherit theme text tokens set above */
-
-[data-theme="dark"] .login-icon-link,
-[data-theme="dark"] .login-doc-link {
-  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
-  border-color: color-mix(in srgb, var(--color-border-strong) 70%, transparent);
-}
-
-[data-theme="dark"] .login-doc-link {
-  color: var(--color-primary-hover);
-}
 
 [data-theme="dark"] .login-theme-option.active {
   color: var(--color-on-primary);
 }
 
-[data-theme="dark"] .login-brand-kicker,
-[data-theme="dark"] .login-compat-line,
-[data-theme="dark"] .login-capability-index,
-[data-theme="dark"] .login-icon-link {
-  color: var(--color-text-secondary);
-}
-
-[data-theme="dark"] .login-auth-footer {
-  border-top-color: color-mix(in srgb, var(--color-border-strong) 90%, transparent);
+[data-theme="dark"] .login-doc-link {
+  color: var(--color-primary-hover);
 }
 
 @media (max-width: 1080px) {
@@ -4917,19 +4927,21 @@ textarea:focus-visible {
   color: var(--color-warning);
 }
 
-/* ===== User Dropdown ===== */
+/* ===== User Dropdown (elev glass popover — UI-REFRESH Phase 2) ===== */
 .user-dropdown {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-glass);
   min-width: 160px;
   padding: 4px;
   z-index: 110;
   animation: slide-down 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .user-dropdown.is-closing {

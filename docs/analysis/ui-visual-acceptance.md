@@ -90,7 +90,7 @@ Workflow: [`.github/workflows/ui-visual.yml`](../../.github/workflows/ui-visual.
 - [x] UX theme + FOUC bootstrap specs with `theme_mode=dark`
 - [x] Makefile `ui-visual` / `ui-e2e`
 - [x] GH workflow path-filtered on `web/**`
-- [ ] Gallery baselines committed (`npm run test:visual:update` on Linux CI SSOT)
+- [x] Gallery baselines: win32 committed (`web/e2e/visual-gallery.spec.ts-snapshots/*-win32.png`); **Linux CI SSOT still residual** (`*-linux.png`)
 
 ## Non-goals
 

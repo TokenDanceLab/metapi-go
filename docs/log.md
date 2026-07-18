@@ -7,6 +7,12 @@
 
 
 
+## [2026-07-19] UI-REFRESH Phase 2 shell glass
+
+- CSS-only glass chrome in `web/index.css`: topbar, sidebar, user-dropdown, mobile drawer, login surfaces.
+- Token-only (`--glass-*`); `@supports` + `prefers-reduced-transparency` solid fallbacks.
+- Login/sidebar unit tests green; typecheck green.
+
 ## [2026-07-19] UI-REFRESH Phase 1 foundation in tree
 
 - FOUC #535: `themeBootstrap` + head script theme_mode-first; canvas #0b0f14/#f4f6f8; unit + e2e contracts.

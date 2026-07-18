@@ -166,14 +166,14 @@
 
 ### Phase 2 — Shell（P0）
 
-| Work | AC |
-|:-----|:---|
-| Topbar / Sidebar / Main canvas | 玻璃 + 新圆角阴影 |
-| Theme 菜单 / 用户菜单 |  elev glass popover |
-| Mobile drawer | 同材质；无双滚动陷阱 |
-| Login surface | 与 shell 一致 |
+| Work | AC | Status |
+|:-----|:---|:------:|
+| Topbar / Sidebar / Main canvas | 玻璃 + 新圆角阴影 | **done** CSS (topbar/sidebar glass tokens) |
+| Theme 菜单 / 用户菜单 | elev glass popover | **done** user-dropdown glass |
+| Mobile drawer | 同材质；无双滚动陷阱 | **done** drawer panel glass |
+| Login surface | 与 shell 一致 | **done** login-surface/auth-panel glass |
 
-**Exit**: 登录后 3 个主页（Dashboard / Sites / Settings）截图亮暗四套可过审。
+**Exit residual**: 登录后 3 个主页（Dashboard / Sites / Settings）亮暗截图人工过审；Linux visual baselines。
 
 ### Phase 3 — Data surfaces（P1）
 
