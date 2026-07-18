@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery  
 **Mode**: GitHub Issues + Milestones (SDD)  
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
-**Latest release**: **[v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37)** (2026-07-18)
+**Latest release**: **[v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。  
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 48](https://github.com/TokenDanceLab/metapi-go/milestone/48) open until **v0.8.38** release gate |
+| Active milestone | none (board clean; next residual only with ACs) |
 | Program map | `docs/plan/enterprise-program.md` (historical / closed foundations) |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; historical) |
@@ -32,17 +32,16 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Product board empty after this PR closes #506; next is **v0.8.38** release gate |
+| — | — | Board clean (no open residual product board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35–M47 closed** with v0.8.37. **M48 product landed on master**: #503 DOCS-REDIS-TRUTH (PR #507) · #504/#505 docker badge + residual latest (PR #508). Docs honesty is #506 (this PR).
-**Milestone 48**: remains open until release gate / **v0.8.38** tag — do not claim v0.8.38 released.
-**Latest release**: stays **v0.8.37** until the M48 release gate.
+**M35–M48 closed** with v0.8.38. Latest release **v0.8.38** (published after this gate).
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) | 48 | Redis admission truth · docker badge · residual latest sequencing · residual honesty |
 | [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) | 47 | README stack truth · TPM admission estimate · P0-585 credential usage honesty · residual honesty |
 | [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) | 46 | monitor cookie clear · CSS residual · P0-555 stream usage honesty · residual honesty |
 | [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) | 45 | DownstreamKeys maxRpm/maxTpm UI · P0-585 empty-filter honesty · login token debt |
@@ -71,7 +70,7 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. After this docs PR closes #506: M48 product board is empty on master; run **v0.8.38** release gate (tag + milestone close). Latest release remains **v0.8.37** until then.
+1. Board clean after **v0.8.38**. Optional residual **v0.8.39+** only with dedicated ACs.
 2. Do **not** invent WS-1 / STICKY-B Redis sticky / UC-1 product without dedicated ACs.
 3. Optional later: P0-585 production load-proof; deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
 
