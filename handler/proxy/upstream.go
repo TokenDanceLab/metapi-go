@@ -1067,6 +1067,20 @@ func writeSuccessProxyLog(
 		UsageSource:        source,
 	}
 	logProxy(ctx, cfg, entry)
+	// Advance managed-key used_cost so max_cost can gate subsequent traffic.
+	// Stream + non-stream both sink here once; helper no-ops zero/NaN/Inf.
+	// Failure paths intentionally do not call this (P0-555 residual stays).
+	recordManagedKeyCostOnSuccess(keyID, billing.EstimatedCost)
+}
+
+// recordManagedKeyCostOnSuccess increments used_cost for managed keys after a
+// successful proxy attempt. Nil KeyID (global token) is a no-op; zero/NaN/Inf
+// costs are skipped by auth.RecordManagedKeyCostUsage itself.
+func recordManagedKeyCostOnSuccess(keyID *int64, estimatedCost float64) {
+	if keyID == nil {
+		return
+	}
+	auth.RecordManagedKeyCostUsage(*keyID, estimatedCost)
 }
 
 // writeFailureProxyLog persists a failed attempt into proxy_logs so stats /
