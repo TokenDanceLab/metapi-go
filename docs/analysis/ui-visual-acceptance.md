@@ -1,13 +1,13 @@
 # UI visual acceptance + UX e2e harness
 
 **Date:** 2026-07-19  
-**Backlog:** [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) · [#536](https://github.com/TokenDanceLab/metapi-go/issues/536)  
-**Status:** harness green; win32 gallery baselines committed/refreshed; Linux CI baselines residual  
-**Code:** `web/playwright.config.ts` · `web/e2e/**` · `web/pages/DesignSystemGallery.tsx`
+**Backlog:** [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) · [#536](https://github.com/TokenDanceLab/metapi-go/issues/536) · [#538](https://github.com/TokenDanceLab/metapi-go/issues/538)  
+**Status:** harness green; shell chrome mock for Dashboard/Sites/Settings interim shots; win32 gallery baselines need refresh after shell section; Linux CI baselines residual  
+**Code:** `web/playwright.config.ts` · `web/e2e/**` · `web/pages/DesignSystemGallery.tsx` · `web/scripts/capture-ui-shots.mjs`
 
 ## Goal
 
-Every design-system / shell chrome change can be Vite-accepted with Playwright baselines, and critical UX (theme bootstrap, login smoke) stays green without a live API backend.
+Every design-system / shell chrome change can be Vite-accepted with Playwright baselines, and critical UX (theme bootstrap, login smoke) stays green without a live API backend. Post-login shell composition (Dashboard / Sites / Settings) is scored via a **gallery shell mock** when credentials are unavailable, and via **real page shots** when `METAPI_UI_AUTH_TOKEN` is set.
 
 ## Commands (from `web/`)
 
@@ -16,6 +16,7 @@ Every design-system / shell chrome change can be Vite-accepted with Playwright b
 | `npm run test:e2e` | Full Playwright suite (`e2e/**`) |
 | `npm run test:visual` | Gallery visual baselines only |
 | `npm run test:visual:update` | Refresh gallery snapshots after intentional UI change |
+| `node scripts/capture-ui-shots.mjs` | Human-score PNGs under `docs/analysis/ui-shots/` |
 
 Root Makefile:
 
@@ -39,7 +40,27 @@ npx playwright install chromium
 1. `npm run build:web`
 2. `vite preview --host 127.0.0.1 --port 4173 --strictPort`
 
-Tests use `baseURL=http://127.0.0.1:4173`. Locally the server is reused when already up (`reuseExistingServer`); CI always boots fresh.
+Tests use `baseURL=http://127.0.0.1:4173`.
+
+### Port 4173 / reuseExistingServer pitfall
+
+Locally Playwright **reuses** an existing server on `:4173` (`reuseExistingServer: !CI`). If a **foreign** process already listens there (another project, stale preview, wrong build), gallery specs soft-skip or snapshot against the wrong app — looks like “visual tests passed/skipped” with no useful artifact.
+
+**Mitigations:**
+
+1. Free the port before `test:visual` / `test:e2e` (Windows: `Get-NetTCPConnection -LocalPort 4173`).
+2. Force a clean preview for this repo:
+
+```bash
+# from web/
+$env:METAPI_PW_FORCE_SERVER = '1'   # PowerShell
+# or: METAPI_PW_FORCE_SERVER=1
+npm run test:visual
+```
+
+`METAPI_PW_FORCE_SERVER=1` sets `reuseExistingServer: false` so Playwright always builds + boots this tree’s preview (fails if port busy — kill the occupant first).
+
+CI always boots fresh (`reuseExistingServer: false` when `CI` is set).
 
 ## Specs
 
@@ -59,14 +80,72 @@ Tests use `baseURL=http://127.0.0.1:4173`. Locally the server is reused when alr
 
 FOUC Phase 1 (#535): inline head script is **theme_mode-first** (see `web/themeBootstrap.ts` + `web/index.html`).
 
+## Shell page screenshots (#538)
+
+### Approach
+
+| Track | What | Auth | CI-friendly |
+|:------|:-----|:-----|:------------|
+| **B – gallery shell mock** | `/__design__` section `Shell chrome mock` reuses production `topbar` / `sidebar` / `page-header` / `data-table` classes with static Dashboard · Sites · Settings content | none | yes |
+| **A – real pages** | `capture-ui-shots.mjs` with `METAPI_UI_AUTH_TOKEN` hits `/`, `/sites`, `/settings` against a live API-backed UI | required | no |
+
+Default interim acceptance for material / brand_calm / spacing / elevation / dark_parity uses **shell mock** artifacts:
+
+- `docs/analysis/ui-shots/shell-dashboard-{light\|dark}-win32.png`
+- `docs/analysis/ui-shots/shell-sites-{light\|dark}-win32.png`
+- `docs/analysis/ui-shots/shell-settings-{light\|dark}-win32.png`
+
+Optional real-page artifacts (when token works):
+
+- `docs/analysis/ui-shots/page-{dashboard\|sites\|settings}-{light\|dark}-win32.png`
+
+### Capture SOP (human score)
+
+From a **built** `web/` tree (or let the script start `vite preview` on `:4181`):
+
+```bash
+cd web
+npm run build:web
+
+# Mock + login + gallery (no backend)
+node scripts/capture-ui-shots.mjs
+
+# Optional: real shell pages (admin bearer token; API must accept it)
+# Auth keys: localStorage auth_token + auth_token_expires_at (see web/authSession.ts)
+$env:METAPI_UI_AUTH_TOKEN = '<admin-bearer>'
+# Optional cookie header fragments:
+# $env:METAPI_UI_AUTH_COOKIE = 'meta_monitor_auth=...'
+# Optional: point at an already-running UI instead of local preview:
+# $env:METAPI_UI_SHOT_BASE = 'http://127.0.0.1:3000'
+node scripts/capture-ui-shots.mjs
+```
+
+Env vars:
+
+| Variable | Purpose |
+|:---------|:--------|
+| `METAPI_UI_AUTH_TOKEN` | Bearer admin token → `localStorage.auth_token` |
+| `METAPI_AUTH_TOKEN` | Alias for the above |
+| `METAPI_UI_AUTH_COOKIE` | Optional `Cookie` header string (`a=b; c=d`) |
+| `METAPI_UI_SHOT_BASE` | Skip local preview; use this origin |
+| `METAPI_UI_SHOT_PORT` | Local preview port (default `4181`) |
+
+Gallery mock marker: `[data-testid="shell-chrome-mock"]` with `data-shell-page=dashboard|sites|settings`.
+
+Score axes (target ≥4/5): material, brand_calm, spacing, elevation, dark_parity. Record in `docs/analysis/ui-score-*.md` or issue comment on [#532](https://github.com/TokenDanceLab/metapi-go/issues/532).
+
 ## Updating baselines
 
 ```bash
 cd web
+# Prefer free :4173 or force clean server
+$env:METAPI_PW_FORCE_SERVER = '1'
 npm run test:visual:update
 ```
 
 Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Prefer Linux CI baselines; Windows font AA may drift — CI is the SSOT (`maxDiffPixelRatio: 0.02`).
+
+**When to refresh gallery baselines:** any intentional change to `/__design__` layout height/composition (including the #538 shell mock section). Skip update for pure docs/script-only changes.
 
 ## CI
 
@@ -91,9 +170,12 @@ Workflow: [`.github/workflows/ui-visual.yml`](../../.github/workflows/ui-visual.
 - [x] Makefile `ui-visual` / `ui-e2e`
 - [x] GH workflow path-filtered on `web/**`
 - [x] Gallery baselines: win32 committed (`web/e2e/visual-gallery.spec.ts-snapshots/*-win32.png`); **Linux CI SSOT still residual** (`*-linux.png`)
+- [x] Shell chrome mock on `/__design__` for Dashboard/Sites/Settings (#538)
+- [x] `capture-ui-shots.mjs` auth env + shell mock shots SOP
+- [x] Document `:4173` reuse pitfall + `METAPI_PW_FORCE_SERVER=1`
 
 ## Non-goals
 
-- Editing product pages / `index.html` / design-system sources from this harness lane
-- Backend-authenticated flows (sites, accounts) — unit/vitest and API tests own those
+- Editing product pages / `index.html` / design-system sources from the harness lane alone (shell mock reuses existing classes only)
+- Backend-authenticated e2e in CI (sites/accounts still unit/vitest + API tests)
 - Cross-browser matrix beyond Chromium (expand later if needed)
