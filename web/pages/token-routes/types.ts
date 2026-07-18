@@ -73,6 +73,8 @@ export type RouteRow = {
   sourceRouteIds?: number[];
   modelMapping?: string | null;
   routingStrategy?: RouteRoutingStrategy | null;
+  /** Optional route context window (tokens). null/omit/0 = unknown, no enforce. */
+  contextLength?: number | null;
   decisionSnapshot?: RouteDecision | null;
   decisionRefreshedAt?: string | null;
   enabled: boolean;
@@ -88,6 +90,8 @@ export type RouteSummaryRow = {
   sourceRouteIds?: number[];
   modelMapping: string | null;
   routingStrategy?: RouteRoutingStrategy | null;
+  /** Optional route context window (tokens). null/omit/0 = unknown, no enforce. */
+  contextLength?: number | null;
   enabled: boolean;
   channelCount: number;
   enabledChannelCount: number;

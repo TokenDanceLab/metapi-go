@@ -177,6 +177,64 @@ export function normalizeRoutes(routeRows: any[]): RouteRow[] {
   }));
 }
 
+/**
+ * Hydrate optional contextLength into a form string.
+ * null / omit / non-positive → empty (unknown / no enforce).
+ */
+export function contextLengthFormValue(value?: number | null): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return String(Math.trunc(n));
+}
+
+/**
+ * Parse contextLength from form input.
+ * empty / 0 → null (unknown, no enforce); rejects non-integers and negatives.
+ */
+export function parseRouteContextLength(raw: string): {
+  valid: boolean;
+  value: number | null;
+  error?: string;
+} {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: true, value: null };
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return {
+      valid: false,
+      value: null,
+      error: '上下文长度必须是正整数 token 数（留空表示未知/不强制）',
+    };
+  }
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) {
+    return {
+      valid: false,
+      value: null,
+      error: '上下文长度必须是正整数 token 数（留空表示未知/不强制）',
+    };
+  }
+  if (value === 0) {
+    return { valid: true, value: null };
+  }
+  return { valid: true, value: Math.trunc(value) };
+}
+
+/**
+ * Compact list/card label when set. null when unknown/unset.
+ * Multiples of 1000 → "128k"; otherwise raw count.
+ */
+export function formatRouteContextLength(value?: number | null): string | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const tokens = Math.trunc(n);
+  if (tokens % 1000 === 0) {
+    return `${tokens / 1000}k`;
+  }
+  return String(tokens);
+}
+
 export function buildSourceGroupKey(routeId: number, sourceModel: string): string {
   const normalizedSourceModel = sourceModel.trim() || '__ungrouped__';
   return `${routeId}::${normalizedSourceModel}`;
