@@ -3,6 +3,13 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-18] deploy v0.8.41 to hk3 (0.6.5 → 0.8.41)
+
+- Tags: v0.8.40 (PG pool + docs) · **v0.8.41** (request_id index upgrade fix for old DBs).
+- Prod: Azure PG `tokendance-pg` / role `metapi`; container `td-metapi` healthy; migrations sc2_001–006 applied.
+- Ops fix: role CONNECTION LIMIT 2→15; app pool max_open=5 idle=2.
+- Evidence: `/health` `/ready database=ok`; admin auth OK; 103 sites; public 302 to ID.
+
 ## [2026-07-18] neat-freak: STATE/MASTER/LOG roles + branch hygiene
 
 - Closed M49 / shipped **v0.8.39**; board empty.

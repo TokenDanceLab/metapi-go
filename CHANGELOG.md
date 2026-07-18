@@ -5,13 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.41] — 2026-07-18
+
+### Fixed
+- Move `proxy_logs_request_id_created_at_idx` out of base bootstrap indexes so upgrades from pre-request_id schemas (e.g. v0.6.5) do not fail before additive `sc2_004` runs
+
 ## [v0.8.40] — 2026-07-18
 
 ### Fixed
 - Explicit PostgreSQL pool budget: configurable `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` / lifetime/idle-time via env; documented in deployment guide + compose (#526)
 
 ### Docs
-- Split STATE/MASTER/LOG progress roles; codify docs governance (#527)
+- Split STATE/MASTER/LOG progress roles; codify docs governance
 
 ## [v0.8.39] — 2026-07-18
 
