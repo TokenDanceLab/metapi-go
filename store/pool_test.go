@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/tokendancelab/metapi-go/config"
 )
 
 func TestConfigurePostgresPoolAppliesBudget(t *testing.T) {
@@ -47,5 +48,13 @@ func TestConfigurePostgresPoolRejectsBudgetAboveOpen(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("configurePostgresPool() error = nil, want invalid budget")
+	}
+}
+
+func TestPostgresPoolConfigFromZeroValueRuntimeConfigUsesLegacyDefaults(t *testing.T) {
+	got := postgresPoolConfigFromRuntimeConfig(&config.Config{})
+	want := DefaultPostgresPoolConfig()
+	if got != want {
+		t.Fatalf("pool = %#v, want %#v", got, want)
 	}
 }
