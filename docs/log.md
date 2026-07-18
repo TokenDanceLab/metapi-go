@@ -5,6 +5,12 @@
 
 
 
+
+## [2026-07-19] design: formal readiness + UI-REFRESH
+
+- Added `docs/analysis/formal-readiness.md` — Track A 对内正式可用（已达标）vs Track B 对外完备（未达标）；T0–T4 运行档位；Redis 可选。
+- Added `docs/analysis/ui-ux-refresh.md` — GCP IA + 白磨砂玻璃 + 苹果细节；FOUC/夜间闪光弹 P0；分 Phase 落地，未改 web 实现。
+
 ## [2026-07-19] ops: hk3 deploy v0.8.44 shared-tiny
 
 - Pin + up `td-metapi` 0.8.44; compose force `DB_PROFILE=shared-tiny` + MaxOpen/Idle 1/1 + `application_name=metapi-hk3`; restart=no.

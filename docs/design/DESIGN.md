@@ -4,7 +4,8 @@
 **Scope**: Enterprise ops control plane (sites, accounts, tokens, routes, monitors, logs)  
 **Issue**: #12 (U0) — foundation only; component rewrites land in U1–U3  
 **Source of truth**: this document + `web/styles/tokens.css`  
-**Last updated**: 2026-07-16
+**Last updated**: 2026-07-16  
+**Next visual language**: [`../analysis/ui-ux-refresh.md`](../analysis/ui-ux-refresh.md) (design-only; FOUC + GCP/glass/Apple) — this file remains token SSOT until Phase 1 lands
 
 ---
 

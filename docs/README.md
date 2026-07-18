@@ -21,6 +21,8 @@ Ops live host/image: server `projects/metapi/STATE.md` (may lag repo tip).
 | Current product status | [`STATE.md`](STATE.md) |
 | Open gates / next gates | [`progress/MASTER.md`](progress/MASTER.md) |
 | High-value next (ours vs original) | [`analysis/high-value-next.md`](analysis/high-value-next.md) |
+| Formal readiness (对内正式 vs 对外完备) | [`analysis/formal-readiness.md`](analysis/formal-readiness.md) |
+| UI/UX refresh design | [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) |
 | Progress timeline | [`log.md`](log.md) |
 | Package architecture | [`architecture.md`](architecture.md) |
 | Backend design rules | [`design/BACKEND.md`](design/BACKEND.md) |
@@ -49,6 +51,8 @@ docs/
     high-value-next.md            ← next-wave shortlist (ours vs original)
     residual-next-candidates.md   ← residual honesty SSOT (ours)
     db-pool-budget.md             ← PG pool profiles / #531
+    formal-readiness.md           ← Track A/B 正式可用门禁
+    ui-ux-refresh.md              ← UI 重构方向（GCP/glass/Apple）
     original-gap-matrix.md        ← parity evidence (historical; see banner)
     original-gap-sources.md       ← upstream snapshot 2026-07-16
     competitive/                  ← peer learning inventory

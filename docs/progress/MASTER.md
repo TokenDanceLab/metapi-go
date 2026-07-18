@@ -12,7 +12,8 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | **Empty** after #531 / v0.8.44 |
+| — | — | **Empty product board** after #531 / v0.8.44 |
+| UI-REFRESH (design) | UX | [`ui-ux-refresh.md`](../analysis/ui-ux-refresh.md) — not scheduled until Milestone |
 
 ## Hard gates
 

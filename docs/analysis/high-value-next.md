@@ -40,6 +40,7 @@ Do **not** invent WS-1 / STICKY-B / UC-1 product without dedicated ACs.
 | 12 | **REL-P0585-LOADPROOF** | Multi-channel storm honesty | **present unit** (#527 / v0.8.43) | Load-proof honesty | Production e2e still residual | — |
 | 13 | **REL-P0555-SLICE** | Gemini SSE usage honesty | **present** (#530 / v0.8.43) | Stream billing honesty | Keep present-with-residual | — |
 | 14 | **REL-PG-POOL-PROFILE** | DB_PROFILE + 53300 lease backoff | **present** (#531 / v0.8.44) | Shared tiny + large dedicated both work | Ops pin profile/role LIMIT | — |
+| 15 | **UI-REFRESH** | Admin UI visual language | **design-only** ([ui-ux-refresh.md](./ui-ux-refresh.md)) | FOUC/夜间闪光弹 + 现代壳层 | Milestone + FOUC AC first | 暗色体验差 / 审美债 |
 
 ### Ours — explicit non-goals (without ACs)
 
@@ -77,6 +78,7 @@ Out-of-product: #592/#574/#553/#552/#459 noise; #575 MySQL; #595 k3s chart.
 2. Ops: keep pool ≤ Azure role LIMIT (read server STATE).  
 3. Original parity #579/#547/#584 only with product ACs.  
 4. WS-1 / STICKY-B / UC-1 — separate milestones only.
+5. **UI-REFRESH** — FOUC first, then glass shell; not mixed with Track B residual.
 
 ---
 
@@ -89,4 +91,6 @@ Out-of-product: #592/#574/#553/#552/#459 noise; #575 MySQL; #595 k3s chart.
 | Residual (ours)? | [`residual-next-candidates.md`](./residual-next-candidates.md) |
 | Original parity? | [`original-gap-matrix.md`](./original-gap-matrix.md) |
 | Next? | **This file** |
+| 正式可用？ | [`formal-readiness.md`](./formal-readiness.md) |
+| UI 重构？ | [`ui-ux-refresh.md`](./ui-ux-refresh.md) |
 | Shipped? | `CHANGELOG.md` + Releases |

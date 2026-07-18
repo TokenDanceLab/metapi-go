@@ -46,6 +46,8 @@ Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`
 | Doc map | [`README.md`](README.md) |
 | Open gates / next | [`progress/MASTER.md`](progress/MASTER.md) |
 | High-value next | [`analysis/high-value-next.md`](analysis/high-value-next.md) |
+| Formal readiness | [`analysis/formal-readiness.md`](analysis/formal-readiness.md) — Track A 对内正式 / Track B 对外完备 |
+| UI/UX refresh | [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) — design-only until Milestone |
 | Residual inventory | [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) |
 | Agent rules | root [`AGENTS.md`](../AGENTS.md) |
 | Deploy vars | [`deployment.md`](deployment.md) |
