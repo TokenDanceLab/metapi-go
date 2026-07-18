@@ -2,6 +2,8 @@ package platform
 
 import (
 	"context"
+	"encoding/base64"
+	"reflect"
 	"testing"
 )
 
@@ -25,6 +27,33 @@ func TestNewApiAdapter_PlatformName(t *testing.T) {
 	n := &NewApiAdapter{BaseAdapter: NewBaseAdapter("new-api")}
 	if n.PlatformName() != "new-api" {
 		t.Errorf("PlatformName: %q", n.PlatformName())
+	}
+}
+
+func TestNewApiAdapter_ExtractLikelyUserIDs_RE2Boundaries(t *testing.T) {
+	n := &NewApiAdapter{BaseAdapter: NewBaseAdapter("new-api")}
+	tests := []struct {
+		name    string
+		payload string
+		want    []int
+	}{
+		{name: "underscore before delimiter", payload: `prefix_8765432|suffix`, want: []int{8765432}},
+		{name: "underscore at end", payload: `prefix_1234`, want: []int{1234}},
+		{name: "named user before delimiter", payload: `username: 567890;`, want: []int{567890}},
+		{name: "named id at end", payload: `uid=4321`, want: []int{4321}},
+		{name: "adjacent underscore ids", payload: `prefix_1234_5678`, want: []int{1234, 5678}},
+		{name: "reject underscore nine digits", payload: `prefix_123456789|suffix`, want: nil},
+		{name: "reject named nine digits", payload: `user_id=123456789;`, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token := "session=" + base64.RawStdEncoding.EncodeToString([]byte(tt.payload))
+			got := n.extractLikelyUserIDs(token)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("extractLikelyUserIDs() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

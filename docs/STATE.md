@@ -15,7 +15,7 @@
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
 | Tip | `origin/master` @ v0.8.44 (#531 pool profiles + lease pressure) |
-| Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
+| Production pin (ops) | server `projects/metapi/STATE.md` (hk3 image **0.8.44**; small-pool experiment failed, container **Exited(2)**; pool/role remains **1/1**; restart=no; source fix is on `codex/metapi-regex-crash`, but no fixed image has been deployed) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** (Phase 1–5 slices in tree unreleased) |
 | Open issues / PRs | #532 epic · #533–#536 · #537 forms · #538 shell shots · #539 linux baselines · #540 a11y · #541 empty/error |
