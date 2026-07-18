@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.32] — 2026-07-18
+
+### Security
+- system-proxy/test rejects non-empty targetUrl that fails IsValidHTTPURL / IsForbiddenSiteTargetURL (metadata/link-local) before probe (#449 / #452)
+
+### Fixed
+- OpenAI /v1/responses (+ /compact): reject max_output_tokens or max_tokens above positive route context_length with honest 400 (no silent clamp; extends CTX-520) (#450 / #454)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 42 post v0.8.31; SEC-PROXY-TEST-TARGET + CTX-520 Responses path present · board #449–#451 closed (#451 / #453)
+
 ## [v0.8.31] — 2026-07-18
 
 ### Security

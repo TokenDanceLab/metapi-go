@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.31](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.31)** (2026-07-18) — remains latest until M42 release gate
+**Latest release**: **[v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [Milestone 42 — Enterprise residual security/product polish v0.8.32](https://github.com/TokenDanceLab/metapi-go/milestone/42) |
+| Active milestone | none (board clean; next residual only with ACs) |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -44,25 +44,24 @@
 | Enterprise residual reliability harden **v0.8.29** | ✅ closed | #423–#426 (PRs #427/#428/#430/#431); tag **v0.8.29** |
 | Enterprise residual client/routing polish **v0.8.30** | ✅ closed | #433–#435 (PRs #436–#438); tag **v0.8.30** |
 | Enterprise residual security polish **v0.8.31** | ✅ closed | #440–#443 (PRs #444–#447); tag **v0.8.31** |
-| Enterprise residual security/product polish **v0.8.32** | 🔄 active | Milestone 42 · board **#449–#451** |
+| Enterprise residual security/product polish **v0.8.32** | ✅ closed | #449–#451 (PRs #452–#454); tag **v0.8.32** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [#449](https://github.com/TokenDanceLab/metapi-go/issues/449) | security P0 | SEC-PROXY-TEST-TARGET: reject metadata/link-local targetUrl on system-proxy/test |
-| [#450](https://github.com/TokenDanceLab/metapi-go/issues/450) | reliability P1 | CTX-520-RESPONSES: enforce max_output_tokens vs context_length on OpenAI /v1/responses |
-| [#451](https://github.com/TokenDanceLab/metapi-go/issues/451) | docs | Residual honesty post v0.8.31 (M42 board) |
+| — | — | Board clean (no open residual product board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35–M41 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, or #440–#443 as active work (landed on master with v0.8.31).
-**Latest release**: stays **v0.8.31** until M42 release gate; do not claim v0.8.32 until tag.
+**M35–M42 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, or #449–#451 as active work (landed on master with v0.8.32).
+**Latest release**: **v0.8.32** after this release gate (tag is a separate operator step).
 
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.32](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.32) | 42 | system-proxy/test targetUrl guard · Responses max_output_tokens vs context_length · residual honesty |
 | [v0.8.31](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.31) | 41 | ProxyAware/SiteProxy CheckRedirect · key mutate redact · residual honesty |
 | [v0.8.30](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.30) | 40 | OAuth/Telegram CheckRedirect · source-model fallback · residual honesty |
 | [v0.8.29](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.29) | 39 | preferred breaker · cooldown timestamp parse · conductor attempt budget · residual honesty |
@@ -96,16 +95,15 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.31
+gh release view v0.8.32
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land M42 board **#449–#451**: SEC-PROXY-TEST-TARGET (#449 P0) · CTX-520-RESPONSES (#450 P1) · residual honesty (#451). Latest release stays **v0.8.31** until release gate. P0-585 stays partial; do not invent WS/sticky/update-center.
+1. Board clean after M42 / **v0.8.32**. Optional later residual only with ACs (P0-585 load-proof / empty-filter; deeper P0-555 media/lag polish; further dialect context_length enforce for Gemini etc.). P0-585 stays partial; do not invent WS/sticky/update-center.
 2. Product Milestones only with ACs: full Responses WS Codex (WS-1); Redis sticky Option B (STICKY-B); update-center registry (UC-1).
-3. Optional later: P0-585 production load-proof / empty-filter residual; deeper P0-555 media/lag polish; further dialect context_length enforce (Gemini etc.) after #450 shrinks Responses residual.
-4. Keep MASTER slim; docs map at `docs/README.md`.
+3. Keep MASTER slim; docs map at `docs/README.md`.
 
 
 ## Governance
