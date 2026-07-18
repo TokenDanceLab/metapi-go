@@ -29,6 +29,8 @@ import {
   emptySiteApiEndpoint,
   emptySiteCustomHeader,
   emptySiteForm,
+  formatSiteMaxConcurrency,
+  parseSiteMaxConcurrency,
   serializeSiteApiEndpoints,
   serializeSiteCustomHeaders,
   siteFormFromSite,
@@ -64,6 +66,8 @@ type SiteRow = {
   useSystemProxy?: boolean;
   customHeaders?: string | null;
   globalWeight?: number;
+  /** Caps concurrent upstream calls (0 = unlimited). */
+  maxConcurrency?: number;
   isPinned?: boolean;
   sortOrder?: number;
   totalBalance?: number;
@@ -746,6 +750,11 @@ export default function Sites() {
       toast.error('全局权重必须是大于 0 的数字');
       return;
     }
+    const parsedMaxConcurrency = parseSiteMaxConcurrency(form.maxConcurrency);
+    if (!parsedMaxConcurrency.valid) {
+      toast.error(parsedMaxConcurrency.error || '最大并发必须是非负整数（0 = 不限制）');
+      return;
+    }
     const serializedCustomHeaders = serializeSiteCustomHeaders(form.customHeaders);
     if (!serializedCustomHeaders.valid) {
       toast.error(serializedCustomHeaders.error || '自定义请求头格式不正确');
@@ -779,6 +788,7 @@ export default function Sites() {
       apiEndpoints: serializedApiEndpoints.apiEndpoints,
       customHeaders: serializedCustomHeaders.customHeaders,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
+      maxConcurrency: parsedMaxConcurrency.value,
       postRefreshProbeEnabled: probeEnabled,
       postRefreshProbeModel: probeModel.trim(),
       postRefreshProbeScope: probeScope,
@@ -1944,6 +1954,22 @@ export default function Sites() {
                 越大越容易被路由选中。建议 0.5-3，默认 1。
               </div>
             </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                data-testid="site-max-concurrency-input"
+                placeholder="最大并发（0 = 不限制）"
+                value={form.maxConcurrency}
+                onChange={(e) => setForm((prev) => ({ ...prev, maxConcurrency: e.target.value }))}
+                style={formInputStyle}
+              />
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                限制该站点同时进行的上游请求数。0 = 不限制；负数会被拒绝。
+              </div>
+            </div>
           </ResponsiveFormGrid>
         </CenteredModal>
       )}
@@ -2045,6 +2071,7 @@ export default function Sites() {
                       )}
                     />
                     <MobileField label="权重" value={(site.globalWeight || 1).toFixed(2)} />
+                    <MobileField label="最大并发" value={formatSiteMaxConcurrency(site.maxConcurrency)} />
                     {isExpanded ? (
                       <div className="mobile-card-extra">
                         <MobileField
@@ -2185,6 +2212,7 @@ export default function Sites() {
                   <th>状态</th>
                   <th>系统代理</th>
                   <th>权重</th>
+                  <th>最大并发</th>
                   <th>平台</th>
                   <th>创建时间</th>
                   <th className="sites-actions-col" style={{ textAlign: 'right' }}>操作</th>
@@ -2270,6 +2298,15 @@ export default function Sites() {
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                       {(site.globalWeight || 1).toFixed(2)}
+                    </td>
+                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <span
+                        className={`badge ${!site.maxConcurrency || site.maxConcurrency <= 0 ? 'badge-muted' : 'badge-info'}`}
+                        style={{ fontSize: 11 }}
+                        title="0 = 不限制"
+                      >
+                        {formatSiteMaxConcurrency(site.maxConcurrency)}
+                      </span>
                     </td>
                     <td>
                       <a

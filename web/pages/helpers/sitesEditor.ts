@@ -21,6 +21,8 @@ export type SiteForm = {
   apiEndpoints: SiteApiEndpointField[];
   customHeaders: SiteCustomHeaderField[];
   globalWeight: string;
+  /** Site concurrent upstream cap; string for controlled input. 0 = unlimited. */
+  maxConcurrency: string;
 };
 
 export type SiteEditorState =
@@ -42,6 +44,8 @@ export type SiteSavePayload = {
   }>;
   customHeaders: string;
   globalWeight: number;
+  /** Caps concurrent upstream calls for this site (0 = unlimited). */
+  maxConcurrency: number;
   postRefreshProbeEnabled?: boolean;
   postRefreshProbeModel?: string;
   postRefreshProbeScope?: 'single' | 'all';
@@ -80,6 +84,7 @@ export function emptySiteForm(): SiteForm {
     apiEndpoints: [emptySiteApiEndpoint()],
     customHeaders: [emptySiteCustomHeader()],
     globalWeight: '1',
+    maxConcurrency: '0',
   };
 }
 
@@ -131,7 +136,7 @@ function parseApiEndpointsForEditor(raw: unknown): SiteApiEndpointField[] {
   return ensureSiteApiEndpointRows(rows);
 }
 
-export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | 'customHeaders' | 'globalWeight' | 'externalCheckinUrl' | 'proxyUrl' | 'useSystemProxy'>> & {
+export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | 'customHeaders' | 'globalWeight' | 'maxConcurrency' | 'externalCheckinUrl' | 'proxyUrl' | 'useSystemProxy'>> & {
   externalCheckinUrl?: string | null;
   proxyUrl?: string | null;
   useSystemProxy?: boolean | null;
@@ -143,9 +148,14 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
   }> | null;
   customHeaders?: string | null;
   globalWeight?: number | string | null;
+  maxConcurrency?: number | string | null;
 }): SiteForm {
   const globalWeightRaw = Number(site.globalWeight);
   const globalWeight = Number.isFinite(globalWeightRaw) && globalWeightRaw > 0 ? String(globalWeightRaw) : '1';
+  const maxConcurrencyRaw = Number(site.maxConcurrency);
+  const maxConcurrency = Number.isFinite(maxConcurrencyRaw) && maxConcurrencyRaw >= 0
+    ? String(Math.trunc(maxConcurrencyRaw))
+    : '0';
   return {
     name: site.name ?? '',
     url: site.url ?? '',
@@ -156,7 +166,46 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     apiEndpoints: parseApiEndpointsForEditor(site.apiEndpoints),
     customHeaders: parseCustomHeadersForEditor(site.customHeaders),
     globalWeight,
+    maxConcurrency,
   };
+}
+
+/**
+ * Parse maxConcurrency from form input.
+ * 0 = unlimited; rejects non-integers and negatives (backend also 400s negatives).
+ */
+export function parseSiteMaxConcurrency(raw: string): {
+  valid: boolean;
+  value: number;
+  error?: string;
+} {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: true, value: 0 };
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return {
+      valid: false,
+      value: 0,
+      error: '最大并发必须是非负整数（0 = 不限制）',
+    };
+  }
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) {
+    return {
+      valid: false,
+      value: 0,
+      error: '最大并发必须是非负整数（0 = 不限制）',
+    };
+  }
+  return { valid: true, value: Math.trunc(value) };
+}
+
+/** Compact list/detail label: 0 → 不限制. */
+export function formatSiteMaxConcurrency(value?: number | null): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return '不限制';
+  return String(Math.trunc(n));
 }
 
 // Keep this in sync with normalizeSiteApiEndpointBaseUrl in
