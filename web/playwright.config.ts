@@ -8,7 +8,16 @@ const baseURL = `http://${previewHost}:${previewPort}`;
  * Visual + UX e2e harness for MetAPI admin UI (#534 / #536).
  * Serves the production Vite build via `vite preview` so screenshots match
  * embedded static assets rather than HMR dev chrome.
+ *
+ * Pitfall: reuseExistingServer reuses whatever is already on :4173.
+ * If a foreign server occupies that port, gallery/theme specs soft-skip or
+ * fail with confusing diffs. Locally prefer a free :4173, or force a clean
+ * preview with METAPI_PW_FORCE_SERVER=1 (disables reuse).
  */
+const forceServer =
+  process.env.METAPI_PW_FORCE_SERVER === '1'
+  || process.env.METAPI_PW_FORCE_SERVER === 'true';
+
 export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results',
@@ -46,7 +55,8 @@ export default defineConfig({
   webServer: {
     command: `npm run build:web && npx vite preview --host ${previewHost} --port ${previewPort} --strictPort`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    // CI always boots fresh. Locally reuse unless METAPI_PW_FORCE_SERVER=1.
+    reuseExistingServer: !process.env.CI && !forceServer,
     timeout: 180_000,
   },
 });
