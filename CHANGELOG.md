@@ -5,6 +5,18 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.35] — 2026-07-18
+
+### UI
+- Wire DownstreamKeys maxRpm/maxTpm create/edit/list (backend #116 admission already present) (#475 / #481)
+- Tokenize residual login-shell hard-coded hex to design tokens where clean (#477 / #480)
+
+### Tests / Reliability
+- P0-585 empty-filter global full-set fallback honesty regression tests (does not flip cascade to present) (#476 / #479)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 45 post-product landings; UI-KEY-RPM-TPM + REL-EMPTY-FILTER-TESTS + UI-LOGIN-TOKENS present · board #475–#478 closed (#478 / #482)
+
 ## [v0.8.34] — 2026-07-18
 
 ### UI
