@@ -7,13 +7,14 @@ import (
 )
 
 // maxTokensOverContextError is returned when body max_tokens / max_output_tokens
-// exceeds a positive route context_length. Callers must surface an honest 400
-// (no silent clamp).
+// / generationConfig.maxOutputTokens exceeds a positive route context_length.
+// Callers must surface an honest 400 (no silent clamp).
 type maxTokensOverContextError struct {
 	MaxTokens     int64
 	ContextLength int64
-	// Field is the body key that exceeded the limit ("max_tokens" or
-	// "max_output_tokens") so error text matches the request dialect.
+	// Field is the body key (or dotted nested path) that exceeded the limit
+	// ("max_tokens", "max_output_tokens", "generationConfig.maxOutputTokens", …)
+	// so error text matches the request dialect.
 	Field string
 }
 
@@ -30,14 +31,15 @@ func (e maxTokensOverContextError) Error() string {
 	)
 }
 
-// enforceMaxTokensAgainstContextLength rejects max_tokens / max_output_tokens
-// above a positive route context_length for OpenAI chat/completions-style,
-// Anthropic messages, and OpenAI Responses bodies.
+// enforceMaxTokensAgainstContextLength rejects max_tokens / max_output_tokens /
+// Gemini generationConfig.maxOutputTokens above a positive route context_length
+// for OpenAI chat/completions-style, Anthropic messages, OpenAI Responses, and
+// Gemini generateContent bodies.
 //
-// Policy (issue #399 / #409 / #450 / CTX-520 residual):
+// Policy (issue #399 / #409 / #450 / #458 / CTX-520 residual):
 //   - enforce only when context_length > 0
-//   - enforce when max_output_tokens or max_tokens is present and parseable
-//   - skip when both fields are omitted, null, or unparseable
+//   - enforce when a dialect-specific output-token field is present and parseable
+//   - skip when all candidate fields are omitted, null, or unparseable
 //   - never silent-clamp or invent tokens
 //
 // Returns maxTokensOverContextError when the request must be rejected with 400.
@@ -46,8 +48,8 @@ func enforceMaxTokensAgainstContextLength(body map[string]any, contextLength *in
 	if !ok {
 		return nil
 	}
-	// Prefer OpenAI Responses max_output_tokens when both are present; otherwise
-	// accept chat/messages max_tokens for parity.
+	// Prefer nested Gemini generationConfig / OpenAI Responses max_output_tokens
+	// when present; otherwise accept chat/messages max_tokens for parity.
 	maxTokens, field, present := bodyOutputTokenLimit(body)
 	if !present {
 		return nil
@@ -63,8 +65,10 @@ func enforceMaxTokensAgainstContextLength(body map[string]any, contextLength *in
 }
 
 // shouldEnforceMaxTokensOnPath is true for OpenAI chat/completions (+ legacy
-// completions), Anthropic Claude /v1/messages (issue #409), and OpenAI
-// /v1/responses (+ /compact) (issue #450). count_tokens and other surfaces stay out.
+// completions), Anthropic Claude /v1/messages (issue #409), OpenAI
+// /v1/responses (+ /compact) (issue #450), and Gemini generateContent /
+// streamGenerateContent (issue #458). count_tokens / countTokens and other
+// surfaces stay out.
 func shouldEnforceMaxTokensOnPath(downstreamPath string) bool {
 	p := strings.ToLower(strings.TrimSpace(downstreamPath))
 	switch {
@@ -80,6 +84,12 @@ func shouldEnforceMaxTokensOnPath(downstreamPath string) bool {
 		return true
 	case p == "/v1/responses/compact" || p == "/responses/compact" || strings.HasSuffix(p, "/v1/responses/compact") || strings.HasSuffix(p, "/responses/compact"):
 		return true
+	// Gemini native generateContent / streamGenerateContent (v1beta models/*:action
+	// and CLI /v1internal::generateContent). Substring match is action-safe:
+	// "streamgeneratecontent" and "generatecontent" both contain "generatecontent";
+	// countTokens does not and stays out.
+	case strings.Contains(p, "generatecontent"):
+		return true
 	default:
 		return false
 	}
@@ -93,18 +103,56 @@ func positiveContextLength(contextLength *int64) (int64, bool) {
 }
 
 // bodyOutputTokenLimit extracts a parseable output-token cap from the body.
-// OpenAI Responses uses max_output_tokens; chat/completions and Claude messages
-// use max_tokens. When both are present, max_output_tokens wins (Responses dialect).
+// Preference order (first present + parseable wins):
+//  1. Gemini nested generationConfig.maxOutputTokens (camel/snake variants)
+//  2. Gemini CLI envelope request.generationConfig.*
+//  3. OpenAI Responses top-level max_output_tokens
+//  4. chat/completions + Claude messages top-level max_tokens
+//
 // Missing / null / empty / non-numeric → not present.
 func bodyOutputTokenLimit(body map[string]any) (value int64, field string, present bool) {
 	if body == nil {
 		return 0, "", false
+	}
+	if n, field, ok := bodyGeminiMaxOutputTokens(body); ok {
+		return n, field, true
+	}
+	// Gemini CLI internal envelope: { "model", "request": { generationConfig... } }
+	if req, ok := body["request"].(map[string]any); ok && req != nil {
+		if n, field, ok := bodyGeminiMaxOutputTokens(req); ok {
+			return n, field, true
+		}
 	}
 	if n, ok := parseBodyTokenField(body, "max_output_tokens"); ok {
 		return n, "max_output_tokens", true
 	}
 	if n, ok := parseBodyTokenField(body, "max_tokens"); ok {
 		return n, "max_tokens", true
+	}
+	return 0, "", false
+}
+
+// bodyGeminiMaxOutputTokens reads nested generationConfig.maxOutputTokens
+// (and cheap camel/snake variants). Field is returned as a dotted path for
+// honest error text. Missing / null / non-object / unparseable → not present.
+func bodyGeminiMaxOutputTokens(body map[string]any) (value int64, field string, present bool) {
+	if body == nil {
+		return 0, "", false
+	}
+	for _, configKey := range []string{"generationConfig", "generation_config"} {
+		raw, ok := body[configKey]
+		if !ok || raw == nil {
+			continue
+		}
+		gc, ok := raw.(map[string]any)
+		if !ok || gc == nil {
+			continue
+		}
+		for _, tokenKey := range []string{"maxOutputTokens", "max_output_tokens"} {
+			if n, ok := parseBodyTokenField(gc, tokenKey); ok {
+				return n, configKey + "." + tokenKey, true
+			}
+		}
 	}
 	return 0, "", false
 }
