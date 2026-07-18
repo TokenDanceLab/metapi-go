@@ -2,6 +2,9 @@
 
 > Snapshot date: 2026-07-16 (G2 inventory)  
 > **Matrix evidence refreshed: 2026-07-17** (post v0.8.15 — #568 present, #585/#555 partial evidence, #590 present)  
+> **Read-me 2026-07-18**: this table is **historical evidence**, not the living residual board.  
+> Living residual / next-wave: [`residual-next-candidates.md`](./residual-next-candidates.md) · shortlist [`high-value-next.md`](./high-value-next.md) · 现状 [`../STATE.md`](../STATE.md).  
+> Known matrix drift: **#520 context_length** row still says partial — product later shipped **CTX-520** (admin + multi-dialect enforce + UI); trust residual inventory over this row.  
 > Branch base: `feat/gap-inventory` (G1 sources/taxonomy); refresh on `docs/p90-gap-matrix-refresh`  
 > Issue: [#9 G2](https://github.com/tokendancelab/metapi-go/issues/9) · refresh [#281](https://github.com/TokenDanceLab/metapi-go/issues/281)  
 > Sources: `docs/analysis/original-gap-sources.md`  

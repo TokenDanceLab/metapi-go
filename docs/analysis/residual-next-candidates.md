@@ -1,13 +1,14 @@
-# Residual next candidates (post v0.8.39 / M49 closed)
+# Residual next candidates (post v0.8.42 / maintenance)
 
 **Date**: 2026-07-18  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#517](https://github.com/TokenDanceLab/metapi-go/issues/517) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.39 shipped** (Milestone 49 closed; Issues #511–#517 / PRs #518–#525 on master + tag). M49 reliability: RR fail-count, used_requests 429 order, Redis admit rollback, max_cost wire, Gemini path/stream, retention RFC3339, residual honesty. Residual train **v0.8.18–v0.8.39** is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations closed; residual polish only.  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG (M49 #517 and later)  
+**Context**: **v0.8.42 shipped** (cron 5-field validate). Prior: v0.8.41 request_id index upgrade; v0.8.40 PG pool env; M49 reliability train through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
+**Next-wave shortlist (ours vs original)**: [`high-value-next.md`](./high-value-next.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (board clean; optional residual **v0.8.40+** only with dedicated ACs)  
-**Tip note**: master may include post-**v0.8.39** commits (e.g. #526 PG pool budget) before the next tag — see STATE.
+**Active wave**: none (board clean; optional residual only with dedicated ACs)  
+**Prod pin**: see STATE / server `projects/metapi/STATE.md` (hk3 **0.8.42** at last verify)
 
 ## Purpose
 
@@ -89,15 +90,17 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.40+)
+## Recommended sequencing (maintenance default)
 
-1. **Latest release**: **v0.8.39** (M49 closed): #511–#517 present on master with tag.
-2. **Active wave**: none. Optional residual **v0.8.40+** only with dedicated ACs.
-3. **M49 reliability present**: REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.
-4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).
-5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
-7. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
+1. **Latest release**: **v0.8.42** (cron validate) · prod pin see STATE.  
+2. **Active wave**: none. Optional residual only with dedicated ACs — shortlist [`high-value-next.md`](./high-value-next.md).  
+3. **M49 reliability present** (v0.8.39): REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.  
+4. **Post-M49 present**: REL-PG-POOL (v0.8.40) · REL-MIG-REQID-IDX (v0.8.41) · REL-CRON-5F (v0.8.42).  
+5. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).  
+6. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.  
+7. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.  
+8. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.  
+9. **Original parity** leftovers live in [`high-value-next.md`](./high-value-next.md) §B — matrix is evidence, not the open board.
 
 ## Explicit non-goals for residual waves
 
@@ -127,9 +130,13 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming Gemini path model / streamGenerateContent IsStream still broken after #515/#523.
 - Claiming retention same-day prune still broken (space vs RFC3339) after #516/#521.
 - Claiming Milestone 49 or residual board is still open after **v0.8.39** release + M49 closed.
-- Claiming **v0.8.40+** product without dedicated ACs (maintenance mode is the default).
+- Claiming residual inventory still tops out at v0.8.39 after **v0.8.40–v0.8.42** ships.
+- Claiming default 5-field crons are invalid after v0.8.42 validateCronExpr normalize.
+- Claiming **v0.8.43+** product without dedicated ACs (maintenance mode is the default).
+- Treating `original-gap-matrix.md` as the live open board (it is historical evidence; use high-value-next + residual inventory).
 
 ## Links
 
 - 现状: [`docs/STATE.md`](../STATE.md) · 开放门禁: [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志: [`docs/log.md`](../log.md)
-- Release: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · prior [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · optional residual **v0.8.40+** (with ACs only)
+- Next shortlist: [`high-value-next.md`](./high-value-next.md)
+- Release: [v0.8.42](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.42) · [v0.8.41](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.41) · [v0.8.40](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.40) · optional residual only with ACs

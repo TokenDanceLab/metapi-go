@@ -86,11 +86,13 @@ golangci-lint run --timeout=3m        # Lint check
 | `docs/STATE.md` | **现状 SSOT** (verified product facts; keep slim) |
 | `docs/progress/MASTER.md` | **开放项 + 硬门禁** (not a changelog) |
 | `docs/log.md` | **进度日志** append-only (never overrides STATE) |
+| `docs/analysis/high-value-next.md` | Next-wave shortlist: **ours residual vs original parity** |
 | `docs/architecture.md` | As-built package map (proxy/transform/routing; not proxycore/protocol) |
 | `docs/design/BACKEND.md` | Backend philosophy, dependency rules, forbidden imports |
 | `docs/design/DESIGN.md` | UI design system SSOT |
 | `docs/analysis/residual-next-candidates.md` | Honest residual queue (what is NOT product yet) |
-| `docs/analysis/original-gap-matrix.md` | Upstream parity evidence |
+| `docs/analysis/original-gap-matrix.md` | Upstream parity evidence (historical; see file banner) |
+| `docs/analysis/original-gap-sources.md` | Upstream issue/PR snapshot (2026-07-16; not live-synced) |
 | `docs/api.md` / `docs/deployment.md` / `docs/migration.md` | API · deploy · migration |
 | `docs/specs/` | Rewrite-era phase specs (large; historical) |
 | `CHANGELOG.md` | Version narrative |

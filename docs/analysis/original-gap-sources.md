@@ -3,7 +3,8 @@
 > Snapshot date: 2026-07-16  
 > Upstream repo: [cita-777/metapi](https://github.com/cita-777/metapi)  
 > Scope: open GitHub issues (`gh issue list --state open --limit 200`) plus product-relevant open PRs.  
-> Purpose: inventory of original project gaps for metapi-go G1 (#8). Docs only.
+> Purpose: inventory of original project gaps for metapi-go G1 (#8). Docs only.  
+> **Not live-synced.** For next-wave prioritization see [`high-value-next.md`](./high-value-next.md). For our residual honesty see [`residual-next-candidates.md`](./residual-next-candidates.md).
 
 ## Collection method
 

@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-18] docs: high-value-next shortlist (ours vs original)
+
+- Add `docs/analysis/high-value-next.md` separating metapi-go residual from cita-777/metapi parity leftovers.
+- Banner matrix/sources as historical; residual header → post v0.8.42; wire README/STATE/MASTER entry points.
+- No product board opened; maintenance default remains.
+
 ## [2026-07-18] v0.8.42 cron validation + prod roll-forward
 
 - Fix: config `validateCronExpr` accepts default 5-field crons (parity with scheduler normalize).

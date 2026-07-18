@@ -31,12 +31,19 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 
+## Next-wave pointer
+
+Prioritized **ours vs original** shortlist: [`analysis/high-value-next.md`](analysis/high-value-next.md)  
+Full residual inventory: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md)  
+Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)
+
 ## Entry points
 
 | Need | Path |
 |:-----|:-----|
 | Doc map | [`README.md`](README.md) |
 | Open gates / next | [`progress/MASTER.md`](progress/MASTER.md) |
+| High-value next | [`analysis/high-value-next.md`](analysis/high-value-next.md) |
 | Residual inventory | [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) |
 | Agent rules | root [`AGENTS.md`](../AGENTS.md) |
 | Deploy vars | [`deployment.md`](deployment.md) |
