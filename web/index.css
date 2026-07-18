@@ -3888,7 +3888,7 @@ textarea:focus-visible {
 
 .login-theme-option.active {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-on-primary);
   box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
 
@@ -4044,7 +4044,7 @@ textarea:focus-visible {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--color-text-tertiary);
 }
 
 .login-brand-copy-block {
@@ -4064,7 +4064,7 @@ textarea:focus-visible {
   max-width: 42ch;
   font-size: 13px;
   line-height: 1.8;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .login-capability-list {
@@ -4089,7 +4089,7 @@ textarea:focus-visible {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: #64748b;
+  color: var(--color-text-tertiary);
 }
 
 .login-capability-content {
@@ -4102,7 +4102,7 @@ textarea:focus-visible {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .login-capability-desc {
@@ -4128,7 +4128,7 @@ textarea:focus-visible {
   border-radius: 999px;
   border: 1px solid rgba(99, 102, 241, 0.12);
   background: rgba(255, 255, 255, 0.76);
-  color: #0f172a;
+  color: var(--color-text-primary);
   text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -4274,48 +4274,34 @@ textarea:focus-visible {
 [data-theme="dark"] .brand-mark-canvas,
 [data-theme="dark"] .login-auth-stage,
 [data-theme="dark"] .login-auth-panel {
-  background: color-mix(in srgb, var(--color-bg-card) 92%, #0f172a);
+  background: color-mix(in srgb, var(--color-bg-card) 92%, var(--color-bg));
 }
 
-[data-theme="dark"] .login-brand-panel {
-  color: #f8fafc;
-}
-
-[data-theme="dark"] .login-brand-name,
-[data-theme="dark"] .login-brand-copy,
-[data-theme="dark"] .login-capability-desc {
-  color: #e2e8f0;
-}
+/* brand/copy/title/kicker/index inherit theme text tokens set above */
 
 [data-theme="dark"] .login-icon-link,
 [data-theme="dark"] .login-doc-link {
-  background: rgba(15, 23, 42, 0.72);
-  border-color: rgba(148, 163, 184, 0.24);
+  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+  border-color: color-mix(in srgb, var(--color-border-strong) 70%, transparent);
 }
 
 [data-theme="dark"] .login-doc-link {
-  color: #a5b4fc;
+  color: var(--color-primary-hover);
 }
 
 [data-theme="dark"] .login-theme-option.active {
-  color: #ffffff;
+  color: var(--color-on-primary);
 }
 
 [data-theme="dark"] .login-brand-kicker,
 [data-theme="dark"] .login-compat-line,
 [data-theme="dark"] .login-capability-index,
-[data-theme="dark"] .login-icon-link,
-[data-theme="dark"] .login-auth-note,
-[data-theme="dark"] .login-auth-footer {
-  color: #cbd5e1;
-}
-
-[data-theme="dark"] .login-capability-title {
-  color: #f8fafc;
+[data-theme="dark"] .login-icon-link {
+  color: var(--color-text-secondary);
 }
 
 [data-theme="dark"] .login-auth-footer {
-  border-top-color: rgba(51, 65, 85, 0.9);
+  border-top-color: color-mix(in srgb, var(--color-border-strong) 90%, transparent);
 }
 
 @media (max-width: 1080px) {
