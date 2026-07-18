@@ -235,9 +235,9 @@ func TestPostgresConnectionPool(t *testing.T) {
 	db := openTestPG(t)
 
 	maxOpen := db.DB.DB.Stats().MaxOpenConnections
-	// configured to 20 in configurePostgresPool
-	if maxOpen != 20 {
-		t.Logf("MaxOpenConnections=%d (expected 20)", maxOpen)
+	// DefaultPostgresPoolConfig is now profile "normal" (10 open).
+	if maxOpen != 10 && maxOpen != 20 {
+		t.Logf("MaxOpenConnections=%d (expected 10 normal or 20 dedicated)", maxOpen)
 	}
 
 	// Just verify the pool is functional.

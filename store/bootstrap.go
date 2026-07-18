@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,12 +85,24 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 
 	logAttrs := []any{"dialect", dialect}
 	if dialect == DialectPostgres {
+		profile := strings.TrimSpace(cfg.DbProfile)
+		if profile == "" {
+			profile = config.DefaultDbProfile
+		}
 		logAttrs = append(logAttrs,
+			"db_profile", profile,
 			"max_open_conns", pool.MaxOpenConns,
 			"max_idle_conns", pool.MaxIdleConns,
 			"conn_max_lifetime_sec", cfg.DbConnMaxLifetimeSec,
 			"conn_max_idle_time_sec", cfg.DbConnMaxIdleTimeSec,
+			"application_name", pool.ApplicationName,
 		)
+		if pool.MaxOpenConns <= 2 {
+			slog.Warn("bootstrap: small PostgreSQL pool — MaxOpenConns must stay ≤ role CONNECTION LIMIT; scheduler leases degrade to process-local when pool is tiny",
+				"max_open_conns", pool.MaxOpenConns,
+				"db_profile", profile,
+			)
+		}
 	}
 	slog.Info("bootstrap: database ready", logAttrs...)
 	return nil
@@ -97,19 +110,40 @@ func EnsureRuntimeDatabase(cfg *config.Config) error {
 
 func postgresPoolConfigFromRuntimeConfig(cfg *config.Config) PostgresPoolConfig {
 	// Preserve compatibility for tests and embedders that construct Config
-	// directly instead of using config.Load, which populates all four defaults.
+	// directly instead of using config.Load, which populates defaults.
 	if cfg.DbMaxOpenConns == 0 &&
 		cfg.DbMaxIdleConns == 0 &&
 		cfg.DbConnMaxLifetimeSec == 0 &&
 		cfg.DbConnMaxIdleTimeSec == 0 {
-		return DefaultPostgresPoolConfig()
+		pool := DefaultPostgresPoolConfig()
+		pool.ApplicationName = resolvePostgresApplicationName(cfg)
+		return pool
 	}
 	return PostgresPoolConfig{
 		MaxOpenConns:    cfg.DbMaxOpenConns,
 		MaxIdleConns:    cfg.DbMaxIdleConns,
 		ConnMaxLifetime: time.Duration(cfg.DbConnMaxLifetimeSec) * time.Second,
 		ConnMaxIdleTime: time.Duration(cfg.DbConnMaxIdleTimeSec) * time.Second,
+		ApplicationName: resolvePostgresApplicationName(cfg),
 	}
+}
+
+func resolvePostgresApplicationName(cfg *config.Config) string {
+	if cfg != nil {
+		if name := strings.TrimSpace(cfg.DbApplicationName); name != "" {
+			return name
+		}
+	}
+	host, err := os.Hostname()
+	if err != nil || strings.TrimSpace(host) == "" {
+		host = "unknown"
+	}
+	// Keep pg application_name short and operator-friendly.
+	host = strings.ReplaceAll(host, " ", "-")
+	if len(host) > 48 {
+		host = host[:48]
+	}
+	return "metapi-" + host
 }
 
 // CloseDatabase closes the active database connection and resets the

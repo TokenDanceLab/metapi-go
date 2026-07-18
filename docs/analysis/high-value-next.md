@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-19  
 **Scope**: planning inventory only — **no product code**.  
-**Mode**: maintenance after **v0.8.43** / M50 (prod pin see STATE / ops STATE).
+**Mode**: maintenance after **v0.8.43** / M50; **#531 pool budget** in v0.8.44 (prod pin see STATE / ops STATE).
 
 > **两套问题，不要混：**  
 > - **Ours** = metapi-go 自有 residual / 运维 / 工程质量（权威：[`residual-next-candidates.md`](./residual-next-candidates.md) + [`../STATE.md`](../STATE.md)）  
@@ -28,7 +28,7 @@ Do **not** invent WS-1 / STICKY-B / UC-1 product without dedicated ACs.
 |-----:|:---|:------|:-------|:---------------|:-------------------|:----------------|
 | 1 | **P0-585** | Channel failure cascade poison | **partial** (M50 unit load-proof #527) | Production trust | **Production e2e** multi-channel storm only | Silent cascade under live load |
 | 2 | **P0-555** | Token usage / billing accuracy | **present-with-residual** (+ Gemini SSE #530) | Ops trust | Media zeros / multi-instance lag ACs | Wrong cost dashboards |
-| 3 | **OPS-PG-BUDGET** | Azure PG role/pool budget | **ops live** (read server STATE for role LIMIT) | Shared Azure B1ms | Keep pool ≤ role LIMIT | Connect / lease failures |
+| 3 | **OPS-PG-BUDGET** | Azure PG role/pool budget | **present product** (#531 / v0.8.44 code; ops still size role LIMIT) | Shared Azure B1ms | Keep pool ≤ role LIMIT; `DB_PROFILE=shared-tiny` on hk3 | Connect / lease failures |
 | 4 | **OPS-US1-PIN** | Standby us1 image pin | **present ops** (#528 pin 0.8.42+) | DR cold standby | Optional smoke start if authorized | Failover to stale binary |
 | 5 | **OPS-OAUTH-CFG** | OAuth client placeholders | residual config | Warnings until real IDs | Real client IDs if product needs OAuth | OAuth login fails (expected) |
 | 6 | **WS-1** | Responses WebSocket Codex | residual (501/426) | Codex interop | Protocol AC + multi-instance sticky | High protocol cost |
@@ -39,6 +39,7 @@ Do **not** invent WS-1 / STICKY-B / UC-1 product without dedicated ACs.
 | 11 | **REL-PG-POOL** | Explicit PG pool env | **present** (v0.8.40) | Shared DB budget | Done | — |
 | 12 | **REL-P0585-LOADPROOF** | Multi-channel storm honesty | **present unit** (#527 / v0.8.43) | Load-proof honesty | Production e2e still residual | — |
 | 13 | **REL-P0555-SLICE** | Gemini SSE usage honesty | **present** (#530 / v0.8.43) | Stream billing honesty | Keep present-with-residual | — |
+| 14 | **REL-PG-POOL-PROFILE** | DB_PROFILE + 53300 lease backoff | **present** (#531 / v0.8.44) | Shared tiny + large dedicated both work | Ops pin profile/role LIMIT | — |
 
 ### Ours — explicit non-goals (without ACs)
 

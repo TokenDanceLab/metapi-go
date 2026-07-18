@@ -27,8 +27,10 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       # Database config (for PG mode; leave empty for SQLite)
       DATABASE_URL: ${DATABASE_URL:-}
-      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-20}
-      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-5}
+      DB_PROFILE: ${DB_PROFILE:-normal}
+      # Leave empty to use profile defaults (normal=10/3). Large exclusive PG: dedicated or raise explicitly.
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-}
+      DB_MAX_IDLE_CONNS: ${DB_MAX_IDLE_CONNS:-}
       DB_CONN_MAX_LIFETIME_SEC: ${DB_CONN_MAX_LIFETIME_SEC:-1800}
       DB_CONN_MAX_IDLE_TIME_SEC: ${DB_CONN_MAX_IDLE_TIME_SEC:-300}
     restart: unless-stopped

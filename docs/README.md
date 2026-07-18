@@ -48,6 +48,7 @@ docs/
   analysis/                 ← evidence audits, residuals, gap matrix
     high-value-next.md            ← next-wave shortlist (ours vs original)
     residual-next-candidates.md   ← residual honesty SSOT (ours)
+    db-pool-budget.md             ← PG pool profiles / #531
     original-gap-matrix.md        ← parity evidence (historical; see banner)
     original-gap-sources.md       ← upstream snapshot 2026-07-16
     competitive/                  ← peer learning inventory
@@ -69,7 +70,7 @@ docs/
 
 ## Residual board (post v0.8.43 / M50)
 
-- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.43**.
+- **STATE**: [`STATE.md`](STATE.md) — latest tag **v0.8.43** (v0.8.44 #531 pending).
 - **Next shortlist**: [`analysis/high-value-next.md`](analysis/high-value-next.md).
 - **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md).
 - **Still not product without ACs**: WS-1, STICKY-B, UC-1.

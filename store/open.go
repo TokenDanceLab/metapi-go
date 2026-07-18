@@ -13,6 +13,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"github.com/tokendancelab/metapi-go/config"
+
 	// Register pure-Go SQLite driver (no CGO).
 	_ "modernc.org/sqlite"
 
@@ -36,19 +38,25 @@ type DB struct {
 
 // PostgresPoolConfig is the application-side connection budget. MaxOpenConns
 // must not exceed the production role CONNECTION LIMIT.
+// ApplicationName is injected into the PostgreSQL DSN as application_name when
+// the DSN does not already set it (visible in pg_stat_activity).
 type PostgresPoolConfig struct {
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime time.Duration
 	ConnMaxIdleTime time.Duration
+	ApplicationName string
 }
 
+// DefaultPostgresPoolConfig returns the "normal" profile defaults (10/3).
+// Large exclusive databases should raise MaxOpenConns explicitly or use
+// DB_PROFILE=dedicated (20/5). Shared tiny roles use DB_PROFILE=shared-tiny (2/1).
 func DefaultPostgresPoolConfig() PostgresPoolConfig {
 	return PostgresPoolConfig{
-		MaxOpenConns:    20,
-		MaxIdleConns:    5,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 5 * time.Minute,
+		MaxOpenConns:    config.DefaultDbMaxOpenConnsNormal,
+		MaxIdleConns:    config.DefaultDbMaxIdleConnsNormal,
+		ConnMaxLifetime: time.Duration(config.DefaultDbConnMaxLifetimeSec) * time.Second,
+		ConnMaxIdleTime: time.Duration(config.DefaultDbConnMaxIdleTimeSec) * time.Second,
 	}
 }
 
@@ -213,6 +221,7 @@ func OpenWithPostgresSSLModeAndPool(
 			return nil, fmt.Errorf("store: unsupported postgres sslmode %q", sslMode)
 		}
 		connStr = applyPostgresSSLMode(dsn, normalizedSSLMode)
+		connStr = applyPostgresApplicationName(connStr, pool.ApplicationName)
 	default:
 		return nil, fmt.Errorf("store: unsupported dialect %q (expected %q or %q)", dialect, DialectSQLite, DialectPostgres)
 	}
@@ -288,6 +297,38 @@ func applyPostgresSSLMode(dsn string, mode string) string {
 		return "sslmode=" + mode
 	}
 	return strings.TrimRight(dsn, " ") + " sslmode=" + mode
+}
+
+// applyPostgresApplicationName sets application_name when absent so operators can
+// attribute connections in pg_stat_activity. Existing DSN values win.
+func applyPostgresApplicationName(dsn string, appName string) string {
+	appName = strings.TrimSpace(appName)
+	if appName == "" {
+		return dsn
+	}
+	trimmed := strings.TrimSpace(dsn)
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://") {
+		parsed, err := url.Parse(trimmed)
+		if err != nil {
+			return dsn
+		}
+		q := parsed.Query()
+		if strings.TrimSpace(q.Get("application_name")) != "" {
+			return dsn
+		}
+		q.Set("application_name", appName)
+		parsed.RawQuery = q.Encode()
+		return parsed.String()
+	}
+	// keyword/value DSN
+	if strings.Contains(lower, "application_name=") {
+		return dsn
+	}
+	if strings.TrimSpace(dsn) == "" {
+		return "application_name=" + appName
+	}
+	return strings.TrimRight(dsn, " ") + " application_name=" + appName
 }
 
 var postgresKeywordSSLModeRE = regexp.MustCompile(`(^|\s)sslmode=\S+`)

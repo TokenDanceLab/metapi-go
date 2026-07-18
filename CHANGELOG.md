@@ -5,6 +5,17 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.44] — 2026-07-19
+
+### Fixed / Reliability
+- PostgreSQL pool profiles (`DB_PROFILE`/`METAPI_DB_PROFILE`: `shared-tiny` 2/1, `normal` 10/3 default, `dedicated` 20/5); explicit `DB_MAX_*` always override (#531)
+- Inject `application_name=metapi-<hostname>` (or `DB_APPLICATION_NAME`) when DSN omits it for `pg_stat_activity` attribution (#531)
+- Scheduler advisory-lease: MaxOpen≤2 uses process-local lease; SQLSTATE 53300 / too-many-connections exponential backoff + log rate-limit + force-local after repeated pressure (#531)
+- Metrics: `metapi_db_connections_in_use`, `metapi_db_conn_errors_total` alongside open gauge (#531)
+
+### Docs
+- Pool budget design + operator recipes: `docs/analysis/db-pool-budget.md`; deployment/README/.env.example/compose aligned (#531)
+
 ## [v0.8.43] — 2026-07-19
 
 ### Tests / Honesty

@@ -30,10 +30,12 @@
 | `DATABASE_URL` | _(empty)_ | PostgreSQL connection string; alias of `DB_URL`; when set to `postgres://` or `postgresql://`, uses PG instead of SQLite |
 | `DB_URL` | _(empty)_ | Database URL or SQLite file path; takes precedence over `DATABASE_URL` |
 | `DB_SSLMODE` | _(empty)_ | PostgreSQL TLS mode. Supports `disable`, `allow`, `prefer`, `require`, `verify-ca`, and `verify-full`; non-empty values override `sslmode` in the connection string |
-| `DB_MAX_OPEN_CONNS` | `20` | PostgreSQL application pool ceiling; must not exceed the database role connection limit |
-| `DB_MAX_IDLE_CONNS` | `5` | PostgreSQL idle pool ceiling; must not exceed `DB_MAX_OPEN_CONNS` |
+| `DB_PROFILE` / `METAPI_DB_PROFILE` | `normal` | Pool preset: `shared-tiny` (2/1), `normal` (10/3), `dedicated` (20/5). Explicit `DB_MAX_*` always override |
+| `DB_MAX_OPEN_CONNS` | profile default | PostgreSQL application pool ceiling; **must not exceed the database role CONNECTION LIMIT** |
+| `DB_MAX_IDLE_CONNS` | profile default | PostgreSQL idle pool ceiling; must not exceed `DB_MAX_OPEN_CONNS` |
 | `DB_CONN_MAX_LIFETIME_SEC` | `1800` | Maximum PostgreSQL connection lifetime; `0` disables rotation |
 | `DB_CONN_MAX_IDLE_TIME_SEC` | `300` | Maximum PostgreSQL idle time; `0` disables idle rotation |
+| `DB_APPLICATION_NAME` | `metapi-<hostname>` | Injected as PostgreSQL `application_name` when absent from DSN |
 | `PROXY_MAX_BUFFERED_RESPONSE_BYTES` | `20971520` | Maximum buffered non-streaming upstream response size; responses above the limit return 502 |
 | `METAPI_ENABLE_PROXY_STUB` | _(empty)_ | Test/demo-only local proxy stub. Leave empty in production; unconfigured upstream forwarding returns 503 |
 | `TRUSTED_PROXY_CIDRS` | _(empty)_ | Comma-separated reverse-proxy CIDRs allowed to supply `X-Forwarded-For` / `X-Real-IP`; forwarded headers are ignored when empty |

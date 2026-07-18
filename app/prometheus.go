@@ -50,6 +50,7 @@ func refreshRuntimeGauges() {
 	if db := store.GetDB(); db != nil && db.DB != nil && db.DB.DB != nil {
 		stats := db.DB.DB.Stats()
 		shared.SetDBConnections(int64(stats.OpenConnections))
+		shared.SetDBConnectionsInUse(int64(stats.InUse))
 	}
 }
 

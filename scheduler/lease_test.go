@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -138,3 +139,64 @@ func TestSideEffectSchedulersUseClusterLease(t *testing.T) {
 		})
 	}
 }
+
+func TestSchedulerLeaseTinyPoolUsesLocal(t *testing.T) {
+	ResetLeasePressureForTest()
+	t.Cleanup(ResetLeasePressureForTest)
+
+	// Simulate a postgres dialect DB with MaxOpen=2 using sqlite driver underneath
+	// (pool settings still apply to sql.DB).
+	raw, err := store.Open(store.DialectSQLite, ":memory:", false)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { raw.Close() })
+	// Re-label as postgres for lease path; keep MaxOpen=1 (sqlite default).
+	raw.Dialect = store.DialectPostgres
+	raw.DB.DB.SetMaxOpenConns(2)
+	raw.DB.DB.SetMaxIdleConns(1)
+
+	if !shouldUseLocalLease(raw) {
+		t.Fatal("shouldUseLocalLease = false for MaxOpen=2")
+	}
+
+	name := "tiny-pool-" + t.Name()
+	lease, acquired, err := tryAcquireSchedulerLease(context.Background(), raw, name)
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	if !acquired || lease == nil || !lease.local {
+		t.Fatalf("expected local lease, got acquired=%v local=%v err=%v", acquired, lease != nil && lease.local, err)
+	}
+	lease.Release(context.Background())
+}
+
+func TestIsConnectionBudgetError(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{nil, false},
+		{fmt.Errorf("pq: sorry, too many clients already"), true},
+		{fmt.Errorf("ERROR: too many connections for role \"metapi\" (SQLSTATE 53300)"), true},
+		{fmt.Errorf("open lease connection: %w", fmt.Errorf("scheduler lease under connection pressure (retry in 5s)")), true},
+		{fmt.Errorf("connection refused"), false},
+	}
+	for _, tc := range cases {
+		if got := isConnectionBudgetError(tc.err); got != tc.want {
+			t.Fatalf("isConnectionBudgetError(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
+
+func TestNoteLeaseAcquireFailureBackoff(t *testing.T) {
+	ResetLeasePressureForTest()
+	t.Cleanup(ResetLeasePressureForTest)
+
+	noteLeaseAcquireFailure(fmt.Errorf("SQLSTATE 53300 too many connections"))
+	blocked, rem := leasePressureActive()
+	if !blocked || rem <= 0 {
+		t.Fatalf("expected active backoff, blocked=%v rem=%v", blocked, rem)
+	}
+}
+

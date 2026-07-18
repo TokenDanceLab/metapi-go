@@ -1,8 +1,8 @@
-# Residual next candidates (post v0.8.43 / M50)
+# Residual next candidates (post v0.8.43 / M50; #531 → v0.8.44)
 
 **Date**: 2026-07-19  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG (M49 #517 · M50 #527–#530)  
-**Context**: **v0.8.43 shipped** (P0-585 load-proof honesty tests · P0-555 Gemini stream honesty · us1 pin · M50 docs). Prior: v0.8.42 cron validate; v0.8.41 request_id index; v0.8.40 PG pool; M49 reliability through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
+**Context**: **v0.8.43 shipped**; **#531 pool profiles** landing as v0.8.44 (P0-585 load-proof honesty tests · P0-555 Gemini stream honesty · us1 pin · M50 docs). Prior: v0.8.42 cron validate; v0.8.41 request_id index; v0.8.40 PG pool; M49 reliability through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
 **Next-wave shortlist (ours vs original)**: [`high-value-next.md`](./high-value-next.md)  
@@ -31,6 +31,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-MAX-COST-WIRE | max_cost never advances (RecordManagedKeyCostUsage unwired) | **present** (#514/#520) | Success sink `writeSuccessProxyLog` records managed-key cost when estimatedCost > 0; failure/429 do not invent cost | Done for max_cost progress | Pricing formula defaults residual only with AC; P0-555 still present-with-residual |
 | REL-GEMINI-PATH-STREAM | Gemini path model + streamGenerateContent IsStream | **present** (#515/#523) | `ParseGeminiPath` sets RequestedModel when body omits model; path/CLI `streamGenerateContent` forces IsStream | Done for Gemini native path model/stream | Residual further Gemini surface only with AC |
 | REL-RETENTION-RFC3339 | Retention cutoff space-datetime vs RFC3339 created_at | **present** (#516/#521) | Retention cutoffs use RFC3339 UTC comparable to proxy_logs/events/files/video `created_at`; same-day prune no longer shielded | Done for created_at retention compare | Multi-instance SQLite lease redesign residual |
+| REL-PG-POOL-PROFILE | PG pool profiles + 53300 lease pressure | **present** (#531 / v0.8.44) | `DB_PROFILE` shared-tiny/normal/dedicated; lease local/backoff; metrics; design `docs/analysis/db-pool-budget.md` |
 | WS-1 | Full Responses WebSocket Codex path | residual | `handler/proxy/responses_ws.go` (426 plain GET / 501 upgrade); `docs/analysis/responses-websocket-residual.md` (#217/#274) | Dedicated Milestone after Codex interop ACs | High protocol + multi-instance sticky interaction |
 | STICKY-B | Redis sticky map (option B) | design-only | `proxy/session.go` process-local `stickyBindings`; `docs/analysis/sticky-session-multi-instance-residual.md` (#237/#282); design spike #292 | Only if multi-instance sticky is product-critical and LB pin is unavailable | Hot-path Redis; must fail-open like sharedcount |
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |

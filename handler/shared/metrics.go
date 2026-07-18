@@ -20,6 +20,8 @@ type MetricsCollector struct {
 	proxyStreamsActive atomic.Int64
 	activeChannels     atomic.Int64
 	dbConnectionsOpen  atomic.Int64
+	dbConnectionsInUse atomic.Int64
+	dbConnErrorsTotal  atomic.Int64
 	routeRebuildOK     atomic.Int64
 	startTime          time.Time
 
@@ -143,8 +145,15 @@ func RecordStreamEnd() { globalMetrics.proxyStreamsActive.Add(-1) }
 // SetActiveChannels sets the active channel gauge.
 func SetActiveChannels(n int64) { globalMetrics.activeChannels.Store(n) }
 
-// SetDBConnections sets the DB connection gauge.
+// SetDBConnections sets the DB open-connection gauge.
 func SetDBConnections(n int64) { globalMetrics.dbConnectionsOpen.Store(n) }
+
+// SetDBConnectionsInUse sets the DB in-use connection gauge.
+func SetDBConnectionsInUse(n int64) { globalMetrics.dbConnectionsInUse.Store(n) }
+
+// RecordDBConnError increments the DB connection-budget / open error counter
+// (e.g. SQLSTATE 53300 too many connections for role).
+func RecordDBConnError() { globalMetrics.dbConnErrorsTotal.Add(1) }
 
 // RecordRouteRebuildCompleted increments successful route rebuild/cache-invalidate counter.
 func RecordRouteRebuildCompleted() { globalMetrics.routeRebuildOK.Add(1) }
@@ -310,6 +319,8 @@ func ResetMetricsForTest() {
 	globalMetrics.proxyStreamsActive.Store(0)
 	globalMetrics.activeChannels.Store(0)
 	globalMetrics.dbConnectionsOpen.Store(0)
+	globalMetrics.dbConnectionsInUse.Store(0)
+	globalMetrics.dbConnErrorsTotal.Store(0)
 	globalMetrics.routeRebuildOK.Store(0)
 	globalMetrics.startTime = time.Now()
 	globalMetrics.outcomesMu.Lock()
@@ -387,6 +398,14 @@ func WritePrometheusMetrics(w http.ResponseWriter) error {
 	appendLine("# HELP metapi_db_connections_open Open database connections\n")
 	appendLine("# TYPE metapi_db_connections_open gauge\n")
 	appendLine("metapi_db_connections_open %d\n", m.dbConnectionsOpen.Load())
+
+	appendLine("# HELP metapi_db_connections_in_use In-use database connections\n")
+	appendLine("# TYPE metapi_db_connections_in_use gauge\n")
+	appendLine("metapi_db_connections_in_use %d\n", m.dbConnectionsInUse.Load())
+
+	appendLine("# HELP metapi_db_conn_errors_total Database connection budget / open errors\n")
+	appendLine("# TYPE metapi_db_conn_errors_total counter\n")
+	appendLine("metapi_db_conn_errors_total %d\n", m.dbConnErrorsTotal.Load())
 
 	appendLine("# HELP metapi_route_rebuild_total Total route cache rebuild/invalidate operations\n")
 	appendLine("# TYPE metapi_route_rebuild_total counter\n")

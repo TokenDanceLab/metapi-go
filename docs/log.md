@@ -3,6 +3,15 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+
+## [2026-07-19] #531 PostgreSQL pool budget profiles + lease pressure
+
+- Product: `DB_PROFILE` shared-tiny/normal/dedicated; default normal 10/3 (dedicated still 20/5 for large DBs).
+- Inject `application_name=metapi-<host>`; startup banner logs profile + pool.
+- Scheduler lease: MaxOpen≤2 → local; 53300 backoff + log denoise + force-local.
+- Metrics: db_connections_in_use + db_conn_errors_total.
+- Docs: `docs/analysis/db-pool-budget.md`; CHANGELOG v0.8.44 pending tag/deploy.
+
 ## [2026-07-19] M50 v0.8.43 residual honesty + us1 pin
 
 - GitHub Milestone 50 + Project items #527–#530.

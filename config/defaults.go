@@ -15,6 +15,25 @@ const (
 	DefaultDataDir = "./data"
 	DefaultDbType  = "sqlite"
 
+	// DbProfile selects PostgreSQL pool presets. Explicit DB_MAX_* env vars
+	// always override the profile numbers. Dedicated/large-DB users can set
+	// DB_PROFILE=dedicated or raise DB_MAX_OPEN_CONNS freely.
+	//
+	//   shared-tiny — multi-tenant / role LIMIT 1–3 (e.g. shared Azure B1ms)
+	//   normal      — default; small-to-medium single service
+	//   dedicated   — large exclusive PostgreSQL (legacy 20/5)
+	DefaultDbProfile = "normal"
+
+	DefaultDbMaxOpenConnsSharedTiny = 2
+	DefaultDbMaxIdleConnsSharedTiny = 1
+	DefaultDbMaxOpenConnsNormal     = 10
+	DefaultDbMaxIdleConnsNormal     = 3
+	DefaultDbMaxOpenConnsDedicated  = 20
+	DefaultDbMaxIdleConnsDedicated  = 5
+
+	DefaultDbConnMaxLifetimeSec = 1800
+	DefaultDbConnMaxIdleTimeSec = 300
+
 	DefaultRequestBodyLimit = 20 * 1024 * 1024 // 20 MB
 
 	TokenRouterFailureCooldownMaxSecCeiling = 30 * 24 * 60 * 60 // 30 days

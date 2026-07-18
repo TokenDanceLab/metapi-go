@@ -74,11 +74,17 @@ type Config struct {
 	DbSslMode  string
 	// PostgreSQL pool budget. Production operators must size MaxOpenConns no
 	// higher than the database role CONNECTION LIMIT.
+	// DbProfile is a convenience preset (shared-tiny|normal|dedicated);
+	// explicit DB_MAX_* values always win when set.
+	DbProfile            string
 	DbMaxOpenConns       int
 	DbMaxIdleConns       int
 	DbConnMaxLifetimeSec int
 	DbConnMaxIdleTimeSec int
-	Tz                   string
+	// DbApplicationName is injected into the PostgreSQL DSN as
+	// application_name (default metapi-<hostname>) for pg_stat_activity.
+	DbApplicationName string
+	Tz                string
 
 	// Cron (5 fields)
 	CheckinCron          string
@@ -412,10 +418,13 @@ func Load(env map[string]string) *Config {
 	cfg.DbType = inferDbType(get("DB_TYPE"), cfg.DbUrl)
 	cfg.DbSsl = parseBoolean(get("DB_SSL"), false)
 	cfg.DbSslMode = normalizeDbSslMode(get("DB_SSLMODE"))
-	cfg.DbMaxOpenConns = int(math.Trunc(parseNumber(get("DB_MAX_OPEN_CONNS"), 20)))
-	cfg.DbMaxIdleConns = int(math.Trunc(parseNumber(get("DB_MAX_IDLE_CONNS"), 5)))
-	cfg.DbConnMaxLifetimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_LIFETIME_SEC"), 1800)))
-	cfg.DbConnMaxIdleTimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_IDLE_TIME_SEC"), 300)))
+	cfg.DbProfile = normalizeDbProfile(firstNonEmpty(get("DB_PROFILE"), get("METAPI_DB_PROFILE"), DefaultDbProfile))
+	openDefault, idleDefault := dbPoolDefaultsForProfile(cfg.DbProfile)
+	cfg.DbMaxOpenConns = int(math.Trunc(parseNumber(get("DB_MAX_OPEN_CONNS"), float64(openDefault))))
+	cfg.DbMaxIdleConns = int(math.Trunc(parseNumber(get("DB_MAX_IDLE_CONNS"), float64(idleDefault))))
+	cfg.DbConnMaxLifetimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_LIFETIME_SEC"), float64(DefaultDbConnMaxLifetimeSec))))
+	cfg.DbConnMaxIdleTimeSec = int(math.Trunc(parseNumber(get("DB_CONN_MAX_IDLE_TIME_SEC"), float64(DefaultDbConnMaxIdleTimeSec))))
+	cfg.DbApplicationName = strings.TrimSpace(firstNonEmpty(get("DB_APPLICATION_NAME"), get("METAPI_DB_APPLICATION_NAME")))
 	cfg.Tz = get("TZ")
 
 	// ---- §3.4 Cron ----
@@ -572,12 +581,40 @@ func Load(env map[string]string) *Config {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-// firstNonEmpty returns a if non-empty, otherwise b.
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
+// firstNonEmpty returns the first non-empty argument, or "" if all are empty.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
 	}
-	return b
+	return ""
+}
+
+// normalizeDbProfile maps env aliases to shared-tiny|normal|dedicated.
+func normalizeDbProfile(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "shared-tiny", "shared_tiny", "tiny", "lite", "small":
+		return "shared-tiny"
+	case "dedicated", "large", "big":
+		return "dedicated"
+	case "normal", "default", "medium", "":
+		return "normal"
+	default:
+		return "normal"
+	}
+}
+
+// dbPoolDefaultsForProfile returns (maxOpen, maxIdle) for a normalized profile.
+func dbPoolDefaultsForProfile(profile string) (int, int) {
+	switch normalizeDbProfile(profile) {
+	case "shared-tiny":
+		return DefaultDbMaxOpenConnsSharedTiny, DefaultDbMaxIdleConnsSharedTiny
+	case "dedicated":
+		return DefaultDbMaxOpenConnsDedicated, DefaultDbMaxIdleConnsDedicated
+	default:
+		return DefaultDbMaxOpenConnsNormal, DefaultDbMaxIdleConnsNormal
+	}
 }
 
 // clampInt clamps v to [lo, hi].

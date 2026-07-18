@@ -68,7 +68,8 @@ All env vars are identical to the TypeScript version.
 | `DB_TYPE` | `sqlite`; `postgres` is inferred when a PostgreSQL URL is provided |
 | `DATABASE_URL` / `DB_URL` | empty; PostgreSQL connection string or SQLite file path. `DB_URL` takes precedence. |
 | `DB_SSLMODE` | empty; PostgreSQL TLS mode. Supports `disable`, `allow`, `prefer`, `require`, `verify-ca`, and `verify-full`; non-empty values override `sslmode` in the connection string. |
-| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `20` / `5`; PostgreSQL application pool budget, bounded by the database role connection limit. |
+| `DB_PROFILE` | `normal`; pool preset `shared-tiny` (2/1), `normal` (10/3), `dedicated` (20/5). Explicit `DB_MAX_*` override. |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | profile defaults; PostgreSQL application pool budget, must not exceed the database role connection limit. |
 | `DB_CONN_MAX_LIFETIME_SEC` / `DB_CONN_MAX_IDLE_TIME_SEC` | `1800` / `300`; PostgreSQL connection lifetime and idle rotation in seconds. |
 | `TRUSTED_PROXY_CIDRS` | empty; comma-separated reverse-proxy CIDRs allowed to supply `X-Forwarded-For` / `X-Real-IP`; forwarded headers are ignored by default |
 | `ADMIN_CORS_ALLOWED_ORIGINS` | empty; comma-separated exact `http(s)` admin browser origins allowed to call `/api/*`; `*` is rejected |

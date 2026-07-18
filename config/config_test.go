@@ -284,3 +284,42 @@ func TestValidateCronExprRejectsInvalid(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadDbProfileDefaults(t *testing.T) {
+	// Default profile is normal (10/3).
+	cfg := Load(map[string]string{})
+	if cfg.DbProfile != "normal" {
+		t.Fatalf("DbProfile = %q, want normal", cfg.DbProfile)
+	}
+	if cfg.DbMaxOpenConns != DefaultDbMaxOpenConnsNormal || cfg.DbMaxIdleConns != DefaultDbMaxIdleConnsNormal {
+		t.Fatalf("normal defaults = %d/%d, want %d/%d", cfg.DbMaxOpenConns, cfg.DbMaxIdleConns, DefaultDbMaxOpenConnsNormal, DefaultDbMaxIdleConnsNormal)
+	}
+
+	tiny := Load(map[string]string{"DB_PROFILE": "shared-tiny"})
+	if tiny.DbProfile != "shared-tiny" {
+		t.Fatalf("DbProfile = %q, want shared-tiny", tiny.DbProfile)
+	}
+	if tiny.DbMaxOpenConns != DefaultDbMaxOpenConnsSharedTiny || tiny.DbMaxIdleConns != DefaultDbMaxIdleConnsSharedTiny {
+		t.Fatalf("shared-tiny defaults = %d/%d, want %d/%d", tiny.DbMaxOpenConns, tiny.DbMaxIdleConns, DefaultDbMaxOpenConnsSharedTiny, DefaultDbMaxIdleConnsSharedTiny)
+	}
+
+	dedicated := Load(map[string]string{"METAPI_DB_PROFILE": "dedicated"})
+	if dedicated.DbProfile != "dedicated" {
+		t.Fatalf("DbProfile = %q, want dedicated", dedicated.DbProfile)
+	}
+	if dedicated.DbMaxOpenConns != DefaultDbMaxOpenConnsDedicated || dedicated.DbMaxIdleConns != DefaultDbMaxIdleConnsDedicated {
+		t.Fatalf("dedicated defaults = %d/%d, want %d/%d", dedicated.DbMaxOpenConns, dedicated.DbMaxIdleConns, DefaultDbMaxOpenConnsDedicated, DefaultDbMaxIdleConnsDedicated)
+	}
+}
+
+func TestLoadExplicitPoolOverridesProfile(t *testing.T) {
+	cfg := Load(map[string]string{
+		"DB_PROFILE":        "shared-tiny",
+		"DB_MAX_OPEN_CONNS": "50",
+		"DB_MAX_IDLE_CONNS": "10",
+	})
+	if cfg.DbMaxOpenConns != 50 || cfg.DbMaxIdleConns != 10 {
+		t.Fatalf("explicit override = %d/%d, want 50/10", cfg.DbMaxOpenConns, cfg.DbMaxIdleConns)
+	}
+}
+
