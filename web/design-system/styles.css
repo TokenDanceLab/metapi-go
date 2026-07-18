@@ -572,3 +572,48 @@
   justify-content: flex-start;
   padding-bottom: 0;
 }
+
+/* ===== Shell chrome mock (#538) — scoped so gallery does not own app layout ===== */
+.ds-gallery__shell-frame {
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-card);
+  /* Keep mock chrome height stable for visual baselines / full-page shots. */
+  min-height: 640px;
+}
+
+.ds-gallery__shell-frame .topbar {
+  position: relative;
+  top: auto;
+  z-index: 1;
+}
+
+.ds-gallery__shell-frame .app-layout {
+  min-height: 560px;
+}
+
+.ds-gallery__shell-frame .sidebar {
+  position: relative;
+  top: auto;
+  height: auto;
+  min-height: 560px;
+  flex-shrink: 0;
+}
+
+.ds-gallery__shell-frame .sidebar-item {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  font: inherit;
+}
+
+.ds-gallery__shell-frame .main-content {
+  min-height: 560px;
+  background:
+    radial-gradient(800px 320px at 8% 0%, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 55%),
+    var(--color-bg);
+}
