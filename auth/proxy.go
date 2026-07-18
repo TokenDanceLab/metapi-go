@@ -27,8 +27,9 @@ var bearerPrefixRe = regexp.MustCompile(`(?i)^Bearer\s+`)
 //   - Falls back to checking against config.ProxyToken
 //   - Returns a ProxyAuthContext on success
 //
-// On successful managed key auth, the middleware atomically increments
-// used_requests via consumeManagedKeyRequest.
+// On successful managed key auth, the middleware runs soft RPM/TPM admission
+// first, then atomically increments used_requests via consumeManagedKeyRequest
+// so a 429 over_rpm/over_tpm never burns max_requests (#512).
 func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,12 +51,11 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			// ---- Reserve managed key request count (atomic quota gate) ----
+			// ---- Managed key soft admission then request quota (#512) ----
+			// RPM/TPM admission MUST run before consumeManagedKeyRequest so a
+			// 429 over_rpm/over_tpm does not permanently burn used_requests.
+			// Successful admit still increments used_requests exactly once.
 			if result.Source == "managed" && result.Key != nil {
-				if !consumeManagedKeyRequest(result.Key.ID) {
-					writeJSON(w, http.StatusForbidden, jsonError("API key has exceeded max requests"))
-					return
-				}
 				// Soft RPM/TPM admission (learn #116). Fail closed with 429 + Retry-After.
 				// When maxTPM is set, reserve a best-effort estimate from the request
 				// body (#495). estimatedTokens=0 skips TPM accounting (no invent).
@@ -75,6 +75,11 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 					}
 					w.Header().Set("Retry-After", strconv.Itoa(sec))
 					writeJSON(w, http.StatusTooManyRequests, jsonError(msg))
+					return
+				}
+				// Atomic max_requests gate - only after admission allows.
+				if !consumeManagedKeyRequest(result.Key.ID) {
+					writeJSON(w, http.StatusForbidden, jsonError("API key has exceeded max requests"))
 					return
 				}
 			}

@@ -704,3 +704,131 @@ func TestProxyAuthMiddleware_PropagatesKeyProxyURL(t *testing.T) {
 		t.Fatalf("captured ProxyURL = %#v, want %q", captured, proxyURL)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// #512 — admission deny must not burn used_requests / max_requests quota
+// ---------------------------------------------------------------------------
+
+func insertTestKeyWithRPM(t *testing.T, key string, maxRequests *int64, usedRequests int64, maxRPM *int64, maxTPM *int64) int64 {
+	t.Helper()
+	db := testDB(t)
+	now := "2026-07-04T00:00:00Z"
+	res, err := db.Exec(
+		`INSERT INTO downstream_api_keys
+		 (name, key, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
+		  max_rpm, max_tpm,
+		  supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		  created_at, updated_at)
+		 VALUES (?, ?, 1, NULL, NULL, 0, ?, ?, ?, ?, '[]', '[]', '{}', '[]', '[]', ?, ?)`,
+		"test-key-"+key, key, maxRequests, usedRequests, maxRPM, maxTPM, now, now,
+	)
+	if err != nil {
+		t.Fatalf("insert test key with rpm: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return id
+}
+
+func readUsedRequests(t *testing.T, id int64) int64 {
+	t.Helper()
+	var used int64
+	err := testDB(t).QueryRow(`SELECT COALESCE(used_requests, 0) FROM downstream_api_keys WHERE id = ?`, id).Scan(&used)
+	if err != nil {
+		t.Fatalf("read used_requests: %v", err)
+	}
+	return used
+}
+
+func TestProxyAuthMiddleware_AdmissionDenyDoesNotBurnUsedRequests(t *testing.T) {
+	setupTestDB(t)
+	ResetKeyAdmissionForTest()
+	t.Cleanup(ResetKeyAdmissionForTest)
+
+	maxRPM := int64(1)
+	maxRequests := int64(100)
+	id := insertTestKeyWithRPM(t, "sk-adm-deny", &maxRequests, 0, &maxRPM, nil)
+
+	cfg := proxyCfg("global-secret")
+	middleware := ProxyAuth(cfg)
+	handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// First request: admission allows → used_requests +1
+	req1 := newProxyRequest("POST", "/v1/chat/completions", map[string]string{
+		"Authorization": "Bearer sk-adm-deny",
+	}, "")
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first request expected 200, got %d: %s", w1.Code, w1.Body.String())
+	}
+	if got := readUsedRequests(t, id); got != 1 {
+		t.Fatalf("after allow used_requests=%d, want 1", got)
+	}
+
+	// Second request: over_rpm 429 → used_requests must stay 1 (no burn)
+	req2 := newProxyRequest("POST", "/v1/chat/completions", map[string]string{
+		"Authorization": "Bearer sk-adm-deny",
+	}, "")
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request expected 429, got %d: %s", w2.Code, w2.Body.String())
+	}
+	if ra := w2.Header().Get("Retry-After"); ra == "" {
+		t.Fatal("expected Retry-After header on 429")
+	}
+	if got := readUsedRequests(t, id); got != 1 {
+		t.Fatalf("after admit deny used_requests=%d, want 1 (unchanged)", got)
+	}
+}
+
+func TestProxyAuthMiddleware_AdmissionAllowIncrementsUsedRequestsOnce(t *testing.T) {
+	setupTestDB(t)
+	ResetKeyAdmissionForTest()
+	t.Cleanup(ResetKeyAdmissionForTest)
+
+	maxRPM := int64(10)
+	maxRequests := int64(100)
+	id := insertTestKeyWithRPM(t, "sk-adm-allow", &maxRequests, 5, &maxRPM, nil)
+
+	cfg := proxyCfg("global-secret")
+	w := proxyAuthMiddlewareHelper(t, cfg, map[string]string{
+		"Authorization": "Bearer sk-adm-allow",
+	}, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := readUsedRequests(t, id); got != 6 {
+		t.Fatalf("after allow used_requests=%d, want 6 (exactly +1)", got)
+	}
+}
+
+func TestProxyAuthMiddleware_AdmissionDenyFromZeroDoesNotIncrement(t *testing.T) {
+	// Pure deny case: fill RPM window without going through ProxyAuth consume path
+	// by pre-saturating GlobalKeyAdmission, then hit middleware once.
+	setupTestDB(t)
+	ResetKeyAdmissionForTest()
+	t.Cleanup(ResetKeyAdmissionForTest)
+
+	maxRPM := int64(1)
+	maxRequests := int64(50)
+	id := insertTestKeyWithRPM(t, "sk-adm-prefill", &maxRequests, 0, &maxRPM, nil)
+
+	// Saturate admission window for this key id without consuming DB quota.
+	if d := GlobalKeyAdmission.Allow(id, &maxRPM, nil, 0); !d.Allowed {
+		t.Fatalf("prefill should allow once: %#v", d)
+	}
+
+	cfg := proxyCfg("global-secret")
+	w := proxyAuthMiddlewareHelper(t, cfg, map[string]string{
+		"Authorization": "Bearer sk-adm-prefill",
+	}, "")
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after prefilled rpm, got %d: %s", w.Code, w.Body.String())
+	}
+	if got := readUsedRequests(t, id); got != 0 {
+		t.Fatalf("admit deny from zero used_requests=%d, want 0", got)
+	}
+}
