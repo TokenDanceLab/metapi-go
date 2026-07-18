@@ -288,3 +288,46 @@
   --glass-saturate: 1.1;
   --shadow-glass: 0 10px 28px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
+
+/* ===== a11y: prefers-reduced-motion (#540 / Phase 5) =====
+ * Collapse motion tokens so any `var(--duration-*)` / `--motion-*` usage
+ * becomes effectively instant. Hardcoded durations still need the global
+ * rule in `web/index.css`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0.001ms;
+    --duration-fast: 0.001ms;
+    --duration-normal: 0.001ms;
+    --duration-moderate: 0.001ms;
+    --duration-slow: 0.001ms;
+  }
+}
+
+/* ===== a11y: prefers-reduced-transparency (#540 / Phase 5) =====
+ * Solidify glass family + translucent chrome surfaces. Component rules
+ * still strip backdrop-filter for non-token blur (toast/modal overlays).
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --color-bg-sidebar: var(--color-bg-elevated);
+    --color-bg-topbar: var(--color-bg-elevated);
+    --glass-bg: var(--color-bg-elevated);
+    --glass-bg-strong: var(--color-bg-elevated);
+    --glass-border: var(--color-border);
+    --glass-blur: 0px;
+    --glass-saturate: 1;
+    --shadow-glass: var(--shadow-elevated);
+  }
+
+  [data-theme="dark"] {
+    --color-bg-sidebar: var(--color-bg-elevated);
+    --color-bg-topbar: var(--color-bg-elevated);
+    --glass-bg: var(--color-bg-elevated);
+    --glass-bg-strong: var(--color-bg-elevated);
+    --glass-border: var(--color-border);
+    --glass-blur: 0px;
+    --glass-saturate: 1;
+    --shadow-glass: var(--shadow-elevated);
+  }
+}
