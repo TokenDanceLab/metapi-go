@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | none (board clean; next residual only with ACs) |
+| Active milestone | [Milestone 44](https://github.com/TokenDanceLab/metapi-go/milestone/44) open until **v0.8.34** release gate |
 | Program map | `docs/plan/enterprise-program.md` |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; M35 closed) |
@@ -46,16 +46,19 @@
 | Enterprise residual security polish **v0.8.31** | ✅ closed | #440–#443 (PRs #444–#447); tag **v0.8.31** |
 | Enterprise residual security/product polish **v0.8.32** | ✅ closed | #449–#451 (PRs #452–#454); tag **v0.8.32** |
 | Enterprise UI/schema/product residual polish **v0.8.33** | ✅ closed | #456–#459 (PRs #460–#462 / #464); tag **v0.8.33** |
+| Enterprise UI schema-product residual polish **v0.8.34** | 🔄 product landed / release pending | Milestone 44 · product #466–#468 (PRs #471/#472/#470) on master; docs #469 this PR; **tag pending** |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | Board clean (no open residual product board) |
+| — | — | Product board empty after this PR closes #469; next is **v0.8.34** release gate |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
 **M35–M43 closed**: do not re-list #388–#390, #397–#400, #407–#410, #416–#418, #423–#426, #433–#435, #440–#443, #449–#451, or #456–#459 as active work (landed on master with v0.8.33).
-**Latest release**: **v0.8.33** after this release gate (tag is a separate operator step).
+**M44 product landed on master**: #466 UI-KEY-PROXY (PR #471 / 78b0571) · #467 UI-ROUTE-CTX (PR #472 / dbcbdfd) · #468 UI-TOKEN-DEBT (PR #470 / 5ea85b5). Issues closed with those PRs; docs honesty is #469 (this PR).
+**Milestone 44**: remains open until release gate / **v0.8.34** tag — do not claim v0.8.34 released.
+**Latest release**: stays **v0.8.33** until the M44 release gate.
 
 
 ## Residual releases (pointer only)
@@ -103,9 +106,9 @@ git log --oneline origin/master -10
 
 ## Next Steps
 
-1. Board clean after **v0.8.33**. Optional residual **v0.8.34+** only with dedicated ACs.
-2. Product Milestones only with ACs: full Responses WS Codex; Redis sticky Option B; update-center registry.
-3. Optional later: P0-585 production load-proof / empty-filter residual; deeper P0-555 media/lag polish; further dialect context_length only if a new dialect needs ACs.
+1. After this docs PR closes #469: M44 product board is empty on master; run **v0.8.34** release gate (tag + milestone close). Latest release remains **v0.8.33** until then.
+2. Optional residual **v0.8.35+** only with ACs (P0-585 load-proof / empty-filter; deeper P0-555 media/lag polish; further dialect context_length enforce beyond OpenAI chat/Claude/Responses/Gemini). P0-585 stays partial; do not invent WS/sticky/update-center.
+3. Product Milestones only with ACs: full Responses WS Codex (WS-1); Redis sticky Option B (STICKY-B); update-center registry (UC-1).
 4. Keep MASTER slim; docs map at `docs/README.md`.
 
 
