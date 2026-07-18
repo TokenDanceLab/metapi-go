@@ -1,5 +1,7 @@
 # Lane Charters — 每条线独立小组 / Workflow
 
+> **Status: historical program ownership map** (enterprise foundations closed; residual board clean after v0.8.36). File-ownership rules still useful for parallel WFs; residual queue SSOT is `docs/analysis/residual-next-candidates.md` (optional v0.8.37+ with ACs only).
+
 **规则**：一条线 = 一个 Milestone + 一组 Issues + **一个专属 Workflow 舰队** + 硬文件所有权。  
 主 session 只编排，不跨线改代码。两条线不得写同一文件。
 

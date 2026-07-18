@@ -1,5 +1,7 @@
 # Original MetAPI Gap Backlog (G3)
 
+> **Status: historical G3 backlog shells**. Do not schedule product work from this file; use `docs/analysis/residual-next-candidates.md` + MASTER.
+
 > Snapshot date: 2026-07-16  
 > **Matrix evidence refreshed: 2026-07-17** for shipped surfaces (post v0.8.12 / toward v0.8.13) — see `docs/analysis/original-gap-matrix.md` (#281). Historical G3 issue shells below are unchanged.  
 > Source matrix: `docs/analysis/original-gap-matrix.md` (G2 #9)  

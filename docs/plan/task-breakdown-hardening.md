@@ -1,5 +1,7 @@
 # Task Breakdown — MetAPI-Go Production Hardening
 
+> **Status: historical / superseded** (v0.4.0 hardening). Residual train: `docs/analysis/residual-next-candidates.md`.
+
 **目标**: 消除所有审计发现的 CRITICAL/HIGH/MEDIUM 问题，达到生产就绪状态
 **跟踪模式**: LOCAL_ONLY
 **版本目标**: v0.4.0

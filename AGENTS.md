@@ -21,14 +21,14 @@ Go rewrite of [MetAPI](https://github.com/cita-777/metapi). Feature parity with 
 cmd/server/main.go      Entry point
 cmd/migrate/main.go     SQLite→PG migration tool
 config/                 ~100 env vars from config.Load()
-store/                  DB layer (27 tables, sqlx)
+store/                  DB layer (28 tables, sqlx)
 auth/                   Admin + proxy auth + rate limiting
 routing/                TokenRouter (Fibonacci + weighted random)
 proxy/                  ProxyCore (dual-loop orchestration)
 platform/               14 upstream adapters
 transform/              4-protocol SSE conversion
 service/                Checkin, balance, notify, OAuth, backup
-scheduler/              15 background jobs
+scheduler/              16 background jobs
 handler/admin/          ~144 admin REST endpoints
 handler/proxy/           ~30 proxy routes (OpenAI, Gemini, Claude, Codex, Files)
 web/dist/               Pre-built React SPA (embedded)

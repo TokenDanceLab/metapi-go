@@ -1,5 +1,7 @@
 # Feature-Complete Roadmap (F0)
 
+> **Status: historical F0 snapshot (M-FEATURE closed)**. Do not schedule implementation from this file. Living residual inventory: `docs/analysis/residual-next-candidates.md`.
+
 > Snapshot date: 2026-07-16  
 > Issue: [#23 F0](https://github.com/TokenDanceLab/metapi-go/issues/23)  
 > Milestone: [M-FEATURE](https://github.com/TokenDanceLab/metapi-go/milestone/6)  

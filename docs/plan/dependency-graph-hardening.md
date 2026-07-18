@@ -1,5 +1,7 @@
 # Dependency Graph — Production Hardening
 
+> **Status: historical / superseded** (pre-v0.4 hardening era). Not an open board.
+
 ```mermaid
 graph TD
     subgraph Phase1[Phase 1: Critical Fixes]

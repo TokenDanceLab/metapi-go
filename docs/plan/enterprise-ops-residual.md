@@ -1,5 +1,7 @@
 # Enterprise ops residual + v0.8.0
 
+> **Status: closed (M9 / v0.8.0 era)**. Not an open residual board. Next residual honesty: `docs/analysis/residual-next-candidates.md`.
+
 **Milestone**: https://github.com/TokenDanceLab/metapi-go/milestone/9  
 **Opened**: 2026-07-17
 

@@ -1,12 +1,12 @@
-# Residual next candidates (post v0.8.35 / M46 product landed)
+# Residual next candidates (post v0.8.36 / M46 closed)
 
 **Date**: 2026-07-18  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty refresh [#334](https://github.com/TokenDanceLab/metapi-go/issues/334); trail #318 / #329 + v0.8.18 product + v0.8.19 residual; post-M35 honesty [#397](https://github.com/TokenDanceLab/metapi-go/issues/397); post-v0.8.26 honesty [#410](https://github.com/TokenDanceLab/metapi-go/issues/410); post-v0.8.27 honesty [#418](https://github.com/TokenDanceLab/metapi-go/issues/418); post-v0.8.28 honesty [#426](https://github.com/TokenDanceLab/metapi-go/issues/426); post-v0.8.29 honesty [#435](https://github.com/TokenDanceLab/metapi-go/issues/435); post-v0.8.30 honesty [#443](https://github.com/TokenDanceLab/metapi-go/issues/443); post-v0.8.31 honesty [#451](https://github.com/TokenDanceLab/metapi-go/issues/451); post-v0.8.32 honesty [#459](https://github.com/TokenDanceLab/metapi-go/issues/459); post-M44 product honesty [#469](https://github.com/TokenDanceLab/metapi-go/issues/469); post-M45 product honesty [#478](https://github.com/TokenDanceLab/metapi-go/issues/478); post-M46 product honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487)  
-**Context**: **v0.8.33 shipped** (Milestone 43 closed): #456 UI-STAT-TOKENS (PR #460), #457 UI-SITE-CONC (PR #461), #458 CTX-520-GEMINI (PR #462), #459 residual honesty (PR #464) + release gate. **v0.8.34 shipped** (Milestone 44 closed): #466 UI-KEY-PROXY DownstreamKeys proxyUrl UI (PR #471), #467 UI-ROUTE-CTX TokenRoutes contextLength UI (PR #472), #468 UI-TOKEN-DEBT high-value CSS hex clusters → design tokens (PR #470), #469 residual honesty (PR #473) + release gate. **v0.8.35 shipped** (Milestone 45 closed): #475–#478 (PRs #479–#483). **v0.8.36 shipped** (Milestone 46 closed): #484 SEC-MONITOR-TOKEN-CLEAR (PR #489), #485 UI-CSS-RESIDUAL (PR #490), #486 REL-P0555-STREAM-TESTS (PR #488), #487 residual honesty (PR #491) + release gate. Prior **v0.8.32**: #449–#451 (PRs #452/#454/#453). Prior **v0.8.31**: #440–#443 (PRs #444–#447). Prior **v0.8.30**: #433–#435 (PRs #436/#438/#437). Prior **v0.8.29**: #423–#426 (PRs #427/#428/#430/#431). Prior **v0.8.28**: #416–#418 (PRs #419–#421). Prior **v0.8.27**: #407–#410 (PRs #411–#414). Prior **v0.8.26**: #397–#400 (PRs #401–#404/#406). Prior **v0.8.25**: #382–#384. M35 closed: #388 review synthesis, **#389/#396** endpoint early reject, **#390/#395** multi-route list regression. Original P0 #405/#565/#515 already-correct in code. **Program foundations already closed** (M-STACK / M-UI / M-BACKEND / M-SCHEMA / M-FEATURE): M46 is residual polish, not greenfield modernization.  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
+**Context**: **v0.8.36 shipped** (Milestone 46 closed): #484 SEC-MONITOR-TOKEN-CLEAR, #485 UI-CSS-RESIDUAL, #486 REL-P0555-STREAM-TESTS, #487 residual honesty + release gate. Prior residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
-**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — ranked P0/P1/P2 backlog after multi-lane residual review (historical; #389/#390 done)  
-**Active wave**: none (M46 closed; sequencing **v0.8.37+** optional residual with ACs only)
+**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
+**Active wave**: none (M46 closed; optional **v0.8.37+** residual only with dedicated ACs)
 
 ## Purpose
 
@@ -78,13 +78,13 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (v0.8.37+)
 
-1. **Shipped in v0.8.35 (M45 closed)**: #475-#478 (PRs #479-#483). Latest release **v0.8.35**.
-2. **M46 / v0.8.36 closed**: #484–#487 (PRs #488–#491) present on master with tag.
-3. **Active wave**: none. Optional residual **v0.8.37+** only with dedicated ACs.
-4. **SEC-MONITOR-TOKEN-CLEAR** / **UI-CSS-RESIDUAL** / **REL-P0555-STREAM-TESTS** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
-5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
-6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
-7. **Do not** re-open enterprise program foundations as greenfield modernization — M46 is residual polish only.
+1. **Latest release**: **v0.8.36** (M46 closed; #484–#487 present on master with tag).
+2. **Active wave**: none. Optional residual **v0.8.37+** only with dedicated ACs.
+3. **Shipped M46**: SEC-MONITOR-TOKEN-CLEAR / UI-CSS-RESIDUAL / REL-P0555-STREAM-TESTS are **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required — do not flip present from tests alone).
+4. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
+5. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
+6. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
+
 
 ## Explicit non-goals for residual waves
 
@@ -92,50 +92,22 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming cluster-wide sticky while bindings remain process-local.
 - Inventing update-center deploy/rollback success without a registry.
 - Returning `success:true` for unimplemented admin stream/job queues.
-- Claiming perfect billing accuracy without aggregation proof after #311.
-- Claiming all-dialect proxy max-token enforcement from `contextLength` without a dedicated product AC (OpenAI chat/completions after #399; Claude `/v1/messages` after #409; OpenAI `/v1/responses` after #450; Gemini generationConfig after #458; further dialects need ACs).
-- Returning full downstream API keys on admin list/summary/overview after #355, or on update/reset-usage after #440.
-- Allowing custom_headers to override Authorization/Host/hop-by-hop after #356.
-- Following cross-origin/private RuntimeExecutor, bare probe/harness/defaultUpstreamClient, OAuth/notify, ProxyAwareHTTPClient, or SiteProxy constructor redirects after #357/#416/#433/#441/#442.
-- Embedding live `AUTH_TOKEN` in monitor cookies after #407; leaving `meta_monitor_auth` set after admin logout after #417.
-- Non-constant-time compares on admin token-change paths after #408.
-- Claiming preferred/sticky selection ignores open site/model breakers after #423.
-- Claiming CooldownUntil eligibility uses lex string compare after #424.
-- Claiming conductor lacks a hard cross-channel attempt budget or never fails over on nil RefreshAuth after #425.
-- Claiming Codex OAuth or Telegram notify clients still lack cross-origin redirect rejection after #433/#436.
-- Claiming `loadRouteMatch` still uses an always-empty source-model fallback stub after #434/#438.
-- Claiming `ProxyAwareHTTPClient` still lacks cross-origin redirect rejection after #441/#446.
-- Claiming SiteProxy `buildClients` / `doWithExplicitProxy` still lack cross-origin redirect rejection after #442/#444.
-- Claiming downstream-keys update + reset-usage still echo plaintext `key` after #440/#445.
-- Claiming system-proxy/test still accepts metadata/link-local `targetUrl` after #449/#452.
-- Claiming OpenAI `/v1/responses` still lacks `max_output_tokens` vs `context_length` enforce after #450/#454.
-- Claiming Gemini generateContent still lacks `generationConfig.maxOutputTokens` vs `context_length` enforce after #458/#462.
-- Claiming Sites admin UI still omits `maxConcurrency` after #457/#461 (backend was already present).
-- Claiming stat-icon colors still use hard-coded hex after #456/#460.
-- Claiming DownstreamKeys admin UI still omits `proxyUrl` after #466/#471 (backend KEY-578 was already present).
-- Claiming TokenRoutes admin UI still omits `contextLength` after #467/#472 (backend CTX-520 was already present).
-- Claiming listed high-value CSS clusters (checkin-toggle / route-enable / info-tip / model-tag / status-dot) still use hard-coded hex after #468/#470.
-- Claiming P0-585 cascade is fully present (stays partial; REL-SOURCE-MODEL is not a cascade close).
-- Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; M44 is residual polish only).
-- Claiming DownstreamKeys admin UI still omits `maxRpm`/`maxTpm` after #475/#481 (backend #116 was already present).
-- Claiming P0-585 empty-filter honesty tests are missing after #476/#479 (tests present; cascade still partial).
-- Claiming residual login-shell text/surface hex still hard-coded after #477/#480 (gradients may remain).
-- Claiming **v0.8.36** product without dedicated ACs.
-- Claiming **v0.8.36** product without dedicated ACs.
+- Claiming perfect billing accuracy without aggregation proof (P0-555 stays present-with-residual).
+- Claiming all-dialect proxy max-token enforcement from `contextLength` without a dedicated product AC (OpenAI chat/completions, Claude messages, Responses, Gemini generateContent present; further dialects need ACs).
+- Claiming P0-585 cascade is fully present (stays **partial**; honesty tests and selection mapping are not cascade-complete).
+- Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; residual polish only).
 - Inventing WS-1 / STICKY-B / UC-1 product without dedicated ACs.
+- Claiming **v0.8.37+** product without dedicated ACs.
+- Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them (monitor token clear, CSS residual, stream usage honesty tests, etc.).
 
-- Claiming admin AuthToken change still leaves meta_monitor_auth uncleared after #484/#489.
-- Claiming residual monitor-hint / stat-summary / topbar brand hex still hard-coded after #485/#490.
-- Claiming P0-555 Anthropic stream usage merge honesty tests are missing after #486/#488 (still not perfect billing).
-- Claiming **v0.8.37** product without dedicated ACs.
+
 ## Links
 
 - Release: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · prior [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) · next optional residual **v0.8.37+** (with ACs only)
-- Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (board #484–#487; issues closed; GH milestone close is operator step after tag)
+- Milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
 - Prior milestone: [Enterprise UI/reliability residual polish v0.8.35](https://github.com/TokenDanceLab/metapi-go/milestone/45) · **closed**
-- Prior milestone: [Enterprise UI schema-product residual polish v0.8.34](https://github.com/TokenDanceLab/metapi-go/milestone/44) · **closed**
 - Matrix: `docs/analysis/original-gap-matrix.md`
 - Failover: `docs/analysis/failover-isolation.md`
-- M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388)
+- M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388; historical)
 - MASTER: `docs/progress/MASTER.md`
-- Related issues: #466, #467, #468, #469, #470, #471, #472, #456, #457, #458, #459, #460, #461, #462, #449, #450, #451, #452, #453, #454, #440, #441, #442, #443, #444, #445, #446, #447, #433, #434, #435, #436, #437, #438, #423, #424, #425, #426, #427, #428, #430, #431, #416, #417, #418, #419, #420, #421, #407, #408, #409, #410, #411, #412, #413, #414, #397, #398, #399, #400, #401, #402, #403, #404, #406, #382, #383, #384, #375, #376, #377, #274, #282, #283, #290, #291, #292, #298, #299, #300, #309, #310, #311, #318, #319, #320, #327, #328, #329, #334, #335, #336, #345, #346, #350, #351, #355, #356, #357, #358, #359, #366, #367, #368, #388, #389, #390, #391, #395, #396
+- Related issues: see closed M45/M46 boards (#475–#478, #484–#487) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
