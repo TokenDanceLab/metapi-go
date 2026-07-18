@@ -259,3 +259,28 @@ func TestValidateRejectsInvalidTrustedProxyCidrs(t *testing.T) {
 		t.Fatal("Validate did not return critical trusted proxy CIDR error")
 	}
 }
+
+func TestValidateCronExprAcceptsFiveField(t *testing.T) {
+	// 5-field cron (no seconds) should pass — validateCronExpr auto-normalises.
+	for _, expr := range []string{"0 8 * * *", "0 * * * *", "0 6 * * *", "30 2 * * 1-5"} {
+		if !validateCronExpr(expr) {
+			t.Fatalf("validateCronExpr(%q) = false, want true for 5-field expression", expr)
+		}
+	}
+}
+
+func TestValidateCronExprAcceptsSixField(t *testing.T) {
+	for _, expr := range []string{"0 0 8 * * *", "15 0 * * * *"} {
+		if !validateCronExpr(expr) {
+			t.Fatalf("validateCronExpr(%q) = false, want true for 6-field expression", expr)
+		}
+	}
+}
+
+func TestValidateCronExprRejectsInvalid(t *testing.T) {
+	for _, expr := range []string{"", "not a cron", "* * * * * * *", "100 8 * * *"} {
+		if validateCronExpr(expr) {
+			t.Fatalf("validateCronExpr(%q) = true, want false", expr)
+		}
+	}
+}

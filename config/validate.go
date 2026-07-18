@@ -302,11 +302,16 @@ func IsCritical(err error) bool {
 	return false
 }
 
-// validateCronExpr checks if a cron expression is parseable using robfig/cron
-// with seconds field support (matches scheduler.ValidateCronExpr behavior).
+// validateCronExpr checks if a cron expression is parseable. Auto-normalizes
+// 5-field expressions (minute hour dom month dow) to 6-field (second ...)
+// for compatibility with cron.WithSeconds(), matching the scheduler behavior.
 func validateCronExpr(expr string) bool {
 	if strings.TrimSpace(expr) == "" {
 		return false
+	}
+	fields := strings.Fields(expr)
+	if len(fields) == 5 {
+		expr = "0 " + expr
 	}
 	parser := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	_, err := parser.Parse(expr)
