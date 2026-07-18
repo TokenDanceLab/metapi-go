@@ -1,14 +1,15 @@
-# Residual next candidates (post v0.8.37 / M47 closed)
+# Residual next candidates (post v0.8.38 / M48 closed; M49 product landed)
 
-**Date**: 2026-07-18  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#487](https://github.com/TokenDanceLab/metapi-go/issues/487) (trail via MASTER / CHANGELOG)  
-**Context**: **v0.8.37 shipped** (Milestone 47 closed): #494-#497 present. **v0.8.38 shipped** (Milestone 48 closed): #503 DOCS-REDIS-TRUTH (PR #507), #504/#505 docker badge + residual latest (PR #508), #506 residual honesty (PR #509) + release gate. Prior **v0.8.36** (M46 closed): #484-#487 present. Residual train v0.8.18–v0.8.35 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations (STACK / UI / BACKEND / SCHEMA / FEATURE / RELIABILITY) are closed; residual polish only.  
-**Scope**: inventory only — **no product code** in this document.  
-**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)  
-**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none (M48 closed; sequencing **v0.8.39+** optional residual with ACs only)
+**Date**: 2026-07-18
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); latest honesty [#517](https://github.com/TokenDanceLab/metapi-go/issues/517) (trail via MASTER / CHANGELOG)
+**Context**: **v0.8.38 shipped** (Milestone 48 closed). **M49 product landings on master** (Issues #511–#516 / PRs #518–#523): RR fail-count, used_requests 429 order, Redis admit rollback, max_cost wire, Gemini path/stream, retention RFC3339. Residual train v0.8.18–v0.8.38 is in `CHANGELOG.md` / Releases — do not re-narrate here. Program foundations closed; residual polish only.
+**Scope**: inventory only — **no product code** in this document.
+**Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
+**M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only
+**Active wave**: none (M49 product closed on master; residual honesty #517 + release gate → **v0.8.39**; sequencing **v0.8.40+** optional residual with ACs only)
 
 ## Purpose
+
 
 Give the next residual / product wave a single honest backlog of high-leverage leftovers. Status labels:
 
@@ -23,6 +24,12 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 | ID | Title | Status | Evidence | Recommended wave | Risk |
 |----|-------|--------|----------|------------------|------|
+| REL-RR-FAILCOUNT | RR consecutiveFailCount double-increment | **present** (#511/#519) | `RecordFailure` / probe / OAuth RR pass raw count into `ApplyRoundRobinCooldown` (helper alone +1); threshold 3; regression tests | Done for RR fail-count contract | Residual novel selector cool only with AC |
+| REL-USED-REQ-429 | used_requests burned on RPM/TPM 429 | **present** (#512/#522) | Managed-key path runs `Allow` before `consumeManagedKeyRequest`; over_rpm/over_tpm does not permanently increment used_requests | Done for admit-before-quota consume | Residual novel quota refund paths only with AC |
+| REL-REDIS-ADMIT-ROLLBACK | Shared Redis RPM/TPM deny leaves reservation | **present** (#513/#518) | `KeyAdmissionLimiter.Allow` rolls back RPM/TPM window counters on deny (incl. RPM after TPM deny); MemoryCounter Decr/negative parity; fail-open preserved | Done for shared admission rollback | STICKY-B still design-only; not sticky |
+| REL-MAX-COST-WIRE | max_cost never advances (RecordManagedKeyCostUsage unwired) | **present** (#514/#520) | Success sink `writeSuccessProxyLog` records managed-key cost when estimatedCost > 0; failure/429 do not invent cost | Done for max_cost progress | Pricing formula defaults residual only with AC; P0-555 still present-with-residual |
+| REL-GEMINI-PATH-STREAM | Gemini path model + streamGenerateContent IsStream | **present** (#515/#523) | `ParseGeminiPath` sets RequestedModel when body omits model; path/CLI `streamGenerateContent` forces IsStream | Done for Gemini native path model/stream | Residual further Gemini surface only with AC |
+| REL-RETENTION-RFC3339 | Retention cutoff space-datetime vs RFC3339 created_at | **present** (#516/#521) | Retention cutoffs use RFC3339 UTC comparable to proxy_logs/events/files/video `created_at`; same-day prune no longer shielded | Done for created_at retention compare | Multi-instance SQLite lease redesign residual |
 | WS-1 | Full Responses WebSocket Codex path | residual | `handler/proxy/responses_ws.go` (426 plain GET / 501 upgrade); `docs/analysis/responses-websocket-residual.md` (#217/#274) | Dedicated Milestone after Codex interop ACs | High protocol + multi-instance sticky interaction |
 | STICKY-B | Redis sticky map (option B) | design-only | `proxy/session.go` process-local `stickyBindings`; `docs/analysis/sticky-session-multi-instance-residual.md` (#237/#282); design spike #292 | Only if multi-instance sticky is product-critical and LB pin is unavailable | Hot-path Redis; must fail-open like sharedcount |
 | UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
@@ -82,12 +89,12 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (v0.8.39+)
+## Recommended sequencing (v0.8.40+)
 
-1. **Latest release**: **v0.8.37** (M47 closed).
-2. **M48 / v0.8.38 closed**: #503–#506 (PRs #507–#509) present on master with tag.
-3. **Active wave**: none. Optional residual **v0.8.39+** only with dedicated ACs.
-4. **DOCS-REDIS-TRUTH** (optional admission honesty, sticky **not** product / fail-open) / **DOCS-DOCKER-BADGE** / **DOCS-RESIDUAL-LATEST** fully **present**. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required).
+1. **Latest release**: **v0.8.38** (M48 closed). **M49 product** (#511–#516) merged on master (PRs #518–#523); residual honesty #517 + release gate ship **v0.8.39**.
+2. **Active wave**: none after #517 + v0.8.39 tag. Optional residual **v0.8.40+** only with dedicated ACs.
+3. **M49 reliability present**: REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.
+4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
 6. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.
 7. **Do not** re-open enterprise program foundations as greenfield modernization — residual polish only.
@@ -103,25 +110,24 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming P0-585 cascade is fully present (stays **partial**; honesty tests and selection mapping are not cascade-complete).
 - Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; residual polish only).
 - Inventing WS-1 / STICKY-B / UC-1 product without dedicated ACs.
-- Claiming **v0.8.38+** product without dedicated ACs.
-- Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them (monitor token clear, CSS residual, stream usage honesty tests, etc.).
+- Claiming **v0.8.40+** product without dedicated ACs.
+- Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them.
 - Claiming README still shows Go 1.26.4 / React 18 after #494/#498.
 - Claiming maxTPM soft admission is a no-op after #495/#500 (estimate is best-effort, not perfect tokenizer).
 - Claiming P0-585 credential usage-limit honesty tests are missing after #496/#499 (cascade still partial).
 - Claiming public Docker/ghcr badge still shows stale **v0.6.5** after #504.
 - Claiming residual sequencing still lists Latest release as **v0.8.36** after #505.
-
 - Claiming Redis is completely absent after #503/#507 (admission optional; sticky still residual).
 - Claiming public ghcr badge is still v0.6.5 after #504/#508.
 - Claiming residual inventory latest release is still v0.8.36 after #505/#508.
-- Claiming **v0.8.39** product without dedicated ACs.
+- Claiming RR consecutiveFailCount still double-increments after #511/#519.
+- Claiming used_requests still burns on RPM/TPM 429 after #512/#522.
+- Claiming shared Redis admit deny still leaves window reservation after #513/#518.
+- Claiming max_cost never advances after #514/#520 (`RecordManagedKeyCostUsage` wired on success).
+- Claiming Gemini path model / streamGenerateContent IsStream still broken after #515/#523.
+- Claiming retention same-day prune still broken (space vs RFC3339) after #516/#521.
+- Claiming **v0.8.39** product without the release gate tag after M49 landings.
+
 ## Links
 
-- Release: [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · prior [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · next optional residual **v0.8.39+** (with ACs only)
-- Milestone: [Enterprise residual polish v0.8.37](https://github.com/TokenDanceLab/metapi-go/milestone/47) · **closed** (#494–#497)
-- Prior milestone: [Enterprise security/UI residual polish v0.8.36](https://github.com/TokenDanceLab/metapi-go/milestone/46) · **closed** (#484–#487)
-- Matrix: `docs/analysis/original-gap-matrix.md`
-- Failover: `docs/analysis/failover-isolation.md`
-- M35 review synthesis: `docs/analysis/enterprise-review-m35.md` (#388; historical)
-- MASTER: `docs/progress/MASTER.md`
-- Related issues: #503, #504, #505, #506, #507, #508, #494, #495, #496, #497, #504, #505, see closed M45/M46/M47 boards (#475–#478, #484–#487, #494–#497) and residual IDs in the table above; full PR trail in `CHANGELOG.md`.
+- Release: [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · prior [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · next **v0.8.39** (M49 release gate) · optional residual **v0.8.40+** (with ACs only)

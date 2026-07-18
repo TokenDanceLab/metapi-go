@@ -46,10 +46,10 @@ docs/
 4. **`docs/specs/` is heavy rewrite history** — do not treat as day-to-day runbook.
 5. **One Issue per topic**; close duplicates the same day.
 
-## Residual board (post v0.8.36)
+## Residual board (post v0.8.38 / M49 product)
 
-- **Latest release**: [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) · M46 closed · active milestone **none**.
-- **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) (optional **v0.8.37+** only with dedicated ACs).
+- **Latest release**: [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · M48 closed · M49 product #511–#516 on master · release gate → **v0.8.39**.
+- **Residual SSOT**: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md) (optional **v0.8.40+** only with dedicated ACs).
 - **Still not product without ACs**: full Responses WS (WS-1), Redis sticky (STICKY-B), update-center remote deploy (UC-1).
 - **Keep partial**: P0-585 cascade (load-proof required; honesty tests do not flip present).
 
