@@ -6,7 +6,7 @@
 **Scope**: inventory only — **no product code** in this document.
 **Map**: [`docs/README.md`](../README.md) · status [`docs/progress/MASTER.md`](../progress/MASTER.md)
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only
-**Active wave**: none (M49 product closed on master; residual honesty #517 + release gate → **v0.8.39**; sequencing **v0.8.40+** optional residual with ACs only)
+**Active wave**: none (M49 / **v0.8.39** shipped; sequencing **v0.8.40+** optional residual with ACs only)
 
 ## Purpose
 
@@ -64,8 +64,8 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-P0555-STREAM-TESTS | P0-555 Anthropic stream message_delta usage merge honesty tests | **present** (#486/#488) | handler/proxy/usage_test.go locks early input + later output merge; no invent when usage absent | Done for honesty residual tests | P0-555 still present-with-residual (not perfect billing) |
 | DOCS-STACK-TRUTH | README/README_EN stack badge truth | **present** (#494/#498) | Go badge + tech stack table align to go.mod 1.26.5 and React 19 / Vite 8 | Done for public stack truth | Residual other marketing badges only with AC |
 | DOCS-REDIS-TRUTH | Public Redis admission truth (not sticky) | **present** (#503/#507) | README/README_EN/deployment: optional REDIS_URL for multi-instance RPM/TPM admission via sharedcount fail-open; sticky remains process-local | Done for public Redis honesty | STICKY-B still design-only |
-| DOCS-DOCKER-BADGE | ghcr public badge current release | **present** (#504/#508) | README ghcr badge v0.8.37 (was stale v0.6.5) | Done for badge truth | Residual other marketing badges only with AC |
-| DOCS-RESIDUAL-LATEST | residual inventory latest release line | **present** (#505/#508) | sequencing Latest release points at v0.8.37 | Done | residual inventory churn only |
+| DOCS-DOCKER-BADGE | ghcr public badge current release | **present** (#504/#508; release bump v0.8.39) | README ghcr badge tracks current release series | Done for badge truth | Residual other marketing badges only with AC |
+| DOCS-RESIDUAL-LATEST | residual inventory latest release line | **present** (#505/#508; release bump v0.8.39) | sequencing Latest release points at v0.8.39 | Done | residual inventory churn only |
 | REL-TPM-ESTIMATE | Best-effort TPM admission estimate when maxTPM set | **present** (#495/#500) | auth ProxyAuth passes best-effort estimatedTokens when maxTPM>0; empty body keeps 0; never invents large defaults | Done for TPM soft-limit not no-op | Residual perfect tokenizer only with AC |
 | REL-CRED-USAGE-HONESTY | P0-585 credential usage-limit multi-channel cool honesty tests | **present** (#496/#499) | routing tests document same-credential siblings cool only; non-usage-limit stays channel-scoped | Done for honesty residual tests | P0-585 still partial (load-proof) |
 | KEY-578 | Per-key outbound proxy | **present** (backend #281; admin UI #466/#471) | `proxy/key_proxy.go` + `downstream_api_keys.proxy_url`; DownstreamKeys create/edit/list wires `proxyUrl` (empty/null inherits site/system) via #466/#471 | Done for backend + DownstreamKeys admin UI | Residual novel key-proxy surfaces only with AC |
@@ -91,8 +91,8 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Recommended sequencing (v0.8.40+)
 
-1. **Latest release**: **v0.8.38** (M48 closed). **M49 product** (#511–#516) merged on master (PRs #518–#523); residual honesty #517 + release gate ship **v0.8.39**.
-2. **Active wave**: none after #517 + v0.8.39 tag. Optional residual **v0.8.40+** only with dedicated ACs.
+1. **Latest release**: **v0.8.39** (M49 closed): #511–#517 present on master with tag.
+2. **Active wave**: none. Optional residual **v0.8.40+** only with dedicated ACs.
 3. **M49 reliability present**: REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.
 4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).
 5. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.
@@ -130,4 +130,4 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 
 ## Links
 
-- Release: [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · prior [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) · next **v0.8.39** (M49 release gate) · optional residual **v0.8.40+** (with ACs only)
+- Release: [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) · prior [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) · optional residual **v0.8.40+** (with ACs only)

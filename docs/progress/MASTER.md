@@ -3,7 +3,7 @@
 **Task**: MetAPI TypeScript → Go rewrite + enterprise residual delivery
 **Mode**: GitHub Issues + Milestones (SDD)
 **Repo**: https://github.com/TokenDanceLab/metapi-go
-**Latest release**: **[v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38)** (2026-07-18)
+**Latest release**: **[v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39)** (2026-07-18)
 
 > 本文件是**轻量导航索引**，不是变更日志。细节进 Issue / PR / CHANGELOG。
 > 文档地图：[`docs/README.md`](../README.md)
@@ -13,7 +13,7 @@
 | Item | URL |
 |:-----|:----|
 | Project | https://github.com/orgs/TokenDanceLab/projects/1 |
-| Active milestone | [49](https://github.com/TokenDanceLab/metapi-go/milestone/49) (product #511–#516 closed; #517 residual honesty + release gate → **v0.8.39**) |
+| Active milestone | none (board clean; next residual only with ACs) |
 | Program map | `docs/plan/enterprise-program.md` (historical / closed foundations) |
 | Residual backlog | `docs/analysis/residual-next-candidates.md` |
 | M35 review synthesis | `docs/analysis/enterprise-review-m35.md` (#388; historical) |
@@ -26,28 +26,26 @@
 |:------|:-------|:------|
 | Rewrite P0–P13 | ✅ | Single-binary Go + embed SPA |
 | Program foundations (STACK / GAP / BACKEND / UI / SCHEMA / RELIABILITY / FEATURE) | ✅ | Closed; residual polish only |
-| Enterprise residual train **v0.8.18–v0.8.38** (M27–M48) | ✅ closed | Latest **v0.8.38** / M48; full narrative → `CHANGELOG.md` + Releases |
-| M49 product adversarial bugfix (#511–#516) | ✅ on master | PRs #518–#523; residual honesty + tag remaining |
+| Enterprise residual train **v0.8.18–v0.8.39** (M27–M49) | ✅ closed | Latest **v0.8.39** / M49; full narrative → `CHANGELOG.md` + Releases |
 
 ## Active work
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| #517 | docs | Residual honesty after M49 product landings (this wave) |
-| — | release | CHANGELOG + tag **v0.8.39** after #517 |
+| — | — | Board clean (no open residual product board) |
 
 **Board hygiene**: one Issue per topic; never leave conflict markers in squash merges.
-**M35–M48 closed** with v0.8.38. **M49 product merged**; do not invent WS-1 / STICKY-B / UC-1.
+**M35–M49 closed** with v0.8.39. Do not invent WS-1 / STICKY-B / UC-1.
 
 ## Residual releases (pointer only)
 
 | Tag | Milestone | Highlights |
 |:----|:----------|:-----------|
+| [v0.8.39](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.39) | 49 | RR fail-count · used_requests 429 order · Redis admit rollback · max_cost wire · Gemini path/stream · retention RFC3339 · residual honesty |
 | [v0.8.38](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.38) | 48 | Redis admission truth · docker badge · residual latest sequencing · residual honesty |
 | [v0.8.37](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.37) | 47 | README stack truth · TPM admission estimate · P0-585 credential usage honesty · residual honesty |
 | [v0.8.36](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.36) | 46 | monitor cookie clear · CSS residual · P0-555 stream usage honesty · residual honesty |
-| [v0.8.35](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.35) | 45 | DownstreamKeys maxRpm/maxTpm UI · P0-585 empty-filter honesty · login token debt |
-| older | 11–44 | See GitHub Releases / `CHANGELOG.md` |
+| older | 11–45 | See GitHub Releases / `CHANGELOG.md` |
 
 ## Architecture entry points
 
@@ -66,13 +64,13 @@
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.38
+gh release view v0.8.39
 git log --oneline origin/master -10
 ```
 
 ## Next Steps
 
-1. Land **#517** residual honesty → release docs + tag **v0.8.39** → close Milestone 49.
+1. Board clean after **v0.8.39**. Optional residual **v0.8.40+** only with dedicated ACs.
 2. Do **not** invent WS-1 / STICKY-B Redis sticky / UC-1 product without dedicated ACs.
 3. Keep **P0-585 partial** and **P0-555 present-with-residual**; optional later load-proof / media polish only with ACs.
 

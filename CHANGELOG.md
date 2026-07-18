@@ -5,6 +5,20 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [v0.8.39] — 2026-07-18
+
+### Fixed
+- Round-robin `consecutiveFailCount` no longer double-increments (threshold 3 restored) (#511 / #519)
+- Managed-key `used_requests` not burned on RPM/TPM admission 429 (`Allow` before consume) (#512 / #522)
+- Shared Redis RPM/TPM admission rolls back window counters on deny (fail-open preserved) (#513 / #518)
+- Wire `RecordManagedKeyCostUsage` on proxy success so `max_cost` advances (#514 / #520)
+- Gemini path model when body omits model; `streamGenerateContent` forces stream (#515 / #523)
+- Retention cutoffs use RFC3339 comparable to `created_at` (same-day prune fixed) (#516 / #521)
+
+### Docs / Honesty
+- Residual inventory + MASTER for Milestone 49 post-product landings; REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339 present · board #511–#517 closed (#517 / residual honesty PR)
+- Keep **P0-585 partial** (load-proof still required) and **P0-555 present-with-residual**; WS-1 / STICKY-B / UC-1 residual
+
 ## [v0.8.38] — 2026-07-18
 
 ### Docs / Honesty
