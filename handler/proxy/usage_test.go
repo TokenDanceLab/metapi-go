@@ -213,6 +213,137 @@ func TestParseUsageFromSSEEventsAnthropicMessageDelta(t *testing.T) {
 	}
 }
 
+// P0-555 residual honesty (#486): Claude/Anthropic stream merge must retain early
+// input_tokens when later message_delta only reports output_tokens, recompute total
+// from the observed split, and never invent tokens beyond what upstream reported.
+// This locks residual merge honesty — not a claim of perfect multi-instance billing.
+func TestParseUsageFromSSEEventsAnthropicMessageStartDeltaMergeHonesty(t *testing.T) {
+	events := []SseEvent{
+		{Event: "message_start", Data: `{"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":120,"output_tokens":0}}}`},
+		{Event: "content_block_delta", Data: `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hello"}}`},
+		// Later partial usage: output only — prompt must be retained, not zeroed/invented.
+		{Event: "message_delta", Data: `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":34}}`},
+		{Event: "message_stop", Data: `{"type":"message_stop"}`},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if !got.Found {
+		t.Fatal("expected usage found after message_start + message_delta")
+	}
+	if got.PromptTokens != 120 {
+		t.Fatalf("prompt = %d, want 120 retained from message_start input_tokens", got.PromptTokens)
+	}
+	if got.CompletionTokens != 34 {
+		t.Fatalf("completion = %d, want 34 from message_delta output_tokens", got.CompletionTokens)
+	}
+	// Total is derived from observed prompt+completion only — no invented extras.
+	if got.TotalTokens != 154 {
+		t.Fatalf("total = %d, want 154 (120+34 observed sum; no invented totals)", got.TotalTokens)
+	}
+	if got.Source != usageSourceUpstream {
+		t.Fatalf("source = %q, want upstream", got.Source)
+	}
+	if got.CacheReadTokens != 0 || got.CacheCreationTokens != 0 || got.ReasoningTokens != 0 {
+		t.Fatalf("must not invent cache/reasoning fields: %+v", got)
+	}
+}
+
+// P0-555 residual honesty (#486): SSE streams that never emit usage must stay Found=false
+// with zero tokens — never invent billing fields from content/event shapes alone.
+func TestParseUsageFromSSEEventsNoUsageDoesNotInvent(t *testing.T) {
+	events := []SseEvent{
+		{Event: "message_start", Data: `{"type":"message_start","message":{"id":"msg_1","role":"assistant","content":[]}}`},
+		{Event: "content_block_delta", Data: `{"type":"content_block_delta","delta":{"type":"text_delta","text":"hi"}}`},
+		{Event: "message_delta", Data: `{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`},
+		{Event: "message_stop", Data: `{"type":"message_stop"}`},
+		{Data: `{"choices":[{"delta":{"content":"x"},"finish_reason":null}]}`},
+		{Data: "[DONE]"},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if got.Found {
+		t.Fatalf("must not invent usage when SSE omits usage fields: %+v", got)
+	}
+	if got.PromptTokens != 0 || got.CompletionTokens != 0 || got.TotalTokens != 0 {
+		t.Fatalf("tokens must stay zero when usage omitted: %+v", got)
+	}
+	if got.Source != usageSourceUnknown {
+		t.Fatalf("source = %q, want unknown", got.Source)
+	}
+}
+
+// P0-555 residual honesty (#486): OpenAI chat stream end usage (include_usage style)
+// wins over earlier empty/partial chunks; intermediate content deltas do not invent usage.
+func TestParseUsageFromSSEEventsOpenAIStreamEndUsageWins(t *testing.T) {
+	events := []SseEvent{
+		{Data: `{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}`},
+		{Data: `{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":null}]}`},
+		// Empty usage object must not invent non-zero tokens, but Found may flip if keys present.
+		// Prefer a later non-empty usage chunk as the stream-end winner.
+		{Data: `{"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":15,"completion_tokens":4,"total_tokens":19}}`},
+		{Data: "[DONE]"},
+	}
+	got := ParseUsageFromSSEEvents(events)
+	if !got.Found {
+		t.Fatal("expected usage found from final OpenAI stream chunk")
+	}
+	if got.PromptTokens != 15 || got.CompletionTokens != 4 || got.TotalTokens != 19 {
+		t.Fatalf("usage = %+v, want final stream-end 15/4/19", got)
+	}
+	if got.Source != usageSourceUpstream {
+		t.Fatalf("source = %q, want upstream", got.Source)
+	}
+}
+
+// Same honesty contracts via the incremental SSE analyzer used on the live proxy path.
+func TestIncrementalSseAnalyzerAnthropicUsageMergeHonesty(t *testing.T) {
+	analyzer := newIncrementalSseAnalyzer()
+	stream := "" +
+		"event: message_start\n" +
+		"data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":80,\"output_tokens\":0}}}\n\n" +
+		"event: content_block_delta\n" +
+		"data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n" +
+		"event: message_delta\n" +
+		"data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":9}}\n\n" +
+		"event: message_stop\n" +
+		"data: {\"type\":\"message_stop\"}\n\n"
+	// Push in awkward chunk boundaries to ensure merge is order-based, not buffer-based.
+	analyzer.Push([]byte(stream[:len(stream)/3]))
+	analyzer.Push([]byte(stream[len(stream)/3 : 2*len(stream)/3]))
+	analyzer.Push([]byte(stream[2*len(stream)/3:]))
+
+	got := analyzer.Result().Usage
+	if !got.Found {
+		t.Fatal("expected incremental analyzer to find merged Anthropic usage")
+	}
+	if got.PromptTokens != 80 {
+		t.Fatalf("prompt = %d, want 80 retained from message_start", got.PromptTokens)
+	}
+	if got.CompletionTokens != 9 {
+		t.Fatalf("completion = %d, want 9 from message_delta", got.CompletionTokens)
+	}
+	if got.TotalTokens != 89 {
+		t.Fatalf("total = %d, want 89 (observed sum only)", got.TotalTokens)
+	}
+}
+
+func TestIncrementalSseAnalyzerNoUsageDoesNotInvent(t *testing.T) {
+	analyzer := newIncrementalSseAnalyzer()
+	stream := "" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"b\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n"
+	analyzer.Push([]byte(stream))
+	got := analyzer.Result().Usage
+	if got.Found {
+		t.Fatalf("must not invent usage on content-only SSE: %+v", got)
+	}
+	if got.PromptTokens != 0 || got.CompletionTokens != 0 || got.TotalTokens != 0 {
+		t.Fatalf("tokens must stay zero: %+v", got)
+	}
+	if got.Source != usageSourceUnknown {
+		t.Fatalf("source = %q, want unknown", got.Source)
+	}
+}
+
 func TestToUsageSummary(t *testing.T) {
 	u := ParsedUsage{PromptTokens: 1, CompletionTokens: 2, TotalTokens: 3, Found: true}
 	s := u.ToUsageSummary()
