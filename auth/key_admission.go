@@ -149,15 +149,20 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 	usedTPM := sumTokens(w.tokenEvents)
 
 	// Optional multi-instance RPM (#118). Fail-open on errors.
+	// On deny, compensating Decr so denied requests do not occupy the window (#513).
 	sharedRPMCounted := false
+	rpmKey := rpmSharedKey(keyID)
 	if rpmLimit > 0 && l.sharedRPM != nil {
-		n, err := l.sharedRPM.Incr(context.Background(), rpmSharedKey(keyID), time.Minute)
+		n, err := l.sharedRPM.Incr(context.Background(), rpmKey, time.Minute)
 		if err != nil {
 			slog.Debug("redis admission: fail-open on error", "key_id", keyID, "error", err)
 		} else {
 			sharedRPMCounted = true
 			usedRPM = n
 			if n > rpmLimit {
+				if _, rerr := l.sharedRPM.Decr(context.Background(), rpmKey, time.Minute); rerr != nil {
+					slog.Debug("redis admission: rpm rollback failed", "key_id", keyID, "error", rerr)
+				}
 				return AdmissionDecision{
 					Allowed:    false,
 					Reason:     "over_rpm",
@@ -181,15 +186,26 @@ func (l *KeyAdmissionLimiter) Allow(keyID int64, maxRPM, maxTPM *int64, estimate
 	}
 
 	// Optional multi-instance TPM (#245). Fail-open on errors.
+	// On deny, roll back TPM (and RPM if already reserved) so the window stays free (#513).
 	sharedTPMCounted := false
+	tpmKey := tpmSharedKey(keyID)
 	if tpmLimit > 0 && estimatedTokens > 0 && l.sharedTPM != nil {
-		n, err := l.sharedTPM.IncrBy(context.Background(), tpmSharedKey(keyID), estimatedTokens, time.Minute)
+		n, err := l.sharedTPM.IncrBy(context.Background(), tpmKey, estimatedTokens, time.Minute)
 		if err != nil {
 			slog.Debug("redis admission tpm: fail-open on error", "key_id", keyID, "error", err)
 		} else {
 			sharedTPMCounted = true
 			usedTPM = n
 			if n > tpmLimit {
+				if _, rerr := l.sharedTPM.IncrBy(context.Background(), tpmKey, -estimatedTokens, time.Minute); rerr != nil {
+					slog.Debug("redis admission: tpm rollback failed", "key_id", keyID, "error", rerr)
+				}
+				if sharedRPMCounted {
+					if _, rerr := l.sharedRPM.Decr(context.Background(), rpmKey, time.Minute); rerr != nil {
+						slog.Debug("redis admission: rpm rollback after tpm deny failed", "key_id", keyID, "error", rerr)
+					}
+					sharedRPMCounted = false
+				}
 				return AdmissionDecision{
 					Allowed:    false,
 					Reason:     "over_tpm",

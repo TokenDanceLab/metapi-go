@@ -16,8 +16,12 @@ type WindowCounter interface {
 	// Incr increments key by 1 within window and returns the new count.
 	// Implementations may approximate sliding windows with fixed TTL buckets.
 	Incr(ctx context.Context, key string, window time.Duration) (count int64, err error)
+	// Decr decrements key by 1 (compensating rollback for a prior Incr, #513).
+	// Does not extend/refresh TTL. Count is floored at 0 for memory; Redis DECR may go negative.
+	Decr(ctx context.Context, key string, window time.Duration) (count int64, err error)
 	// IncrBy increments key by delta within window and returns the new total.
-	// Used for TPM token reservations (#245). delta<=0 returns the current total.
+	// Used for TPM token reservations (#245). delta==0 returns the current total.
+	// Negative delta is a compensating rollback (#513) and does not refresh TTL.
 	IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (count int64, err error)
 	// Get returns the current count without incrementing.
 	Get(ctx context.Context, key string) (count int64, err error)
@@ -70,6 +74,34 @@ func (m *MemoryCounter) Incr(ctx context.Context, key string, window time.Durati
 	return int64(len(w.times)), nil
 }
 
+func (m *MemoryCounter) Decr(ctx context.Context, key string, window time.Duration) (int64, error) {
+	_ = ctx
+	if window <= 0 {
+		window = time.Minute
+	}
+	nowMs := m.now().UnixMilli()
+	start := nowMs - window.Milliseconds()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	w := m.keys[key]
+	if w == nil {
+		return 0, nil
+	}
+	// prune
+	i := 0
+	for i < len(w.times) && w.times[i] < start {
+		i++
+	}
+	if i > 0 {
+		w.times = append([]int64(nil), w.times[i:]...)
+	}
+	// Compensating rollback: drop the most recent unit event when present.
+	if len(w.times) > 0 {
+		w.times = w.times[:len(w.times)-1]
+	}
+	return int64(len(w.times)), nil
+}
+
 func (m *MemoryCounter) IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (int64, error) {
 	_ = ctx
 	if window <= 0 {
@@ -92,12 +124,18 @@ func (m *MemoryCounter) IncrBy(ctx context.Context, key string, delta int64, win
 	if i > 0 {
 		w.points = append([]memPoint(nil), w.points[i:]...)
 	}
-	if delta > 0 {
+	// delta==0 is a read-only peek; positive reserves; negative rolls back (#513).
+	if delta != 0 {
 		w.points = append(w.points, memPoint{atMs: nowMs, delta: delta})
 	}
 	var sum int64
 	for _, p := range w.points {
 		sum += p.delta
+	}
+	if sum < 0 {
+		// Keep memory totals non-negative for admission math.
+		sum = 0
+		w.points = nil
 	}
 	return sum, nil
 }
@@ -241,24 +279,39 @@ func (r *RedisCounter) Incr(ctx context.Context, key string, window time.Duratio
 	return count, err
 }
 
+func (r *RedisCounter) Decr(ctx context.Context, key string, window time.Duration) (int64, error) {
+	_ = window // compensating rollback must not refresh TTL
+	var count int64
+	err := r.withConn(ctx, func(conn net.Conn) error {
+		n, err := redisDoInt(conn, "DECR", key)
+		if err != nil {
+			return err
+		}
+		count = n
+		return nil
+	})
+	return count, err
+}
+
 func (r *RedisCounter) IncrBy(ctx context.Context, key string, delta int64, window time.Duration) (int64, error) {
 	if window <= 0 {
 		window = time.Minute
 	}
-	if delta <= 0 {
+	if delta == 0 {
 		// No reservation — read current total without changing TTL.
 		return r.Get(ctx, key)
 	}
 	var count int64
 	err := r.withConn(ctx, func(conn net.Conn) error {
-		// Fixed-window approximation: INCRBY + PEXPIRE when this is the first write
+		// Fixed-window approximation: INCRBY + PEXPIRE when this is the first positive write
 		// in the window (post-increment equals delta ⇒ key was absent/0).
+		// Negative delta is a compensating rollback (#513) and must not refresh TTL.
 		n, err := redisDoInt(conn, "INCRBY", key, strconv.FormatInt(delta, 10))
 		if err != nil {
 			return err
 		}
 		count = n
-		if n == delta {
+		if delta > 0 && n == delta {
 			ms := strconv.FormatInt(window.Milliseconds(), 10)
 			if err := redisDo(conn, "PEXPIRE", key, ms); err != nil {
 				return err
