@@ -1108,3 +1108,216 @@ func TestRoundRobinAndStableFirstSoftFilter_AllLayersSoftEmptyAllowsGlobalFallba
 		t.Fatalf("unexpected stable_first selected channel %d", sf.Channel.ID)
 	}
 }
+
+// =============================================================================
+// P0-585 honesty residual — empty-filter global full-set fallback (#476)
+//
+// These tests document intentional residual behavior, NOT cascade-complete.
+// Per-layer strict demotion shipped (#358/#368). Global empty-filter full-set
+// fallback remains the starvation guard when ALL priority layers are soft-empty.
+// Do not flip inventory P0-585 to present based on this suite alone.
+// =============================================================================
+
+// lowestChannelIDPick is a deterministic selectFromPool for honesty residual tests.
+func lowestChannelIDPick(pool []RouteChannelCandidate) *RouteChannelCandidate {
+	if len(pool) == 0 {
+		return nil
+	}
+	best := &pool[0]
+	for i := range pool {
+		if pool[i].Channel.ID < best.Channel.ID {
+			best = &pool[i]
+		}
+	}
+	return best
+}
+
+// TestP0585Honesty_EmptyFilterFullSetStarvationGuard_AllPriorityLayersSoftUnhealthy
+// is the P0-585 honesty residual for global empty-filter full-set fallback:
+// when EVERY priority layer is soft-unhealthy, weighted / round_robin /
+// stable_first (shared selectAcrossPriorityLayers path) still return a
+// candidate via the intentional global full-set starvation guard.
+//
+// This does NOT claim cascade-complete or close P0-585; global re-exposure of
+// soft-failed channels when the whole fleet is degraded remains residual.
+func TestP0585Honesty_EmptyFilterFullSetStarvationGuard_AllPriorityLayersSoftUnhealthy(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 1_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	// Two priority layers, both entirely soft-unhealthy (recent fail).
+	c0 := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0.Channel.FailCount = 3
+	c0.Channel.LastFailAt = &recentISO
+	c1 := buildTestCandidate(2, 20, 201, 10, 1, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c1.Channel.FailCount = 2
+	c1.Channel.LastFailAt = &recentISO
+	available := []RouteChannelCandidate{c0, c1}
+
+	// Strict per-layer filters must be empty — demotion exhausts every layer.
+	if got := softFilterCandidatesStrict([]RouteChannelCandidate{c0}, resolve, nowMs, 3600); len(got) != 0 {
+		t.Fatalf("honesty residual: strict prio-0 must be empty, got %v", healthyIDs(got))
+	}
+	if got := softFilterCandidatesStrict([]RouteChannelCandidate{c1}, resolve, nowMs, 3600); len(got) != 0 {
+		t.Fatalf("honesty residual: strict prio-1 must be empty, got %v", healthyIDs(got))
+	}
+	if got := softFilterCandidatesStrict(available, resolve, nowMs, 3600); len(got) != 0 {
+		t.Fatalf("honesty residual: strict full available set must be empty, got %v", healthyIDs(got))
+	}
+
+	// Global empty-filter full-set fallback intentionally re-exposes both.
+	breakerHealthy, _ := GetBreakerFilteredCandidatesByModelResolver(available, resolve)
+	fullSet := FilterRecentlyFailedCandidates(breakerHealthy,
+		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+		nowMs, 3600)
+	if len(fullSet) != 2 {
+		t.Fatalf("honesty residual: global full-set starvation guard must return both candidates, got %v", healthyIDs(fullSet))
+	}
+
+	// Shared priority-layer walk used by weighted / RR / stable_first.
+	strategies := []struct {
+		name string
+		pick func([]RouteChannelCandidate) *RouteChannelCandidate
+	}{
+		{name: "weighted_shared_path", pick: lowestChannelIDPick},
+		{name: "round_robin", pick: SelectRoundRobinCandidate},
+		{name: "stable_first_shared_path", pick: lowestChannelIDPick},
+	}
+	for _, st := range strategies {
+		t.Run(st.name, func(t *testing.T) {
+			selected := selectAcrossPriorityLayers(available, resolve, nowMs, 3600, st.pick)
+			if selected == nil {
+				t.Fatal("P0-585 honesty residual: all-soft-unhealthy must still select via global full-set fallback (starvation prevention), got nil")
+			}
+			if selected.Channel.ID != 1 && selected.Channel.ID != 2 {
+				t.Fatalf("unexpected selected channel %d", selected.Channel.ID)
+			}
+			// Alias path used by older #358 tests must share the same starvation guard.
+			alias := selectWeightedAcrossPriorityLayers(available, resolve, nowMs, 3600, st.pick)
+			if alias == nil {
+				t.Fatal("alias walk must also apply global full-set starvation guard")
+			}
+		})
+	}
+}
+
+// TestP0585Honesty_PriorityLayerDemotes_DoesNotPinBrokenLayerViaFullSet is the
+// P0-585 honesty residual for strict per-layer demotion: when a higher priority
+// layer is soft-empty but a lower priority has healthy candidates, selection
+// demotes to the healthy layer and does NOT pin via full-set on the broken
+// higher layer.
+//
+// Documents residual inventory clarity only — not a claim that P0-585 cascade
+// isolation is complete (global full-set fallback still exists when all layers
+// are soft-empty; see EmptyFilterFullSetStarvationGuard).
+func TestP0585Honesty_PriorityLayerDemotes_DoesNotPinBrokenLayerViaFullSet(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+	siteRuntimeHealthLoaded = true
+	t.Cleanup(ResetSiteRuntimeHealthState)
+
+	nowMs := time.Now().UnixMilli()
+	recentISO := time.UnixMilli(nowMs - 2_000).UTC().Format(time.RFC3339)
+	model := "gpt-test"
+	resolve := staticModel(model)
+
+	// Priority 0: soft-unhealthy. Give it RR ordering advantage so a full-set pin
+	// on the broken layer would prefer it over healthy prio-1.
+	c0 := buildTestCandidate(1, 10, 101, 10, 0, 100, 1, 50.0, 1.0, nil, 50.0, &model)
+	c0.Channel.FailCount = 2
+	c0.Channel.LastFailAt = &recentISO
+	oldSel := time.UnixMilli(nowMs - 86_400_000).UTC().Format(time.RFC3339)
+	c0.Channel.LastSelectedAt = &oldSel
+	c0.Channel.SuccessCount = 50
+
+	// Priority 1: healthy.
+	c1 := buildTestCandidate(2, 20, 201, 10, 1, 100, 0, 50.0, 1.0, nil, 50.0, &model)
+	recentSel := time.UnixMilli(nowMs - 1_000).UTC().Format(time.RFC3339)
+	c1.Channel.LastSelectedAt = &recentSel
+	c1.Channel.SuccessCount = 50
+
+	available := []RouteChannelCandidate{c0, c1}
+
+	// Strict soft-filter on broken prio-0 alone is empty (no per-layer full-set pin).
+	strict0 := softFilterCandidatesStrict([]RouteChannelCandidate{c0}, resolve, nowMs, 3600)
+	if len(strict0) != 0 {
+		t.Fatalf("honesty residual: strict soft-filter of broken prio-0 must be empty, got %v", healthyIDs(strict0))
+	}
+	// Healthy prio-1 survives strict soft-filter.
+	strict1 := softFilterCandidatesStrict([]RouteChannelCandidate{c1}, resolve, nowMs, 3600)
+	if len(strict1) != 1 || strict1[0].Channel.ID != 2 {
+		t.Fatalf("honesty residual: strict soft-filter of healthy prio-1 must keep channel 2, got %v", healthyIDs(strict1))
+	}
+	// Legacy global FilterRecentlyFailedCandidates on the whole set would keep only
+	// healthy channel 2 (not pin broken); on prio-0 alone it would full-set pin c0.
+	legacyBrokenLayer := FilterRecentlyFailedCandidates([]RouteChannelCandidate{c0},
+		func(c RouteChannelCandidate) (*int64, *string) { return &c.Channel.FailCount, c.Channel.LastFailAt },
+		nowMs, 3600)
+	if len(legacyBrokenLayer) != 1 || legacyBrokenLayer[0].Channel.ID != 1 {
+		t.Fatalf("sanity: legacy full-set on broken layer alone pins channel 1, got %v", healthyIDs(legacyBrokenLayer))
+	}
+
+	// Prove demotion for weighted / RR / stable_first shared path — never pin prio-0.
+	cases := []struct {
+		name string
+		pick func([]RouteChannelCandidate) *RouteChannelCandidate
+	}{
+		{
+			name: "weighted_shared_path",
+			pick: lowestChannelIDPick,
+		},
+		{
+			name: "round_robin",
+			pick: SelectRoundRobinCandidate,
+		},
+		{
+			name: "stable_first_shared_path",
+			pick: func(pool []RouteChannelCandidate) *RouteChannelCandidate {
+				poolPlan := BuildStableFirstPoolPlan(pool, resolve)
+				selectionPool := poolPlan.PrimaryCandidates
+				if len(selectionPool) == 0 {
+					selectionPool = poolPlan.ObservationCandidates
+				}
+				if len(selectionPool) == 0 {
+					return lowestChannelIDPick(pool)
+				}
+				return lowestChannelIDPick(selectionPool)
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			selected := selectAcrossPriorityLayers(available, resolve, nowMs, 3600, tc.pick)
+			if selected == nil {
+				t.Fatal("expected demotion selection from healthy priority-1 layer")
+			}
+			if selected.Channel.ID != 2 {
+				t.Fatalf("P0-585 honesty residual: must demote to healthy prio-1 channel 2, not pin broken prio-0 via full-set; got channel %d priority %d",
+					selected.Channel.ID, selected.Channel.Priority)
+			}
+			if selected.Channel.Priority != 1 {
+				t.Fatalf("expected priority 1 after demotion, got %d", selected.Channel.Priority)
+			}
+		})
+	}
+}
+
+// TestP0585Honesty_EmptyFilter_DoesNotClaimCascadeComplete is a documentation
+// sentinel: names the residual inventory contract so grep/test runners surface
+// P0-585 honesty language. Behavior is covered by the StarvationGuard +
+// PriorityLayerDemotes tests above; this only locks residual wording intent.
+func TestP0585Honesty_EmptyFilter_DoesNotClaimCascadeComplete(t *testing.T) {
+	// Residual contract (do not "fix" product status here):
+	// 1) Global empty-filter full-set fallback remains intentional starvation guard.
+	// 2) Per-layer strict demotion is shipped; global re-exposure is still residual.
+	// 3) Passing these honesty tests does NOT flip P0-585 from partial → present.
+	const residualNote = "P0-585 honesty residual: empty-filter global full-set fallback is documented behavior, not cascade-complete"
+	if residualNote == "" {
+		t.Fatal("unreachable")
+	}
+	t.Log(residualNote)
+}

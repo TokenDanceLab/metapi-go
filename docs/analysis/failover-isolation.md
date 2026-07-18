@@ -153,6 +153,8 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
   - `TestRoundRobinSoftFilter_EmptyPriorityDemotesToNext` (**#368**)
   - `TestStableFirstSoftFilter_EmptyPriorityDemotesToNext` (**#368**)
   - `TestRoundRobinAndStableFirstSoftFilter_AllLayersSoftEmptyAllowsGlobalFallback` (**#368**)
+  - `TestP0585Honesty_EmptyFilterFullSetStarvationGuard_AllPriorityLayersSoftUnhealthy` (**#476** honesty residual — global full-set fallback still intentional; not cascade-complete)
+  - `TestP0585Honesty_PriorityLayerDemotes_DoesNotPinBrokenLayerViaFullSet` (**#476**)
 - Existing: `routing/cooldown_test.go`, `routing/runtime_health_test.go`, `routing/algorithm_test.go` (partial/all breaker open)
 
 ## Non-goals (R1 / #299 / #336)
