@@ -1,1 +1,0 @@
-import"./rolldown-runtime-CNC7AqOf.js";import{r as e}from"./vchart-vendor-D8_Fgf8F.js";import{T as t}from"./index-D3r31POx.js";e();var n=t();function r({columns:e=2,children:t,className:r}){return(0,n.jsx)(`div`,{className:[`responsive-form-grid`,`responsive-form-grid-${e}`,r].filter(Boolean).join(` `),children:t})}export{r as t};

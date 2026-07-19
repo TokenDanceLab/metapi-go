@@ -13,7 +13,12 @@
 
 html {
   font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: var(--line-body, 1.45);
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -21,6 +26,15 @@ body {
   color: var(--color-text-primary);
   margin: 0;
   min-height: 100vh;
+  font-weight: var(--font-weight-regular);
+}
+
+/* Tabular figures for KPI / tables */
+.tabular-nums,
+.stat-value,
+.data-table td.num,
+.data-table th.num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== a11y: prefers-reduced-motion (#540 / Phase 5) =====
@@ -437,8 +451,9 @@ body {
 
 .topbar-logo-text {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-primary);
+  letter-spacing: var(--tracking-tight, -0.01em);
 }
 
 .topbar-nav {
@@ -450,11 +465,13 @@ body {
 .topbar-nav a,
 .topbar-nav-item {
   padding: 6px 14px;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   text-decoration: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+  border-radius: var(--radius-full);
+  transition:
+    background-color var(--motion-swift),
+    color var(--motion-swift);
   cursor: pointer;
   font-weight: 500;
 }
@@ -469,6 +486,7 @@ body {
 .topbar-nav-item.active {
   color: var(--color-primary);
   background: var(--color-primary-light);
+  font-weight: 600;
 }
 
 .topbar-right {
@@ -620,12 +638,12 @@ body {
 }
 
 .sidebar-group-label {
-  padding: 8px 12px 4px;
+  padding: 6px 12px 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-transform: none;
+  letter-spacing: var(--tracking-label, 0.02em);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -635,11 +653,14 @@ body {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  font-size: 13.5px;
+  margin: 1px 4px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   text-decoration: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+  border-radius: var(--radius-full);
+  transition:
+    background-color var(--motion-swift),
+    color var(--motion-swift);
   cursor: pointer;
   white-space: nowrap;
   font-weight: 500;
@@ -664,16 +685,9 @@ body {
   font-weight: 600;
 }
 
+/* Pill active nav — no left rail (GCP console density) */
 .sidebar-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  background: var(--color-primary);
-  border-radius: 0 3px 3px 0;
+  content: none;
 }
 
 .sidebar-item-icon {
@@ -866,9 +880,41 @@ body {
 
 .main-content {
   flex: 1;
-  padding: 24px;
+  width: 100%;
+  max-width: min(var(--content-max, 1680px), 100%);
+  margin-inline: auto;
+  padding: var(--content-pad-y, 24px) var(--content-pad-x, 24px);
   overflow-x: clip;
   min-width: 0;
+}
+
+/* High-res content column — avoid sparse right gutter on 2K/4K */
+@media (min-width: 1920px) {
+  :root {
+    --content-max: 1920px;
+  }
+
+  .dashboard-stat-grid {
+    gap: 18px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --content-max: 2280px;
+    --content-pad-x: 32px;
+    --content-pad-y: 28px;
+  }
+
+  .dashboard-stat-grid {
+    gap: 20px;
+  }
+}
+
+@media (min-width: 3200px) {
+  :root {
+    --content-max: 2600px;
+  }
 }
 
 .main-content:focus {
@@ -1124,26 +1170,23 @@ body {
   border: 1px solid var(--color-border);
   transition:
     box-shadow var(--motion-soft),
-    border-color var(--motion-swift),
-    transform var(--motion-soft);
+    border-color var(--motion-swift);
 }
 
+/* Ops console: no lift on static cards — keep elevation calm */
 .card:hover {
   box-shadow: var(--shadow-md);
-  border-color: color-mix(in srgb, var(--color-border) 55%, var(--color-primary) 45%);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-border) 70%, var(--color-primary) 30%);
 }
 
 .card-transition {
   transition:
     box-shadow var(--motion-soft),
-    border-color var(--motion-swift),
-    transform var(--motion-soft);
+    border-color var(--motion-swift);
 }
 
 .card-transition:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
 }
 
 /* ===== Mobile Card ===== */
@@ -1654,14 +1697,12 @@ body {
   border: 1px solid var(--color-border);
   transition:
     box-shadow var(--motion-soft),
-    border-color var(--motion-swift),
-    transform var(--motion-soft);
+    border-color var(--motion-swift);
 }
 
 .stat-card:hover {
   box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--color-border) 50%, var(--color-primary) 50%);
+  border-color: color-mix(in srgb, var(--color-border) 65%, var(--color-primary) 35%);
 }
 
 .stat-card-header {
@@ -1670,9 +1711,9 @@ body {
   gap: var(--space-2);
   margin-bottom: var(--space-4);
   font-size: var(--text-md);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  letter-spacing: 0.01em;
+  letter-spacing: var(--tracking-label, 0.02em);
 }
 
 .stat-card-header svg {
@@ -1751,9 +1792,11 @@ body {
 
 .stat-value {
   font-size: 18px;
-  font-weight: 700;
+  font-weight: var(--font-weight-regular);
   color: var(--color-text-primary);
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-display, -0.02em);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
 }
 
 .dashboard-stat-grid {
@@ -3516,7 +3559,8 @@ textarea.form-input {
 /* ===== Greeting ===== */
 .greeting {
   font-size: 22px;
-  font-weight: 700;
+  font-weight: var(--font-weight-regular);
+  letter-spacing: var(--tracking-tight, -0.01em);
   color: var(--color-text-primary);
   display: flex;
   align-items: center;
@@ -3535,17 +3579,18 @@ textarea.form-input {
 .page-title {
   margin: 0;
   font-size: var(--text-2xl);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-regular);
   color: var(--color-text-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  letter-spacing: var(--tracking-tight, -0.01em);
+  line-height: var(--line-title, 1.25);
 }
 
 .page-subtitle {
   margin: var(--space-1) 0 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   color: var(--color-text-muted);
   letter-spacing: 0.01em;
+  font-weight: var(--font-weight-regular);
 }
 
 .page-actions {
@@ -6566,6 +6611,7 @@ textarea.form-input {
   }
 
   .main-content {
+    max-width: none;
     padding: 14px;
     padding-bottom: 96px;
   }

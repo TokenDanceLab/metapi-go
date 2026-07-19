@@ -1,7 +1,7 @@
 # UI/UX refresh — GCP × frosted glass × Apple detail
 
-**Date**: 2026-07-19  
-**Status**: Phase 1–5 + EmptyState + focus-trap/skip-link polish **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) **closed**; residual optional live shots / hex / axe / release  
+**Date**: 2026-07-20  
+**Status**: Phase 1–5 + EmptyState + focus-trap/skip-link + **console density/hi-res type** **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) **closed**; residual optional live shots / release  
 **Product**: MetAPI admin (`web/`)  
 **Supersedes direction of**: closed U0–U2 token polish (#12/#14 等) — **new visual language**, keep token-first architecture  
 **Related**: [`../design/DESIGN.md`](../design/DESIGN.md) · [`../design/a11y-checklist.md`](../design/a11y-checklist.md) · `web/styles/tokens.css` · [`formal-readiness.md`](./formal-readiness.md)
@@ -50,9 +50,10 @@
 
 | Source | Take |
 |:-------|:-----|
-| **Google Cloud Console** | 顶栏+侧栏 IA、蓝主色、表+滤镜、冷静状态色 |
+| **Google Cloud Console** | 顶栏+侧栏 IA、蓝主色、表+滤镜、冷静状态色、pill 导航、系统字体 |
 | **Apple Settings / VisionOS glass** | 材质、模糊、细边、层级阴影 |
 | **Linear / Vercel dashboard** | 现代细节、克制动效（次要参考） |
+| **Hi-res ops consoles** | 内容区 max-width 阶梯（~1680→2600）居中，避免 4K 右缘大片留白 |
 
 ### 3.2 Light theme（主推“白磨砂”）
 

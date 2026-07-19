@@ -2,9 +2,9 @@
 
 **Product**: TokenDance / MetAPI admin  
 **Scope**: Enterprise ops control plane (sites, accounts, tokens, routes, monitors, logs)  
-**Visual language**: GCP cloud console IA + frosted glass + Apple detail (UI-REFRESH M51)  
+**Visual language**: GCP cloud console density + frosted glass shell + Apple detail (UI-REFRESH M51+)  
 **Source of truth**: this document + `web/styles/tokens.css` + `web/design-system/**`  
-**Last updated**: 2026-07-19  
+**Last updated**: 2026-07-20  
 **Related**: [`components.md`](./components.md) · [`../analysis/ui-ux-refresh.md`](../analysis/ui-ux-refresh.md) · gallery `/__design__`
 
 ---
@@ -19,15 +19,18 @@
 | Density default | Comfortable-dense (admin tables + KPI cards coexist) |
 | Brand color | **GCP Blue** `#1a73e8` (dark `#8ab4f8`) with cool gray accent |
 | Logo mark | Soft blue gradient chip (no neon indigo/cyan marketing pair) |
+| Fonts | **System stack only** (Segoe UI / PingFang / YaHei / system-ui) — no Google Fonts CDN |
+| High-res | Content column max-width ladder 1680 → 1920 → 2280 → 2600, centered |
 
 **Principles**
 
 1. **Signal over decoration** — every color/weight change means status, severity, or hierarchy.
 2. **Token-first** — no new hard-coded hex in pages; use CSS custom properties.
 3. **Dual theme parity** — light and dark share the same semantic token names.
-4. **Dense but breathing** — 12–14px body, clear table rhythm, Apple spacing ladder.
+4. **Dense but breathing** — 13px body, clear table rhythm, calm page titles (weight 400).
 5. **One glass system** — shell/modal/dropdown only; never blur table rows.
 6. **Progressive adoption** — primitives in `web/design-system`; migrate pages gradually.
+7. **Console, not marketing** — pill nav, tabular nums, restrained card hover (no lift).
 
 ---
 
@@ -75,14 +78,16 @@ Unchanged roles: success / warning / danger / info with solid + soft pairs. Badg
 
 ---
 
-## 3. Spacing, radius, elevation, motion
+## 3. Spacing, radius, elevation, motion, type, layout
 
 | Family | Tokens | Notes |
 |--------|--------|-------|
 | Spacing | `--space-0…12`, `--gap-tight/default/section`, `--space-main` | 4px base; section gap 20px |
-| Radius | `--radius-control` 10 · `--radius-card` 14 · `--radius-shell` 16 | Buttons/inputs = control; cards = card |
+| Radius | `--radius-control` 10 · `--radius-card` 14 · `--radius-shell` 16 · `--radius-full` | Nav pills use full; buttons/inputs = control |
 | Shadow | `--shadow-sm/md/lg/card/elevated/glass` | Dual ambient+key; dark uses emissive border |
-| Motion | `--motion-swift`, `--motion-soft`, `--ease-spring` | Calm; honor `prefers-reduced-motion` |
+| Motion | `--motion-swift`, `--motion-soft`, `--ease-emphasized` | Calm; honor `prefers-reduced-motion` |
+| Type | `--font-sans` system stack · `--tracking-*` · `--line-body/title` | No external font CDN |
+| Content | `--content-max` + `--content-pad-x/y` | Hi-res breakpoints at 1920 / 2560 / 3200 |
 
 ---
 
@@ -134,3 +139,4 @@ Checklist: [`a11y-checklist.md`](./a11y-checklist.md).
 | 2026-07-16 | U0 token freeze (indigo era) |
 | 2026-07-19 | UI-REFRESH: FOUC canvas, glass family, GCP primary, card density, shell glass |
 | 2026-07-19 | Phase 3: dual-theme semantic ink, purple badge, table/filter/pagination/toast retokenize |
+| 2026-07-20 | Console density: system fonts, pill nav, calm titles, hi-res content max-width ladder |

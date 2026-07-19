@@ -8,9 +8,9 @@
 
 /* ===== Light (default) ===== */
 :root {
-  /* Typography families */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
+  /* Typography families — system stack (no Google Fonts CDN; CSP-friendly) */
+  --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", "Consolas", "Liberation Mono", ui-monospace, Menlo, monospace;
 
   /* Type scale */
   --text-xs: 11px;
@@ -26,6 +26,13 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+
+  /* Type detail */
+  --tracking-tight: -0.01em;
+  --tracking-display: -0.02em;
+  --tracking-label: 0.02em;
+  --line-body: 1.45;
+  --line-title: 1.25;
 
   /* Surfaces — canvas matches FOUC bootstrap (#535): cool GCP gray */
   --color-bg: #eef2f6;
@@ -184,6 +191,11 @@
   --topbar-height: 56px;
   --sidebar-width: 220px;
   --sidebar-collapsed-width: 64px;
+
+  /* Content column — high-res ladder (main-content max-width) */
+  --content-max: 1680px;
+  --content-pad-x: 24px;
+  --content-pad-y: 24px;
 
   /* Z-index ladder */
   --z-topbar: 100;

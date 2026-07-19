@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` — shell mock full nav + M52 first-run on tip (unreleased; ops pin v0.8.44) |
+| Tip | local/tip — console density + hi-res type + shell mock full nav + M52 first-run (unreleased; ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed**; residual = optional shot recapture + **UI patch release decision** |
@@ -32,7 +32,7 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| UI-REFRESH / UI-POLISH | **delivered unreleased** | M51 + M52 Wave1 + first-run #553/#554 on tip; residual optional empty-DB shot recapture + release decision |
+| UI-REFRESH / UI-POLISH | **delivered unreleased** | M51 + M52 Wave1 + first-run #553/#554 + console density/hi-res type on tip; residual optional empty-DB shot recapture + release decision |
 | UI vs 原版功能 | **parity on web surface** | 2026-07-20 inventory: routes/buttons 齐平；体感「没了」= 空库 + pin 落后 tip + 主题换肤 — [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md) |
 
 ## Next-wave pointer

@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] Console density + hi-res type polish
+
+- System font stack (drop Google Fonts Inter CDN); letter-spacing / line-height tokens; page-title + KPI weight 400; tabular nums.
+- Pill sidebar/topbar active nav; calmer card hover (no translateY lift).
+- `.main-content` max-width ladder 1680→1920→2280→2600 + centered; larger pad on 2560+.
+- Docs: DESIGN.md + ui-ux-refresh abstract only (no private portal facts).
+- Residual: rebuild dist + refresh visual/shell shots; UI release decision; empty-DB AUTH recapture.
+
 ## [2026-07-20] Shell mock sidebar full parity (14 items)
 
 - User saw truncated left nav → root cause was `/__design__` Shell chrome mock (3–4 items), not product `sidebarGroups`.

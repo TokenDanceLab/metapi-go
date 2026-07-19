@@ -22,11 +22,13 @@ describe('FOUC bootstrap (index.html)', () => {
     expect(head).toMatch(/<meta\s+name=["']color-scheme["']\s+content=["']light dark["']\s*\/?>/i);
   });
 
-  it('places FOUC bootstrap before Google Fonts stylesheet', () => {
+  it('places FOUC bootstrap early in head and does not load external font CDN', () => {
     const scriptIdx = indexHtml.indexOf("localStorage.getItem('theme_mode')");
-    const fontsIdx = indexHtml.indexOf('fonts.googleapis.com/css2');
+    const headEnd = indexHtml.toLowerCase().indexOf('</head>');
     expect(scriptIdx).toBeGreaterThan(-1);
-    expect(fontsIdx).toBeGreaterThan(-1);
-    expect(scriptIdx).toBeLessThan(fontsIdx);
+    expect(headEnd).toBeGreaterThan(scriptIdx);
+    // System stack only — no Google Fonts / third-party font CDN
+    expect(indexHtml).not.toMatch(/fonts\.googleapis\.com/i);
+    expect(indexHtml).not.toMatch(/fonts\.gstatic\.com/i);
   });
 });
