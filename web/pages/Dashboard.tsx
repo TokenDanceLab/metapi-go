@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, useState, useCallback } from "react";
+import { Suspense, lazy, useEffect, useState, useCallback, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useToast } from "../components/Toast.js";
 import { useIsMobile } from "../components/useIsMobile.js";
+import { EmptyState } from "../design-system/index.js";
 import { formatCompactTokenMetric } from "../numberFormat.js";
 import { safeExternalHref } from "../shared/sitePrimaryUrl.js";
 
@@ -49,6 +50,73 @@ function ChartFallback({ height = 280 }: { height?: number }) {
           height: Math.max(120, height - 46),
           borderRadius: 10,
         }}
+      />
+    </div>
+  );
+}
+
+/** Shared first-run / empty-well next step (#553). */
+function DashboardNextStepCta({
+  to = "/sites",
+  label = "添加站点",
+}: {
+  to?: string;
+  label?: string;
+}) {
+  return (
+    <Link to={to} className="ds-btn ds-btn--primary ds-btn--sm">
+      {label}
+    </Link>
+  );
+}
+
+const FIRST_RUN_STEPS: { to: string; label: string; hint: string }[] = [
+  { to: "/sites", label: "添加站点", hint: "配置上游 API 站点" },
+  { to: "/accounts", label: "连接账号", hint: "绑定站点账号与凭证" },
+  { to: "/tokens", label: "同步令牌", hint: "同步或生成访问令牌" },
+];
+
+function DashboardGettingStartedStrip() {
+  return (
+    <section
+      className="dashboard-getting-started"
+      aria-label="首次使用引导"
+    >
+      <div className="dashboard-getting-started__intro">
+        <div className="dashboard-getting-started__title">开始使用</div>
+        <p className="dashboard-getting-started__desc">
+          按顺序完成站点、账号与令牌配置后，仪表盘将自动展示余额与流量。
+        </p>
+      </div>
+      <ol className="dashboard-getting-started__steps">
+        {FIRST_RUN_STEPS.map((step, index) => (
+          <li key={step.to} className="dashboard-getting-started__step">
+            {index > 0 && (
+              <span className="dashboard-getting-started__arrow" aria-hidden="true">
+                →
+              </span>
+            )}
+            <Link to={step.to} className="dashboard-getting-started__link">
+              <span className="dashboard-getting-started__index">{index + 1}</span>
+              <span className="dashboard-getting-started__label">{step.label}</span>
+              <span className="dashboard-getting-started__hint">{step.hint}</span>
+            </Link>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function DashboardZeroTrafficSummary({ action }: { action?: ReactNode }) {
+  return (
+    <div className="dashboard-zero-traffic card animate-slide-up stagger-1">
+      <EmptyState
+        tone="info"
+        icon="◇"
+        title="尚未产生流量"
+        description="添加站点并完成账号连接后，余额、请求与签到指标会显示在这里。"
+        action={action ?? <DashboardNextStepCta />}
       />
     </div>
   );
@@ -528,6 +596,19 @@ export default function Dashboard({
     ? [...activeSites, ...inactiveSites]
     : activeSites;
 
+  // First-run: no sites yet (or site list still empty after load) and no traffic noise.
+  const sitesReady = !siteLoading;
+  const hasSites = sites.length > 0;
+  const hasTrafficSignal =
+    proxy24hTotal > 0 ||
+    totalTokens > 0 ||
+    totalUsed > 0 ||
+    todaySpend > 0 ||
+    siteDistribution.length > 0 ||
+    siteTrend.length > 0 ||
+    activeSites.length > 0;
+  const isFirstRunBootstrap = sitesReady && !hasSites && !hasTrafficSignal;
+
   const getLatencyColor = (ms: number) =>
     ms <= 500
       ? "var(--color-success)"
@@ -622,6 +703,13 @@ export default function Dashboard({
         </div>
       </div>
 
+      {isFirstRunBootstrap && <DashboardGettingStartedStrip />}
+
+      {isFirstRunBootstrap ? (
+        <DashboardZeroTrafficSummary
+          action={<DashboardNextStepCta to="/sites" label="添加站点" />}
+        />
+      ) : (
       <div className="dashboard-stat-grid">
         <div className="stat-card animate-slide-up stagger-1">
           <div className="stat-card-header">
@@ -968,6 +1056,7 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+      )}
 
       {/* 站点级分析 */}
       <div
@@ -1043,12 +1132,25 @@ export default function Dashboard({
             <SiteDistributionChart
               data={siteDistribution}
               loading={siteLoading}
+              emptyAction={
+                isFirstRunBootstrap || (!siteLoading && !hasSites) ? (
+                  <DashboardNextStepCta />
+                ) : undefined
+              }
             />
           </Suspense>
         </div>
         <div className="chart-panel-enter animate-slide-up stagger-7">
           <Suspense fallback={<ChartFallback height={320} />}>
-            <SiteTrendChart data={siteTrend} loading={siteLoading} />
+            <SiteTrendChart
+              data={siteTrend}
+              loading={siteLoading}
+              emptyAction={
+                isFirstRunBootstrap || (!siteLoading && !hasSites) ? (
+                  <DashboardNextStepCta />
+                ) : undefined
+              }
+            />
           </Suspense>
         </div>
       </div>
@@ -1239,12 +1341,21 @@ export default function Dashboard({
           </div>
         ) : (
           <div className="site-observability-empty">
-            <div className="site-observability-empty-title">
-              暂无站点观测数据
-            </div>
-            <div className="site-observability-empty-note">
-              有代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。
-            </div>
+            <EmptyState
+              tone="neutral"
+              icon="◇"
+              title="暂无站点观测数据"
+              description={
+                isFirstRunBootstrap
+                  ? "添加站点并产生代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。"
+                  : "有代理请求后，这里会自动生成每个站点的可用性条和平均响应速度。"
+              }
+              action={
+                isFirstRunBootstrap || !hasSites ? (
+                  <DashboardNextStepCta />
+                ) : undefined
+              }
+            />
           </div>
         )}
       </div>
@@ -1508,63 +1619,30 @@ export default function Dashboard({
                 </div>
               ))
             ) : (
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  padding: 20,
-                }}
-              >
-                <div style={{ width: 60, height: 60, opacity: 0.25 }}>
-                  <svg
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="var(--color-text-muted)"
-                    width="60"
-                    height="60"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={0.6}
-                      d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--color-text-secondary)",
-                  }}
-                >
-                  代理端点可用
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--color-text-muted)",
-                    textAlign: "center",
-                    lineHeight: 1.6,
-                  }}
-                >
-                  使用{" "}
-                  <code
-                    style={{
-                      background: "var(--color-bg)",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      fontSize: 10,
-                    }}
-                  >
-                    /v1/chat/completions
-                  </code>{" "}
-                  访问
-                </div>
+              <div className="dashboard-sites-empty">
+                <EmptyState
+                  tone="neutral"
+                  icon="◇"
+                  title={isFirstRunBootstrap ? "尚未配置站点" : "代理端点可用"}
+                  description={
+                    isFirstRunBootstrap ? (
+                      "先添加上游站点，再连接账号并同步令牌。"
+                    ) : (
+                      <>
+                        使用{" "}
+                        <code className="dashboard-inline-code">
+                          /v1/chat/completions
+                        </code>{" "}
+                        访问
+                      </>
+                    )
+                  }
+                  action={
+                    isFirstRunBootstrap || !hasSites ? (
+                      <DashboardNextStepCta />
+                    ) : undefined
+                  }
+                />
               </div>
             )}
             <div
