@@ -160,11 +160,47 @@ function ShellChromeMock({ activePage, onPageChange }: {
                   </article>
                 ))}
               </div>
-              <Card title="Traffic trend" description="Placeholder chart well for shell composition.">
-                <div className="ds-gallery__fake-table" aria-hidden="true">
-                  <div /><div /><div />
-                  <div /><div /><div />
-                  <div /><div /><div />
+              <Card title="Traffic trend" description="Token-only sparkline mock for shell composition (#543).">
+                <div className="ds-gallery__chart-well" aria-hidden="true">
+                  <svg
+                    className="ds-gallery__chart-sparkline"
+                    viewBox="0 0 320 120"
+                    preserveAspectRatio="none"
+                    role="presentation"
+                  >
+                    <defs>
+                      <linearGradient id="ds-gallery-spark-fill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.28" />
+                        <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0.02" />
+                      </linearGradient>
+                    </defs>
+                    {/* soft baseline grid */}
+                    <line className="ds-gallery__chart-grid" x1="0" y1="30" x2="320" y2="30" />
+                    <line className="ds-gallery__chart-grid" x1="0" y1="60" x2="320" y2="60" />
+                    <line className="ds-gallery__chart-grid" x1="0" y1="90" x2="320" y2="90" />
+                    {/* area under sparkline */}
+                    <path
+                      className="ds-gallery__chart-area"
+                      d="M0 88 C28 84, 40 70, 56 66 C78 60, 92 78, 112 72 C136 64, 148 42, 172 46 C196 50, 208 74, 232 68 C256 62, 272 38, 292 34 C304 32, 312 36, 320 40 L320 120 L0 120 Z"
+                      fill="url(#ds-gallery-spark-fill)"
+                    />
+                    {/* stroke sparkline */}
+                    <path
+                      className="ds-gallery__chart-line"
+                      d="M0 88 C28 84, 40 70, 56 66 C78 60, 92 78, 112 72 C136 64, 148 42, 172 46 C196 50, 208 74, 232 68 C256 62, 272 38, 292 34 C304 32, 312 36, 320 40"
+                      fill="none"
+                      stroke="var(--color-primary)"
+                      strokeWidth="2.25"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle className="ds-gallery__chart-dot" cx="172" cy="46" r="3.5" />
+                    <circle className="ds-gallery__chart-dot" cx="292" cy="34" r="3.5" />
+                  </svg>
+                  <div className="ds-gallery__chart-meta">
+                    <span>7d · req/min</span>
+                    <span>peak 14.8k</span>
+                  </div>
                 </div>
               </Card>
             </div>
