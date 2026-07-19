@@ -68,6 +68,13 @@ func (n *NewApiAdapter) authHeaders(accessToken string, userID *int) map[string]
 
 // --- User-ID discovery ---
 
+// Package-level patterns: Go RE2 does not support PCRE lookaheads like (?!\d).
+// Match digit runs of length ≥4, then reject ids longer than 8 in Go (parity with former {4,8}).
+var (
+	underscoreUserIDRE = regexp.MustCompile(`_(\d{4,})`)
+	namedUserIDRE      = regexp.MustCompile(`(?i)(?:user(?:name)?|uid|id)[^\d]{0,16}(\d{4,})`)
+)
+
 func (n *NewApiAdapter) tryDecodeUserID(token string) *int {
 	t := strings.TrimSpace(token)
 	t = strings.TrimPrefix(t, "Bearer ")
@@ -180,16 +187,20 @@ func (n *NewApiAdapter) extractLikelyUserIDs(token string) []int {
 		}
 
 		for _, payload := range payloads {
-			// Pattern: _12345678
-			re := regexp.MustCompile(`_(\d{4,8})(?!\d)`)
-			for _, match := range re.FindAllStringSubmatch(payload, -1) {
+			// Pattern: _12345678 (RE2-safe; length capped in Go)
+			for _, match := range underscoreUserIDRE.FindAllStringSubmatch(payload, -1) {
+				if len(match[1]) > 8 {
+					continue
+				}
 				if id, err := strconv.Atoi(match[1]); err == nil {
 					push(id)
 				}
 			}
-			// Pattern: user/id/uid near a number
-			re2 := regexp.MustCompile(`(?i)(?:user(?:name)?|uid|id)[^\d]{0,16}(\d{4,8})(?!\d)`)
-			for _, match := range re2.FindAllStringSubmatch(payload, -1) {
+			// Pattern: user/id/uid near a number (RE2-safe; length capped in Go)
+			for _, match := range namedUserIDRE.FindAllStringSubmatch(payload, -1) {
+				if len(match[1]) > 8 {
+					continue
+				}
 				if id, err := strconv.Atoi(match[1]); err == nil {
 					push(id)
 				}

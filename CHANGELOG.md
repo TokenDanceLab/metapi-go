@@ -5,6 +5,14 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## Unreleased
+
+### Fixed / Reliability
+- NewAPI user-id discovery regex is RE2-safe: drop PCRE `(?!\d)` lookaheads that panic under Go `regexp` during balance/user-id extract (production Exited under v0.8.44)
+
+### UI (already on tip, still unreleased)
+- M51–M52 polish, first-run, console density / system fonts / hi-res content column, gallery linux baselines (GHA SSOT)
+
 ## [v0.8.44] — 2026-07-19
 
 ### Fixed / Reliability

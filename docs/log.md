@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] RE2-safe NewAPI user-id extract (production crash root cause)
+
+- Ops: hk3 **0.8.44 Exited(2)** after balance refresh compiled PCRE lookahead `_(\d{4,8})(?!\d)` (Go RE2 panic).
+- Fix on tip: `platform/newapi.go` package-level `underscoreUserIDRE` / `namedUserIDRE` without `(?!\d)`; length >8 rejected in Go.
+- Tests: `TestNewApiAdapter_ExtractLikelyUserIDs_RE2Boundaries`.
+- Historical branch `codex/metapi-regex-crash` (`f1c629d`) was **not** on master; reapplied onto current tip.
+- Residual: tag/release (candidate **v0.8.45** = RE2 + unreleased UI tip) → GHCR → **15min background soak** → authorized ops pin/up only. Do not auto-start.
+
 ## [2026-07-20] Linux gallery baselines = GHA actuals (not Docker)
 
 - ui-visual failed: console density changed full-page height; Docker jammy snapshots still drift vs GHA fonts (light 3919 vs 3953).
