@@ -171,6 +171,24 @@ npm run test:visual:update
 
 Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Linux SSOT files: `design-gallery-{light,dark}-chromium-linux.png` (from CI actuals / Linux runner). Windows font AA may drift — CI is the SSOT (`maxDiffPixelRatio: 0.02`).
 
+**Linux refresh without CI wait** (Playwright version must match `package.json`):
+
+```bash
+# from web/ — use a clean container install (do not bind-mount Windows node_modules)
+docker run --rm \
+  -v "$PWD:/src:ro" \
+  -v "$PWD/e2e/visual-gallery.spec.ts-snapshots:/out" \
+  -e CI=1 -e METAPI_PW_FORCE_SERVER=1 \
+  mcr.microsoft.com/playwright:v1.61.1-jammy \
+  bash -lc 'mkdir -p /work && cp -a /src/package.json /src/package-lock.json /work/ &&
+    for d in e2e pages components design-system styles scripts public shared; do
+      [ -d /src/$d ] && cp -a /src/$d /work/; done &&
+    for f in /src/*.{ts,tsx,css,json,html,mjs}; do [ -e "$f" ] && cp -a "$f" /work/; done &&
+    cd /work && npm ci --no-audit --no-fund &&
+    npx playwright test e2e/visual-gallery.spec.ts --update-snapshots &&
+    cp -a e2e/visual-gallery.spec.ts-snapshots/design-gallery-*-chromium-linux.png /out/'
+```
+
 **When to refresh gallery baselines:** any intentional change to `/__design__` layout height/composition (including the #538 shell mock section). Skip update for pure docs/script-only changes.
 
 ## CI

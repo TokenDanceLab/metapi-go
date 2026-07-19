@@ -3,13 +3,19 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] Linux gallery baselines after console density
+
+- ui-visual CI failed on stale `design-gallery-*-chromium-linux.png` (height 3927→3953).
+- Regenerated both light/dark linux snapshots via Playwright Docker `mcr.microsoft.com/playwright:v1.61.1-jammy` (`--update-snapshots`).
+- Residual: UI release decision; empty-DB AUTH page recapture.
+
 ## [2026-07-20] Console density + hi-res type polish
 
 - System font stack (drop Google Fonts Inter CDN); letter-spacing / line-height tokens; page-title + KPI weight 400; tabular nums.
 - Pill sidebar/topbar active nav; calmer card hover (no translateY lift).
 - `.main-content` max-width ladder 1680→1920→2280→2600 + centered; larger pad on 2560+.
 - Docs: DESIGN.md + ui-ux-refresh abstract only (no private portal facts).
-- Residual: rebuild dist + refresh visual/shell shots; UI release decision; empty-DB AUTH recapture.
+- Residual: linux baselines (fixed next entry); UI release decision; empty-DB AUTH recapture.
 
 ## [2026-07-20] Shell mock sidebar full parity (14 items)
 
