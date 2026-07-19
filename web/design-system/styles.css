@@ -741,6 +741,64 @@ select.ds-input {
   }
 }
 
+/* Shell mock Traffic trend chart well (#543) — token-only sparkline surface */
+.ds-gallery__chart-well {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 168px;
+  margin-top: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border-light);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-card)) 0%,
+      var(--color-bg-secondary) 100%
+    );
+  /* dual soft shadow — intentional elevation vs empty grey box */
+  box-shadow:
+    var(--shadow-sm),
+    0 10px 28px color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+}
+
+.ds-gallery__chart-sparkline {
+  display: block;
+  width: 100%;
+  height: 120px;
+  min-height: 120px;
+  overflow: visible;
+}
+
+.ds-gallery__chart-grid {
+  stroke: color-mix(in srgb, var(--color-border) 70%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.ds-gallery__chart-line {
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--color-primary) 25%, transparent));
+}
+
+.ds-gallery__chart-dot {
+  fill: var(--color-bg-card);
+  stroke: var(--color-primary);
+  stroke-width: 2;
+}
+
+.ds-gallery__chart-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+}
+
 .ds-gallery__fake-table {
   display: grid;
   grid-template-columns: 1.4fr 1fr 0.7fr;
