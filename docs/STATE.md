@@ -32,7 +32,7 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| UI-REFRESH | **delivered unreleased** | FOUC·DS·Playwright·shell glass·data surfaces·forms·a11y·shell mock·EmptyState; CI green; residual: live shots optional · focus-trap/hex · Accounts/ModelTester empty · release decision |
+| UI-REFRESH | **delivered unreleased** | FOUC·DS·Playwright·shell glass·data surfaces·forms·a11y·shell mock·EmptyState·focus-trap·skip-link; CI green; residual: live shots optional · hex hygiene · axe CI · UI patch release decision |
 
 ## Next-wave pointer
 
@@ -60,5 +60,5 @@ Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`
 | Fact | Value |
 |:-----|:------|
 | Default branch | `master` |
-| Worktrees | master + M51 lanes: `.worktrees/phase4-forms` (`ui/phase4-forms`) · `.worktrees/phase5-a11y` (`ui/phase5-a11y`) · `.worktrees/shell-page-shots` (`ui/shell-page-shots`) |
+| Worktrees | clean master; prior M51 lanes pruned after merge |
 | Stale remote feature heads | deleted after merge-PR / abandon sweep 2026-07-18 |

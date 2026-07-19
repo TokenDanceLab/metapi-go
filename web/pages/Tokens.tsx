@@ -20,6 +20,7 @@ import { clearFocusParams, readFocusTokenId } from './helpers/navigationFocus.js
 import { shouldIgnoreRowSelectionClick } from './helpers/rowSelection.js';
 import { tr } from '../i18n.js';
 import { safeExternalHref } from '../shared/sitePrimaryUrl.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 
 type SyncStatus = 'success' | 'skipped' | 'failed';
 type TokensPanelProps = {
@@ -1446,11 +1447,22 @@ export function TokensPanel({ embedded = false, onEmbeddedActionsChange }: Token
           </table>
           )
         ) : (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
-            <div className="empty-state-title">暂无令牌</div>
-            <div className="empty-state-desc">可先同步站点令牌，或直接在站点创建新令牌。</div>
-          </div>
+          <EmptyState
+            tone="neutral"
+            icon="◇"
+            title="暂无令牌"
+            description="可先同步站点令牌，或直接在站点创建新令牌。"
+            action={(
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <DsButton size="sm" variant="secondary" onClick={() => { void handleSyncAll(); }} disabled={syncingAll}>
+                  {syncingAll ? '同步中…' : '同步全部账号'}
+                </DsButton>
+                <DsButton size="sm" variant="primary" onClick={() => setShowAdd(true)}>
+                  + 创建令牌
+                </DsButton>
+              </div>
+            )}
+          />
         )}
       </div>
     </div>

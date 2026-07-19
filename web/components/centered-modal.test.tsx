@@ -55,6 +55,7 @@ describe('CenteredModal component', () => {
     expect(source).toContain('modal-backdrop');
     expect(source).toContain('modal-content');
     expect(source).toContain('useAnimatedVisibility');
+    expect(source).toContain('useFocusTrap');
     expect(source).toContain('createPortal');
   });
 

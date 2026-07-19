@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] UI polish: focus-trap + EmptyState residual + skip-link
+
+- Shared `useFocusTrap` wired into SearchModal / CenteredModal / MobileDrawer / NotificationPanel.
+- Skip link → `#main-content`; sidebar `:focus-visible`; chrome i18n for nav/skip.
+- EmptyState: Accounts, Tokens panel, ModelTester conversation empty.
+- typecheck + related vitest pass; web dist rebuilt. Still **unreleased** (ops pin v0.8.44).
+- Residual: optional live authed shots, hex hygiene, axe CI, UI patch release decision.
+
 ## [2026-07-19] M51 UI-REFRESH epic closed (unreleased)
 
 - Closed #532 epic + #538 (mock track). All M51 children closed.

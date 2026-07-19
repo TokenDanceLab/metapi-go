@@ -5,6 +5,7 @@ import { formatDateLocal, formatDateTimeMinuteLocal } from '../pages/helpers/che
 import { buildAccountFocusPath, buildSiteFocusPath, buildTokenFocusPath } from '../pages/helpers/navigationFocus.js';
 import { useI18n } from '../i18n.js';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { useFocusTrap } from './useFocusTrap.js';
 
 interface SiteResult {
   id: number;
@@ -72,13 +73,17 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const timerRef = useRef<number | undefined>(undefined);
+
+  useFocusTrap(open && presence.shouldRender, panelRef);
 
   useEffect(() => {
     if (open) {
       setQuery('');
       setResults(null);
+      // Input also receives focus via trap; keep explicit focus for input-first UX.
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [open]);
@@ -143,6 +148,7 @@ export default function SearchModal({ open, onClose }: { open: boolean; onClose:
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         className={`modal-content search-modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
         role="dialog"
         aria-modal="true"

@@ -5,6 +5,7 @@ import { formatDateTimeMinuteLocal } from '../pages/helpers/checkinLogTime.js';
 import { buildEventNavigationPath } from '../pages/helpers/navigationFocus.js';
 import { useI18n } from '../i18n.js';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { useFocusTrap } from './useFocusTrap.js';
 
 const levelColors: Record<string, string> = {
   info: 'var(--color-info)',
@@ -40,6 +41,8 @@ export default function NotificationPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  useFocusTrap(open && presence.shouldRender, panelRef);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -74,6 +77,15 @@ export default function NotificationPanel({
     return () => document.removeEventListener('mousedown', handler);
   }, [open, onClose, anchorRef]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeydown);
+    return () => document.removeEventListener('keydown', handleKeydown);
+  }, [open, onClose]);
+
   const clearAll = async () => {
     await api.clearEvents();
     setEvents([]);
@@ -86,6 +98,9 @@ export default function NotificationPanel({
     <div
       ref={panelRef}
       className={`user-dropdown notification-panel ${presence.isVisible ? '' : 'is-closing'}`.trim()}
+      role="dialog"
+      aria-modal="true"
+      aria-label={tr('通知')}
     >
       <div className="notification-panel-header">
         <span className="notification-panel-title">{tr('通知')}</span>

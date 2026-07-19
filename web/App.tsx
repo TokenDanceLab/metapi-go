@@ -714,6 +714,9 @@ function AppShell() {
 
   return (
     <>
+      <a href="#main-content" className="skip-link">
+        {t('跳到主要内容')}
+      </a>
       <header className="topbar">
         {isMobile && (
           <button
@@ -939,7 +942,7 @@ function AppShell() {
           </aside>
         )}
 
-        <main className="main-content">
+        <main id="main-content" className="main-content" tabIndex={-1}>
           <PageTransition>
             <Suspense fallback={<RouteLoadingFallback />}>
               <Routes>

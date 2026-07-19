@@ -62,6 +62,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import { tr } from '../i18n.js';
+import { EmptyState } from '../design-system/index.js';
 
 type ChatJobResponse = {
   jobId: string;
@@ -2782,13 +2783,13 @@ export default function ModelTester() {
                 </pre>
               </div>
             ) : messages.length === 0 ? (
-              <div className="empty-state" style={{ padding: '40px 0' }}>
-                <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 10h.01M12 14h.01M16 10h.01M9 16h6M12 3C7.03 3 3 6.582 3 11c0 2.2 1.003 4.193 2.63 5.64V21l3.376-1.847A10.76 10.76 0 0012 19c4.97 0 9-3.582 9-8s-4.03-8-9-8z" />
-                </svg>
-                <div className="empty-state-title">开始对话测试</div>
-                <div className="empty-state-desc">支持流式模式、自定义请求体模式和可恢复的任务。</div>
-              </div>
+              <EmptyState
+                tone="neutral"
+                icon="◇"
+                title="开始对话测试"
+                description="支持流式模式、自定义请求体模式和可恢复的任务。"
+                style={{ padding: '40px 0' }}
+              />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {messages.map((message) => {

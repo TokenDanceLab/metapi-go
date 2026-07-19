@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAnimatedVisibility } from './useAnimatedVisibility.js';
+import { useFocusTrap } from './useFocusTrap.js';
 
 type CenteredModalProps = {
   open: boolean;
@@ -28,10 +29,13 @@ export default function CenteredModal({
   showCloseButton = true,
 }: CenteredModalProps) {
   const presence = useAnimatedVisibility(open, 220);
+  const panelRef = useRef<HTMLDivElement>(null);
   const canUsePortal = typeof document !== 'undefined'
     && !!document.body
     && typeof document.body.appendChild === 'function'
     && typeof document.body.removeChild === 'function';
+
+  useFocusTrap(open && presence.shouldRender, panelRef);
 
   useEffect(() => {
     if (!open || !canUsePortal) return;
@@ -66,8 +70,12 @@ export default function CenteredModal({
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
+        ref={panelRef}
         className={`modal-content ${presence.isVisible ? '' : 'is-closing'}`.trim()}
         style={{ maxWidth }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === 'string' ? title : undefined}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-header">

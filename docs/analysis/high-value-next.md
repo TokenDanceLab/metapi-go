@@ -40,7 +40,7 @@ Do **not** invent WS-1 / STICKY-B / UC-1 product without dedicated ACs.
 | 12 | **REL-P0585-LOADPROOF** | Multi-channel storm honesty | **present unit** (#527 / v0.8.43) | Load-proof honesty | Production e2e still residual | — |
 | 13 | **REL-P0555-SLICE** | Gemini SSE usage honesty | **present** (#530 / v0.8.43) | Stream billing honesty | Keep present-with-residual | — |
 | 14 | **REL-PG-POOL-PROFILE** | DB_PROFILE + 53300 lease backoff | **present** (#531 / v0.8.44) | Shared tiny + large dedicated both work | Ops pin profile/role LIMIT | — |
-| 15 | **UI-REFRESH** | Admin UI visual language | **design-only** ([ui-ux-refresh.md](./ui-ux-refresh.md)) | FOUC/夜间闪光弹 + 现代壳层 | Milestone + FOUC AC first | 暗色体验差 / 审美债 |
+| 15 | **UI-REFRESH** | Admin UI visual language | **delivered unreleased** ([ui-ux-refresh.md](./ui-ux-refresh.md)) | FOUC/shell/forms/a11y/EmptyState/focus-trap landed | Optional UI patch release (v0.8.45+) + live shots | Unreleased aesthetic debt until pin |
 
 ### Ours — explicit non-goals (without ACs)
 

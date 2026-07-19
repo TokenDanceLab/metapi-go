@@ -51,10 +51,11 @@ This document is the U3 acceptance checklist. It records keyboard, name, contras
 
 | Surface | Expected | Notes |
 |---------|----------|-------|
-| Search modal | Esc exits; Tab should stay useful within modal | No full focus trap yet → residual |
-| Centered modal | Esc optional via `closeOnEscape`; close button always named | Pass for name; trap residual |
-| Mobile drawer | Esc exits; role=`dialog` + `aria-modal` | Pass |
-| Dropdowns (theme/user/notifications) | Click-outside closes; Esc residual | Residual |
+| Search modal | Esc exits; Tab cycles within modal | **Pass** — `useFocusTrap` on panel |
+| Centered modal | Esc optional via `closeOnEscape`; close button always named | **Pass** — trap + dialog name |
+| Mobile drawer | Esc exits; role=`dialog` + `aria-modal` | **Pass** — trap on panel |
+| Notification panel | Esc exits; Tab cycles within panel | **Pass** — trap + Esc (2026-07-19 polish) |
+| Theme/user dropdowns | Click-outside closes; Esc residual | Residual (non-modal menus) |
 
 ### 2.4 Focus order anti-patterns (do not introduce)
 
@@ -205,16 +206,16 @@ Breakpoints used by product:
 
 Tracked for follow-up issues (not blocking U3 checklist doc):
 
-1. **Focus trap** inside SearchModal / CenteredModal / notification panel (Tab cycles within overlay).
-2. **Global `:focus-visible`** utility applied to all `.btn`, `.sidebar-item`, topbar controls.
+1. ~~**Focus trap** inside SearchModal / CenteredModal / notification panel (Tab cycles within overlay).~~ **Done** — `web/components/useFocusTrap.ts` wired into SearchModal, CenteredModal, MobileDrawer, NotificationPanel.
+2. ~~**Global `:focus-visible`** utility applied to all `.btn`, `.sidebar-item`, topbar controls.~~ **Partial done** — `.sidebar-item:focus-visible` + existing chrome rings; remaining page-level action grids still mixed.
 3. ~~**`prefers-reduced-motion`** hard cutover for `fade-in` / `slide-up` / drawer transitions.~~ **Done in #540** (global + token collapse). Residual: intentional essential-motion exceptions only if product later needs them.
 4. **Page-level icon actions** (copy, open external, row kebab, route drag handles) — many labeled, inventory incomplete across Accounts/Sites/Routes/Logs.
 5. **Muted/tertiary text** used as primary content in a few dense tables — content audit.
-6. **Notification panel** keyboard model (arrow keys, Esc, focus return to bell).
+6. ~~**Notification panel** keyboard model (arrow keys, Esc, focus return to bell).~~ **Partial** — Esc + focus trap + restore; arrow-key list nav still residual.
 7. **ModernSelect** listbox semantics (`role="listbox"/"option"`, typeahead, aria-controls).
 8. **Charts**: non-color status encoding for availability buckets; keyboard access to series.
-9. **Skip link** to `#main-content` for keyboard users.
-10. **i18n entries** for newer chrome strings (e.g. `展开侧边栏`) if EN surface shows Chinese fallback.
+9. ~~**Skip link** to `#main-content` for keyboard users.~~ **Done** — `App.tsx` skip-link + `main#main-content`.
+10. ~~**i18n entries** for newer chrome strings (e.g. `展开侧边栏`) if EN surface shows Chinese fallback.~~ **Partial** — skip-link + sidebar expand/nav open/close added; full inventory residual.
 11. **Automated axe/playwright a11y CI** gate — not wired.
 12. **Full 375 walkthrough** of every page table → card path (U2 density work residual).
 13. **Residual hex hygiene** in pages/components (brand logos, chart series, route-card dark gradients) — sequential; no new brand hex allowed.
@@ -275,5 +276,6 @@ No package bumps. No Go changes. No wholesale page redesign.
 - [x] Residual debt listed for follow-up
 - [x] `prefers-reduced-motion` hard-cut + duration token collapse (#540)
 - [x] `prefers-reduced-transparency` solid glass fallbacks complete for shell/login/toast/ds-glass (#540)
-- [ ] Full page inventory + focus trap (future issues)
+- [x] Shared focus trap + skip link + EmptyState residual pages (Accounts/Tokens/ModelTester) — 2026-07-19 polish
+- [ ] Page-level icon action inventory + ModernSelect listbox semantics (follow-up)
 - [ ] Residual page hex sweep + dual-theme soft-badge contrast lab measurement (follow-up under #540 residual)

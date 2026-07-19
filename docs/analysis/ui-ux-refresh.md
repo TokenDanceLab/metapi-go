@@ -1,7 +1,7 @@
 # UI/UX refresh — GCP × frosted glass × Apple detail
 
 **Date**: 2026-07-19  
-**Status**: Phase 1–3 + token/card density **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51); issues #532–#536  
+**Status**: Phase 1–5 + EmptyState + focus-trap/skip-link polish **in tree** (unreleased) — Milestone [51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) **closed**; residual optional live shots / hex / axe / release  
 **Product**: MetAPI admin (`web/`)  
 **Supersedes direction of**: closed U0–U2 token polish (#12/#14 等) — **new visual language**, keep token-first architecture  
 **Related**: [`../design/DESIGN.md`](../design/DESIGN.md) · [`../design/a11y-checklist.md`](../design/a11y-checklist.md) · `web/styles/tokens.css` · [`formal-readiness.md`](./formal-readiness.md)

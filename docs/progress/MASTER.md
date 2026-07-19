@@ -12,7 +12,7 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | UX | **M51 UI-REFRESH closed** on master (`168e8ee`, unreleased) — re-open only for live-shot/release residual |
+| — | UX | **M51 UI-REFRESH closed** on master (unreleased) — polish focus-trap/EmptyState/skip-link landed; residual only live-shot / hex / axe / release decision |
 
 
 ## Hard gates

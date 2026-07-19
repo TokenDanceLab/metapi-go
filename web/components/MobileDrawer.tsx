@@ -1,5 +1,6 @@
-import React, { useEffect, useId, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useId, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useFocusTrap } from './useFocusTrap.js';
 
 type MobileDrawerProps = {
   open: boolean;
@@ -20,8 +21,11 @@ function MobileDrawer({
 }: MobileDrawerProps) {
   const [shouldRender, setShouldRender] = useState(open);
   const [isClosing, setIsClosing] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const labelledBy = title ? titleId : undefined;
+
+  useFocusTrap(open && shouldRender && !isClosing, panelRef);
 
   useEffect(() => {
     if (open) {
@@ -73,7 +77,13 @@ function MobileDrawer({
         onClick={handleClose}
         aria-hidden="true"
       />
-      <div className={`mobile-drawer-panel mobile-drawer-panel-${side}`} role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+      <div
+        ref={panelRef}
+        className={`mobile-drawer-panel mobile-drawer-panel-${side}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+      >
         <div className="mobile-drawer-toolbar">
           {title ? (
             <div className="mobile-drawer-title" id={titleId}>
