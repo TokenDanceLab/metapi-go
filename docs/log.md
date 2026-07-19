@@ -7,7 +7,8 @@
 
 - ui-visual failed: console density changed full-page height; Docker jammy snapshots still drift vs GHA fonts (light 3919 vs 3953).
 - SSOT: copy CI `design-gallery-*-actual.png` → `*-chromium-linux.png`; drop serial so dark actuals also upload.
-- Residual after green: UI release decision; empty-DB AUTH page recapture.
+- light `016ec80` + dark `4f05736` → **ui-visual success** (run 29701482781).
+- Residual: UI release decision; empty-DB AUTH page recapture.
 
 ## [2026-07-20] Linux gallery baselines after console density (partial)
 
