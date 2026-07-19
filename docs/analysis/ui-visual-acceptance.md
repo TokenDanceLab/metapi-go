@@ -1,8 +1,8 @@
 # UI visual acceptance + UX e2e harness
 
 **Date:** 2026-07-19  
-**Backlog:** [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) · [#536](https://github.com/TokenDanceLab/metapi-go/issues/536) · [#538](https://github.com/TokenDanceLab/metapi-go/issues/538)  
-**Status:** harness green; shell chrome mock for Dashboard/Sites/Settings interim shots; win32 gallery baselines need refresh after shell section; Linux CI baselines residual  
+**Backlog:** [#534](https://github.com/TokenDanceLab/metapi-go/issues/534) · [#536](https://github.com/TokenDanceLab/metapi-go/issues/536) · [#538](https://github.com/TokenDanceLab/metapi-go/issues/538) · [#544](https://github.com/TokenDanceLab/metapi-go/issues/544)  
+**Status:** harness green; shell mock + **real authed page sample present** (`page-*-win32.png`, empty-DB honesty); win32+linux gallery baselines committed  
 **Code:** `web/playwright.config.ts` · `web/e2e/**` · `web/pages/DesignSystemGallery.tsx` · `web/scripts/capture-ui-shots.mjs`
 
 ## Goal
@@ -89,15 +89,16 @@ FOUC Phase 1 (#535): inline head script is **theme_mode-first** (see `web/themeB
 | **B – gallery shell mock** | `/__design__` section `Shell chrome mock` reuses production `topbar` / `sidebar` / `page-header` / `data-table` classes with static Dashboard · Sites · Settings content | none | yes |
 | **A – real pages** | `capture-ui-shots.mjs` with `METAPI_UI_AUTH_TOKEN` hits `/`, `/sites`, `/settings` against a live API-backed UI | required | no |
 
-Default interim acceptance for material / brand_calm / spacing / elevation / dark_parity uses **shell mock** artifacts:
+Default CI-friendly acceptance for material / brand_calm / spacing / elevation / dark_parity uses **shell mock** artifacts:
 
 - `docs/analysis/ui-shots/shell-dashboard-{light\|dark}-win32.png`
 - `docs/analysis/ui-shots/shell-sites-{light\|dark}-win32.png`
 - `docs/analysis/ui-shots/shell-settings-{light\|dark}-win32.png`
 
-Optional real-page artifacts (when token works):
+**Real track sample present** (#544) — empty-state first-run honesty on local sqlite is OK:
 
 - `docs/analysis/ui-shots/page-{dashboard\|sites\|settings}-{light\|dark}-win32.png`
+- Score note: `docs/analysis/ui-score-pages-2026-07-19.md`
 
 ### Capture SOP (human score)
 
@@ -112,13 +113,36 @@ node scripts/capture-ui-shots.mjs
 
 # Optional: real shell pages (admin bearer token; API must accept it)
 # Auth keys: localStorage auth_token + auth_token_expires_at (see web/authSession.ts)
-$env:METAPI_UI_AUTH_TOKEN = '<admin-bearer>'
+# Do NOT echo / print the token. Prefer env already set in the shell session.
+# $env:METAPI_UI_AUTH_TOKEN = '<set-once-do-not-log>'
 # Optional cookie header fragments:
 # $env:METAPI_UI_AUTH_COOKIE = 'meta_monitor_auth=...'
 # Optional: point at an already-running UI instead of local preview:
 # $env:METAPI_UI_SHOT_BASE = 'http://127.0.0.1:3000'
 node scripts/capture-ui-shots.mjs
 ```
+
+### Re-run real pages one-liner (no secret printing)
+
+Point at a live API-backed UI (or leave `METAPI_UI_SHOT_BASE` unset to use local vite preview on `:4181`). Token must already be in the environment — never `echo` / `Write-Host` it.
+
+```powershell
+# PowerShell — token already exported in this session
+cd web
+$env:METAPI_UI_SHOT_BASE = 'http://127.0.0.1:3000'   # optional live UI
+# $env:METAPI_UI_AUTH_TOKEN = '<set-once-do-not-log>'
+node scripts/capture-ui-shots.mjs
+```
+
+```bash
+# bash — same idea
+cd web
+export METAPI_UI_SHOT_BASE="${METAPI_UI_SHOT_BASE:-}"   # optional
+# export METAPI_UI_AUTH_TOKEN='…'   # set once; do not print
+node scripts/capture-ui-shots.mjs
+```
+
+Empty DB is acceptable for honesty scores (first-run EmptyStates). Populated fixtures are optional residual.
 
 Env vars:
 
@@ -169,11 +193,11 @@ Workflow: [`.github/workflows/ui-visual.yml`](../../.github/workflows/ui-visual.
 - [x] UX theme + FOUC bootstrap specs with `theme_mode=dark`
 - [x] Makefile `ui-visual` / `ui-e2e`
 - [x] GH workflow path-filtered on `web/**`
-- [x] Gallery baselines: win32 committed (`web/e2e/visual-gallery.spec.ts-snapshots/*-win32.png`); **Linux CI SSOT still residual** (`*-linux.png`)
-
+- [x] Gallery baselines: win32 + Linux CI SSOT committed (`web/e2e/visual-gallery.spec.ts-snapshots/*-{win32,linux}.png`, #539)
 - [x] Shell chrome mock on `/__design__` for Dashboard/Sites/Settings (#538)
 - [x] `capture-ui-shots.mjs` auth env + shell mock shots SOP
 - [x] Document `:4173` reuse pitfall + `METAPI_PW_FORCE_SERVER=1`
+- [x] Real authed page sample `page-*-win32.png` + score honesty (#544)
 
 ## Non-goals
 

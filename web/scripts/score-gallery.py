@@ -95,6 +95,7 @@ for r in rows:
 lines.append("```\n\n## Pass bar\n\nTarget ≥ 4/5 on each scored axis. Iterate tokens/CSS/gallery composition if any axis <4.\n")
 lines.append("\n## Notes\n\n- Brand calm high after indigo→GCP blue remap (cyan=0).\n")
 lines.append("- Gallery now includes KPI cards + multi-section hierarchy to exercise elevation/spacing.\n")
-lines.append("- Linux CI baselines still residual (`*-chromium-linux.png`).\n")
+lines.append("- Linux CI baselines committed (`*-chromium-linux.png`, #539); not residual.\n")
+lines.append("- Real authed page sample: `docs/analysis/ui-score-pages-2026-07-19.md` (#544).\n")
 out.write_text("".join(lines), encoding="utf-8")
 print("wrote", out)
