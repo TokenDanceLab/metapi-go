@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] Release v0.8.45 — RE2-safe + UI tip
+
+- Tag **v0.8.45**: RE2-safe NewAPI user-id extract (blocks production restart) + M51–M52/console density UI + fail-fast probe tests.
+- Ops: still **must not** auto-start; pin/up **0.8.45** only after GHCR image + ≥15min background soak authorization.
+- Residual: empty-DB AUTH recapture; VIS-1/NAV-1 optional; P0-585 prod e2e; P0-555 residual.
+
 ## [2026-07-20] RE2-safe NewAPI user-id extract (production crash root cause)
 
 - Ops: hk3 **0.8.44 Exited(2)** after balance refresh compiled PCRE lookahead `_(\d{4,8})(?!\d)` (Go RE2 panic).

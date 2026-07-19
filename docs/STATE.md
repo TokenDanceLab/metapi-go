@@ -13,13 +13,13 @@
 
 | Fact | Value |
 |:-----|:------|
-| Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` **367078c** — RE2-safe NewAPI user-id extract + fail-fast probe tests + UI tip (console density / M52 / linux gallery green) — **unreleased** |
-| Production pin (ops) | server `projects/metapi/STATE.md` — hk3 image **0.8.44** · **Exited (2)** · restart=no · **受控停服**（RE2 panic 2026-07-19）；pool/role **1/1** |
+| Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
+| Tip | `origin/master` **45da88d** — same as v0.8.45 content |
+| Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
-| Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed** on tip; tag still **v0.8.44** |
+| Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
 | Open issues / PRs | board empty (epic #548 closed); optional residual not scheduled as issues |
-| Mode | **maintenance** — tip ahead of pin; **must not** pin/up until RE2-safe image tagged + 15min background soak |
+| Mode | **maintenance** — product released; **ops pin/up still gated** (受控停服 until soak) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)
@@ -32,8 +32,8 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| OPS-RE2-USERID | **fixed on tip (unreleased)** | `platform/newapi.go` no PCRE `(?!\d)`; was production Exited(2) on balance path under 0.8.44 |
-| UI-REFRESH / UI-POLISH | **delivered unreleased** | M51 + M52 Wave1 + first-run #553/#554 + console density/hi-res type on tip; residual optional empty-DB shot recapture + release decision |
+| OPS-RE2-USERID | **fixed in v0.8.45** | was production Exited(2) on 0.8.44; ops still must pin/up 0.8.45 + soak |
+| UI-REFRESH / UI-POLISH | **released v0.8.45** | residual optional empty-DB shot recapture |
 | UI vs 原版功能 | **parity on web surface** | 2026-07-20 inventory: routes/buttons 齐平；体感「没了」= 空库 + pin 落后 tip + 主题换肤 — [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md) |
 
 ## Next-wave pointer
