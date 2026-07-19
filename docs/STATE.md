@@ -14,12 +14,12 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` UI-REFRESH unreleased (ops pin v0.8.44) |
+| Tip | `origin/master` M52 Wave1 merged (unreleased; ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
-| Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** **closed children**; UI tip unreleased |
-| Open issues / PRs | M51 children closed; optional residual only (live shots / UI patch release) |
-| Mode | **UI-REFRESH** (Track A ops stable on 0.8.44) |
+| Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** open — Wave1 #543–#546 **closed**; residual #553/#554 first-run + release decision |
+| Open issues / PRs | M52: epic #548 · gate #547 · first-run #553/#554; M51 closed |
+| Mode | **UI-POLISH** (Track A ops stable on 0.8.44) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)
@@ -32,7 +32,7 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| UI-REFRESH | **delivered unreleased** | FOUC·DS·Playwright·shell glass·data surfaces·forms·a11y·shell mock·EmptyState·focus-trap·skip-link; CI green; residual: live shots optional · hex hygiene · axe CI · UI patch release decision |
+| UI-REFRESH | **delivered unreleased** | M51 closed; M52 Wave1 landed (Traffic chart well · real page shots · hex soft pass · axe smoke); residual first-run Dashboard/Sites (#553/#554) · UI patch release decision |
 
 ## Next-wave pointer
 

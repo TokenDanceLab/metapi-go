@@ -12,7 +12,9 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | UX | **M51 UI-REFRESH closed** on master (unreleased) — polish focus-trap/EmptyState/skip-link landed; residual only live-shot / hex / axe / release decision |
+| #548 | UX | **M52 UI-POLISH** epic — Wave1 #543–#546 closed; open #553/#554 first-run + #547 gate/score |
+| #553 | UX | First-run Dashboard getting-started + zero KPI collapse |
+| #554 | UX | Sites empty: defer weight-formula banner |
 
 
 ## Hard gates

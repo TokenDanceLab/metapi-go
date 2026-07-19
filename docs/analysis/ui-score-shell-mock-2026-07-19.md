@@ -1,4 +1,4 @@
-# UI visual score — shell chrome mock (#538)
+# UI visual score — shell chrome mock (#538 / #543)
 
 **Date**: 2026-07-19  
 **Artifacts**: `docs/analysis/ui-shots/shell-*-win32.png`  
@@ -13,19 +13,8 @@
 | shell-sites-dark-win32.png | 5 | 5 | 5 | 5 | 5 |
 | shell-sites-light-win32.png | 5 | 5 | 5 | 5 | 5 |
 
-## Pixel probes
-
-```
-{'name': 'shell-dashboard-dark-win32.png', 'mean': 25.2, 'sd': 22.0, 'cyan': 0.0, 'blueish': 0.0161}
-{'name': 'shell-dashboard-light-win32.png', 'mean': 243.6, 'sd': 20.5, 'cyan': 0.0, 'blueish': 0.0972}
-{'name': 'shell-settings-dark-win32.png', 'mean': 23.7, 'sd': 18.8, 'cyan': 0.0, 'blueish': 0.0141}
-{'name': 'shell-settings-light-win32.png', 'mean': 245.0, 'sd': 17.6, 'cyan': 0.0, 'blueish': 0.0713}
-{'name': 'shell-sites-dark-win32.png', 'mean': 25.4, 'sd': 17.7, 'cyan': 0.0, 'blueish': 0.015}
-{'name': 'shell-sites-light-win32.png', 'mean': 245.8, 'sd': 16.8, 'cyan': 0.0, 'blueish': 0.1259}
-```
-
 ## Notes
 
-- Auth-free shell mock (topbar/sidebar/page-header/table) for Dashboard/Sites/Settings.
-- Cyan≈0 → brand calm. Dark mean ~25 / light ~245 → theme parity.
-- Real authed page sample landed (#544): `page-*-win32.png` + `ui-score-pages-2026-07-19.md` (empty-DB honesty OK).
+- #543: Traffic trend fake-table replaced with token-only SVG sparkline chart well; dashboard shots recaptured.
+- Real page track: `page-*-win32.png` + `ui-score-pages-2026-07-19.md` (#544).
+- Residual product: first-run empty DB UX #553/#554 (not mock).

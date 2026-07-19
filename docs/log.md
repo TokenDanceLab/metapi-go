@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] M52 Wave1 merged — screenshot residual polish
+
+- Milestone **52 UI-POLISH** + epic #548; Project items Todo.
+- Wave1 closed: #543 Traffic sparkline · #544 real page score honesty · #545 hex soft pass · #546 axe smoke (PRs #549–#552).
+- Unblocked CI frontend: dual-CTA EmptyState tests (`8bd9ec1`).
+- First-run product backlog: #553 Dashboard zeros · #554 Sites weight banner.
+- Tip `9092a4b`+; ops pin still **v0.8.44** unreleased.
+
 ## [2026-07-19] UI polish: focus-trap + EmptyState residual + skip-link
 
 - Shared `useFocusTrap` wired into SearchModal / CenteredModal / MobileDrawer / NotificationPanel.
