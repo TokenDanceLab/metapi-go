@@ -3,11 +3,15 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
-## [2026-07-20] Linux gallery baselines after console density
+## [2026-07-20] Linux gallery baselines = GHA actuals (not Docker)
 
-- ui-visual CI failed on stale `design-gallery-*-chromium-linux.png` (height 3927→3953).
-- Regenerated both light/dark linux snapshots via Playwright Docker `mcr.microsoft.com/playwright:v1.61.1-jammy` (`--update-snapshots`).
-- Residual: UI release decision; empty-DB AUTH page recapture.
+- ui-visual failed: console density changed full-page height; Docker jammy snapshots still drift vs GHA fonts (light 3919 vs 3953).
+- SSOT: copy CI `design-gallery-*-actual.png` → `*-chromium-linux.png`; drop serial so dark actuals also upload.
+- Residual after green: UI release decision; empty-DB AUTH page recapture.
+
+## [2026-07-20] Linux gallery baselines after console density (partial)
+
+- First attempt: Docker Playwright v1.61.1 jammy regenerate — insufficient vs GHA; superseded by GHA actuals entry above.
 
 ## [2026-07-20] Console density + hi-res type polish
 

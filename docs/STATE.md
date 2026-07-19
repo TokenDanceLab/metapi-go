@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` **e713870** — console density + hi-res type + shell mock full nav + M52 first-run (unreleased; ops pin v0.8.44) |
+| Tip | `origin/master` — console density + hi-res + shell mock full nav + linux gallery baselines (unreleased; ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed**; residual = optional shot recapture + **UI patch release decision** |

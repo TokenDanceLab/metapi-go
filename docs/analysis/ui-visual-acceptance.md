@@ -169,12 +169,16 @@ $env:METAPI_PW_FORCE_SERVER = '1'
 npm run test:visual:update
 ```
 
-Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Linux SSOT files: `design-gallery-{light,dark}-chromium-linux.png` (from CI actuals / Linux runner). Windows font AA may drift — CI is the SSOT (`maxDiffPixelRatio: 0.02`).
+Commit new files under `web/e2e/**/*-snapshots/` only after human visual review. Linux SSOT files: `design-gallery-{light,dark}-chromium-linux.png`. **GitHub Actions ubuntu Playwright is the SSOT** (`maxDiffPixelRatio: 0.02`) — local Docker jammy fonts can still pixel-diff vs GHA (full-page height drift). Prefer:
 
-**Linux refresh without CI wait** (Playwright version must match `package.json`):
+1. Let `ui-visual.yml` fail once after an intentional layout change.
+2. `gh run download <runId>` → copy `design-gallery-*-actual.png` over `*-chromium-linux.png`.
+3. Spec is **not serial**, so light+dark actuals both upload even if light fails first.
+
+**Optional Docker preflight** (Playwright version must match `package.json`; may still need CI actuals):
 
 ```bash
-# from web/ — use a clean container install (do not bind-mount Windows node_modules)
+# from web/ — clean container install (do not bind-mount Windows node_modules)
 docker run --rm \
   -v "$PWD:/src:ro" \
   -v "$PWD/e2e/visual-gallery.spec.ts-snapshots:/out" \

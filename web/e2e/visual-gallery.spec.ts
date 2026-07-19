@@ -39,8 +39,8 @@ async function applyTheme(page: Page, mode: 'light' | 'dark') {
 }
 
 test.describe('visual gallery @visual', () => {
-  test.describe.configure({ mode: 'serial' });
-
+  // Not serial: a light-only failure must still run dark so CI artifacts
+  // include both *-actual.png for linux baseline refresh.
   for (const mode of ['light', 'dark'] as const) {
     test(`/__design__ ${mode} baseline`, async ({ page }) => {
       await applyTheme(page, mode);
