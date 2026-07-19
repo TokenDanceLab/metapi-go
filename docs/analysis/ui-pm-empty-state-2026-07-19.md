@@ -70,7 +70,17 @@ Pass bar ≥4 met; **human** still flags Dashboard zero-state and Sites banner.
 | MOCK-REAL-1 | Gallery note: mock ≠ first-run | Score honesty |
 | NAV-1 | Setup-mode nav emphasis | Optional |
 
-M52 Wave1 does **not** implement FIRST-RUN-* (scope control). Track as follow-ups after #544 honesty lands.
+M52 Wave1 did **not** implement FIRST-RUN-* (scope control). **Wave2 closed 2026-07-19**: #553 + #554 on tip `479f52c`.
+
+### Status after Wave2
+
+| ID | Status | Note |
+|:---|:-------|:-----|
+| FIRST-RUN-1 / #553 | **shipped tip** | Getting-started strip + shared empty-well CTA |
+| FIRST-RUN-2 / #554 | **shipped tip** | Weight banner only when `sites.length > 0` |
+| FIRST-RUN-3 | **shipped with #553** | Zero KPI collapse → “尚未产生流量” |
+| MOCK-REAL-1 | partial | #544 honesty; optional recapture of empty-DB PNGs still stale vs new UX |
+| NAV-1 | optional | not scheduled |
 
 ## 6. Decision log
 
@@ -78,4 +88,5 @@ M52 Wave1 does **not** implement FIRST-RUN-* (scope control). Track as follow-up
 |:---------|:----------|
 | Capture empty DB as official real-shot sample | Reproducible without prod `_td_auth` |
 | Keep UI unreleased | Ops pin 0.8.44; no silent product release |
+| Close M52 epic after #553/#554 | First-run P0s from this note are implemented on tip |
 | Parallel M52 lanes by file ownership | Gallery vs docs vs css vs e2e |

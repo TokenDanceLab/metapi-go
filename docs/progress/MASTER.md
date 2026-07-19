@@ -4,7 +4,7 @@
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: GitHub Issues + Milestones (SDD) · product **maintenance**  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
-**Milestone**: [50](https://github.com/TokenDanceLab/metapi-go/milestone/50) closed with **v0.8.43**; **#531 closed** in **v0.8.44**
+**Milestone**: [52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52) — Wave1 + first-run Wave2 closed on tip; tag still **v0.8.44**
 
 > **开放项 + 硬门禁**。现状 → [`../STATE.md`](../STATE.md) · 日志 → [`../log.md`](../log.md) · shortlist → [`../analysis/high-value-next.md`](../analysis/high-value-next.md)
 
@@ -12,10 +12,7 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| #548 | UX | **M52 UI-POLISH** epic — Wave1 #543–#546 closed; open #553/#554 first-run + #547 gate/score |
-| #553 | UX | First-run Dashboard getting-started + zero KPI collapse |
-| #554 | UX | Sites empty: defer weight-formula banner |
-
+| — | — | **empty** — M52 epic #548 closed; #553/#554 merged |
 
 ## Hard gates
 
@@ -30,15 +27,17 @@
 
 | Priority | Candidate |
 |:---------|:----------|
+| Product | **UI patch release decision** (ship tip as 0.8.45+ or hold pin 0.8.44) |
+| Docs/visual | Optional recapture empty-DB page shots after first-run UX (#553/#554) |
 | Reliability | P0-585 **production e2e** load-proof only |
 | Billing | P0-555 media zeros / multi-instance lag |
-| Product | #579 / #547 / #584 with ACs · WS-1 / STICKY-B / UC-1 |
+| Product | #579 / #547 already closed · WS-1 / STICKY-B / UC-1 need ACs |
 
 ## Quick status
 
 ```bash
 gh issue list --state open --limit 20
 gh pr list --state open
-gh release view v0.8.43
+gh release view v0.8.44
 gh project view 1 --owner TokenDanceLab
 ```

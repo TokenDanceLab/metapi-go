@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] M52 Wave2 first-run closed — epic #548 done
+
+- Merged #554 Sites banner defer (PR #555 `68ff46e`) · #553 Dashboard getting-started (PR #556 `479f52c`).
+- #553 fixup: Dashboard unit tests wrap `MemoryRouter` (Link context); frontend CI green.
+- Closed epic #548; Milestone 52 residual = optional shot recapture + **UI release decision**.
+- Tip `479f52c`; ops pin still **v0.8.44** unreleased.
+- Board empty; mode → maintenance.
+
 ## [2026-07-19] M52 Wave1 merged — screenshot residual polish
 
 - Milestone **52 UI-POLISH** + epic #548; Project items Todo.
