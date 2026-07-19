@@ -12,11 +12,7 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · foundation+Phase4/5 **closed**; residual #538 real authed shots |
-| #532 | UX | Epic UI-REFRESH — open until #538 + optional UI release |
-| #538 | UX | Real authed Dashboard/Sites/Settings light+dark shots (mock track done) |
-
-Closed under M51: #533–#537 · #539–#541.
+| — | UX | **M51 UI-REFRESH closed** on master (`168e8ee`, unreleased) — re-open only for live-shot/release residual |
 
 
 ## Hard gates

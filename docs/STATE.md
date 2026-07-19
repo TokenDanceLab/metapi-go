@@ -17,8 +17,8 @@
 | Tip | `origin/master` UI-REFRESH unreleased (ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
-| Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** (Phase 1–5 **source** in tree unreleased) |
-| Open issues / PRs | #532 epic · #538 real authed shell shots (foundation #533–#537/#539–#541 closed) |
+| Active milestone | **[51 UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51)** **closed children**; UI tip unreleased |
+| Open issues / PRs | M51 children closed; optional residual only (live shots / UI patch release) |
 | Mode | **UI-REFRESH** (Track A ops stable on 0.8.44) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
@@ -32,7 +32,7 @@
 | STICKY-B Redis sticky | design-only | process-local sticky only |
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
-| UI-REFRESH | **in tree unreleased** | Phase 1–5 + EmptyState (Sites/OAuth/ProxyLogs/TokenRoutes/…); CI ui-visual green; residual: #538 real authed shots · focus-trap/hex · Accounts/ModelTester empty residual |
+| UI-REFRESH | **delivered unreleased** | FOUC·DS·Playwright·shell glass·data surfaces·forms·a11y·shell mock·EmptyState; CI green; residual: live shots optional · focus-trap/hex · Accounts/ModelTester empty · release decision |
 
 ## Next-wave pointer
 

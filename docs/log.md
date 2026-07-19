@@ -3,6 +3,12 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] M51 UI-REFRESH epic closed (unreleased)
+
+- Closed #532 epic + #538 (mock track). All M51 children closed.
+- Tip `168e8ee`; ui-visual CI green; ops pin remains v0.8.44.
+- Residual only: optional live authed shots, focus-trap/hex, Accounts/ModelTester empty, UI patch release.
+
 ## [2026-07-19] M51 closeout: foundation issues + Linux CI green + more EmptyState
 
 - Pushed linux gallery baselines; `ui-visual.yml` **success**.
