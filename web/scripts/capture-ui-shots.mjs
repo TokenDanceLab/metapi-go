@@ -7,7 +7,7 @@
  *   - shell-{dashboard|sites|settings}-{light|dark}-win32.png  (gallery shell mock)
  *
  * Optional real shell pages (need a valid admin token against a live API proxy):
- *   METAPI_UI_AUTH_TOKEN=<bearer>
+ *   METAPI_UI_AUTH_TOKEN=<bearer>                 # do not echo/print secrets
  *   METAPI_UI_AUTH_COOKIE=<cookie header value>   # optional extra Cookie header
  *   METAPI_UI_SHOT_BASE=http://127.0.0.1:3000    # optional; skip local vite preview
  *
@@ -16,7 +16,12 @@
  *
  * Run from web/:
  *   node scripts/capture-ui-shots.mjs
- *   METAPI_UI_AUTH_TOKEN=... node scripts/capture-ui-shots.mjs
+ *   # token already in env — never print it
+ *   node scripts/capture-ui-shots.mjs
+ *
+ * Real page outputs (when token accepted):
+ *   page-{dashboard|sites|settings}-{light|dark}-{plat}.png
+ * Empty DB first-run EmptyStates are valid honesty samples (#544).
  */
 import { chromium } from '@playwright/test';
 import path from 'path';

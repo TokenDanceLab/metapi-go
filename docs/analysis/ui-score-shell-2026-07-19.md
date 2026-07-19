@@ -23,4 +23,4 @@
 
 - Login dark mean~30, light~234 → theme parity good.
 - Cyan≈0 → brand calm (no neon).
-- Full authenticated Dashboard/Sites/Settings still residual (#538).
+- Full authenticated Dashboard/Sites/Settings sample present (#544): see `ui-score-pages-2026-07-19.md` + `page-*-win32.png`.

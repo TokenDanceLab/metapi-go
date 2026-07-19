@@ -28,4 +28,4 @@
 
 - Auth-free shell mock (topbar/sidebar/page-header/table) for Dashboard/Sites/Settings.
 - Cyan≈0 → brand calm. Dark mean ~25 / light ~245 → theme parity.
-- Residual: real authed page shots via `METAPI_UI_AUTH_TOKEN` (#538).
+- Real authed page sample landed (#544): `page-*-win32.png` + `ui-score-pages-2026-07-19.md` (empty-DB honesty OK).
