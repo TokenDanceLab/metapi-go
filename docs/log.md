@@ -3,6 +3,13 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] UI 原版对照 inventory（功能未删）
+
+- 用户反馈「丑 + 原版功能和按钮全没了」→ 对照 `TokenDance/metapi` web vs metapi-go tip。
+- 结论：侧栏 18 路由齐平；Sites/Accounts/Tokens/Routes/Settings 按钮计数齐平；`/tokens` 两边均 redirect 到连接管理。
+- 体感来源：空库稀疏 + ops pin 0.8.44 未含 tip first-run/glass + 主题 indigo→GCP blue + 仓库空库截图仍 pre-#553/#554。
+- 文档：`docs/analysis/ui-original-parity-2026-07-20.md`；STATE/MASTER residual 指针更新。无产品代码。
+
 ## [2026-07-19] M52 Wave2 first-run closed — epic #548 done
 
 - Merged #554 Sites banner defer (PR #555 `68ff46e`) · #553 Dashboard getting-started (PR #556 `479f52c`).

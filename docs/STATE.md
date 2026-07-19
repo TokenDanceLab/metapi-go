@@ -1,6 +1,6 @@
 # STATE.md — MetAPI Go product status
 
-**Last verified**: 2026-07-19
+**Last verified**: 2026-07-20
 
 > **现状 SSOT**（产品仓库）。只记当前事实与指针，不写流水账。  
 > 运维主机/compose/镜像 pin / PG role LIMIT 以 **server 仓** `projects/metapi/STATE.md` 为准（可能与本 tip 不同步）。  
@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` **479f52c** — M52 first-run Wave2 merged (unreleased; ops pin v0.8.44) |
+| Tip | `origin/master` **98b6aff** — M52 Wave2 closeout docs + first-run product on tip (unreleased; ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed**; residual = optional shot recapture + **UI patch release decision** |
@@ -33,11 +33,12 @@
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
 | UI-REFRESH / UI-POLISH | **delivered unreleased** | M51 + M52 Wave1 + first-run #553/#554 on tip; residual optional empty-DB shot recapture + release decision |
+| UI vs 原版功能 | **parity on web surface** | 2026-07-20 inventory: routes/buttons 齐平；体感「没了」= 空库 + pin 落后 tip + 主题换肤 — [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md) |
 
 ## Next-wave pointer
 
 Prioritized **ours vs original** shortlist: [`analysis/high-value-next.md`](analysis/high-value-next.md)  
-UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md) · PM empty notes [`analysis/ui-pm-empty-state-2026-07-19.md`](analysis/ui-pm-empty-state-2026-07-19.md)  
+UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md) · PM empty notes [`analysis/ui-pm-empty-state-2026-07-19.md`](analysis/ui-pm-empty-state-2026-07-19.md) · 原版功能对照 [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md)  
 Full residual inventory: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md)  
 Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)
 

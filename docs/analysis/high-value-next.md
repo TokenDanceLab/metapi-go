@@ -41,6 +41,7 @@ Do **not** invent WS-1 / STICKY-B / UC-1 product without dedicated ACs.
 | 13 | **REL-P0555-SLICE** | Gemini SSE usage honesty | **present** (#530 / v0.8.43) | Stream billing honesty | Keep present-with-residual | — |
 | 14 | **REL-PG-POOL-PROFILE** | DB_PROFILE + 53300 lease backoff | **present** (#531 / v0.8.44) | Shared tiny + large dedicated both work | Ops pin profile/role LIMIT | — |
 | 15 | **UI-REFRESH** | Admin UI visual language | **delivered unreleased** ([ui-ux-refresh.md](./ui-ux-refresh.md)) | FOUC/shell/forms/a11y/EmptyState/focus-trap landed | Optional UI patch release (v0.8.45+) + live shots | Unreleased aesthetic debt until pin |
+| 16 | **UI-PARITY-FEEL** | 「原版按钮没了」体感 | **docs-only present** ([ui-original-parity-2026-07-20.md](./ui-original-parity-2026-07-20.md)) | 静态对照：路由/按钮齐平 | 发版 tip + 重录空库 shot；可选 VIS-1/NAV-1 | 继续被误读为功能回归 |
 
 ### Ours — explicit non-goals (without ACs)
 
@@ -78,7 +79,7 @@ Out-of-product: #592/#574/#553/#552/#459 noise; #575 MySQL; #595 k3s chart.
 2. Ops: keep pool ≤ Azure role LIMIT (read server STATE).  
 3. Original parity #579/#547/#584 only with product ACs.  
 4. WS-1 / STICKY-B / UC-1 — separate milestones only.
-5. **UI-REFRESH** — FOUC first, then glass shell; not mixed with Track B residual.
+5. **UI-REFRESH** — tip 已含 first-run；优先 **UI patch release** + 空库 shot 重录，别再当「功能缺失」开 issue。
 
 ---
 
@@ -93,4 +94,5 @@ Out-of-product: #592/#574/#553/#552/#459 noise; #575 MySQL; #595 k3s chart.
 | Next? | **This file** |
 | 正式可用？ | [`formal-readiness.md`](./formal-readiness.md) |
 | UI 重构？ | [`ui-ux-refresh.md`](./ui-ux-refresh.md) |
+| 原版功能/按钮对照？ | [`ui-original-parity-2026-07-20.md`](./ui-original-parity-2026-07-20.md) |
 | Shipped? | `CHANGELOG.md` + Releases |

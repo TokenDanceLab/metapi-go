@@ -1,6 +1,6 @@
 # MASTER.md — MetAPI Go open gates
 
-**Last verified**: 2026-07-19  
+**Last verified**: 2026-07-20  
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: GitHub Issues + Milestones (SDD) · product **maintenance**  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
@@ -27,8 +27,9 @@
 
 | Priority | Candidate |
 |:---------|:----------|
-| Product | **UI patch release decision** (ship tip as 0.8.45+ or hold pin 0.8.44) |
-| Docs/visual | Optional recapture empty-DB page shots after first-run UX (#553/#554) |
+| Product | **UI patch release decision** (ship tip as 0.8.45+ or hold pin 0.8.44) — also unblocks “功能没了”体感 |
+| Docs/visual | Recapture empty-DB page shots after first-run (#553/#554); shots in repo still pre-Wave2 |
+| UX | Optional VIS-1 theme preset / NAV-1 first-run sidebar — see [`ui-original-parity-2026-07-20.md`](../analysis/ui-original-parity-2026-07-20.md) |
 | Reliability | P0-585 **production e2e** load-proof only |
 | Billing | P0-555 media zeros / multi-instance lag |
 | Product | #579 / #547 already closed · WS-1 / STICKY-B / UC-1 need ACs |
