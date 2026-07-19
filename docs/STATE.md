@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | master **RE2-safe NewAPI user-id extract** + UI tip (console density / M52 / linux gallery green) — **unreleased** |
+| Tip | `origin/master` **af2749c** — RE2-safe NewAPI user-id extract + UI tip (console density / M52 / linux gallery green) — **unreleased** |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 image **0.8.44** · **Exited (2)** · restart=no · **受控停服**（RE2 panic 2026-07-19）；pool/role **1/1** |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed** on tip; tag still **v0.8.44** |
