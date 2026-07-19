@@ -3,6 +3,13 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] Shell mock sidebar full parity (14 items)
+
+- User saw truncated left nav → root cause was `/__design__` Shell chrome mock (3–4 items), not product `sidebarGroups`.
+- `DesignSystemGallery` shell mock now lists full production labels (控制台 10 + 系统 4); topbar adds 模型操练场.
+- Unit guard `designSystemGallery.shell-nav.test.ts`; shell-*.png recaptured; win32 gallery visual baselines updated; `web/dist` rebuilt for embed.
+- Residual: linux gallery baselines may need CI actuals if pixel-diff; empty-DB real page shots still need AUTH token; UI release decision.
+
 ## [2026-07-20] UI 原版对照 inventory（功能未删）
 
 - 用户反馈「丑 + 原版功能和按钮全没了」→ 对照 `TokenDance/metapi` web vs metapi-go tip。

@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.44](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.44)** (2026-07-19) |
-| Tip | `origin/master` **98b6aff** — M52 Wave2 closeout docs + first-run product on tip (unreleased; ops pin v0.8.44) |
+| Tip | `origin/master` — shell mock full nav + M52 first-run on tip (unreleased; ops pin v0.8.44) |
 | Production pin (ops) | server `projects/metapi/STATE.md` (hk3 **0.8.44** healthy; pool/role **1/1**; restart=no) |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 **closed**; residual = optional shot recapture + **UI patch release decision** |

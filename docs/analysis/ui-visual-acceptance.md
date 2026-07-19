@@ -100,6 +100,8 @@ Default CI-friendly acceptance for material / brand_calm / spacing / elevation /
 - `docs/analysis/ui-shots/page-{dashboard\|sites\|settings}-{light\|dark}-win32.png`
 - Score note: `docs/analysis/ui-score-pages-2026-07-19.md`
 
+**Shell mock nav (2026-07-20):** mock sidebar lists the same **14** product labels as `App.sidebarGroups` (only Dashboard/Sites/Settings switch mock content). Truncated mock nav is **not** product IA — see [`ui-original-parity-2026-07-20.md`](./ui-original-parity-2026-07-20.md).
+
 ### Capture SOP (human score)
 
 From a **built** `web/` tree (or let the script start `vite preview` on `:4181`):

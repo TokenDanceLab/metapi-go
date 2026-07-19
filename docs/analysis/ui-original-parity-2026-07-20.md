@@ -64,6 +64,7 @@
 | 「账号令牌」侧栏入口 | 两边都从 `/tokens` **重定向到连接管理**内嵌面板，不是独立侧栏项 |
 | 生产看起来「旧」 | ops pin **v0.8.44**；UI-REFRESH / first-run 在 tip **未发版**（release decision residual） |
 | Mock 很「满」真实很「空」 | `shell-dashboard` 是 #538 验收 mock（有 12.4k 请求），不是真实 DB |
+| Shell mock 侧栏曾只有 3～4 项 | **已修**（2026-07-20）：mock 对齐生产 14 项，避免再被当成「目录被砍」 |
 
 ---
 
@@ -98,7 +99,8 @@ P0-585 partial、P0-555 residual、#579/#547/#584 partial 等是 **协议/计费
 | ID | 动作 | 价值 |
 |:---|:-----|:-----|
 | **UI-REL-1** | 决定 tip 是否打 **v0.8.45** 发版（把 first-run + glass 推到 ops pin） | 用户立刻看到「功能在」 |
-| **SHOT-1** | 空库重录 `page-dashboard/sites/settings-*-win32.png`（含 #553/#554） | 文档/评分诚实 |
+| **SHOT-1** | 空库重录 `page-dashboard/sites/settings-*-win32.png`（含 #553/#554） | 文档/评分诚实；需 `METAPI_UI_AUTH_TOKEN` + 空库 |
+| **MOCK-NAV** | Shell mock 侧栏对齐生产 14 项 | **done tip** — `DesignSystemGallery` + shell shots + win32 gallery baselines |
 | **VIS-1** | 可选：primary 回 indigo 或提供主题 preset（GCP / Classic） | 缓解「不像原版」 |
 | **NAV-1** | first-run 侧栏强调 站点/连接/设置（progressive） | 降 onboarding 噪音 |
 | **DENSE-1** | 有数据页（Sites/Accounts 表格）再做一 denser pass | 运营态「满」感 |
