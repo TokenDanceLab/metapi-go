@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestOneApiAdapter_PlatformName(t *testing.T) {
@@ -14,10 +15,11 @@ func TestOneApiAdapter_PlatformName(t *testing.T) {
 
 func TestOneApiAdapter_Detect(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
 	// Detect requires HTTP probe; will fail and return false for non-existent URLs
-	ok, err := o.Detect(ctx, "http://127.0.0.1:1")
+	ok, err := o.Detect(ctx, unreachableBaseURL(t))
 	if err != nil {
 		t.Errorf("Detect should not return error on probe failure: %v", err)
 	}
@@ -28,7 +30,8 @@ func TestOneApiAdapter_Detect(t *testing.T) {
 
 func TestOneApiAdapter_BalanceQuotaMinusUsed(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// OneApi model B: quota=total, balance=quota-used
 	// Impossible to test balance without HTTP, but verify the struct has correct inheritance
@@ -61,16 +64,17 @@ func TestOneApiAdapter_BalanceParseLogic(t *testing.T) {
 
 func TestOneApiAdapter_DoubleDeleteStrategy(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// DeleteAPIToken should not error even with unreachable URL (returns nil)
-	err := o.DeleteAPIToken(ctx, "http://127.0.0.1:1", "token", "sk-test", nil, nil)
+	err := o.DeleteAPIToken(ctx, unreachableBaseURL(t), "token", "sk-test", nil, nil)
 	if err != nil {
 		t.Errorf("DeleteAPIToken should be idempotent: %v", err)
 	}
 
 	// Empty tokenKey should return nil immediately
-	err = o.DeleteAPIToken(ctx, "http://127.0.0.1:1", "token", "", nil, nil)
+	err = o.DeleteAPIToken(ctx, unreachableBaseURL(t), "token", "", nil, nil)
 	if err != nil {
 		t.Errorf("DeleteAPIToken with empty key: %v", err)
 	}
@@ -78,9 +82,10 @@ func TestOneApiAdapter_DoubleDeleteStrategy(t *testing.T) {
 
 func TestOneApiAdapter_GetAPIToken(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	tok, err := o.GetAPIToken(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	tok, err := o.GetAPIToken(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -91,9 +96,10 @@ func TestOneApiAdapter_GetAPIToken(t *testing.T) {
 
 func TestOneApiAdapter_GetAPITokens(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	tokens, err := o.GetAPITokens(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	tokens, err := o.GetAPITokens(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -104,10 +110,11 @@ func TestOneApiAdapter_GetAPITokens(t *testing.T) {
 
 func TestOneApiAdapter_GetUserGroupsDefault(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// On unreachable URL, terminalError from failed HTTP propagates as error
-	_, err := o.GetUserGroups(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	_, err := o.GetUserGroups(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Logf("GetUserGroups error on unreachable (expected): %v", err)
 	}
@@ -116,9 +123,10 @@ func TestOneApiAdapter_GetUserGroupsDefault(t *testing.T) {
 
 func TestOneApiAdapter_CreateAPIToken(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	created, err := o.CreateAPIToken(ctx, "http://127.0.0.1:1", "token", nil, nil, nil)
+	created, err := o.CreateAPIToken(ctx, unreachableBaseURL(t), "token", nil, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -259,9 +267,10 @@ func TestDedupeStrings(t *testing.T) {
 
 func TestOneApiAdapter_Checkin(t *testing.T) {
 	o := &OneApiAdapter{BaseAdapter: NewBaseAdapter("one-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	cr, err := o.Checkin(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	cr, err := o.Checkin(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("Checkin should not error: %v", err)
 	}

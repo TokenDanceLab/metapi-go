@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	defaultProxyConnectTimeout   = 10 * time.Second
+	// Keep short: multi-candidate user-id probes must fail fast on dead hosts.
+	defaultProxyConnectTimeout   = 2 * time.Second
 	defaultProxyKeepAliveInitial = 60 * time.Second
 	siteProxyCacheTTL            = 3 * time.Second
 )
@@ -53,7 +54,7 @@ func (sp *SiteProxy) buildClients() {
 	transport := &http.Transport{
 		Proxy: sp.proxyFunc,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
+			Timeout:   defaultProxyConnectTimeout,
 			KeepAlive: defaultProxyKeepAliveInitial,
 		}).DialContext,
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -70,7 +71,7 @@ func (sp *SiteProxy) buildClients() {
 	transportNoTLS := &http.Transport{
 		Proxy: sp.proxyFunc,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
+			Timeout:   defaultProxyConnectTimeout,
 			KeepAlive: defaultProxyKeepAliveInitial,
 		}).DialContext,
 		TLSHandshakeTimeout:   10 * time.Second,

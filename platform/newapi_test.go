@@ -5,16 +5,18 @@ import (
 	"encoding/base64"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // --- NewApiAdapter ---
 
 func TestNewApiAdapter_Detect(t *testing.T) {
 	n := &NewApiAdapter{BaseAdapter: NewBaseAdapter("new-api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
 	// Detect requires HTTP probe; will fail and return false for non-existent URLs
-	ok, err := n.Detect(ctx, "http://127.0.0.1:1")
+	ok, err := n.Detect(ctx, unreachableBaseURL(t))
 	if err != nil {
 		t.Errorf("Detect should not return error (should return false on probe failure): %v", err)
 	}
@@ -193,10 +195,12 @@ func TestNewApiAdapter_BalanceQuotaIsRemaining(t *testing.T) {
 
 func TestNewApiAdapter_DefaultUnsupportedMethods(t *testing.T) {
 	n := &NewApiAdapter{BaseAdapter: NewBaseAdapter("new-api")}
-	ctx := context.Background()
+	// GetUserInfo may cookie-probe many user ids against unreachable hosts.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// GetUserInfo on unreachable URL should return nil, nil
-	ui, err := n.GetUserInfo(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	ui, err := n.GetUserInfo(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -205,7 +209,7 @@ func TestNewApiAdapter_DefaultUnsupportedMethods(t *testing.T) {
 	}
 
 	// GetSiteAnnouncements on unreachable URL
-	anns, err := n.GetSiteAnnouncements(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	anns, err := n.GetSiteAnnouncements(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

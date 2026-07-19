@@ -9,6 +9,7 @@
 - Fix on tip: `platform/newapi.go` package-level `underscoreUserIDRE` / `namedUserIDRE` without `(?!\d)`; length >8 rejected in Go.
 - Tests: `TestNewApiAdapter_ExtractLikelyUserIDs_RE2Boundaries`.
 - Historical branch `codex/metapi-regex-crash` (`f1c629d`) was **not** on master; reapplied onto current tip.
+- Also: user-id probe loops honor `ctx.Done()`; adapter unreachable tests use closed local listener (`unreachableBaseURL`) instead of `:1` blackhole; SiteProxy dial timeout 2s; pre-push race timeout 300s.
 - Residual: tag/release (candidate **v0.8.45** = RE2 + unreleased UI tip) → GHCR → **15min background soak** → authorized ops pin/up only. Do not auto-start.
 
 ## [2026-07-20] Linux gallery baselines = GHA actuals (not Docker)

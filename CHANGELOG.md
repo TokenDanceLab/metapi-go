@@ -9,6 +9,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 
 ### Fixed / Reliability
 - NewAPI user-id discovery regex is RE2-safe: drop PCRE `(?!\d)` lookaheads that panic under Go `regexp` during balance/user-id extract (production Exited under v0.8.44)
+- User-id probe loops honor context cancel; unreachable-host adapter tests use closed-listener URLs (not `:1` blackhole) so race suite finishes under pre-push timeout
 
 ### UI (already on tip, still unreleased)
 - M51–M52 polish, first-run, console density / system fonts / hi-res content column, gallery linux baselines (GHA SSOT)

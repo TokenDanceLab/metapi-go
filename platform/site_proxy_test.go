@@ -31,7 +31,7 @@ func TestSiteProxy_Do_NoProxy(t *testing.T) {
 	sp := NewSiteProxy("")
 
 	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestSiteProxy_Do_WithCustomHeaders(t *testing.T) {
 	sp := NewSiteProxy("")
 
 	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestSiteProxy_Do_WithExplicitProxy(t *testing.T) {
 	sp := NewSiteProxy("")
 
 	ctx := context.Background()
-	req, err := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestSiteProxy_Do_WithExplicitProxy(t *testing.T) {
 
 func TestDoWithProxy_NoProxy(t *testing.T) {
 	ctx := context.Background()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 
 	_, err := DoWithProxy(ctx, req, nil)
 	if err == nil {
@@ -122,7 +122,7 @@ func TestDoWithProxy_NoProxyIgnoresEnvironmentProxy(t *testing.T) {
 
 func TestDoWithProxy_WithExplicitProxy(t *testing.T) {
 	ctx := context.Background()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 
 	proxyConfig := &ProxyConfig{
 		ProxyURL: "http://invalid-proxy:1",
@@ -158,7 +158,7 @@ func TestDoWithProxy_WithCustomHeaders(t *testing.T) {
 
 func TestDoWithProxy_InvalidProxyURL(t *testing.T) {
 	ctx := context.Background()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 
 	proxyConfig := &ProxyConfig{
 		ProxyURL: "://invalid",
@@ -171,7 +171,7 @@ func TestDoWithProxy_InvalidProxyURL(t *testing.T) {
 
 func TestDoWithProxy_RejectsUnsupportedProxyScheme(t *testing.T) {
 	ctx := context.Background()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 
 	proxyConfig := &ProxyConfig{
 		ProxyURL: "ftp://proxy.example:21",
@@ -187,7 +187,7 @@ func TestDoWithProxy_RejectsUnsupportedProxyScheme(t *testing.T) {
 
 func TestDoWithProxy_InsecureSkipTLS(t *testing.T) {
 	ctx := context.Background()
-	req, _ := http.NewRequestWithContext(ctx, "GET", "http://127.0.0.1:1/test", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", unreachableBaseURL(t)+"/test", nil)
 
 	proxyConfig := &ProxyConfig{
 		InsecureSkipTLS: true,

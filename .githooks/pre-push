@@ -17,7 +17,7 @@ echo "  ✓ vet passed"
 # 2. full test suite with race detector
 echo ""
 echo "[2/2] go test ./... -count=1 -race"
-go test ./... -count=1 -race -timeout 120s
+go test ./... -count=1 -race -timeout 300s
 echo "  ✓ tests passed (-race clean)"
 
 echo ""

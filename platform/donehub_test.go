@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestDoneHubAdapter_PlatformName(t *testing.T) {
@@ -74,10 +75,11 @@ func TestDoneHubAdapter_BalanceQuotaIsRemaining(t *testing.T) {
 			OneApiAdapter: &OneApiAdapter{BaseAdapter: NewBaseAdapter("done-hub")},
 		},
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// DoneHub balance on unreachable URL returns empty BalanceInfo
-	bi, err := d.GetBalance(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	bi, err := d.GetBalance(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -122,7 +124,7 @@ func TestDoneHubAdapter_GetSiteAnnouncements(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	anns, err := d.GetSiteAnnouncements(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	anns, err := d.GetSiteAnnouncements(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

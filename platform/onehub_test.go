@@ -52,7 +52,7 @@ func TestOneHubAdapter_GetModels_Fallback(t *testing.T) {
 
 	// On unreachable URL, /v1/models fails, /api/available_model fails
 	// Should return empty slice without error
-	models, err := o.GetModels(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	models, err := o.GetModels(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestOneHubAdapter_GetUserGroups_Fallback(t *testing.T) {
 	ctx := context.Background()
 
 	// On unreachable URL, may error or fall back to ["default"]
-	_, err := o.GetUserGroups(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	_, err := o.GetUserGroups(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Logf("GetUserGroups error on unreachable (expected): %v", err)
 	}

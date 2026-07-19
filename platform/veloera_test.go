@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestVeloeraAdapter_PlatformName(t *testing.T) {
@@ -14,10 +15,11 @@ func TestVeloeraAdapter_PlatformName(t *testing.T) {
 
 func TestVeloeraAdapter_Detect(t *testing.T) {
 	v := &VeloeraAdapter{BaseAdapter: NewBaseAdapter("veloera")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
 	// Detect requires HTTP probe; returns false for unreachable URL
-	ok, err := v.Detect(ctx, "http://127.0.0.1:1")
+	ok, err := v.Detect(ctx, unreachableBaseURL(t))
 	if err != nil {
 		t.Errorf("Detect should not return error on probe failure: %v", err)
 	}
@@ -60,9 +62,10 @@ func TestVeloeraAdapter_Headers(t *testing.T) {
 
 func TestVeloeraAdapter_Checkin(t *testing.T) {
 	v := &VeloeraAdapter{BaseAdapter: NewBaseAdapter("veloera")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	cr, err := v.Checkin(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	cr, err := v.Checkin(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("Checkin should not error: %v", err)
 	}
@@ -73,10 +76,11 @@ func TestVeloeraAdapter_Checkin(t *testing.T) {
 
 func TestVeloeraAdapter_CheckinWithUserID(t *testing.T) {
 	v := &VeloeraAdapter{BaseAdapter: NewBaseAdapter("veloera")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	id := 1
-	cr, err := v.Checkin(ctx, "http://127.0.0.1:1", "token", &id, nil)
+	cr, err := v.Checkin(ctx, unreachableBaseURL(t), "token", &id, nil)
 	if err != nil {
 		t.Errorf("Checkin with userID should not error: %v", err)
 	}
@@ -87,9 +91,10 @@ func TestVeloeraAdapter_CheckinWithUserID(t *testing.T) {
 
 func TestVeloeraAdapter_GetBalance_1MDivisor(t *testing.T) {
 	v := &VeloeraAdapter{BaseAdapter: NewBaseAdapter("veloera")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	bi, err := v.GetBalance(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	bi, err := v.GetBalance(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("GetBalance should not error: %v", err)
 	}
@@ -127,9 +132,10 @@ func TestVeloeraAdapter_DivisorIs1M(t *testing.T) {
 
 func TestVeloeraAdapter_GetModels(t *testing.T) {
 	v := &VeloeraAdapter{BaseAdapter: NewBaseAdapter("veloera")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	models, err := v.GetModels(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	models, err := v.GetModels(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("GetModels should not error: %v", err)
 	}

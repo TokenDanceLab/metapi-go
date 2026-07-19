@@ -47,7 +47,7 @@ func TestOpenAiAdapter_GetModels(t *testing.T) {
 	ctx := context.Background()
 
 	// Should fail gracefully on non-existent URL
-	models, err := a.GetModels(ctx, "http://127.0.0.1:1", "sk-test", nil, nil)
+	models, err := a.GetModels(ctx, unreachableBaseURL(t), "sk-test", nil, nil)
 	// Either way, we get an error or empty models - both acceptable for this adapter
 	_ = models
 	_ = err

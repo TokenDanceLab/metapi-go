@@ -47,7 +47,7 @@ func TestDetectPlatform_OrderOfProbing(t *testing.T) {
 
 func TestDetectPlatformByTitle_Retry(t *testing.T) {
 	// Should handle unreachable URLs gracefully (return empty string)
-	result := DetectPlatformByTitle("http://127.0.0.1:1")
+	result := DetectPlatformByTitle(unreachableBaseURL(t))
 	if result != "" {
 		t.Errorf("expected empty for unreachable URL, got %q", result)
 	}

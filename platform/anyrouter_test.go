@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestAnyRouterAdapter_PlatformName(t *testing.T) {
@@ -49,14 +50,17 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	a := &AnyRouterAdapter{
 		NewApiAdapter: &NewApiAdapter{BaseAdapter: NewBaseAdapter("anyrouter")},
 	}
-	ctx := context.Background()
+	// Checkin/GetBalance may probe many user-id candidates against an unreachable host.
+	// Bound the whole test so dial timeouts cannot blow past pre-push (-timeout 120s).
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// AnyRouter inherits NewAPI-compatible session methods including cookie fallback,
 	// shield challenge, and user-ID probing.
 	// All HTTP-based methods should gracefully handle unreachable URLs
 
 	// Login
-	lr, err := a.Login(ctx, "http://127.0.0.1:1", "user", "pass", nil, nil)
+	lr, err := a.Login(ctx, unreachableBaseURL(t), "user", "pass", nil, nil)
 	if err != nil {
 		t.Errorf("Login error: %v", err)
 	}
@@ -65,7 +69,7 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	}
 
 	// Checkin
-	cr, err := a.Checkin(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	cr, err := a.Checkin(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("Checkin error: %v", err)
 	}
@@ -74,7 +78,7 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	}
 
 	// GetBalance
-	bi, err := a.GetBalance(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	bi, err := a.GetBalance(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err == nil {
 		// GetBalance returns error on total failure (different from other adapters)
 		if bi != nil && bi.Balance > 0 {
@@ -83,7 +87,7 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	}
 
 	// GetModels
-	models, err := a.GetModels(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	models, err := a.GetModels(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("GetModels error: %v", err)
 	}
@@ -92,7 +96,7 @@ func TestAnyRouterAdapter_InheritsNewApiMethods(t *testing.T) {
 	}
 
 	// GetUserGroups - may return error or default on unreachable URL
-	groups, err := a.GetUserGroups(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	groups, err := a.GetUserGroups(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		// Error is acceptable on unreachable URL (terminalError propagation)
 		t.Logf("GetUserGroups error (expected on unreachable): %v", err)
@@ -126,7 +130,7 @@ func TestAnyRouterAdapter_TokenManagementDoesNotCallNewApiEndpoints(t *testing.T
 func assertAnyRouterTokenManagementUnsupported(t *testing.T, a *AnyRouterAdapter, urls ...string) {
 	t.Helper()
 	ctx := context.Background()
-	baseURL := "http://127.0.0.1:1"
+	baseURL := unreachableBaseURL(t)
 	if len(urls) > 0 {
 		baseURL = urls[0]
 	}

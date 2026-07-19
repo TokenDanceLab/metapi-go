@@ -24,7 +24,7 @@ func TestAdapterInterfaceCompliance(t *testing.T) {
 
 		// Detect: keyword-based adapters are instant; HTTP-probe adapters fail quickly
 		// on unreachable addresses.
-		a.Detect(ctx, "http://127.0.0.1:1")
+		a.Detect(ctx, unreachableBaseURL(t))
 
 		cancel()
 	}
@@ -35,7 +35,7 @@ func TestFullMethodCompliance(t *testing.T) {
 	// Only test adapters whose methods are non-blocking (no discoverUserID loops).
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	unreachable := "http://127.0.0.1:1"
+	unreachable := unreachableBaseURL(t)
 
 	testMethodCompliance(t, ctx, &OpenAiAdapter{StandardAdapter: NewStandardAdapter("openai")}, unreachable)
 	testMethodCompliance(t, ctx, &CodexAdapter{BaseAdapter: NewBaseAdapter("codex")}, unreachable)

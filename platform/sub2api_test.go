@@ -112,10 +112,11 @@ func TestSub2ApiAdapter_CheckinUnspported(t *testing.T) {
 
 func TestSub2ApiAdapter_GetBalance(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	// On unreachable URL, GetBalance returns empty BalanceInfo without error
-	bi, err := s.GetBalance(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	bi, err := s.GetBalance(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -128,7 +129,7 @@ func TestSub2ApiAdapter_GetModels(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	models, err := s.GetModels(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	models, err := s.GetModels(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -313,7 +314,7 @@ func TestSub2ApiAdapter_GetUserGroups(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	groups, err := s.GetUserGroups(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	groups, err := s.GetUserGroups(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -326,7 +327,7 @@ func TestSub2ApiAdapter_CreateAPIToken(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	created, err := s.CreateAPIToken(ctx, "http://127.0.0.1:1", "token", nil, nil, nil)
+	created, err := s.CreateAPIToken(ctx, unreachableBaseURL(t), "token", nil, nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -339,13 +340,13 @@ func TestSub2ApiAdapter_DeleteAPIToken(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	err := s.DeleteAPIToken(ctx, "http://127.0.0.1:1", "token", "sk-test", nil, nil)
+	err := s.DeleteAPIToken(ctx, unreachableBaseURL(t), "token", "sk-test", nil, nil)
 	if err != nil {
 		t.Errorf("DeleteAPIToken should be idempotent: %v", err)
 	}
 
 	// Empty key
-	err = s.DeleteAPIToken(ctx, "http://127.0.0.1:1", "token", "", nil, nil)
+	err = s.DeleteAPIToken(ctx, unreachableBaseURL(t), "token", "", nil, nil)
 	if err != nil {
 		t.Errorf("DeleteAPIToken with empty key: %v", err)
 	}
@@ -355,7 +356,7 @@ func TestSub2ApiAdapter_GetSiteAnnouncements(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	anns, err := s.GetSiteAnnouncements(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	anns, err := s.GetSiteAnnouncements(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -368,7 +369,7 @@ func TestSub2ApiAdapter_GetAPIToken(t *testing.T) {
 	s := &Sub2ApiAdapter{BaseAdapter: NewBaseAdapter("sub2api")}
 	ctx := context.Background()
 
-	tok, err := s.GetAPIToken(ctx, "http://127.0.0.1:1", "token", nil, nil)
+	tok, err := s.GetAPIToken(ctx, unreachableBaseURL(t), "token", nil, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
