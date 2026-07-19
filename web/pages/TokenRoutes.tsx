@@ -8,6 +8,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import { MobileCard, MobileField } from '../components/MobileCard.js';
 import ResponsiveFilterPanel from '../components/ResponsiveFilterPanel.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import { tr } from '../i18n.js';
 import { ROUTE_DECISION_REFRESH_TASK_TYPE } from '../shared/tokenRouteContract.js';
 import {
@@ -2020,22 +2021,27 @@ export default function TokenRoutes() {
 
       {filteredRoutes.length === 0 && (
         <div className="card">
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-              />
-            </svg>
-            <div className="empty-state-title">{routeSummaries.length === 0 ? '暂无路由' : '没有匹配的路由'}</div>
-            <div className="empty-state-desc">
-              {routeSummaries.length === 0
-                ? '点击"自动重建"可按当前模型可用性生成路由。'
-                : '请调整品牌筛选、搜索词或排序条件。'}
-            </div>
-          </div>
+          <EmptyState
+            tone={routeSummaries.length === 0 ? 'neutral' : 'info'}
+            icon="◇"
+            title={routeSummaries.length === 0 ? '暂无路由' : '没有匹配的路由'}
+            description={
+              routeSummaries.length === 0
+                ? '点击“自动重建”可按当前模型可用性生成路由。'
+                : '请调整品牌筛选、搜索词或排序条件。'
+            }
+            action={(
+              routeSummaries.length === 0 ? (
+                <DsButton size="sm" variant="primary" onClick={handleRebuild} disabled={rebuilding}>
+                  {rebuilding ? '重建中...' : tr('自动重建')}
+                </DsButton>
+              ) : (
+                <DsButton size="sm" variant="secondary" onClick={() => setShowManual(true)}>
+                  {tr('新建群组')}
+                </DsButton>
+              )
+            )}
+          />
         </div>
       )}
 

@@ -3,6 +3,13 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-19] M51 closeout: foundation issues + Linux CI green + more EmptyState
+
+- Pushed linux gallery baselines; `ui-visual.yml` **success**.
+- Closed #533–#536 · #539 (with #537/#540/#541 already closed).
+- EmptyState: Sites / ProxyLogs / OAuth / TokenRoutes; residual Accounts/ModelTester/Tokens panel.
+- Epic #532 open for #538 real authed shots + optional UI release decision.
+
 ## [2026-07-19] #539 Linux gallery baselines + more EmptyState pages
 
 - Committed `design-gallery-*-chromium-linux.png` from CI failure actuals (ubuntu Playwright).

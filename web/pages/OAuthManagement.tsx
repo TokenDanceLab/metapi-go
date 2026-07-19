@@ -18,6 +18,7 @@ import ModernSelect from '../components/ModernSelect.js';
 import { useToast } from '../components/Toast.js';
 import { useAnimatedVisibility } from '../components/useAnimatedVisibility.js';
 import { useIsMobile } from '../components/useIsMobile.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import OAuthModelsModal, { type OAuthModelItem } from './oauth/OAuthModelsModal.js';
 import {
   api,
@@ -2134,23 +2135,26 @@ export default function OAuthManagement() {
         ) : null}
 
         {!loaded ? (
-          <div className="empty-state oauth-empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
-            </svg>
-            <div className="empty-state-title">加载中...</div>
-            <div className="empty-state-desc">正在加载 OAuth 连接与额度信息。</div>
-          </div>
+          <EmptyState
+            className="oauth-empty-state"
+            tone="info"
+            icon="…"
+            title="加载中..."
+            description="正在加载 OAuth 连接与额度信息。"
+          />
         ) : filteredConnections.length === 0 ? (
-          <div className="empty-state oauth-empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <div className="empty-state-title">暂无 OAuth 连接</div>
-            <div className="empty-state-desc">
-              使用右上角“新建 OAuth 连接”接入 Codex、Claude、Gemini CLI 或 Antigravity。
-            </div>
-          </div>
+          <EmptyState
+            className="oauth-empty-state"
+            tone="neutral"
+            icon="◇"
+            title="暂无 OAuth 连接"
+            description="接入 Codex、Claude、Gemini CLI 或 Antigravity 后即可在此管理连接与额度。"
+            action={(
+              <DsButton size="sm" variant="primary" onClick={() => openCreateDrawer()}>
+                新建 OAuth 连接
+              </DsButton>
+            )}
+          />
         ) : (
           isMobile ? mobileList : desktopTable
         )}

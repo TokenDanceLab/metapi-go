@@ -12,14 +12,12 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · Phase 1–5 **source on master** (forms/a11y/shell mock/empty) |
-| #532 | UX | Epic UI-REFRESH |
-| #533–#536 | UX | Phase 1 foundation — in tree unreleased |
-| #537 | UX | Phase 4 forms/drawers — **closed** on master |
-| #538 | UX | Shell mock shots done; residual real authed Dashboard/Sites/Settings |
-| #539 | UX | Linux Playwright gallery baselines — **linux snaps committed from CI actuals** |
-| #540 | UX | Phase 5 a11y core — **closed**; residual focus-trap/hex |
-| #541 | UX | Empty/error — **closed** (primitive + 3 pages); residual other pages |
+| [UI-REFRESH](https://github.com/TokenDanceLab/metapi-go/milestone/51) | UX | M51 · #532 epic · foundation+Phase4/5 **closed**; residual #538 real authed shots |
+| #532 | UX | Epic UI-REFRESH — open until #538 + optional UI release |
+| #538 | UX | Real authed Dashboard/Sites/Settings light+dark shots (mock track done) |
+
+Closed under M51: #533–#537 · #539–#541.
+
 
 ## Hard gates
 

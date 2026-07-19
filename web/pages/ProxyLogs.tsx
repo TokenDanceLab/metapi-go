@@ -29,6 +29,7 @@ import SiteBadgeLink from "../components/SiteBadgeLink.js";
 import { MobileCard, MobileField } from "../components/MobileCard.js";
 import ResponsiveFilterPanel from "../components/ResponsiveFilterPanel.js";
 import { useIsMobile } from "../components/useIsMobile.js";
+import { EmptyState, Button as DsButton } from "../design-system/index.js";
 import { formatDateTimeLocal } from "./helpers/checkinLogTime.js";
 import ModernSelect from "../components/ModernSelect.js";
 import { parseProxyLogPathMeta } from "./helpers/proxyLogPathMeta.js";
@@ -3493,25 +3494,29 @@ export default function ProxyLogs() {
           </table>
         )}
         {!loading && logs.length === 0 && (
-          <div className="empty-state">
-            <svg
-              className="empty-state-icon"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              />
-            </svg>
-            <div className="empty-state-title">{tr("暂无使用日志")}</div>
-            <div className="empty-state-desc">
-              当请求通过代理时，日志将显示在这里
-            </div>
-          </div>
+          <EmptyState
+            tone="info"
+            icon="◇"
+            title={tr("暂无使用日志")}
+            description="当请求通过代理时，日志将显示在这里。也可清空筛选后重试。"
+            action={(
+              <DsButton
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setStatusFilter("all");
+                  setClientFilter("");
+                  setSiteFilter(null);
+                  setFromInput("");
+                  setToInput("");
+                  setSearchInput("");
+                  setPage(1);
+                }}
+              >
+                清空筛选
+              </DsButton>
+            )}
+          />
         )}
       </div>
 

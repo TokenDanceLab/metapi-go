@@ -18,6 +18,7 @@ import ResponsiveFormGrid from '../components/ResponsiveFormGrid.js';
 import { useIsMobile } from '../components/useIsMobile.js';
 import DeleteConfirmModal from '../components/DeleteConfirmModal.js';
 import SiteCreatedModal from '../components/SiteCreatedModal.js';
+import { EmptyState, Button as DsButton } from '../design-system/index.js';
 import { formatDateTimeLocal } from './helpers/checkinLogTime.js';
 import { clearFocusParams, readFocusSiteId } from './helpers/navigationFocus.js';
 import { tr } from '../i18n.js';
@@ -2392,18 +2393,17 @@ export default function Sites() {
             </table>
           )
         ) : (
-          <div className="empty-state">
-            <svg className="empty-state-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"
-              />
-            </svg>
-            <div className="empty-state-title">暂无站点</div>
-            <div className="empty-state-desc">点击“+ 添加站点”开始使用。</div>
-          </div>
+          <EmptyState
+            tone="neutral"
+            icon="◇"
+            title="暂无站点"
+            description="点击“+ 添加站点”开始使用。"
+            action={(
+              <DsButton size="sm" variant="primary" onClick={openAdd}>
+                + 添加站点
+              </DsButton>
+            )}
+          />
         )}
       </div>
     </div>
