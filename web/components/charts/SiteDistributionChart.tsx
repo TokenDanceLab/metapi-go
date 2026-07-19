@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ReactNode } from 'react';
 import { VChart } from '@visactor/react-vchart';
 import { useThemeLabelColor } from '../useThemeLabelColor.js';
+import { EmptyState as DsEmptyState } from '../../design-system/index.js';
 
 interface SiteDistributionData {
   siteName: string;
@@ -13,6 +14,8 @@ interface SiteDistributionData {
 interface SiteDistributionChartProps {
   data: SiteDistributionData[];
   loading?: boolean;
+  /** Shared next-step CTA for empty wells (#553). */
+  emptyAction?: ReactNode;
 }
 
 type ViewMode = 'balance' | 'spend';
@@ -56,40 +59,24 @@ function SkeletonCircle() {
   );
 }
 
-function EmptyState() {
+function ChartEmptyState({ action }: { action?: ReactNode }) {
   return (
-    <div className="empty-state" style={{ padding: 40 }}>
-      <div style={{ margin: '0 auto 16px', width: 64, height: 64, opacity: 0.35 }}>
-        <svg
-          width="64"
-          height="64"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="var(--color-text-muted)"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.2}
-            d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"
-          />
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.2}
-            d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"
-          />
-        </svg>
-      </div>
-      <div className="empty-state-title" style={{ marginBottom: 4 }}>
-        暂无站点数据
-      </div>
-      <div className="empty-state-desc">添加站点后将自动展示分布图表</div>
-    </div>
+    <DsEmptyState
+      className="dashboard-chart-empty"
+      tone="neutral"
+      icon="◇"
+      title="暂无站点数据"
+      description="添加站点后将自动展示分布图表"
+      action={action}
+    />
   );
 }
 
-export default function SiteDistributionChart({ data, loading }: SiteDistributionChartProps) {
+export default function SiteDistributionChart({
+  data,
+  loading,
+  emptyAction,
+}: SiteDistributionChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('balance');
   const labelColor = useThemeLabelColor();
 
@@ -263,7 +250,7 @@ export default function SiteDistributionChart({ data, loading }: SiteDistributio
       {loading ? (
         <SkeletonCircle />
       ) : !hasData ? (
-        <EmptyState />
+        <ChartEmptyState action={emptyAction} />
       ) : (
         <div>
           <div style={{ width: '100%', height: 300 }}>

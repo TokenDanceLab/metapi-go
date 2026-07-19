@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, type ReactNode } from 'react';
 import { VChart } from '@visactor/react-vchart';
+import { EmptyState as DsEmptyState } from '../../design-system/index.js';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -13,6 +14,8 @@ interface SiteTrendData {
 interface SiteTrendChartProps {
   data: SiteTrendData[];
   loading?: boolean;
+  /** Shared next-step CTA for empty wells (#553). */
+  emptyAction?: ReactNode;
 }
 
 /* ------------------------------------------------------------------ */
@@ -41,7 +44,11 @@ const COLOR_PALETTE = [
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
+export default function SiteTrendChart({
+  data,
+  loading,
+  emptyAction,
+}: SiteTrendChartProps) {
   const [metric, setMetric] = useState<Metric>('spend');
 
   /* ---------- data transform ---------- */
@@ -78,10 +85,14 @@ export default function SiteTrendChart({ data, loading }: SiteTrendChartProps) {
         <div style={headerStyle}>
           <MetricToggle metric={metric} onChange={setMetric} />
         </div>
-        <div className="empty-state" style={{ padding: 48 }}>
-          <div className="empty-state-title">暂无趋势数据</div>
-          <div className="empty-state-desc">数据加载后将自动展示趋势图表</div>
-        </div>
+        <DsEmptyState
+          className="dashboard-chart-empty"
+          tone="neutral"
+          icon="◇"
+          title="暂无趋势数据"
+          description="数据加载后将自动展示趋势图表"
+          action={emptyAction}
+        />
       </div>
     );
   }
