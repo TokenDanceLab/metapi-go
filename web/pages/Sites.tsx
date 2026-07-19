@@ -1280,9 +1280,17 @@ export default function Sites() {
         </ResponsiveBatchActionBar>
       )}
 
-      <div className="info-tip" style={{ marginBottom: 12 }}>
-        站点权重说明：最终站点倍率 = 站点全局权重 × 设置页中下游 API Key 的站点倍率。它会与路由策略因子（基础权重、价值分、成本、余额、使用频次）共同作用。数值越大，该站点在同优先级下越容易被选中。建议范围 0.5-3，默认 1；长期不建议超过 5。
-      </div>
+      {/* #554: defer weight-formula education until at least one site exists so EmptyState CTA stays primary */}
+      {sites.length > 0 ? (
+        <details className="info-tip sites-weight-tip" style={{ marginBottom: 12 }} data-testid="sites-weight-tip">
+          <summary style={{ cursor: 'pointer', fontWeight: 600, listStylePosition: 'outside' }}>
+            了解站点权重
+          </summary>
+          <div style={{ marginTop: 8 }}>
+            站点权重说明：最终站点倍率 = 站点全局权重 × 设置页中下游 API Key 的站点倍率。它会与路由策略因子（基础权重、价值分、成本、余额、使用频次）共同作用。数值越大，该站点在同优先级下越容易被选中。建议范围 0.5-3，默认 1；长期不建议超过 5。
+          </div>
+        </details>
+      ) : null}
 
       <DeleteConfirmModal
         open={Boolean(deleteConfirm)}
