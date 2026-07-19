@@ -47,12 +47,33 @@ async function flushMicrotasks() {
   });
 }
 
+function isUnderEmptyState(node: { parent?: unknown }): boolean {
+  let current: any = node;
+  while (current) {
+    const className = current.props?.className;
+    if (typeof className === 'string'
+      && (className.includes('ds-empty')
+        || className.includes('empty-state')
+        || className.includes('oauth-empty-state'))) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 function findButton(root: WebTestRenderer, label: string) {
-  return root.root.find((node) => (
+  // EmptyState primary CTAs often duplicate page-header actions (e.g. 新建 OAuth 连接).
+  // Prefer the chrome/header control so tests click a single, stable target.
+  const matches = root.root.findAll((node) => (
     node.type === 'button'
     && typeof node.props.onClick === 'function'
     && collectText(node).includes(label)
   ));
+  if (matches.length === 0) {
+    throw new Error(`No button matching label: ${label}`);
+  }
+  return matches.find((node) => !isUnderEmptyState(node)) ?? matches[0];
 }
 
 function findOauthSettingInput(root: WebTestRenderer, key: string) {

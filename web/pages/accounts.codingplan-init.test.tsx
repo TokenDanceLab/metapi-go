@@ -28,6 +28,32 @@ function collectText(node: ReactTestInstance): string {
   }).join('');
 }
 
+function isUnderEmptyState(node: ReactTestInstance): boolean {
+  let current: ReactTestInstance | null = node;
+  while (current) {
+    const className = current.props?.className;
+    if (typeof className === 'string'
+      && (className.includes('ds-empty') || className.includes('empty-state'))) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+/** Prefer form/header submit over EmptyState CTA when labels collide (e.g. 添加连接). */
+function findActionButton(root: ReactTestRenderer, label: string) {
+  const matches = root.root.findAll((node) => (
+    node.type === 'button'
+    && typeof node.props.onClick === 'function'
+    && collectText(node).includes(label)
+  ));
+  if (matches.length === 0) {
+    throw new Error(`No button matching label: ${label}`);
+  }
+  return matches.find((node) => !isUnderEmptyState(node)) ?? matches[0];
+}
+
 async function flushMicrotasks() {
   await act(async () => {
     await Promise.resolve();
@@ -87,11 +113,7 @@ describe('Accounts CodingPlan initialization', () => {
         node.type === 'textarea'
         && node.props.placeholder === '粘贴 API Key'
       ));
-      const addButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).includes('添加连接')
-      ));
+      const addButton = findActionButton(root, '添加连接');
 
       await act(async () => {
         tokenInput.props.onChange({ target: { value: 'sk-codingplan-demo' } });
@@ -150,11 +172,7 @@ describe('Accounts CodingPlan initialization', () => {
         node.type === 'textarea'
         && node.props.placeholder === '粘贴 API Key'
       ));
-      const addButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).includes('添加连接')
-      ));
+      const addButton = findActionButton(root, '添加连接');
 
       await act(async () => {
         tokenInput.props.onChange({ target: { value: 'sk-deepseek-demo' } });
