@@ -1,3 +1,9 @@
+## [2026-07-21] neat-freak: formal-readiness + About honesty
+
+- formal-readiness Track B gates refresh: WS C1–C3 present · UC-1 hide/external present · P0-585/555 residual honesty; A2.1 ops pin lag noted.
+- About page: version placeholder **0.8.45**; tech stack Go/React/Vite/SQLite+PG (drop Fastify/Drizzle theater); links → TokenDanceLab/metapi-go + GHCR/Releases.
+- README GHCR badge → v0.8.45.
+
 ## [2026-07-21] neat-freak: CHANGELOG unreleased + #514 UI hint
 
 - CHANGELOG [Unreleased] captures KEYS / WS C1–C3 / #514 / UC-1 / cloud-ops / P0-555 media fold.

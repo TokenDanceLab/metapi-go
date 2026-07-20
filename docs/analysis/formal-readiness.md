@@ -1,6 +1,6 @@
 # Formal readiness checklist
 
-**Date**: 2026-07-19  
+**Date**: 2026-07-21 · refresh for parity wave  
 **Status**: design SSOT (no product flip without ACs)  
 **Scope**: decide *what kind of “正式版”* MetAPI Go is allowed to claim  
 **Related**: [`../STATE.md`](../STATE.md) · [`high-value-next.md`](./high-value-next.md) · [`residual-next-candidates.md`](./residual-next-candidates.md) · ops `projects/metapi/STATE.md`
@@ -11,8 +11,8 @@
 
 | Track | Meaning | Audience | Current (v0.8.44) |
 |:------|:--------|:---------|:------------------|
-| **A. 对内正式可用** | 自己人/小流量当代理入口用；可维护、可升级、故障可解释 | 运维 / 内部 | **YES — 已达标** |
-| **B. 对外宣传完备** | 对外说“企业全功能 / 高可用 / 计费准 / 多副本粘滞 / WS 全通” | 客户 / 公告 | **NO — 诚实 residual 未清** |
+| **A. 对内正式可用** | 自己人/小流量当代理入口用；可维护、可升级、故障可解释 | 运维 / 内部 | **YES — 已达标**（tip ≥ v0.8.45 产品；ops pin 可能 lag） |
+| **B. 对外宣传完备** | 对外说“企业全功能 / 高可用 / 计费准 / 多副本粘滞 / WS 全通” | 客户 / 公告 | **NO — residual 未清**（P0-585 e2e · P0-555 multi-instance · multi-instance sticky） |
 
 默认对外话术：**对内正式可用 · 受控生产**；不要写成“全量企业完备”。
 
@@ -26,7 +26,7 @@
 
 | # | Gate | Evidence | v0.8.44 |
 |:-:|:-----|:---------|:-------:|
-| A1.1 | 有 semver Release + GHCR 镜像 | Release `v0.8.44` · `ghcr.io/tokendancelab/metapi-go:0.8.44` | ✅ |
+| A1.1 | 有 semver Release + GHCR 镜像 | Release **v0.8.45** · GHCR `metapi-go:0.8.45`（ops pin 可能仍 lag） | ✅ |
 | A1.2 | 主代理路径可用 | OpenAI/Anthropic/Gemini/Codex HTTP 路径；非 stub 生产默认 503 | ✅ |
 | A1.3 | 管理面可用 | Admin UI + `/api/*` + 登录 | ✅ |
 | A1.4 | 双库形态 | SQLite 单机 / PostgreSQL 生产 | ✅ |
@@ -39,7 +39,7 @@
 
 | # | Gate | Live rule | Status |
 |:-:|:-----|:----------|:------:|
-| A2.1 | pin 明确 | compose image = release tip | ✅ 0.8.44 |
+| A2.1 | pin 明确 | compose image 应对齐 release；**hk3 仍 0.8.44 Exited 直至授权 pin 0.8.45** | ⚠ lag |
 | A2.2 | MaxOpen ≤ role LIMIT | 当前 **1 = 1** | ✅ |
 | A2.3 | 不与冷备双活同库 | us1 不得同时连生产 Azure PG | ✅ 规则在册 |
 | A2.4 | 启动验证 | `/ready` ok · metrics `db_conn_errors_total=0` · Azure backends=1 | ✅ |
@@ -50,11 +50,12 @@
 
 这些 **不阻断** Track A：
 
-- P0-585 production e2e 未跑（unit load-proof 在）
-- P0-555 计费 residual
-- WS-1 / STICKY-B / UC-1
+- P0-585 production e2e 未跑（unit load-proof 在；**仍 partial**）
+- P0-555 计费 residual（media fold 已在；multi-instance lag residual）
+- STICKY-B Redis deferred（单实例 / LB pin 诚实）
 - OAuth client placeholder（未配真实 client 时登录失败是预期）
 - Redis 未部署（单实例不需要）
+- Ops pin 落后 tip（0.8.44 Exited → 授权后 0.8.45 soak）
 
 ---
 
@@ -64,20 +65,21 @@
 
 | # | Gate | Why blocked today |
 |:-:|:-----|:------------------|
-| B1 | P0-585 **production e2e** multi-channel storm | 仍 partial |
-| B2 | P0-555 计费 residual 关闭（media zeros / multi-instance lag AC） | present-with-residual |
-| B3 | WS-1 有协议 AC 且实现 | residual 501/426 |
-| B4 | 多实例 sticky 方案落地（LB pin **或** STICKY-B） | sticky 进程内 |
-| B5 | UC-1 真实 registry 或永久隐藏入口 | 501 / log-only |
-| B6 | 多副本连接预算演练（每副本 pool × N ≤ role） | 我们生产故意 1 副本 1 连接 |
-| B7 | 公开 README 不出现“假 sticky / 假 updateAvailable” | 已挡；需持续 hygiene |
+| B1 | P0-585 **production e2e** multi-channel storm | 仍 **partial**（unit load-proof ≠ present） |
+| B2 | P0-555 计费 residual 关闭（multi-instance lag AC 等） | **present-with-residual**（media detail fold 已在 tip） |
+| B3 | WS-1 协议 AC | **C1–C3 present**（Codex upstream wss flagged）；多实例 sticky 仍诚实 |
+| B4 | 多实例 sticky 方案落地（LB pin **或** STICKY-B） | 进程内 sticky；STICKY-B **deferred** |
+| B5 | UC-1 真实 registry **或** 永久 hide/external | **hide/external present**（无 invent registry） |
+| B6 | 多副本连接预算演练（每副本 pool × N ≤ role） | 生产故意 1 副本 1 连接 |
+| B7 | 公开 README / About 不出现假 sticky / 假 updateAvailable / 假 Node 栈 | 持续 hygiene |
 | B8 | 支持声明的高可用/重启策略与实测一致 | 当前 restart=no 不是 HA |
 
 **对外可用话术模板（推荐）**
 
-> MetAPI Go v0.8.x 是可自托管的元聚合代理网关正式发行版。  
-> 支持统一代理、路由与故障转移、站点账号与签到、SQLite/PostgreSQL。  
-> 多实例粘滞会话、Responses WebSocket、远程升级中心、极端级联风暴生产 e2e 与完美计费仍为 residual，见文档。
+> MetAPI Go v0.8.x 是可自托管的元聚合代理网关正式发行版（Go 重写）。  
+> 支持统一代理、路由与故障转移、Responses WebSocket（C1–C3）、SQLite/PostgreSQL、KEYS 权重/allow-list。  
+> 多实例粘滞（需 LB pin）、远程 in-app 升级中心（外置 GHCR/ops）、极端级联风暴生产 e2e 与完美计费仍为 residual，见文档。  
+> 生产 pin 可能落后 tip；以 server `projects/metapi/STATE.md` 为准。
 
 ---
 
@@ -122,14 +124,14 @@
 
 ---
 
-## 7. 决策记录（2026-07-19）
+## 7. 决策记录（2026-07-19；parity 刷新 2026-07-21）
 
 | Decision | Choice |
 |:---------|:-------|
 | 当前对外定位 | **对内正式可用 · 受控生产（T1）** |
-| 是否算“测试版” | **否** — v0.8.44 是正式 release；运维受控 ≠ 测试镜像 |
+| 是否算“测试版” | **否** — v0.8.45 是正式 release；ops pin lag ≠ 测试镜像 |
 | 是否可正常使用 | **可** — 主路径可用；吞吐受 1/1 池限制 |
-| 下一产品大波 | UI/UX 重构（见 [`ui-ux-refresh.md`](./ui-ux-refresh.md)），与 Track B residual 分开排期 |
+| 下一产品大波 | REL：P0-585 prod e2e · ops pin 0.8.45 授权；UI residual 可选 |
 | Track B | 不自动承诺；单开 Milestone + AC |
 
 ---
@@ -141,5 +143,6 @@
 | 产品现在能否对内用？ | 本文 §2 + STATE |
 | 能否对外吹完备？ | 本文 §3 → 否 |
 | 线上 pin/role？ | server `projects/metapi/STATE.md` |
-| 还差哪些功能诚实项？ | `high-value-next.md` |
-| UI 下一波怎么改？ | `ui-ux-refresh.md` |
+| 还差哪些功能诚实项？ | `high-value-next.md` · `residual-next-candidates.md` |
+| Parity 程序？ | `plan/original-parity-complete-2026-07-20.md` |
+| UI 视觉族？ | `design/cloud-ops-alignment.md` · `ui-ux-refresh.md` |

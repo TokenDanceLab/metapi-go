@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | parity core + P0-555 media fold; next P0-585 e2e / ops pin auth |
+| Active work | parity core shipped; docs honesty (formal-readiness/About); next P0-585 e2e / ops pin auth |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
@@ -31,7 +31,7 @@
 3. **STICKY-B Redis deferred** (single-instance / LB pin honesty only).  
 4. **UC-1**: hide or external ops deploy — **not** invent registry.  
 5. **P0-585 stays partial** until production e2e.  
-6. **P0-555 stays present-with-residual** until media/multi-instance ACs.  
+6. **P0-555 stays present-with-residual** (media detail fold present; multi-instance lag residual).  
 7. Pre-push: `go vet ./... && go test ./... -count=1 -race`.  
 8. Ops pin SSOT: server `projects/metapi/STATE.md`.  
 9. Electron = **non-goal**.

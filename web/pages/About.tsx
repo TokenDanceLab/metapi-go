@@ -6,7 +6,7 @@ import { tr } from '../i18n.js';
 import { SITE_DOCS_URL } from '../docsLink.js';
 import { buildUpdateReminder } from './helpers/updateCenterPresentation.js';
 
-const VERSION = '1.3.0';
+const VERSION = '0.8.45';
 
 const FEATURES = [
   { icon: '🌐', title: '统一代理网关', desc: '一个 Key、一个入口，兼容 OpenAI / Claude 下游格式' },
@@ -16,21 +16,22 @@ const FEATURES = [
   { icon: '🏪', title: '模型广场', desc: '跨站模型覆盖、定价对比、延迟与成功率实测数据' },
   { icon: '✅', title: '自动签到', desc: '定时签到 + 余额刷新，不再手动操心' },
   { icon: '🔔', title: '多渠道告警', desc: 'Webhook / Bark / Server酱 / 邮件，余额不足及时提醒' },
-  { icon: '📦', title: '轻量部署', desc: '单 Docker 容器，内置 SQLite，无外部依赖' },
+  { icon: '📦', title: '轻量部署', desc: '单 Docker 容器；SQLite 开箱 / PostgreSQL 生产' },
 ];
 
 const TECH_STACK = [
-  { name: 'Fastify', desc: '高性能 Node.js 后端框架' },
-  { name: 'React', desc: '用户界面库' },
-  { name: 'TypeScript', desc: '端到端类型安全' },
-  { name: 'Tailwind CSS v4', desc: '原子化样式框架' },
-  { name: 'Drizzle ORM', desc: '轻量 TypeScript ORM' },
-  { name: 'SQLite', desc: '零配置嵌入式数据库' },
+  { name: 'Go', desc: '单二进制后端 · 并发代理与调度' },
+  { name: 'React', desc: '管理台用户界面' },
+  { name: 'TypeScript', desc: '前端类型安全' },
+  { name: 'Vite', desc: '前端构建与开发服务器' },
+  { name: 'SQLite / PostgreSQL', desc: '双方言存储（单机 / 生产）' },
+  { name: 'Docker / GHCR', desc: '镜像分发与外置部署' },
 ];
 
 const LINKS = [
-  { label: 'GitHub', href: 'https://github.com/cita-777/metapi', icon: '📂' },
-  { label: 'Docker Hub', href: 'https://hub.docker.com/r/1467078763/metapi', icon: '🐳' },
+  { label: 'GitHub', href: 'https://github.com/TokenDanceLab/metapi-go', icon: '📂' },
+  { label: 'GHCR', href: 'https://github.com/TokenDanceLab/metapi-go/pkgs/container/metapi-go', icon: '🐳' },
+  { label: 'Releases', href: 'https://github.com/TokenDanceLab/metapi-go/releases', icon: '🏷️' },
   { label: '站点文档', href: SITE_DOCS_URL, icon: '📚' },
 ];
 
