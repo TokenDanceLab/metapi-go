@@ -14,12 +14,12 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
-| Tip | `origin/master` **b9ee6e2** — post-release docs; product tag **v0.8.45** → `4c67dd5` |
+| Tip | `origin/master` **8164b27** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
 | Open issues / PRs | board empty (epic #548 closed); optional residual not scheduled as issues |
-| Mode | **maintenance** — product released; **ops pin/up still gated** (受控停服 until soak) |
+| Mode | **parity program (docs)** — v0.8.45 released; ops pin/up gated; original-complete plan SSOT [`plan/original-parity-complete-2026-07-20.md`](plan/original-parity-complete-2026-07-20.md) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 
 ## Honesty holds (not product yet)
@@ -28,9 +28,9 @@
 |:---|:-------|:-----|
 | P0-585 cascade | **partial** | load-proof still required; honesty tests do not flip present |
 | P0-555 usage stats | **present-with-residual** | not perfect billing |
-| WS-1 Responses WebSocket | residual | no invent without AC |
-| STICKY-B Redis sticky | design-only | process-local sticky only |
-| UC-1 update-center deploy | residual | admin deploy 501 / log-only |
+| WS-1 Responses WebSocket | residual → **scheduled full TS parity** | plan C1–C3; single-instance honesty; no fake frames |
+| STICKY-B Redis sticky | design-only **deferred** | multi-turn/WS requires single instance or LB pin |
+| UC-1 update-center deploy | residual → **hide/external** | no invent registry; GHCR/ops deploy |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
 | OPS-RE2-USERID | **fixed in v0.8.45** | was production Exited(2) on 0.8.44; ops still must pin/up 0.8.45 + soak |
 | OPS-OAUTH-REFRESH | **present** (#251 / post-v0.8.45) | OAuth token auto-refresh scheduler (oauth-refresh); TS parity for codex/claude/gemini-cli/antigravity lead times |
@@ -41,9 +41,11 @@
 ## Next-wave pointer
 
 Prioritized **ours vs original** shortlist: [`analysis/high-value-next.md`](analysis/high-value-next.md)  
+**Parity program (ex-Electron)**: [`plan/original-parity-complete-2026-07-20.md`](plan/original-parity-complete-2026-07-20.md)  
 UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md) · PM empty notes [`analysis/ui-pm-empty-state-2026-07-19.md`](analysis/ui-pm-empty-state-2026-07-19.md) · 原版功能对照 [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md)  
 Full residual inventory: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md)  
-Original parity evidence (historical matrix): [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)
+Original parity evidence: [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)  
+WS residual: [`analysis/responses-websocket-residual.md`](analysis/responses-websocket-residual.md)
 
 ## Entry points
 

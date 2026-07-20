@@ -3,6 +3,15 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] neat-freak + SDD: original parity program (ex-Electron)
+
+- Plan SSOT: `docs/plan/original-parity-complete-2026-07-20.md`.
+- User decisions: WS-1 **full TS parity** (C1–C3); sticky **single-instance honesty** (no STICKY-B now); UC **hide/external deploy**.
+- MASTER + high-value-next + STATE rewritten for parity program schedule.
+- Truth: #534 bulk import **present** (matrix row + summary; was stale missing); #520 CTX present-with-residual; OAuth/Sub2API refresh present.
+- Residual-next + responses-websocket-residual: WS scheduled C1–C3; STICKY-B deferred; UC hide/external; residual 426/501 until C1.
+- Next: open Issues or start Wave KEYS (#547/#584) + WS C1 when coding resumes. No product code this entry.
+
 ## [2026-07-20] 四路并行原版功能对齐研究
 
 - 4 路 sonnet 代理：后端路由 · 平台/调度 · 前端 · gap 矩阵对抗复核。

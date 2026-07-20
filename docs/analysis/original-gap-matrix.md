@@ -89,7 +89,7 @@
 | 565 | Token refresh renames default key / sync overwrites enable state | bug-correctness | unknown-needs-runtime | Account token sync surfaces in `handler/admin/account_tokens.go` (includes sync stubs); enable-state overwrite needs targeted scenario tests | P0 | yes |
 | 560 | Public-site check-in errors | ops-checkin | partial | Generic check-in: `service/checkin/checkin.go` `CheckinAccount`; platform adapters vary; public-site specifics need runtime | P3 | yes |
 | 548 | NewAPI check-in + downstream keys workflow | ops-checkin | partial | Overlaps #550 present cookie path + downstream keys CRUD; full “workflow” UX completeness not verified | P3 | yes |
-| 534 | Bulk account import | feature-admin-ux | missing | No bulk account import API analogous to key import found under `handler/admin/accounts.go` | P4 | yes |
+| 534 | Bulk account import | feature-admin-ux | **present** | `POST /api/accounts` accepts `accessTokens[]` batch create (same site); UI `parseBatchApiKeys` / Accounts paste; tests under `handler/admin/accounts_test.go`. Cross-site file bulk UX still optional residual — not “missing API”. | P4 | no |
 | 531 | Anthropic→OpenAI skill-call anomaly in Claude Code | feature-protocol | partial | Anthropic/OpenAI bridges under `transform/anthropic`, `transform/canonical`; skill-call edge cases need runtime CC repro | P1 | yes |
 | 530 | Site custom request overrides not applied automatically | feature-protocol | partial | Related to #584 — headers applied on platform proxy path; “automatic override of all request paths” not uniformly evidenced for every proxy surface | P2 | yes |
 | 515 | Global model whitelist sporadically resets to `[]` | bug-correctness | unknown-needs-runtime | Settings store `handler/admin/settings.go` + `store/settings.go`; race/reset needs runtime/repro | P0 | yes |
@@ -139,7 +139,7 @@
 | --- | ---: | ---: |
 | present | 21 | 21 |
 | partial | 7 | 28 |
-| missing | 0 | 3 |
+| missing | 0 | 2 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
@@ -148,7 +148,8 @@ Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559/#580/#581/#538 s
 Mandatory partial (7): **#585, #579, #547, #520, #584, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
-Remaining **all-rows missing** (3, additional product sample only): **#534** bulk account import · **#514** multi-tier ctx routing · **#292** auto priority orchestration.
+Remaining **all-rows missing** (2, additional product sample only): **#514** multi-tier ctx routing · **#292** auto priority orchestration.  
+**#534** bulk account import → **present** (2026-07-20 reverify: `POST /api/accounts` + `accessTokens[]`; not missing).
 
 ---
 
@@ -170,7 +171,7 @@ Remaining **all-rows missing** (3, additional product sample only): **#534** bul
 
 1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
 2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
-3. Remaining high-leverage **partial** mandatory work: cascade residual load-proof (**#585**), multi-key binding (**#579**), usage/stats accuracy (**#555**). Gemini `thought_signature` (**#580/#581**) request-side + proxy sanitize is **present** (#86/#309); multi-turn Responses content (**#538**) is **present** for HTTP (#50/#310); residuals are multi-instance aggregate re-attach and conversion/store/WS only.
+3. Remaining high-leverage **partial** mandatory work: cascade residual load-proof (**#585**), multi-key binding (**#579**), per-key weight (**#547**), header priority (**#584**), usage/stats accuracy (**#555**). Program schedule: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md). Gemini `thought_signature` (**#580/#581**) request-side + proxy sanitize is **present** (#86/#309); multi-turn Responses content (**#538**) is **present** for HTTP (#50/#310); full Responses **WebSocket** is scheduled full TS parity (C1–C3), residual until C1 ships.
 4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
 5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 

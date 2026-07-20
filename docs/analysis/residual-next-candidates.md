@@ -1,14 +1,14 @@
-# Residual next candidates (post v0.8.43 / M50; #531 → v0.8.44)
+# Residual next candidates (post v0.8.45; parity program scheduled)
 
-**Date**: 2026-07-19  
-**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG (M49 #517 · M50 #527–#530)  
-**Context**: **v0.8.43 shipped**; **#531 pool profiles** landing as v0.8.44 (P0-585 load-proof honesty tests · P0-555 Gemini stream honesty · us1 pin · M50 docs). Prior: v0.8.42 cron validate; v0.8.41 request_id index; v0.8.40 PG pool; M49 reliability through v0.8.39. Full narrative → `CHANGELOG.md` / Releases. Program foundations closed; residual polish only.  
+**Date**: 2026-07-20  
+**Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG  
+**Context**: **v0.8.45** RE2-safe + UI tip; unreleased tip: OAuth refresh + Sub2API due. **Parity program** (ex-Electron): [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md). Full narrative → `CHANGELOG.md` / Releases.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
 **Next-wave shortlist (ours vs original)**: [`high-value-next.md`](./high-value-next.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: none after M50 (optional residual only with dedicated ACs)  
-**Prod pin**: see STATE / server `projects/metapi/STATE.md`
+**Active wave**: **parity program (docs)** → Wave KEYS / WS C1 when coding starts  
+**Prod pin**: see STATE / server `projects/metapi/STATE.md` (0.8.45 pin/up **gated**)
 
 ## Purpose
 
@@ -33,9 +33,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-RETENTION-RFC3339 | Retention cutoff space-datetime vs RFC3339 created_at | **present** (#516/#521) | Retention cutoffs use RFC3339 UTC comparable to proxy_logs/events/files/video `created_at`; same-day prune no longer shielded | Done for created_at retention compare | Multi-instance SQLite lease redesign residual |
 | REL-PG-POOL-PROFILE | PG pool profiles + 53300 lease pressure | **present** (#531 / v0.8.44) | `DB_PROFILE` shared-tiny/normal/dedicated; lease local/backoff; metrics; design `docs/analysis/db-pool-budget.md` |
 | UI-REFRESH | Admin UI GCP/glass/Apple refresh | **design-only** | FOUC hard-fix + tokens + shell; see `ui-ux-refresh.md`; not Track B |
-| WS-1 | Full Responses WebSocket Codex path | residual | `handler/proxy/responses_ws.go` (426 plain GET / 501 upgrade); `docs/analysis/responses-websocket-residual.md` (#217/#274) | Dedicated Milestone after Codex interop ACs | High protocol + multi-instance sticky interaction |
-| STICKY-B | Redis sticky map (option B) | design-only | `proxy/session.go` process-local `stickyBindings`; `docs/analysis/sticky-session-multi-instance-residual.md` (#237/#282); design spike #292 | Only if multi-instance sticky is product-critical and LB pin is unavailable | Hot-path Redis; must fail-open like sharedcount |
-| UC-1 | Update-center remote registry / deploy | residual | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; `docs/analysis/residual-update-center.md` (#283) | Product Milestone with real registry client | Ops safety; no fake updateAvailable |
+| WS-1 | Full Responses WebSocket Codex path | residual → **scheduled full TS parity** | `handler/proxy/responses_ws.go` (426 plain GET / 501 upgrade until C1); residual doc + plan Wave C1–C3 (#217/#274) | **Parity program** C1 upgrade+bridge → C2 multi-turn → C3 upstream wss; single-instance honesty | High protocol; sticky process-local only |
+| STICKY-B | Redis sticky map (option B) | design-only **deferred** | `proxy/session.go` process-local `stickyBindings`; sticky residual doc (#237/#282) | **Deferred** (user 2026-07-20): document single instance / LB pin; reopen only if multi-instance product | Hot-path Redis if reopened |
+| UC-1 | Update-center remote registry / deploy | residual → **hide/external** | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; residual-update-center (#283) | **Hide or external ops** (user 2026-07-20); deploy via GHCR/ops — **no invent registry** | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
 | P0-568 | Relay keys force-marked expired | **present** (#298/#301) | `ShouldMarkAccountExpired` + `ReportTokenExpired` ClassExpired guard; bare/generic 401 no longer marks | Done for mark path; novel wording residual only | Residual wording gaps |
 | P0-585 | Channel failure cascade poison | **partial** (hardened #299/#302; honesty #336; M39 #423–#425; M45 empty-filter honesty #476/#479; M47 credential usage-limit honesty #496/#499; **M50 load-proof honesty #527** unit/integration present — still not cascade-complete) | **Shipped:** channel-scoped exclude + cooldown isolation; 5xx multi-channel storm budget + exclude growth tests (`TestConductor_P0585LoadProof_*`); 429 same-channel budget policy documented; empty-filter / credential-scope honesty tests. **Still residual:** site/model breaker fleet pressure; credential usage-limit multi-channel cool (intentional); empty-filter global full-set fallback (intentional); **no production e2e load proof**. Detail: `docs/analysis/failover-isolation.md` | Production e2e load-proof only with dedicated AC; do not flip to present from unit tests alone | Medium residual — do not claim #585 present |
@@ -92,17 +92,15 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | SEC-ENDPOINT | Site API endpoint admin normalize + service validator | **present** (#389/#396 + #398/#403) | Admin `normalizeAPIEndpointsInput` rejects forbidden targets with clear 400 before upsert; `IsValidAPIEndpointURL` itself rejects metadata/link-local (parity with `IsValidHTTPURL` / `IsForbiddenSiteTargetURL`) so any caller is safe by default | Done for admin early-reject + base validator parity | RFC1918/localhost intentionally allowed |
 | M35-REVIEW | Multi-lane residual review synthesis | **present** (docs #388) | `docs/analysis/enterprise-review-m35.md` ranked P0/P1/P2; #389/#390 follow-ons closed on master | Historical M35 pointer | Synthesis only |
 
-## Recommended sequencing (maintenance default)
+## Recommended sequencing (parity program)
 
-1. **Latest release**: **v0.8.43** (M50) · prod pin see STATE.  
-2. **Active wave**: none after M50. Optional residual only with dedicated ACs — shortlist [`high-value-next.md`](./high-value-next.md).  
-3. **M50 present**: REL-P0585-LOADPROOF (unit/integration honesty #527) · REL-P0555-SLICE Gemini SSE honesty (#530) · OPS-US1-PIN (#528) · DOCS-M50-HONESTY (#529).  
-4. **M49 reliability present** (v0.8.39): REL-RR-FAILCOUNT · REL-USED-REQ-429 · REL-REDIS-ADMIT-ROLLBACK · REL-MAX-COST-WIRE · REL-GEMINI-PATH-STREAM · REL-RETENTION-RFC3339.  
-5. **Post-M49 present**: REL-PG-POOL (v0.8.40) · REL-MIG-REQID-IDX (v0.8.41) · REL-CRON-5F (v0.8.42).  
-6. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (production e2e load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B design-only).  
-7. **Product Milestones only with ACs**: WS-1 Codex interop, STICKY-B Redis sticky, UC-1 update-center registry.  
-8. **Do not** invent shared sticky, WS completions, or updateAvailable without the matching Milestone.  
-9. **Original parity** leftovers live in [`high-value-next.md`](./high-value-next.md) §B — matrix is evidence, not the open board.
+1. **Latest release**: **v0.8.45** · prod pin see STATE (authorized **0.8.45** soak only).  
+2. **Active program**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) · shortlist [`high-value-next.md`](./high-value-next.md).  
+3. **Order**: docs truth → **#547/#584/#579** → **WS-1 C1–C3** → **#514** → P0-585 e2e ∥ P0-555 residual → UC hide/external.  
+4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (production e2e load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B **deferred**).  
+5. **WS-1** scheduled full TS parity (not invent frames). **STICKY-B** deferred. **UC-1** hide/external (no invent registry).  
+6. **Do not** invent shared sticky, fake WS completions, or updateAvailable.  
+7. **Original matrix** is evidence; open board is MASTER + parity plan.
 
 ## Explicit non-goals for residual waves
 
@@ -114,7 +112,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 - Claiming all-dialect proxy max-token enforcement from `contextLength` without a dedicated product AC (OpenAI chat/completions, Claude messages, Responses, Gemini generateContent present; further dialects need ACs).
 - Claiming P0-585 cascade is fully present (stays **partial**; honesty tests and selection mapping are not cascade-complete).
 - Claiming enterprise STACK/UI/BACKEND/SCHEMA/FEATURE foundations are still greenfield work (closed; residual polish only).
-- Inventing WS-1 / STICKY-B / UC-1 product without dedicated ACs.
+- Inventing fake WS frames / STICKY-B cluster sticky / UC registry without ACs (WS-1 product is **scheduled** with ACs in parity plan; STICKY-B deferred; UC hide/external).
 - Claiming **v0.8.40+** product without dedicated ACs.
 - Re-opening closed security/UI residual slices as active work when CHANGELOG/MASTER already cover them.
 - Claiming README still shows Go 1.26.4 / React 18 after #494/#498.

@@ -1,17 +1,23 @@
 # Residual: Responses WebSocket transport (#217)
 
-**Date**: 2026-07-17  
+**Date**: 2026-07-17 · **program update**: 2026-07-20  
 **Issue**: [#217](https://github.com/TokenDanceLab/metapi-go/issues/217)  
-**Lane**: p85 / honest residual  
-**SSOT code**: `handler/proxy/responses_ws.go`, `handler/proxy/responses.go`, `app/app.go`
+**Lane**: p85 / honest residual → **product scheduled** full TS parity  
+**SSOT code**: `handler/proxy/responses_ws.go`, `handler/proxy/responses.go`, `app/app.go`  
+**Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) Wave C (C1→C3)  
+**Shortlist**: [`high-value-next.md`](./high-value-next.md) WS-1
+
+> **Runtime still residual** until C1 ships: plain GET **426**, upgrade **501**.  
+> **User decision 2026-07-20**: implement **完整 TS 对等** (not invent-frames). C1 may add **one** WS library (`coder/websocket` preferred). Sticky remains **process-local / single-instance honesty** (no STICKY-B now).
 
 ## Goal
 
 Stop silent capability theater around Responses WebSocket:
 
 - `EnsureResponsesWebsocketTransport` must be **called from app boot**, not only defined.
-- Do **not** invent a full Codex multi-turn WebSocket product or fake WS completions.
-- Prefer stdlib residual (no `gorilla/websocket` / `nhooyr` dependency) with clear HTTP status semantics.
+- Do **not** fake WS completions or Hijack-then-silent-close.
+- **Until C1**: residual stays stdlib-only with clear HTTP status semantics (426 / 501).
+- **From C1**: real upgrade + auth + single-turn bridge + tests; multi-turn/upstream wss in C2/C3 per plan.
 
 ## Boot wiring
 
@@ -53,15 +59,18 @@ JSON error shape remains OpenAI-ish:
 1. **No live WS server** — `EnsureResponsesWebsocketTransport` does not install `server.ConnState`, does not Hijack, and does not accept WebSocket handshakes.
 2. **No fake completions on wire** — helpers such as `SynthesizePrewarmResponsePayloads` / `ParseResponsesWSMessage` exist for a future runtime and unit tests only; residual handlers never emit them to a client socket.
 3. **Codex profile capability ≠ transport readiness** — `SupportsResponsesWebsocketIncremental` on the Codex CLI profile describes **client detection** (what Codex clients expect). It does **not** mean metapi-go currently serves incremental WS responses.
-4. **No new websocket module in go.mod** — residual stays stdlib-only.
+4. **Until C1: no websocket module in go.mod** — residual stays stdlib-only. **C1+**: one library is allowed; still no fake frames.
 
-## Optional future scaffolding (out of scope for #217)
+## Product implementation (supersedes “out of scope” for #217 residual-only)
 
-When implementing a real transport:
+Scheduled under parity program Wave C — see plan SSOT:
 
-1. Keep boot call site: `App.WireResponsesWebsocketTransport` → `EnsureResponsesWebsocketTransport`.
-2. Prefer `http.Hijacker` on `GET /v1/responses` after auth, or a dedicated upgrade mux — still no silent success without a protocol.
-3. Message loop, turn-state echo, pre-warm `generate=false`, and HTTP fallback from an open socket are product work, not residual.
+1. Keep boot call site: `App.WireResponsesWebsocketTransport` → `EnsureResponsesWebsocketTransport` (evolve residual → real transport).
+2. C1: real upgrade after auth; turn-state echo; `response.create` single-turn; in-process HTTP SSE→WS bridge; reuse `PrepareCtx` / `dispatchUpstream`.
+3. C2: multi-turn merge/append + prewarm on wire + per-message quota.
+4. C3: Codex upstream `wss` + session store + `previous_response_id` + dial→HTTP fallback.
+5. C4 docs: multi-instance honesty (single instance or LB pin); no STICKY-B unless reopened.
+6. **Forbidden always**: Hijack-silent-close · fake `response.completed` · claim multi-instance multi-turn without pin · treat `SupportsResponsesWebsocketIncremental` as transport ready.
 
 ## Tests
 
