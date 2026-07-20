@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] tip after embed SPA rebuild
+
+- Tip `c1daeab`: web/dist embed matches About source honesty; pushed master (pre-push race clean).
+
 ## [2026-07-21] neat-freak: formal-readiness + About honesty
 
 - formal-readiness Track B gates refresh: WS C1–C3 present · UC-1 hide/external present · P0-585/555 residual honesty; A2.1 ops pin lag noted.
