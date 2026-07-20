@@ -4,6 +4,12 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] neat-freak: residual/matrix/formal after parity ship
+
+- residual-next **Active wave** → parity core shipped (not "when coding starts").
+- formal-readiness table headers → product tip ≥ v0.8.45 (not v0.8.44 column label).
+- matrix: #520 present-with-residual (stale missing-field claim); #555 present-with-residual; #489 discovery timeout present; #571 evidence refresh (still runtime).
+
 ## [2026-07-21] tip after embed SPA rebuild
 
 - Tip `c1daeab`: web/dist embed matches About source honesty; pushed master (pre-push race clean).

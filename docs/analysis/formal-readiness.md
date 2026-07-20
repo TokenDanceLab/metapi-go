@@ -9,7 +9,7 @@
 
 ## 1. Two different “正式”
 
-| Track | Meaning | Audience | Current (v0.8.44) |
+| Track | Meaning | Audience | Current (product tip >= v0.8.45) |
 |:------|:--------|:---------|:------------------|
 | **A. 对内正式可用** | 自己人/小流量当代理入口用；可维护、可升级、故障可解释 | 运维 / 内部 | **YES — 已达标**（tip ≥ v0.8.45 产品；ops pin 可能 lag） |
 | **B. 对外宣传完备** | 对外说“企业全功能 / 高可用 / 计费准 / 多副本粘滞 / WS 全通” | 客户 / 公告 | **NO — residual 未清**（P0-585 e2e · P0-555 multi-instance · multi-instance sticky） |
@@ -20,11 +20,11 @@
 
 ## 2. Track A — 对内正式可用（已满足）
 
-全部为 **must**；任一条��败则降级为“试用/止血态”。
+全部为 **must**；任一条失败则降级为“试用/止血态”。
 
 ### A1. 产品
 
-| # | Gate | Evidence | v0.8.44 |
+| # | Gate | Evidence | product |
 |:-:|:-----|:---------|:-------:|
 | A1.1 | 有 semver Release + GHCR 镜像 | Release **v0.8.45** · GHCR `metapi-go:0.8.45`（ops pin 可能仍 lag） | ✅ |
 | A1.2 | 主代理路径可用 | OpenAI/Anthropic/Gemini/Codex HTTP 路径；非 stub 生产默认 503 | ✅ |

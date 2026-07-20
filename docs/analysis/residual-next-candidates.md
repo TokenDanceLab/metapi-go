@@ -1,13 +1,13 @@
 # Residual next candidates (post v0.8.45; parity program scheduled)
 
-**Date**: 2026-07-20  
+**Date**: 2026-07-21  
 **Issue**: inventory origin [#290](https://github.com/TokenDanceLab/metapi-go/issues/290); honesty trail via MASTER / CHANGELOG  
-**Context**: **v0.8.45** RE2-safe + UI tip; unreleased tip: OAuth refresh + Sub2API due. **Parity program** (ex-Electron): [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md). Full narrative → `CHANGELOG.md` / Releases.  
+**Context**: **v0.8.45** RE2-safe + UI tip; unreleased tip: parity KEYS/WS/#514/UC-1 + P0-555 media fold + embed SPA honesty. **Parity program** (ex-Electron): [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md). Full narrative → `CHANGELOG.md` / Releases.  
 **Scope**: inventory only — **no product code** in this document.  
 **Map**: [`docs/README.md`](../README.md) · 现状 [`docs/STATE.md`](../STATE.md) · 开放门禁 [`docs/progress/MASTER.md`](../progress/MASTER.md) · 日志 [`docs/log.md`](../log.md)  
 **Next-wave shortlist (ours vs original)**: [`high-value-next.md`](./high-value-next.md)  
 **M35 review synthesis**: [`enterprise-review-m35.md`](./enterprise-review-m35.md) (#388) — historical pointer only  
-**Active wave**: **parity program (docs)** → Wave KEYS / WS C1 when coding starts  
+**Active wave**: **parity core shipped** (KEYS / WS C1-C3 / #514 / UC-1); next = REL (P0-585 e2e / P0-555 residual) / ops pin auth  
 **Prod pin**: see STATE / server `projects/metapi/STATE.md` (0.8.45 pin/up **gated**)
 
 ## Purpose
@@ -96,9 +96,9 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 ## Recommended sequencing (parity program)
 
 1. **Latest release**: **v0.8.45** · prod pin see STATE (authorized **0.8.45** soak only).  
-2. **Active program**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) · shortlist [`high-value-next.md`](./high-value-next.md).  
-3. **Order**: docs truth → **#547/#584/#579** → **WS-1 C1–C3** → **#514** → P0-585 e2e ∥ P0-555 residual → UC hide/external.  
-4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (production e2e load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B **deferred**).  
+2. **Parity core shipped** (unreleased tip): KEYS / WS C1-C3 / #514 / UC-1 hide/external / media fold -- plan [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) / shortlist [`high-value-next.md`](./high-value-next.md).  
+3. **Next**: **P0-585** production e2e only / **P0-555** residual (multi-instance lag) / optional #571/#577 runtime probes.  
+4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (unit load-proof != present). Redis admission is fail-open / **not** sticky (STICKY-B **deferred**).  
 5. **WS-1 C1–C3 present** (not invent frames). **STICKY-B** deferred. **UC-1** hide/external (no invent registry).  
 6. **Do not** invent shared sticky, fake WS completions, or updateAvailable.  
 7. **Original matrix** is evidence; open board is MASTER + parity plan.

@@ -22,7 +22,7 @@
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | **empty** — schedule from parity plan when coding starts |
+| — | — | **empty** — parity core shipped; file REL/runtime probe issues only if scheduling work |
 
 ## Hard gates
 
