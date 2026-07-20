@@ -41,6 +41,17 @@
 
 **Documented decision**: Redis / distributed sticky / shared cache invalidation remain out of scope for #42. Operators running multiple MetAPI instances against one database should treat usage aggregation as lease-serialized (correct but delayed on crash) and treat sticky routing as best-effort until a shared store exists.
 
+
+### Orphan proxy_logs (no site join) — observability
+
+`ProjectionPassResult.OrphanLogs` counts rows skipped for site/model buckets while still advancing the watermark. Operators can correlate log lines:
+
+```text
+usage-aggregation: orphan proxy_logs skipped site buckets orphan_logs=N processed_logs=M watermark_id=W
+```
+
+This does **not** invent a synthetic site bucket; global dashboard `SUM(proxy_logs)` paths still see those rows when reading raw logs. Perfect multi-instance billing is **not** claimed.
+
 ## Tests
 
 - `scheduler/usage_aggregation_test.go`

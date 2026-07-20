@@ -89,8 +89,13 @@ func (s *UsageAggregationScheduler) Stop() error {
 }
 
 // ProjectionPassResult is the result of a single projection pass.
+//
+// OrphanLogs counts proxy_logs without a site join (missing account/site).
+// They still advance the watermark so projection does not stall, but they
+// do not contribute to site/model aggregates (P0-555 residual honesty).
 type ProjectionPassResult struct {
 	ProcessedLogs int
+	OrphanLogs    int
 	WatermarkID   int64
 	Recomputed    bool
 }
@@ -171,6 +176,7 @@ func (s *UsageAggregationScheduler) runPass() *ProjectionPassResult {
 
 		// Normal projection phase
 		processedLogs := 0
+		orphanLogs := 0
 		for batch := 0; batch < usageProjectionMaxBatches; batch++ {
 			rows, err := s.fetchBatch(dbw, watermark, usageProjectionBatchSize)
 			if err != nil {
@@ -181,11 +187,13 @@ func (s *UsageAggregationScheduler) runPass() *ProjectionPassResult {
 				break
 			}
 
-			if err := s.applyBatch(dbw, cp, rows); err != nil {
+			batchOrphans, err := s.applyBatch(dbw, cp, rows)
+			if err != nil {
 				passErr = err
 				return
 			}
 			processedLogs += len(rows)
+			orphanLogs += batchOrphans
 			watermark = rows[len(rows)-1].id
 
 			if len(rows) < usageProjectionBatchSize {
@@ -193,8 +201,17 @@ func (s *UsageAggregationScheduler) runPass() *ProjectionPassResult {
 			}
 		}
 
+		if orphanLogs > 0 {
+			slog.Info("usage-aggregation: orphan proxy_logs skipped site buckets",
+				"orphan_logs", orphanLogs,
+				"processed_logs", processedLogs,
+				"watermark_id", watermark,
+			)
+		}
+
 		result = &ProjectionPassResult{
 			ProcessedLogs: processedLogs,
+			OrphanLogs:    orphanLogs,
 			WatermarkID:   watermark,
 			Recomputed:    cp.RecomputeFromID != nil && *cp.RecomputeFromID > 0,
 		}
@@ -370,7 +387,7 @@ func (s *UsageAggregationScheduler) fetchBatch(dbw *store.DB, afterID int64, lim
 	return result, nil
 }
 
-func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheckpoint, rows []projectionRow) error {
+func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheckpoint, rows []projectionRow) (orphanCount int, err error) {
 	// Aggregate deltas by key so one batch never multiplies the same bucket
 	// with repeated single-row upserts (correctness + fewer writes).
 	type dayKey struct {
@@ -406,6 +423,7 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 		if r.siteID == nil {
 			// Orphan logs without a site join still advance the watermark below;
 			// they cannot contribute to site/model aggregates.
+			orphanCount++
 			continue
 		}
 		logTime := projectionTimestamp(r.createdAt)
@@ -486,7 +504,7 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	// Apply to usage tables within a transaction for atomicity
 	tx, err := dbw.Beginx()
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback() // safe to call after Commit
 
@@ -532,19 +550,19 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 	for k, d := range dayDeltas {
 		if _, err := tx.Exec(tx.Rebind(siteDaySQL),
 			k.day, k.siteID, d.calls, d.successes, d.failures, d.tokens, d.summarySpend, d.siteSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
-			return fmt.Errorf("failed to upsert site_day_usage: %w", err)
+			return 0, fmt.Errorf("failed to upsert site_day_usage: %w", err)
 		}
 	}
 	for k, d := range hourDeltas {
 		if _, err := tx.Exec(tx.Rebind(siteHourSQL),
 			k.hour, k.siteID, d.calls, d.successes, d.failures, d.tokens, d.summarySpend, d.siteSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
-			return fmt.Errorf("failed to upsert site_hour_usage: %w", err)
+			return 0, fmt.Errorf("failed to upsert site_hour_usage: %w", err)
 		}
 	}
 	for k, d := range modelDeltas {
 		if _, err := tx.Exec(tx.Rebind(modelDaySQL),
 			k.day, k.siteID, k.model, d.calls, d.successes, d.failures, d.tokens, d.modelSpend, d.latencyMs, d.latencyCount, now, now); err != nil {
-			return fmt.Errorf("failed to upsert model_day_usage: %w", err)
+			return 0, fmt.Errorf("failed to upsert model_day_usage: %w", err)
 		}
 	}
 
@@ -560,11 +578,11 @@ func (s *UsageAggregationScheduler) applyBatch(dbw *store.DB, cp projectionCheck
 			SET last_proxy_log_id = ?, watermark_created_at = ?, last_projected_at = ?, last_successful_at = ?, updated_at = ?
 			WHERE projector_key = ?`),
 			lastID, lastCreatedAt, now, now, now, usageProjectorKey); err != nil {
-			return fmt.Errorf("failed to update projection checkpoint: %w", err)
+			return 0, fmt.Errorf("failed to update projection checkpoint: %w", err)
 		}
 	}
 
-	return tx.Commit()
+	return orphanCount, tx.Commit()
 }
 
 // effectiveTokenCount prefers total_tokens when present and positive; otherwise

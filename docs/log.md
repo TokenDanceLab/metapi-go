@@ -4,6 +4,11 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] P0-555 orphan projection observability
+
+- `ProjectionPassResult.OrphanLogs` + slog when proxy_logs skip site buckets; watermark still advances (no double count).
+- Honesty tests assert orphan count; docs residual updated. P0-555 remains present-with-residual.
+
 ## [2026-07-21] routing estimate envelope tests + #577 evidence
 
 - `routing` EstimateRequestContextTokens tests for Claude system + Gemini contents.

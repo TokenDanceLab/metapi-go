@@ -458,10 +458,16 @@ func TestUsageAggregationProjection_OrphanLogAdvancesWatermarkWithoutDoubleCount
 	if first == nil || first.ProcessedLogs != 2 {
 		t.Fatalf("first pass = %+v, want processed 2", first)
 	}
+	if first.OrphanLogs != 1 {
+		t.Fatalf("first OrphanLogs = %d, want 1 (one log without site join)", first.OrphanLogs)
+	}
 	// Re-running must not re-project already watermarked rows.
 	second := s.RunProjectionPass()
 	if second == nil || second.ProcessedLogs != 0 {
 		t.Fatalf("second pass = %+v, want processed 0 (no double count)", second)
+	}
+	if second.OrphanLogs != 0 {
+		t.Fatalf("second OrphanLogs = %d, want 0", second.OrphanLogs)
 	}
 
 	day := goodTime.Format("2006-01-02")
