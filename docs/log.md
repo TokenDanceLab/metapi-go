@@ -1,3 +1,11 @@
+## [2026-07-21] #584 site custom header override priority
+
+- Schema `custom_headers_override_request_headers` + additive `sc2_008_site_custom_headers_override_request_headers`.
+- `platform.ApplyCustomHeadersWithOptions`: default **request-wins** (only fill missing); opt-in **site-wins** (`OverrideRequest` / site flag).
+- Wired: ProxyConfig flag ← site · BuildPlatformProxyConfig · upstream apply · site_proxy Do/DoWithProxy · channel health probe.
+- Admin create/update + Sites UI checkbox「站点请求头覆盖客户端同名头」; deny-list unchanged.
+- Tests: request-wins / site-wins / sensitive still denied; store column count Site 21.
+
 ## [2026-07-21] #547 per-downstream-key weight
 
 - Schema `key_weight` + additive `sc2_007_downstream_key_weight`.

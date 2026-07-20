@@ -205,6 +205,11 @@ func (h *sitesHandler) createSite(w http.ResponseWriter, r *http.Request) {
 	} else {
 		siteData["customHeaders"] = nil
 	}
+	if body.CustomHeadersOverrideRequestHeaders != nil {
+		siteData["customHeadersOverrideRequestHeaders"] = *body.CustomHeadersOverrideRequestHeaders
+	} else {
+		siteData["customHeadersOverrideRequestHeaders"] = false
+	}
 	if body.ExternalCheckinURL != nil {
 		siteData["externalCheckinUrl"] = service.NormalizeNullable(body.ExternalCheckinURL)
 	} else {
@@ -321,6 +326,9 @@ func (h *sitesHandler) updateSite(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.CustomHeaders != nil {
 		updates["customHeaders"] = *body.CustomHeaders
+	}
+	if body.CustomHeadersOverrideRequestHeaders != nil {
+		updates["customHeadersOverrideRequestHeaders"] = *body.CustomHeadersOverrideRequestHeaders
 	}
 	if body.ExternalCheckinURL != nil {
 		if *body.ExternalCheckinURL != "" && !service.IsValidHTTPURL(*body.ExternalCheckinURL) {

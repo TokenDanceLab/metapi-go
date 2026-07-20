@@ -43,7 +43,7 @@ Decision log (2026-07-20):
 | ID | Title | Status | Effort | Lane | AC sketch |
 |:---|:------|:-------|:-------|:-----|:----------|
 | **#547** | Per-downstream-key weight scalar | partial | M | keys | Schema + selector multiply + DownstreamKeys UI; tests on weighted pick |
-| **#584** | Site custom header override priority | partial | M | protocol | Opt-in flag site-wins vs request-wins; site_proxy + tests |
+| **#584** | Site custom header override priority | **present** | M | protocol | `custom_headers_override_request_headers` + ApplyCustomHeadersWithOptions + Sites UI |
 | **#579** | Multi-credential bind on one downstream key | partial | L | keys | Product model AC first; CRUD + auth eligibility; not only exclusions |
 | **#514** | Multi-tier context → channel switch | missing | L | routing | Tier config + request-ctx select channel; independent of single `context_length` |
 

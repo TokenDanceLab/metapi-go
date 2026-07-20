@@ -100,7 +100,9 @@ func (sp *SiteProxy) Do(ctx context.Context, req *http.Request, proxyConfig *Pro
 
 	// Apply custom headers from proxy config (deny-list filters identity/hop-by-hop).
 	if proxyConfig != nil {
-		ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
+		ApplyCustomHeadersWithOptions(req, proxyConfig.CustomHeaders, ApplyCustomHeadersOptions{
+			OverrideRequest: proxyConfig.CustomHeadersOverrideRequest,
+		})
 	}
 
 	// If specific proxy URL is given, use a dedicated transport
@@ -154,7 +156,10 @@ func (sp *SiteProxy) doWithExplicitProxy(ctx context.Context, req *http.Request,
 func DoWithProxy(ctx context.Context, req *http.Request, proxyConfig *ProxyConfig) (*http.Response, error) {
 	if proxyConfig != nil {
 		// Deny-list sensitive / hop-by-hop / metapi-control headers (#356).
-		ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
+		// #584: honor CustomHeadersOverrideRequest (default request-wins).
+		ApplyCustomHeadersWithOptions(req, proxyConfig.CustomHeaders, ApplyCustomHeadersOptions{
+			OverrideRequest: proxyConfig.CustomHeadersOverrideRequest,
+		})
 	}
 
 	insecureSkipTLS := proxyConfig != nil && proxyConfig.InsecureSkipTLS

@@ -26,6 +26,7 @@ describe('buildSiteSaveAction', () => {
           { url: 'https://api-b.example.com', enabled: false, sortOrder: 1 },
         ],
         customHeaders: '{"x-site-token":"alpha"}',
+        customHeadersOverrideRequestHeaders: false,
         useSystemProxy: false,
         globalWeight: 1.2,
         maxConcurrency: 0,
@@ -49,6 +50,7 @@ describe('buildSiteSaveAction', () => {
           { url: 'https://api-b.example.com', enabled: false, sortOrder: 1 },
         ],
         customHeaders: '{"x-site-token":"alpha"}',
+        customHeadersOverrideRequestHeaders: false,
         useSystemProxy: false,
         globalWeight: 1.2,
         maxConcurrency: 0,
@@ -236,5 +238,43 @@ describe('buildSiteSaveAction', () => {
       apiEndpoints: [],
       error: 'API 请求地址 "https://api.example.com" 重复了',
     });
+  });
+});
+
+describe('customHeadersOverrideRequestHeaders (#584)', () => {
+  it('defaults false in emptySiteForm', () => {
+    expect(emptySiteForm().customHeadersOverrideRequestHeaders).toBe(false);
+  });
+
+  it('reads override flag from site', () => {
+    const form = siteFormFromSite({
+      name: 's',
+      url: 'https://example.com',
+      customHeadersOverrideRequestHeaders: true,
+    });
+    expect(form.customHeadersOverrideRequestHeaders).toBe(true);
+  });
+
+  it('round-trips override flag in save payload', () => {
+    const action = buildSiteSaveAction(
+      { mode: 'add' },
+      {
+        name: 'site-a',
+        url: 'https://a.example.com/',
+        externalCheckinUrl: '',
+        platform: 'new-api',
+        proxyUrl: '',
+        apiEndpoints: [],
+        customHeaders: '',
+        customHeadersOverrideRequestHeaders: true,
+        useSystemProxy: false,
+        globalWeight: 1,
+        maxConcurrency: 0,
+      },
+    );
+    expect(action.kind).toBe('add');
+    if (action.kind === 'add') {
+      expect(action.payload.customHeadersOverrideRequestHeaders).toBe(true);
+    }
   });
 });

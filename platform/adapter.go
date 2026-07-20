@@ -36,10 +36,14 @@ const (
 
 // ProxyConfig carries optional proxy settings for a single request.
 type ProxyConfig struct {
-	ProxyURL        string
-	CustomHeaders   map[string]string
-	UseSystemProxy  bool
-	InsecureSkipTLS bool
+	ProxyURL      string
+	CustomHeaders map[string]string
+	// CustomHeadersOverrideRequest: when true, site custom headers overwrite
+	// same-name request headers (site-wins / upstream #584 opt-in). Default
+	// false = request-wins (only fill missing headers).
+	CustomHeadersOverrideRequest bool
+	UseSystemProxy               bool
+	InsecureSkipTLS              bool
 }
 
 // CheckinResult is the outcome of a daily checkin.
@@ -99,7 +103,7 @@ type UserInfo struct {
 
 // TokenVerifyResult reports the result of token verification.
 type TokenVerifyResult struct {
-	TokenType string     // "session", "apikey", "unknown"
+	TokenType string // "session", "apikey", "unknown"
 	UserInfo  *UserInfo
 	Balance   *BalanceInfo
 	APIToken  string // first discovered API key (optional)
@@ -130,14 +134,14 @@ type SiteAnnouncement struct {
 
 // CreateAPITokenOptions holds parameters for creating a new API key.
 type CreateAPITokenOptions struct {
-	Name              string
-	Group             string
-	UnlimitedQuota    bool    // default true
-	RemainQuota       float64 // default 0
-	ExpiredTime       int64   // Unix timestamp, -1 = never expire
-	AllowIPs          string
+	Name               string
+	Group              string
+	UnlimitedQuota     bool    // default true
+	RemainQuota        float64 // default 0
+	ExpiredTime        int64   // Unix timestamp, -1 = never expire
+	AllowIPs           string
 	ModelLimitsEnabled bool
-	ModelLimits       string
+	ModelLimits        string
 }
 
 // PlatformAdapter is the interface every platform adapter must implement.

@@ -20,6 +20,8 @@ export type SiteForm = {
   useSystemProxy: boolean;
   apiEndpoints: SiteApiEndpointField[];
   customHeaders: SiteCustomHeaderField[];
+  /** When true, site custom headers overwrite same-name request headers (#584). */
+  customHeadersOverrideRequestHeaders: boolean;
   globalWeight: string;
   /** Site concurrent upstream cap; string for controlled input. 0 = unlimited. */
   maxConcurrency: string;
@@ -43,6 +45,8 @@ export type SiteSavePayload = {
     sortOrder: number;
   }>;
   customHeaders: string;
+  /** Opt-in site-wins for same-name headers (#584). Default false = request-wins. */
+  customHeadersOverrideRequestHeaders?: boolean;
   globalWeight: number;
   /** Caps concurrent upstream calls for this site (0 = unlimited). */
   maxConcurrency: number;
@@ -83,6 +87,7 @@ export function emptySiteForm(): SiteForm {
     useSystemProxy: false,
     apiEndpoints: [emptySiteApiEndpoint()],
     customHeaders: [emptySiteCustomHeader()],
+    customHeadersOverrideRequestHeaders: false,
     globalWeight: '1',
     maxConcurrency: '0',
   };
@@ -147,6 +152,7 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     lastFailureReason?: string | null;
   }> | null;
   customHeaders?: string | null;
+  customHeadersOverrideRequestHeaders?: boolean | null;
   globalWeight?: number | string | null;
   maxConcurrency?: number | string | null;
 }): SiteForm {
@@ -165,6 +171,7 @@ export function siteFormFromSite(site: Partial<Omit<SiteForm, 'apiEndpoints' | '
     useSystemProxy: !!site.useSystemProxy,
     apiEndpoints: parseApiEndpointsForEditor(site.apiEndpoints),
     customHeaders: parseCustomHeadersForEditor(site.customHeaders),
+    customHeadersOverrideRequestHeaders: !!site.customHeadersOverrideRequestHeaders,
     globalWeight,
     maxConcurrency,
   };

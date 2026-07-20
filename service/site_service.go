@@ -158,7 +158,7 @@ func LoadSiteAPIEndpoints(db *sqlx.DB, siteIDs []int64) (map[int64][]store.SiteA
 // Shared PG CI DBs may have leftover probe columns from schema experiments;
 // SELECT * would fail struct scan with "missing destination name ...".
 const SiteSelectColumns = `id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy,
-	custom_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency,
+	custom_headers, custom_headers_override_request_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency,
 	post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 	post_refresh_probe_latency_threshold_ms, created_at, updated_at`
 
@@ -183,27 +183,28 @@ func LoadSiteWithEndpoints(db *sqlx.DB, siteID int64) (map[string]any, error) {
 
 func siteToMap(site store.Site, endpoints []store.SiteAPIEndpoint) map[string]any {
 	return map[string]any{
-		"id":                                 site.ID,
-		"name":                               site.Name,
-		"url":                                site.URL,
-		"externalCheckinUrl":                 site.ExternalCheckinURL,
-		"platform":                           site.Platform,
-		"proxyUrl":                           site.ProxyURL,
-		"useSystemProxy":                     site.UseSystemProxy,
-		"customHeaders":                      site.CustomHeaders,
-		"status":                             site.Status,
-		"isPinned":                           site.IsPinned,
-		"sortOrder":                          site.SortOrder,
-		"globalWeight":                       site.GlobalWeight,
-		"apiKey":                             site.APIKey,
-		"maxConcurrency":                     site.MaxConcurrency,
-		"postRefreshProbeEnabled":            site.PostRefreshProbeEnabled,
-		"postRefreshProbeModel":              site.PostRefreshProbeModel,
-		"postRefreshProbeScope":              site.PostRefreshProbeScope,
-		"postRefreshProbeLatencyThresholdMs": site.PostRefreshProbeLatencyThresholdMs,
-		"createdAt":                          site.CreatedAt,
-		"updatedAt":                          site.UpdatedAt,
-		"apiEndpoints":                       endpoints,
+		"id":                                  site.ID,
+		"name":                                site.Name,
+		"url":                                 site.URL,
+		"externalCheckinUrl":                  site.ExternalCheckinURL,
+		"platform":                            site.Platform,
+		"proxyUrl":                            site.ProxyURL,
+		"useSystemProxy":                      site.UseSystemProxy,
+		"customHeaders":                       site.CustomHeaders,
+		"customHeadersOverrideRequestHeaders": site.CustomHeadersOverrideRequestHeaders,
+		"status":                              site.Status,
+		"isPinned":                            site.IsPinned,
+		"sortOrder":                           site.SortOrder,
+		"globalWeight":                        site.GlobalWeight,
+		"apiKey":                              site.APIKey,
+		"maxConcurrency":                      site.MaxConcurrency,
+		"postRefreshProbeEnabled":             site.PostRefreshProbeEnabled,
+		"postRefreshProbeModel":               site.PostRefreshProbeModel,
+		"postRefreshProbeScope":               site.PostRefreshProbeScope,
+		"postRefreshProbeLatencyThresholdMs":  site.PostRefreshProbeLatencyThresholdMs,
+		"createdAt":                           site.CreatedAt,
+		"updatedAt":                           site.UpdatedAt,
+		"apiEndpoints":                        endpoints,
 	}
 }
 
@@ -293,6 +294,7 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	}
 
 	useSystemProxy, _ := siteData["useSystemProxy"].(bool)
+	customHeadersOverrideRequestHeaders, _ := siteData["customHeadersOverrideRequestHeaders"].(bool)
 	isPinned, _ := siteData["isPinned"].(bool)
 	postRefreshProbeEnabled, _ := siteData["postRefreshProbeEnabled"].(bool)
 	postRefreshProbeModel, _ := siteData["postRefreshProbeModel"].(string)
@@ -330,13 +332,15 @@ func CreateSite(db *sqlx.DB, siteData map[string]any) (int64, error) {
 	var siteID int64
 	err = tx.QueryRowx(
 		tx.Rebind(`INSERT INTO sites (name, url, platform, proxy_url, use_system_proxy, custom_headers,
+		 custom_headers_override_request_headers,
 		 external_checkin_url, status, is_pinned, sort_order, global_weight, max_concurrency,
 		 post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		 post_refresh_probe_latency_threshold_ms, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 RETURNING id`),
 		name, urlStr, platform,
 		siteData["proxyUrl"], useSystemProxy, siteData["customHeaders"],
+		customHeadersOverrideRequestHeaders,
 		siteData["externalCheckinUrl"], status, isPinned,
 		sortOrder, globalWeight, maxConcurrency,
 		postRefreshProbeEnabled, postRefreshProbeModel,
@@ -501,23 +505,24 @@ func ApplySiteStatusSideEffects(db *sqlx.DB, siteID int64, siteName string, newS
 // jsonKeyToColumn maps JSON field names to DB column names.
 func jsonKeyToColumn(key string) string {
 	mapping := map[string]string{
-		"name":                               "name",
-		"url":                                "url",
-		"platform":                           "platform",
-		"proxyUrl":                           "proxy_url",
-		"useSystemProxy":                     "use_system_proxy",
-		"customHeaders":                      "custom_headers",
-		"externalCheckinUrl":                 "external_checkin_url",
-		"status":                             "status",
-		"isPinned":                           "is_pinned",
-		"sortOrder":                          "sort_order",
-		"globalWeight":                       "global_weight",
-		"apiKey":                             "api_key",
-		"maxConcurrency":                     "max_concurrency",
-		"postRefreshProbeEnabled":            "post_refresh_probe_enabled",
-		"postRefreshProbeModel":              "post_refresh_probe_model",
-		"postRefreshProbeScope":              "post_refresh_probe_scope",
-		"postRefreshProbeLatencyThresholdMs": "post_refresh_probe_latency_threshold_ms",
+		"name":                                "name",
+		"url":                                 "url",
+		"platform":                            "platform",
+		"proxyUrl":                            "proxy_url",
+		"useSystemProxy":                      "use_system_proxy",
+		"customHeaders":                       "custom_headers",
+		"customHeadersOverrideRequestHeaders": "custom_headers_override_request_headers",
+		"externalCheckinUrl":                  "external_checkin_url",
+		"status":                              "status",
+		"isPinned":                            "is_pinned",
+		"sortOrder":                           "sort_order",
+		"globalWeight":                        "global_weight",
+		"apiKey":                              "api_key",
+		"maxConcurrency":                      "max_concurrency",
+		"postRefreshProbeEnabled":             "post_refresh_probe_enabled",
+		"postRefreshProbeModel":               "post_refresh_probe_model",
+		"postRefreshProbeScope":               "post_refresh_probe_scope",
+		"postRefreshProbeLatencyThresholdMs":  "post_refresh_probe_latency_threshold_ms",
 	}
 	return mapping[key]
 }

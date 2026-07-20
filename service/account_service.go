@@ -195,10 +195,14 @@ func BuildPlatformProxyConfig(cfg *config.Config, account *store.Account, site *
 	}
 
 	proxyCfg := &platform.ProxyConfig{}
-	if site != nil && site.CustomHeaders != nil && strings.TrimSpace(*site.CustomHeaders) != "" {
-		var headers map[string]string
-		if err := json.Unmarshal([]byte(*site.CustomHeaders), &headers); err == nil && len(headers) > 0 {
-			proxyCfg.CustomHeaders = filterPlatformCustomHeaders(headers)
+	if site != nil {
+		// #584: wire site opt-in so ApplyCustomHeaders can force site-wins.
+		proxyCfg.CustomHeadersOverrideRequest = site.CustomHeadersOverrideRequestHeaders
+		if site.CustomHeaders != nil && strings.TrimSpace(*site.CustomHeaders) != "" {
+			var headers map[string]string
+			if err := json.Unmarshal([]byte(*site.CustomHeaders), &headers); err == nil && len(headers) > 0 {
+				proxyCfg.CustomHeaders = filterPlatformCustomHeaders(headers)
+			}
 		}
 	}
 
@@ -310,8 +314,10 @@ func GetAccountWithSiteByID(db *sqlx.DB, id int64) (*AccountWithSite, error) {
 		s.id AS "sites.id", s.name AS "sites.name", s.url AS "sites.url",
 		s.platform AS "sites.platform", s.proxy_url AS "sites.proxy_url",
 		s.use_system_proxy AS "sites.use_system_proxy",
-		s.custom_headers AS "sites.custom_headers", s.status AS "sites.status"
-		FROM accounts a INNER JOIN sites s ON a.site_id = s.id WHERE a.id = ?`
+		s.custom_headers AS "sites.custom_headers",
+			s.custom_headers_override_request_headers AS "sites.custom_headers_override_request_headers",
+			s.status AS "sites.status"
+			FROM accounts a INNER JOIN sites s ON a.site_id = s.id WHERE a.id = ?`
 
 	var row struct {
 		Accounts struct {
@@ -339,14 +345,15 @@ func GetAccountWithSiteByID(db *sqlx.DB, id int64) (*AccountWithSite, error) {
 			UpdatedAt          string   `db:"updated_at"`
 		} `db:"accounts"`
 		Sites struct {
-			ID             int64   `db:"id"`
-			Name           string  `db:"name"`
-			URL            string  `db:"url"`
-			Platform       string  `db:"platform"`
-			ProxyURL       *string `db:"proxy_url"`
-			UseSystemProxy bool    `db:"use_system_proxy"`
-			CustomHeaders  *string `db:"custom_headers"`
-			Status         string  `db:"status"`
+			ID                                  int64   `db:"id"`
+			Name                                string  `db:"name"`
+			URL                                 string  `db:"url"`
+			Platform                            string  `db:"platform"`
+			ProxyURL                            *string `db:"proxy_url"`
+			UseSystemProxy                      bool    `db:"use_system_proxy"`
+			CustomHeaders                       *string `db:"custom_headers"`
+			CustomHeadersOverrideRequestHeaders bool    `db:"custom_headers_override_request_headers"`
+			Status                              string  `db:"status"`
 		} `db:"sites"`
 	}
 
@@ -371,7 +378,9 @@ func GetAccountWithSiteByID(db *sqlx.DB, id int64) (*AccountWithSite, error) {
 			ID: row.Sites.ID, Name: row.Sites.Name,
 			URL: row.Sites.URL, Platform: row.Sites.Platform,
 			ProxyURL: row.Sites.ProxyURL, UseSystemProxy: row.Sites.UseSystemProxy,
-			CustomHeaders: row.Sites.CustomHeaders, Status: row.Sites.Status,
+			CustomHeaders:                       row.Sites.CustomHeaders,
+			CustomHeadersOverrideRequestHeaders: row.Sites.CustomHeadersOverrideRequestHeaders,
+			Status:                              row.Sites.Status,
 		},
 	}, nil
 }

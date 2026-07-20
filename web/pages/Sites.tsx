@@ -788,6 +788,7 @@ export default function Sites() {
       useSystemProxy: !!form.useSystemProxy,
       apiEndpoints: serializedApiEndpoints.apiEndpoints,
       customHeaders: serializedCustomHeaders.customHeaders,
+      customHeadersOverrideRequestHeaders: !!form.customHeadersOverrideRequestHeaders,
       globalWeight: Number(parsedGlobalWeight.toFixed(3)),
       maxConcurrency: parsedMaxConcurrency.value,
       postRefreshProbeEnabled: probeEnabled,
@@ -1613,8 +1614,22 @@ export default function Sites() {
               </div>
             ))}
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复；请求本身显式传入的请求头优先级更高。
+              按 key/value 逐条填写。整行留空会自动忽略；同名请求头不允许重复。默认：客户端显式传入的同名请求头优先；勾选下方选项后改为站点配置覆盖客户端。
             </div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 10, fontSize: 13, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!form.customHeadersOverrideRequestHeaders}
+                onChange={(e) => setForm((prev) => ({ ...prev, customHeadersOverrideRequestHeaders: e.target.checked }))}
+                style={{ marginTop: 3 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600 }}>站点请求头覆盖客户端同名头</span>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5, marginTop: 2 }}>
+                  开启后，站点自定义请求头（如 User-Agent / Originator）会覆盖下游客户端传入的同名头；关闭则保持客户端优先（兼容默认）。
+                </span>
+              </span>
+            </label>
             {isEditing && (
               <div style={{ marginTop: 16, padding: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', background: 'var(--color-bg)' }}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>禁用模型管理</div>

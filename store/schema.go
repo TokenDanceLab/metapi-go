@@ -10,11 +10,15 @@ type Site struct {
 	ProxyURL           *string `db:"proxy_url" json:"proxyUrl"`
 	UseSystemProxy     bool    `db:"use_system_proxy" json:"useSystemProxy"`
 	CustomHeaders      *string `db:"custom_headers" json:"customHeaders"`
-	Status             string  `db:"status" json:"status"`
-	IsPinned           bool    `db:"is_pinned" json:"isPinned"`
-	SortOrder          int64   `db:"sort_order" json:"sortOrder"`
-	GlobalWeight       float64 `db:"global_weight" json:"globalWeight"`
-	APIKey             *string `db:"api_key" json:"apiKey"`
+	// CustomHeadersOverrideRequestHeaders: when true, site custom headers
+	// overwrite same-name request headers (site-wins). Default false =
+	// request-wins (only set when the request lacks that header). #584.
+	CustomHeadersOverrideRequestHeaders bool    `db:"custom_headers_override_request_headers" json:"customHeadersOverrideRequestHeaders"`
+	Status                              string  `db:"status" json:"status"`
+	IsPinned                            bool    `db:"is_pinned" json:"isPinned"`
+	SortOrder                           int64   `db:"sort_order" json:"sortOrder"`
+	GlobalWeight                        float64 `db:"global_weight" json:"globalWeight"`
+	APIKey                              *string `db:"api_key" json:"apiKey"`
 	// MaxConcurrency caps concurrent upstream calls for this site.
 	// 0 (default) means unlimited — preserves pre-SC2 behavior.
 	MaxConcurrency                     int64  `db:"max_concurrency" json:"maxConcurrency"`

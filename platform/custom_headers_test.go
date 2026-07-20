@@ -131,3 +131,68 @@ func TestDoWithProxy_CustomHeadersDenySensitive(t *testing.T) {
 		t.Fatalf("Host was overridden to evil.example")
 	}
 }
+
+func TestApplyCustomHeaders_RequestWinsDefault(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "http://example.test/v1", nil)
+	req.Header.Set("User-Agent", "client-sdk/1.0")
+	req.Header.Set("X-Only-Client", "client")
+
+	// Default ApplyCustomHeaders = request-wins (#584).
+	ApplyCustomHeaders(req, map[string]string{
+		"User-Agent":     "site-forced-ua",
+		"X-Site-Only":    "site",
+		"X-Only-Client":  "site-should-not-win",
+	})
+
+	if got := req.Header.Get("User-Agent"); got != "client-sdk/1.0" {
+		t.Fatalf("User-Agent = %q, want client (request-wins)", got)
+	}
+	if got := req.Header.Get("X-Only-Client"); got != "client" {
+		t.Fatalf("X-Only-Client = %q, want client", got)
+	}
+	if got := req.Header.Get("X-Site-Only"); got != "site" {
+		t.Fatalf("X-Site-Only = %q, want site fill-in", got)
+	}
+}
+
+func TestApplyCustomHeaders_SiteWinsWhenOverride(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "http://example.test/v1", nil)
+	req.Header.Set("User-Agent", "client-sdk/1.0")
+	req.Header.Set("Originator", "client-originator")
+
+	ApplyCustomHeadersWithOptions(req, map[string]string{
+		"User-Agent":  "site-forced-ua",
+		"Originator":  "site-originator",
+		"X-Site-Only": "site",
+	}, ApplyCustomHeadersOptions{OverrideRequest: true})
+
+	if got := req.Header.Get("User-Agent"); got != "site-forced-ua" {
+		t.Fatalf("User-Agent = %q, want site-forced-ua", got)
+	}
+	if got := req.Header.Get("Originator"); got != "site-originator" {
+		t.Fatalf("Originator = %q, want site-originator", got)
+	}
+	if got := req.Header.Get("X-Site-Only"); got != "site" {
+		t.Fatalf("X-Site-Only = %q, want site", got)
+	}
+}
+
+func TestApplyCustomHeaders_SiteWinsStillDeniesSensitive(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "http://example.test/v1", nil)
+	req.Header.Set("Authorization", "Bearer original")
+
+	ApplyCustomHeadersWithOptions(req, map[string]string{
+		"Authorization": "Bearer attacker",
+		"X-Custom":      "ok",
+	}, ApplyCustomHeadersOptions{OverrideRequest: true})
+
+	if got := req.Header.Get("Authorization"); got != "Bearer original" {
+		t.Fatalf("Authorization = %q, want original", got)
+	}
+	if got := req.Header.Get("X-Custom"); got != "ok" {
+		t.Fatalf("X-Custom = %q, want ok", got)
+	}
+}

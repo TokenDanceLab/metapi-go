@@ -91,14 +91,15 @@ type harnessAccountRow struct {
 }
 
 type harnessSiteRow struct {
-	ID             int64   `db:"id"`
-	Name           string  `db:"name"`
-	URL            string  `db:"url"`
-	Platform       string  `db:"platform"`
-	ProxyURL       *string `db:"proxy_url"`
-	UseSystemProxy bool    `db:"use_system_proxy"`
-	CustomHeaders  *string `db:"custom_headers"`
-	Status         string  `db:"status"`
+	ID                                  int64   `db:"id"`
+	Name                                string  `db:"name"`
+	URL                                 string  `db:"url"`
+	Platform                            string  `db:"platform"`
+	ProxyURL                            *string `db:"proxy_url"`
+	UseSystemProxy                      bool    `db:"use_system_proxy"`
+	CustomHeaders                       *string `db:"custom_headers"`
+	CustomHeadersOverrideRequestHeaders bool    `db:"custom_headers_override_request_headers"`
+	Status                              string  `db:"status"`
 }
 
 type harnessChannelRow struct {
@@ -289,7 +290,7 @@ func (h *channelTestHandler) assembleTarget(ctx context.Context, ch harnessChann
 
 	var site harnessSiteRow
 	if err := h.db.GetContext(ctx, &site, h.db.Rebind(`
-		SELECT id, name, url, platform, proxy_url, use_system_proxy, custom_headers, status
+		SELECT id, name, url, platform, proxy_url, use_system_proxy, custom_headers, custom_headers_override_request_headers, status
 		FROM sites WHERE id = ?`), acc.SiteID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("site not found")

@@ -881,7 +881,10 @@ func applyProxyCustomHeaders(req *http.Request, proxyConfig *platform.ProxyConfi
 		return
 	}
 	// Shared deny-list: Authorization/Host/hop-by-hop/Cookie/Proxy-*/metapi control (#356).
-	platform.ApplyCustomHeaders(req, proxyConfig.CustomHeaders)
+	// #584: site-wins when CustomHeadersOverrideRequest; else request-wins.
+	platform.ApplyCustomHeadersWithOptions(req, proxyConfig.CustomHeaders, platform.ApplyCustomHeadersOptions{
+		OverrideRequest: proxyConfig.CustomHeadersOverrideRequest,
+	})
 }
 
 // sendUpstreamRequest dispatches an upstream HTTP request with optional observed

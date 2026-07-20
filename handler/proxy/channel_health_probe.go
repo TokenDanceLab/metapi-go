@@ -142,7 +142,7 @@ func loadProbeChannel(ctx context.Context, dbw *store.DB, channelID int64) (*pro
 	var site store.Site
 	if err := dbw.GetContext(ctx, &site, dbw.Rebind(`
 		SELECT id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy,
-		       custom_headers, status, is_pinned, sort_order, global_weight, api_key,
+		       custom_headers, custom_headers_override_request_headers, status, is_pinned, sort_order, global_weight, api_key,
 		       max_concurrency,
 		       post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope,
 		       post_refresh_probe_latency_threshold_ms, created_at, updated_at
@@ -212,15 +212,10 @@ func (p *ChannelHealthProbeExecutor) executeModelsProbe(ctx context.Context, tar
 
 	proxyCfg := service.BuildPlatformProxyConfig(p.cfg, &target.Account, &target.Site)
 	if proxyCfg != nil {
-		for k, v := range proxyCfg.CustomHeaders {
-			if proxy.IsMetapiControlHeader(k) {
-				continue
-			}
-			if strings.EqualFold(k, "Authorization") {
-				continue
-			}
-			req.Header.Set(k, v)
-		}
+		// Deny-list + #584 override priority (probe path mirrors upstream apply).
+		platform.ApplyCustomHeadersWithOptions(req, proxyCfg.CustomHeaders, platform.ApplyCustomHeadersOptions{
+			OverrideRequest: proxyCfg.CustomHeadersOverrideRequest,
+		})
 	}
 
 	started := time.Now()
@@ -288,15 +283,10 @@ func (p *ChannelHealthProbeExecutor) executeChatProbe(ctx context.Context, targe
 
 	proxyCfg := service.BuildPlatformProxyConfig(p.cfg, &target.Account, &target.Site)
 	if proxyCfg != nil {
-		for k, v := range proxyCfg.CustomHeaders {
-			if proxy.IsMetapiControlHeader(k) {
-				continue
-			}
-			if strings.EqualFold(k, "Authorization") {
-				continue
-			}
-			req.Header.Set(k, v)
-		}
+		// Deny-list + #584 override priority (probe path mirrors upstream apply).
+		platform.ApplyCustomHeadersWithOptions(req, proxyCfg.CustomHeaders, platform.ApplyCustomHeadersOptions{
+			OverrideRequest: proxyCfg.CustomHeadersOverrideRequest,
+		})
 	}
 
 	started := time.Now()

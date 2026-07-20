@@ -624,7 +624,7 @@ func revertPersistedOauthAccount(db *store.DB, accountID int64, created bool, sn
 func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store.Site, error) {
 	var site store.Site
 	err := db.Get(&site,
-		"SELECT id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy, custom_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency, post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope, post_refresh_probe_latency_threshold_ms, created_at, updated_at FROM sites WHERE platform = ? AND url = ? LIMIT 1",
+		"SELECT id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy, custom_headers, custom_headers_override_request_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency, post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope, post_refresh_probe_latency_threshold_ms, created_at, updated_at FROM sites WHERE platform = ? AND url = ? LIMIT 1",
 		def.Site.Platform, def.Site.URL)
 	if err == nil {
 		return &site, nil
@@ -644,7 +644,7 @@ func ensureOAuthProviderSite(db *store.DB, def *OAuthProviderDefinition) (*store
 	if err != nil {
 		// Try reading again in case of race.
 		err2 := db.Get(&site,
-			"SELECT id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy, custom_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency, post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope, post_refresh_probe_latency_threshold_ms, created_at, updated_at FROM sites WHERE platform = ? AND url = ? LIMIT 1",
+			"SELECT id, name, url, external_checkin_url, platform, proxy_url, use_system_proxy, custom_headers, custom_headers_override_request_headers, status, is_pinned, sort_order, global_weight, api_key, max_concurrency, post_refresh_probe_enabled, post_refresh_probe_model, post_refresh_probe_scope, post_refresh_probe_latency_threshold_ms, created_at, updated_at FROM sites WHERE platform = ? AND url = ? LIMIT 1",
 			def.Site.Platform, def.Site.URL)
 		if err2 == nil {
 			return &site, nil
