@@ -4,7 +4,7 @@
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: **GITHUB_FULL** capable · product **parity program scheduled in docs** (board Issues TBD)  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
-**Tip**: `edb711d` · tag **v0.8.45** · unreleased: parity KEYS/WS/#514/UC-1 + media fold + embed SPA + TPM/routing system-contents  
+**Tip**: `c9ca3e7` · tag **v0.8.45** · unreleased: parity core + media fold + embed SPA + TPM/routing + OrphanLogs  
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md)
 
 > **开放项 + 硬门禁**。现状 → [`../STATE.md`](../STATE.md) · 日志 → [`../log.md`](../log.md) · shortlist → [`../analysis/high-value-next.md`](../analysis/high-value-next.md)
@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | parity core shipped; docs honesty (formal-readiness/About); next P0-585 e2e / ops pin auth |
+| Active work | parity core shipped; P0-555 orphan observability; next P0-585 e2e / ops pin auth |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
