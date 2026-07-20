@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] plan: parity core status banner
+
+- `original-parity-complete` waves A/C/D marked present; B REL open; E runtime optional; ops pin gated.
+
 ## [2026-07-21] tip 530fab6
 
 - Final tip after residual/matrix/formal sync push (pre-push race clean).

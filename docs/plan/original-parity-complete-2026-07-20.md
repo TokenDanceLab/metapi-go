@@ -1,12 +1,26 @@
 # Original parity complete plan (ex-Electron)
 
-**Date**: 2026-07-20  
-**Mode**: GITHUB_FULL capable · docs-first until Issues scheduled  
+**Date**: 2026-07-21  
+**Mode**: GITHUB_FULL capable · **parity core shipped** on tip; REL/ops remaining  
 **Scope**: metapi-go vs TokenDance/metapi **server+web** feature parity  
 **Out of scope**: Electron desktop shell · MySQL · k3s chart · noise issues  
 
 > **Living index**: [`../progress/MASTER.md`](../progress/MASTER.md) · shortlist [`../analysis/high-value-next.md`](../analysis/high-value-next.md)  
 > **Evidence**: gap matrix · residual-next · responses-websocket-residual · 2026-07-20 4-way audit  
+
+---
+
+## Status (2026-07-21)
+
+| Wave | Status |
+|:-----|:-------|
+| Docs truth / #534 / #520 | **done** |
+| A KEYS (#547/#584/#579) + #514 | **present** |
+| C WS C1–C4 | **present** (C3 flagged; sticky single-instance honesty) |
+| D UC-1 | **hide/external present** |
+| B REL | **open** — P0-585 partial; P0-555 present-with-residual |
+| E runtime | **optional** — #571/#577 live probes |
+| Ops pin 0.8.45 | **gated** (admin auth + soak) |
 
 ---
 
@@ -42,7 +56,7 @@ Decision log (2026-07-20):
 
 | ID | Title | Status | Effort | Lane | AC sketch |
 |:---|:------|:-------|:-------|:-----|:----------|
-| **#547** | Per-downstream-key weight scalar | partial | M | keys | Schema + selector multiply + DownstreamKeys UI; tests on weighted pick |
+| **#547** | Per-downstream-key weight scalar | **present** | M | keys | `key_weight` + selector multiply + DownstreamKeys UI; tests on weighted pick |
 | **#584** | Site custom header override priority | **present** | M | protocol | `custom_headers_override_request_headers` + ApplyCustomHeadersWithOptions + Sites UI |
 | **#579** | Multi-credential bind on one downstream key | **present** | L | keys | allowed_site_ids + allowed_credential_refs allow-list; empty unrestricted; exclusions compose |
 | **#514** | Multi-tier context → channel switch | **present** | L | routing | same-model multi context_length routes; estimate-driven tightest-fit |
@@ -60,23 +74,23 @@ Decision log (2026-07-20):
 |:------|:------|:-------|:--------|
 | **C0** | Keep 426/501 residual until C1 ships | — | **done** (C1 shipped) |
 | **C1** | Real upgrade + auth + turn-state echo + `response.create` single-turn + **in-process HTTP SSE→WS bridge** | L | **present** 2026-07-21 (`coder/websocket`) |
-| **C2** | Multi-turn merge/append + prewarm on wire + per-message quota | L | C1 |
+| **C2** | Multi-turn merge/append + prewarm on wire + per-message quota | L | **present** 2026-07-21 |
 | **C3** | Codex upstream `wss` runtime + session store + `previous_response_id` recovery + dial→HTTP fallback | XL | **present** 2026-07-21 |
 
-| **C4** | Docs: multi-instance honesty (single instance or LB pin); no STICKY-B unless reopened | S | C1+ |
+| **C4** | Docs: multi-instance honesty (single instance or LB pin); no STICKY-B unless reopened | S | **present** (docs honesty) |
 
 **TS SSOT**: `metapi/src/server/routes/proxy/responsesWebsocket.ts` + `proxy-core/runtime/codexWebsocket*`  
 **Go residual SSOT**: `handler/proxy/responses_ws.go` · `docs/analysis/responses-websocket-residual.md`  
 
 **Reuse**: `HandleResponses` → `PrepareCtx` → `dispatchUpstream`; sticky process-local only.  
-**Dep**: introduce one WS library only when C1 starts (prefer `coder/websocket` or `gorilla/websocket`).  
+**Dep**: `coder/websocket` introduced with C1.  
 **Forbidden**: Hijack-silent-close · fake `response.completed` · claim multi-instance multi-turn without pin.
 
 ### Wave D — Update Center honesty
 
 | Action | Detail |
 |:-------|:-------|
-| Default | Hide admin Update Center deploy UX **or** keep honest 501; deploy via GHCR + ops pin |
+| Default | **present** hide/external — Settings ops note + GHCR/Releases; API residual 501 |
 | Non-goal | Invent registry client / fake `updateAvailable` without product AC |
 
 ### Wave E — Runtime probes (live accounts)
