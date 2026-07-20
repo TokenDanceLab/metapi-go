@@ -45,7 +45,7 @@ Decision log (2026-07-20):
 | **#547** | Per-downstream-key weight scalar | partial | M | keys | Schema + selector multiply + DownstreamKeys UI; tests on weighted pick |
 | **#584** | Site custom header override priority | **present** | M | protocol | `custom_headers_override_request_headers` + ApplyCustomHeadersWithOptions + Sites UI |
 | **#579** | Multi-credential bind on one downstream key | **present** | L | keys | allowed_site_ids + allowed_credential_refs allow-list; empty unrestricted; exclusions compose |
-| **#514** | Multi-tier context → channel switch | missing | L | routing | Tier config + request-ctx select channel; independent of single `context_length` |
+| **#514** | Multi-tier context → channel switch | **present** | L | routing | same-model multi context_length routes; estimate-driven tightest-fit |
 
 ### Wave B — Reliability honesty
 

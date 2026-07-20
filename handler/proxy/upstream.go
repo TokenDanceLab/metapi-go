@@ -94,6 +94,10 @@ func dispatchUpstream(w http.ResponseWriter, r *http.Request, ctx *Ctx) {
 	excludeChannelIDs := make([]int64, 0)
 	maxRetries := ctx.MaxRetries
 	downstreamPolicy := routingPolicyFromAuth(ctx.Policy)
+	// #514 multi-tier: best-effort request context estimate for route tier pick.
+	if ctx != nil {
+		downstreamPolicy.RequestedContextTokens = routing.EstimateRequestContextTokens(ctx.Body)
+	}
 	upstreamPath := ctx.DownstreamPath
 	if upstreamPath == "" {
 		upstreamPath = r.URL.Path
@@ -1774,4 +1778,3 @@ func mapAuthCredentialRefs(in []auth.ExcludedCredentialRef) []routing.Credential
 	}
 	return refs
 }
-

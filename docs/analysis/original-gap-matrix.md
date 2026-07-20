@@ -93,7 +93,7 @@
 | 531 | Anthropic→OpenAI skill-call anomaly in Claude Code | feature-protocol | partial | Anthropic/OpenAI bridges under `transform/anthropic`, `transform/canonical`; skill-call edge cases need runtime CC repro | P1 | yes |
 | 530 | Site custom request overrides not applied automatically | feature-protocol | partial | Related to #584 — headers applied on platform proxy path; “automatic override of all request paths” not uniformly evidenced for every proxy surface | P2 | yes |
 | 515 | Global model whitelist sporadically resets to `[]` | bug-correctness | unknown-needs-runtime | Settings store `handler/admin/settings.go` + `store/settings.go`; race/reset needs runtime/repro | P0 | yes |
-| 514 | Multi-tier ctx sizes per model to switch channels | feature-routing | missing | No multi-tier context routing dimension; no `context_length` model metadata (#520) | P2 | yes |
+| 514 | Multi-tier ctx sizes per model to switch channels | feature-routing | **present** | `PickContextTierRoute` + estimate; multi same-model routes with context_length (reuses CTX-520) | P2 | no |
 | 513 | Model redirect/alias | feature-routing | **present** | `token_routes.model_mapping` + `ResolveMappedModel` in `routing/matcher.go` (exact→pattern fallback) + `ParseModelMappingRecord` + admin CRUD wired in `handler/admin/token_routes.go`; tests cover routing integration | P2 | no |
 | 511 | Minimax thinking concatenated into content | feature-protocol | partial | Think-tag extraction `transform/shared` `ExtractInlineThinkTags` / reasoning_content paths; Minimax-specific regression not isolated | P1 | yes |
 | 507 | `/v1/models` response shape issues | feature-protocol | partial | `handler/proxy/models.go` + e2e `e2e_flow_test.go` GET `/v1/models`; shape parity with all clients needs runtime | P1 | yes |
@@ -148,7 +148,7 @@ Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559/#580/#581/#538 s
 Mandatory partial (4): **#585, #520, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
-Remaining **all-rows missing** (2, additional product sample only): **#514** multi-tier ctx routing · **#292** auto priority orchestration.  
+Remaining **all-rows missing** (1, additional product sample only): **#292** auto priority orchestration. **#514** → present 2026-07-21.  
 **#534** bulk account import → **present** (2026-07-20 reverify: `POST /api/accounts` + `accessTokens[]`; not missing).
 
 ---

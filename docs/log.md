@@ -1,3 +1,11 @@
+## [2026-07-21] #514 multi-tier context routing
+
+- Product: multiple same-model `token_routes` with different `context_length` → pick tightest ceiling that fits estimated request ctx.
+- Estimate: `routing.EstimateRequestContextTokens` (messages/input chars÷4 + max_tokens/max_output_tokens); 0 = first-match honesty.
+- Pick: `PickContextTierRoute` among match-bucket routes; wired in `findRoute` + dispatchUpstream / WS C3 policy.
+- Tests: unit + SelectChannel multi-tier integration.
+- Residual: estimate is best-effort (not a tokenizer); no new schema — reuses CTX-520 `context_length` + multi-route config.
+
 ## [2026-07-21] WS C3: Codex upstream wss runtime
 
 - Status: `c3_codex_upstream_wss` (was `c2_multi_turn_http_bridge`).

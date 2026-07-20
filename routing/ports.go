@@ -66,15 +66,18 @@ type DownstreamRoutingPolicy struct {
 	ExcludedCredentialRefs []CredentialRef
 	// AllowedSiteIDs / AllowedCredentialRefs: optional allow-lists (#579).
 	// Empty = unrestricted; non-empty = only listed sites/credentials eligible.
-	AllowedSiteIDs         []int64
-	AllowedCredentialRefs  []CredentialRef
-	AllowedRouteIDs        []int64
-	SupportedModels        []string
-	DenyAllWhenEmpty       bool
-	SiteWeightMultipliers  map[int64]float64
+	AllowedSiteIDs        []int64
+	AllowedCredentialRefs []CredentialRef
+	AllowedRouteIDs       []int64
+	SupportedModels       []string
+	DenyAllWhenEmpty      bool
+	SiteWeightMultipliers map[int64]float64
 	// KeyWeight multiplies channel.Weight in weighted selection (#547).
 	// 0 or negative is treated as 1.0 (no-op).
 	KeyWeight float64
+	// RequestedContextTokens is a best-effort inbound context estimate for
+	// multi-tier route pick (#514). 0 means unknown → first-match honesty.
+	RequestedContextTokens int64
 }
 
 // CredentialRef identifies a specific credential to exclude.

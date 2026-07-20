@@ -531,48 +531,49 @@ func (s *ChannelSelector) findRoute(ctx context.Context, model string, policy Do
 		routes = filtered
 	}
 
-	// Match priority: 1) explicit_group displayName exact, 2) exact model pattern, 3) displayName exact, 4) wildcard
-	var matchedRoute *store.TokenRoute
-	for i := range routes {
-		r := &routes[i]
-		if IsExplicitGroupRoute(r.RouteMode) && IsRouteDisplayNameMatch(model, r.DisplayName) {
-			matchedRoute = r
-			break
-		}
-	}
-	if matchedRoute == nil {
+	// Match priority: 1) explicit_group displayName exact, 2) exact model pattern,
+	// 3) displayName exact, 4) wildcard. Within the first non-empty bucket,
+	// multi-tier context (#514) may re-rank when RequestedContextTokens > 0.
+	collect := func(pred func(*store.TokenRoute) bool) []store.TokenRoute {
+		out := make([]store.TokenRoute, 0)
 		for i := range routes {
 			r := &routes[i]
-			if !IsExplicitGroupRoute(r.RouteMode) && IsExactRouteModelPattern(r.ModelPattern) && strings.TrimSpace(r.ModelPattern) == model {
-				matchedRoute = r
-				break
+			if pred(r) {
+				out = append(out, *r)
 			}
 		}
-	}
-	if matchedRoute == nil {
-		for i := range routes {
-			r := &routes[i]
-			if !IsExplicitGroupRoute(r.RouteMode) && IsRouteDisplayNameMatch(model, r.DisplayName) {
-				matchedRoute = r
-				break
-			}
-		}
-	}
-	if matchedRoute == nil {
-		for i := range routes {
-			r := &routes[i]
-			if !IsExplicitGroupRoute(r.RouteMode) && MatchesModelPattern(model, r.ModelPattern) {
-				matchedRoute = r
-				break
-			}
-		}
+		return out
 	}
 
-	if matchedRoute == nil {
+	var bucket []store.TokenRoute
+	bucket = collect(func(r *store.TokenRoute) bool {
+		return IsExplicitGroupRoute(r.RouteMode) && IsRouteDisplayNameMatch(model, r.DisplayName)
+	})
+	if len(bucket) == 0 {
+		bucket = collect(func(r *store.TokenRoute) bool {
+			return !IsExplicitGroupRoute(r.RouteMode) && IsExactRouteModelPattern(r.ModelPattern) && strings.TrimSpace(r.ModelPattern) == model
+		})
+	}
+	if len(bucket) == 0 {
+		bucket = collect(func(r *store.TokenRoute) bool {
+			return !IsExplicitGroupRoute(r.RouteMode) && IsRouteDisplayNameMatch(model, r.DisplayName)
+		})
+	}
+	if len(bucket) == 0 {
+		bucket = collect(func(r *store.TokenRoute) bool {
+			return !IsExplicitGroupRoute(r.RouteMode) && MatchesModelPattern(model, r.ModelPattern)
+		})
+	}
+
+	if len(bucket) == 0 {
 		return nil, nil
 	}
 
-	return s.loadRouteMatch(ctx, *matchedRoute)
+	matched := PickContextTierRoute(bucket, policy.RequestedContextTokens)
+	if matched == nil {
+		return nil, nil
+	}
+	return s.loadRouteMatch(ctx, *matched)
 }
 
 func (s *ChannelSelector) loadRouteMatch(ctx context.Context, route store.TokenRoute) (*RouteMatch, error) {
@@ -891,7 +892,6 @@ func credentialRefMatchesOne(candidate RouteChannelCandidate, ref CredentialRef,
 	}
 	return false
 }
-
 
 func (s *ChannelSelector) weightedRandomSelect(
 	candidates []RouteChannelCandidate,

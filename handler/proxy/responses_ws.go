@@ -15,6 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/tokendancelab/metapi-go/auth"
+	"github.com/tokendancelab/metapi-go/routing"
 )
 
 // Responses WebSocket transport (#217 / parity Wave C1–C3).
@@ -793,6 +794,7 @@ func (s *responsesWSSession) tryCodexUpstreamWSS(ctx context.Context, body map[s
 	if s.auth != nil {
 		policy = routingPolicyFromAuth(s.auth.Policy)
 	}
+	policy.RequestedContextTokens = routing.EstimateRequestContextTokens(body)
 	selected, selErr := cfg.Router.SelectChannel(ctx, requestModel, policy)
 	if selErr != nil || selected == nil {
 		return nil, false, nil
