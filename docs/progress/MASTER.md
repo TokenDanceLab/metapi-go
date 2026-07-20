@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | **Parity code** — KEYS #547/#584/#579 + WS C1+C2; next WS C3 / #514 |
+| Active work | **cloud-ops UI align** shipped; next WS C3 / #514 |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |

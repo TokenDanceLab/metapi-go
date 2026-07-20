@@ -11,8 +11,9 @@ export type DataTheme = 'light' | 'dark';
 
 export type ThemeStorageGetItem = (key: string) => string | null;
 
-const CANVAS_BG_LIGHT = '#eef2f6';
-const CANVAS_BG_DARK = '#0b0f14';
+/** cloud-ops canvas (tokendance-design/styles/cloud-ops) — keep FOUC in sync with tokens.css */
+const CANVAS_BG_LIGHT = '#f8f9fa';
+const CANVAS_BG_DARK = '#202124';
 
 function isDataTheme(value: string | null | undefined): value is DataTheme {
   return value === 'light' || value === 'dark';

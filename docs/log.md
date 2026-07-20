@@ -1,3 +1,11 @@
+## [2026-07-21] UI cloud-ops 对齐（tokendance-design）
+
+- 参考 `TokenDance/tokendance-design/styles/cloud-ops/` 全面收紧管理台视觉。
+- Tokens：canvas `#f8f9fa`/`#202124`、GCP 语义色、radius 4/8/12、topbar 48 / sidebar 232、Material e-1 阴影、可选 `data-density=compact`。
+- Shell：实色侧栏 + 轻 blur 顶栏；去掉重 glass/卡片抬升；chip/table/page-title 按 StatusChip/DataTable/PageHeader 密度。
+- FOUC：`index.html` + `themeBootstrap` 与 tokens 同色；单测期望同步。
+- 说明：[`design/cloud-ops-alignment.md`](design/cloud-ops-alignment.md)。不 pin 生产。
+
 ## [2026-07-21] #579 multi-credential / multi-site allow-list bind
 
 - Schema additive `sc2_009_downstream_key_allow_lists`: `allowed_site_ids` + `allowed_credential_refs` (empty = unrestricted).

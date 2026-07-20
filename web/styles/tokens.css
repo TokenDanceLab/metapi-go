@@ -1,13 +1,17 @@
 /*
  * MetAPI design tokens — SSOT for CSS custom properties.
- * Spec: docs/design/DESIGN.md (U0 / issue #12)
+ * Visual family: TokenDance cloud-ops (GCP Console ops console).
+ * Source of truth for look: TokenDance/tokendance-design/styles/cloud-ops/
+ * MetAPI keeps --color-* / --radius-* / --space-* names for app consumers.
  *
  * Import order: web/index.css imports this after Tailwind.
  * Do not put component rules here — tokens only.
  */
 
-/* ===== Light (default) ===== */
+/* ===== Light (default) — cloud-ops / GCP Console ===== */
 :root {
+  color-scheme: light;
+
   /* Typography families — system stack (no Google Fonts CDN; CSP-friendly) */
   --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", sans-serif;
   --font-mono: "Cascadia Code", "SF Mono", "Consolas", "Liberation Mono", ui-monospace, Menlo, monospace;
@@ -34,57 +38,60 @@
   --line-body: 1.45;
   --line-title: 1.25;
 
-  /* Surfaces — canvas matches FOUC bootstrap (#535): cool GCP gray */
-  --color-bg: #eef2f6;
-  --color-bg-secondary: #e4eaf0;
+  /* Surfaces — cloud-ops canvas #f8f9fa (FOUC bootstrap must match) */
+  --color-bg: #f8f9fa;
+  --color-bg-secondary: #f1f3f4;
   --color-bg-card: #ffffff;
-  --color-bg-sidebar: rgba(255, 255, 255, 0.86);
-  --color-bg-topbar: rgba(255, 255, 255, 0.78);
+  --color-bg-sidebar: #ffffff;
+  --color-bg-topbar: rgba(255, 255, 255, 0.92);
   --color-bg-elevated: #ffffff;
-  --color-bg-hover: rgba(0, 0, 0, 0.04);
-  --color-bg-active: rgba(0, 0, 0, 0.06);
+  --color-bg-hover: #f1f3f4;
+  --color-bg-active: #e8eaed;
+  --color-bg-row-hover: #fafafa;
+  --color-bg-row-border: #f1f3f4;
   /* Design.md aliases (U1 consumers) */
   --color-surface: var(--color-bg-card);
   --color-surface-2: var(--color-bg-secondary);
   --color-surface-subtle: var(--color-bg-secondary);
 
-  /* Borders — cool GCP hairlines */
-  --color-border: #e3e8ee;
-  --color-border-light: #eef2f6;
-  --color-border-strong: #c9d2dc;
+  /* Borders — GCP hairlines */
+  --color-border: #dadce0;
+  --color-border-light: #f1f3f4;
+  --color-border-strong: #bdc1c6;
+  --color-grid: rgba(0, 0, 0, 0.06);
 
   /* Text */
   --color-text-primary: #202124;
   --color-text-secondary: #5f6368;
   --color-text-tertiary: #80868b;
-  --color-text-muted: #9aa0a6;
+  --color-text-muted: #80868b;
   --color-text-inverse: #ffffff;
   --color-text-link: var(--color-primary);
 
-  /* Brand — GCP blue-gray (UI-REFRESH), not saturated indigo marketing */
+  /* Brand — GCP blue (cloud-ops) */
   --color-primary: #1a73e8;
-  --color-primary-light: #e8f0fe;
-  --color-primary-hover: #1557b0;
-  --color-primary-soft: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --color-primary-light: rgba(26, 115, 232, 0.08);
+  --color-primary-hover: #174ea6;
+  --color-primary-soft: rgba(26, 115, 232, 0.08);
   --color-accent: #5f6368;
   --color-accent-soft: #f1f3f4;
   --color-accent-hover: #3c4043;
   --color-brand-gradient: linear-gradient(135deg, #1a73e8 0%, #4285f4 55%, #669df6 100%);
 
-  /* Semantic */
-  --color-success: #16a34a;
-  --color-success-soft: #dcfce7;
-  --color-warning: #d97706;
-  --color-warning-soft: #fef3c7;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-info: #2563eb;
-  --color-info-soft: #dbeafe;
+  /* Semantic — GCP Console palette */
+  --color-success: #1e8e3e;
+  --color-success-soft: rgba(30, 142, 62, 0.1);
+  --color-warning: #f9ab00;
+  --color-warning-soft: rgba(249, 171, 0, 0.14);
+  --color-danger: #d93025;
+  --color-danger-soft: rgba(217, 48, 37, 0.1);
+  --color-info: #1a73e8;
+  --color-info-soft: rgba(26, 115, 232, 0.08);
   /* Soft-surface ink (badges/alerts/toasts) — dual-theme readable */
-  --color-success-ink: #15803d;
-  --color-warning-ink: #b45309;
-  --color-danger-ink: #b91c1c;
-  --color-info-ink: #1d4ed8;
+  --color-success-ink: #1e8e3e;
+  --color-warning-ink: #b06000;
+  --color-danger-ink: #d93025;
+  --color-info-ink: #1a73e8;
   --color-purple: #7c3aed;
   --color-purple-soft: var(--color-stat-purple);
   --color-purple-ink: var(--color-stat-purple-ink);
@@ -106,33 +113,35 @@
   --color-chart-1-faint: color-mix(in srgb, var(--color-chart-1) 2%, transparent);
   --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));
 
-  /* Stat icon chips */
-  --color-stat-blue: #dbeafe;
-  --color-stat-blue-ink: #2563eb;
-  --color-stat-green: #dcfce7;
-  --color-stat-green-ink: #16a34a;
-  --color-stat-yellow: #fef3c7;
-  --color-stat-yellow-ink: #d97706;
-  --color-stat-pink: #fce7f3;
-  --color-stat-pink-ink: #db2777;
-  --color-stat-red: #fee2e2;
-  --color-stat-red-ink: #dc2626;
-  --color-stat-orange: #ffedd5;
-  --color-stat-orange-ink: #ea580c;
-  --color-stat-purple: #ede9fe;
-  --color-stat-purple-ink: #7c3aed;
-  --color-stat-cyan: #cffafe;
-  --color-stat-cyan-ink: #0891b2;
+  /* Stat icon chips — GCP soft fills */
+  --color-stat-blue: rgba(26, 115, 232, 0.12);
+  --color-stat-blue-ink: #1a73e8;
+  --color-stat-green: rgba(30, 142, 62, 0.12);
+  --color-stat-green-ink: #1e8e3e;
+  --color-stat-yellow: rgba(249, 171, 0, 0.16);
+  --color-stat-yellow-ink: #b06000;
+  --color-stat-pink: rgba(233, 30, 99, 0.12);
+  --color-stat-pink-ink: #c2185b;
+  --color-stat-red: rgba(217, 48, 37, 0.12);
+  --color-stat-red-ink: #d93025;
+  --color-stat-orange: rgba(232, 113, 10, 0.14);
+  --color-stat-orange-ink: #e8710a;
+  --color-stat-purple: rgba(161, 66, 244, 0.12);
+  --color-stat-purple-ink: #a142f4;
+  --color-stat-cyan: rgba(18, 181, 203, 0.14);
+  --color-stat-cyan-ink: #12b5cb;
 
   /* Focus / overlay */
   --color-focus-ring: rgba(26, 115, 232, 0.42);
-  --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
+  --color-focus-ring-strong: 0 0 0 2px var(--color-bg-card), 0 0 0 4px var(--color-primary);
   --color-overlay: rgba(32, 33, 36, 0.42);
   --color-scrollbar: #dadce0;
   --color-on-primary: #ffffff;
   --color-spinner-track-on-primary: rgba(255, 255, 255, 0.3);
+  --color-chip-bg: #f1f3f4;
+  --color-progress-track: #e8eaed;
 
-  /* Spacing scale (4px base) — ops-comfortable Apple rhythm */
+  /* Spacing scale (4px base) — cloud-ops comfortable density */
   --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;
@@ -143,59 +152,63 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
-  --space-main: 28px;
+  --space-main: 24px;
   --gap-tight: 4px;
-  --gap-default: 10px;
-  --gap-section: 20px;
+  --gap-default: 12px;
+  --gap-section: 16px;
+  --pad-card: 16px;
+  --table-pad-y: 10px;
+  --table-pad-x: 12px;
+  --metric-value: 28px;
 
-  /* Radius ladder — control 10 / card 14 / shell 16 */
+  /* Radius ladder — cloud-ops: control 4 / card 8 / shell 12 */
   --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-control: 10px;
-  --radius-md: 12px;
-  --radius-card: 14px;
-  --radius-lg: 16px;
-  --radius-shell: 16px;
-  --radius-xl: 20px;
+  --radius-sm: 4px;
+  --radius-control: 4px;
+  --radius-md: 8px;
+  --radius-card: 8px;
+  --radius-lg: 12px;
+  --radius-shell: 12px;
+  --radius-xl: 16px;
   --radius-full: 9999px;
 
-  /* Elevation — dual soft ambient + key (Apple-like), cards must read clearly on canvas */
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 1px rgba(15, 23, 42, 0.03);
-  --shadow-md: 0 10px 28px rgba(15, 23, 42, 0.10), 0 2px 8px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.14), 0 4px 14px rgba(15, 23, 42, 0.06);
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.07);
-  --shadow-elevated: 0 14px 36px rgba(15, 23, 42, 0.14), 0 2px 10px rgba(15, 23, 42, 0.07);
+  /* Elevation — GCP Material e-1 (calm, not Apple ambient) */
+  --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.12);
+  --shadow-md: 0 1px 2px rgba(60, 64, 67, 0.18), 0 2px 6px 1px rgba(60, 64, 67, 0.1);
+  --shadow-lg: 0 2px 6px 2px rgba(60, 64, 67, 0.15), 0 1px 2px rgba(60, 64, 67, 0.3);
+  --shadow-card: 0 1px 2px rgba(60, 64, 67, 0.15), 0 1px 3px 1px rgba(60, 64, 67, 0.08);
+  --shadow-elevated: 0 1px 3px 1px rgba(60, 64, 67, 0.15), 0 4px 8px 3px rgba(60, 64, 67, 0.1);
 
-  /* Glass material family (#533 / UI-REFRESH) */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-strong: rgba(255, 255, 255, 0.86);
-  --glass-border: rgba(255, 255, 255, 0.55);
-  --glass-blur: 18px;
-  --glass-saturate: 1.25;
-  --shadow-glass: 0 8px 28px rgba(15, 23, 42, 0.08), 0 1px 0 rgba(255, 255, 255, 0.62) inset;
+  /* Chrome material — cloud-ops prefers solid surfaces; light blur only on topbar */
+  --glass-bg: rgba(255, 255, 255, 0.92);
+  --glass-bg-strong: #ffffff;
+  --glass-border: var(--color-border);
+  --glass-blur: 8px;
+  --glass-saturate: 1;
+  --shadow-glass: var(--shadow-card);
 
-  /* Motion — calm spring-ish, never bouncy */
+  /* Motion — cloud-ops 150ms standard ease */
   --duration-instant: 100ms;
   --duration-fast: 150ms;
-  --duration-normal: 200ms;
-  --duration-moderate: 280ms;
-  --duration-slow: 420ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.34, 1.15, 0.64, 1);
+  --duration-normal: 150ms;
+  --duration-moderate: 200ms;
+  --duration-slow: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.2, 0, 0, 1);
   --ease-linear: linear;
   --motion-swift: var(--duration-fast) var(--ease-standard);
   --motion-soft: var(--duration-moderate) var(--ease-emphasized);
 
-  /* Layout chrome */
-  --topbar-height: 56px;
-  --sidebar-width: 220px;
+  /* Layout chrome — cloud-ops shell */
+  --topbar-height: 48px;
+  --sidebar-width: 232px;
   --sidebar-collapsed-width: 64px;
 
   /* Content column — high-res ladder (main-content max-width) */
   --content-max: 1680px;
   --content-pad-x: 24px;
-  --content-pad-y: 24px;
+  --content-pad-y: 20px;
 
   /* Z-index ladder */
   --z-topbar: 100;
@@ -206,47 +219,52 @@
   --z-tooltip: 380;
 }
 
-/* ===== Dark ===== */
+/* ===== Dark — cloud-ops / GCP dark console ===== */
 [data-theme="dark"] {
-  /* Canvas matches FOUC bootstrap (#535): #0b0f14 */
-  --color-bg: #0b0f14;
-  --color-bg-secondary: #12181f;
-  --color-bg-card: #161b22;
-  --color-bg-sidebar: rgba(15, 20, 26, 0.86);
-  --color-bg-topbar: rgba(15, 20, 26, 0.78);
-  --color-bg-elevated: #1c2330;
-  --color-bg-hover: rgba(255, 255, 255, 0.05);
-  --color-bg-active: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
 
-  --color-border: #2a323c;
-  --color-border-light: #1f262e;
-  --color-border-strong: #3d4754;
+  /* Canvas matches FOUC bootstrap: #202124 */
+  --color-bg: #202124;
+  --color-bg-secondary: #35363a;
+  --color-bg-card: #292a2d;
+  --color-bg-sidebar: #292a2d;
+  --color-bg-topbar: rgba(41, 42, 45, 0.92);
+  --color-bg-elevated: #35363a;
+  --color-bg-hover: #35363a;
+  --color-bg-active: #3c4043;
+  --color-bg-row-hover: #303134;
+  --color-bg-row-border: #3c4043;
+
+  --color-border: #3c4043;
+  --color-border-light: #3c4043;
+  --color-border-strong: #5f6368;
+  --color-grid: rgba(255, 255, 255, 0.08);
 
   --color-text-primary: #e8eaed;
   --color-text-secondary: #9aa0a6;
   --color-text-tertiary: #80868b;
-  --color-text-muted: #5f6368;
-  --color-text-inverse: #0b0f14;
+  --color-text-muted: #9aa0a6;
+  --color-text-inverse: #202124;
   --color-text-link: var(--color-primary);
 
   /* Brand — GCP blue, dark-elevated */
   --color-primary: #8ab4f8;
-  --color-primary-light: #1a2b45;
+  --color-primary-light: rgba(138, 180, 248, 0.14);
   --color-primary-hover: #aecbfa;
-  --color-primary-soft: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  --color-primary-soft: rgba(138, 180, 248, 0.14);
   --color-accent: #9aa0a6;
-  --color-accent-soft: #1f262e;
+  --color-accent-soft: #3c4043;
   --color-accent-hover: #bdc1c6;
   --color-brand-gradient: linear-gradient(135deg, #8ab4f8 0%, #669df6 55%, #4285f4 100%);
 
-  --color-success: #4ade80;
-  --color-success-soft: #052e16;
-  --color-warning: #fbbf24;
-  --color-warning-soft: #451a03;
-  --color-danger: #f87171;
-  --color-danger-soft: #450a0a;
-  --color-info: #60a5fa;
-  --color-info-soft: #172554;
+  --color-success: #81c995;
+  --color-success-soft: rgba(129, 201, 149, 0.14);
+  --color-warning: #fdd663;
+  --color-warning-soft: rgba(253, 214, 99, 0.14);
+  --color-danger: #f28b82;
+  --color-danger-soft: rgba(242, 139, 130, 0.14);
+  --color-info: #8ab4f8;
+  --color-info-soft: rgba(138, 180, 248, 0.14);
   /* Soft-surface ink: use bright semantic itself on dark soft fills */
   --color-success-ink: var(--color-success);
   --color-warning-ink: var(--color-warning);
@@ -262,43 +280,58 @@
   /* Chart series intentionally unchanged for operator continuity */
   --color-chart-gradient: linear-gradient(135deg, var(--color-chart-1), color-mix(in srgb, var(--color-chart-1) 55%, white));
 
-  --color-stat-blue: #172554;
-  --color-stat-blue-ink: #60a5fa;
-  --color-stat-green: #052e16;
-  --color-stat-green-ink: #4ade80;
-  --color-stat-yellow: #451a03;
-  --color-stat-yellow-ink: #fbbf24;
-  --color-stat-pink: #500724;
+  --color-stat-blue: rgba(138, 180, 248, 0.16);
+  --color-stat-blue-ink: #8ab4f8;
+  --color-stat-green: rgba(129, 201, 149, 0.16);
+  --color-stat-green-ink: #81c995;
+  --color-stat-yellow: rgba(253, 214, 99, 0.16);
+  --color-stat-yellow-ink: #fdd663;
+  --color-stat-pink: rgba(244, 114, 182, 0.16);
   --color-stat-pink-ink: #f472b6;
-  --color-stat-red: #450a0a;
-  --color-stat-red-ink: #f87171;
-  --color-stat-orange: #431407;
+  --color-stat-red: rgba(242, 139, 130, 0.16);
+  --color-stat-red-ink: #f28b82;
+  --color-stat-orange: rgba(251, 146, 60, 0.16);
   --color-stat-orange-ink: #fb923c;
-  --color-stat-purple: #2e1065;
+  --color-stat-purple: rgba(167, 139, 250, 0.16);
   --color-stat-purple-ink: #a78bfa;
-  --color-stat-cyan: #083344;
+  --color-stat-cyan: rgba(34, 211, 238, 0.16);
   --color-stat-cyan-ink: #22d3ee;
 
   --color-focus-ring: rgba(138, 180, 248, 0.5);
-  --color-focus-ring-strong: 0 0 0 3px var(--color-focus-ring);
+  --color-focus-ring-strong: 0 0 0 2px var(--color-bg-card), 0 0 0 4px var(--color-primary);
   --color-overlay: rgba(0, 0, 0, 0.65);
-  --color-scrollbar: #3a3a3a;
-  --color-on-primary: #0b0f14;
-  --color-spinner-track-on-primary: rgba(11, 15, 20, 0.3);
+  --color-scrollbar: #5f6368;
+  --color-on-primary: #202124;
+  --color-spinner-track-on-primary: rgba(32, 33, 36, 0.3);
+  --color-chip-bg: #3c4043;
+  --color-progress-track: #3c4043;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-elevated: 0 14px 36px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 6px 1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 2px 6px 2px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.25);
+  --shadow-elevated: 0 1px 3px 1px rgba(0, 0, 0, 0.4), 0 4px 8px 3px rgba(0, 0, 0, 0.3);
 
-  /* Glass material family (#533 / UI-REFRESH) */
-  --glass-bg: rgba(22, 27, 34, 0.72);
-  --glass-bg-strong: rgba(22, 27, 34, 0.88);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: 14px;
-  --glass-saturate: 1.1;
-  --shadow-glass: 0 10px 28px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  /* Chrome — solid dark surfaces */
+  --glass-bg: rgba(41, 42, 45, 0.92);
+  --glass-bg-strong: #292a2d;
+  --glass-border: var(--color-border);
+  --glass-blur: 8px;
+  --glass-saturate: 1;
+  --shadow-glass: var(--shadow-card);
+}
+
+/* Optional density toggle (cloud-ops data-density=compact) */
+html[data-density="compact"] {
+  --topbar-height: 40px;
+  --content-pad-x: 16px;
+  --content-pad-y: 12px;
+  --pad-card: 12px;
+  --table-pad-y: 6px;
+  --table-pad-x: 10px;
+  --metric-value: 22px;
+  --gap-section: 12px;
+  --gap-default: 8px;
 }
 
 /* ===== a11y: prefers-reduced-motion (#540 / Phase 5) =====

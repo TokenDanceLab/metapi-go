@@ -412,19 +412,19 @@ body {
   border-width: 3px;
 }
 
-/* ===== Topbar (glass chrome — UI-REFRESH Phase 2) ===== */
+/* ===== Topbar (cloud-ops solid chrome) ===== */
 .topbar {
   height: var(--topbar-height);
-  background: var(--glass-bg);
-  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-topbar);
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: var(--z-topbar);
-  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
 }
 
 .topbar-logo {
@@ -437,20 +437,20 @@ body {
 }
 
 .topbar-logo-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--color-brand-gradient);
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-on-primary);
+  color: #ffffff;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .topbar-logo-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary);
   letter-spacing: var(--tracking-tight, -0.01em);
@@ -497,17 +497,17 @@ body {
 }
 
 .topbar-icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  background: none;
+  transition: background-color var(--motion-swift), color var(--motion-swift), border-color var(--motion-swift);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
   position: relative;
 }
 
@@ -517,9 +517,9 @@ body {
 }
 
 .topbar-search-trigger {
-  height: 36px;
-  min-width: 170px;
-  border-radius: 12px;
+  height: 32px;
+  min-width: 168px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
   background: var(--color-bg-card);
   display: inline-flex;
@@ -528,7 +528,7 @@ body {
   padding: 0 10px 0 12px;
   color: var(--color-text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color var(--motion-swift), color var(--motion-swift), border-color var(--motion-swift);
 }
 
 .topbar-search-trigger:hover {
@@ -543,8 +543,8 @@ body {
 }
 
 .topbar-search-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: inherit;
 }
 
@@ -552,12 +552,12 @@ body {
   margin-left: auto;
   font-size: 11px;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  border-radius: 8px;
-  padding: 5px 8px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
 }
 
 .topbar-badge {
@@ -583,20 +583,16 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary-light),
-    color-mix(in srgb, var(--color-primary) 28%, var(--color-primary-light))
-  );
+  background: var(--color-primary-soft);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-primary);
   cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-standard);
-  border: 2px solid transparent;
+  transition: background-color var(--motion-swift), border-color var(--motion-swift);
+  border: 1px solid var(--color-border);
   padding: 0;
   appearance: none;
   -webkit-appearance: none;
@@ -604,7 +600,7 @@ body {
 
 .topbar-avatar:hover {
   border-color: var(--color-primary);
-  transform: scale(1.05);
+  background: var(--color-primary-soft);
 }
 
 .topbar-avatar:focus-visible {
@@ -612,21 +608,19 @@ body {
   outline-offset: 2px;
 }
 
-/* ===== Sidebar (glass chrome — UI-REFRESH Phase 2) ===== */
+/* ===== Sidebar (cloud-ops solid chrome) ===== */
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--glass-bg-strong);
-  border-right: 1px solid var(--glass-border);
+  background: var(--color-bg-sidebar);
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  padding: 12px 10px;
-  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  padding: 12px 10px 16px;
+  transition: width var(--duration-moderate) var(--ease-standard);
   overflow: hidden;
   height: calc(100vh - var(--topbar-height));
   position: sticky;
   top: var(--topbar-height);
-  -webkit-backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
-  backdrop-filter: saturate(var(--glass-saturate)) blur(var(--glass-blur));
 }
 
 .sidebar.collapsed {
@@ -691,10 +685,10 @@ body {
 }
 
 .sidebar-item-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 .sidebar-item.active .sidebar-item-icon {
@@ -723,14 +717,14 @@ body {
   background: var(--color-bg-hover);
 }
 
-/* Glass chrome fallbacks (parity with ds-surface--glass) */
+/* Chrome fallbacks when backdrop-filter unsupported */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .topbar {
-    background: var(--color-bg-elevated);
+    background: var(--color-bg-card);
   }
 
   .sidebar {
-    background: var(--color-bg-elevated);
+    background: var(--color-bg-sidebar);
   }
 
   .user-dropdown {
@@ -1162,21 +1156,22 @@ body {
   outline-offset: 2px;
 }
 
-/* ===== Card System ===== */
+/* ===== Card System (cloud-ops calm elevation) ===== */
 .card {
   background: var(--color-bg-card);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   border: 1px solid var(--color-border);
+  padding: var(--pad-card, var(--space-4));
   transition:
     box-shadow var(--motion-soft),
     border-color var(--motion-swift);
 }
 
-/* Ops console: no lift on static cards — keep elevation calm */
+/* Ops console: no lift on static cards */
 .card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: color-mix(in srgb, var(--color-border) 70%, var(--color-primary) 30%);
+  box-shadow: var(--shadow-card);
+  border-color: var(--color-border);
 }
 
 .card-transition {
@@ -1688,11 +1683,12 @@ body {
   color: var(--color-text-primary);
 }
 
-/* ===== Stat Card (GCP ops density + Apple detail) ===== */
+/* ===== Stat Card (cloud-ops MetricCard density) ===== */
 .stat-card {
   background: var(--color-bg-card);
   border-radius: var(--radius-card);
-  padding: var(--space-5);
+  padding: var(--pad-card, var(--space-4));
+  min-height: 140px;
   box-shadow: var(--shadow-card);
   border: 1px solid var(--color-border);
   transition:
@@ -1701,25 +1697,25 @@ body {
 }
 
 .stat-card:hover {
-  box-shadow: var(--shadow-md);
-  border-color: color-mix(in srgb, var(--color-border) 65%, var(--color-primary) 35%);
+  box-shadow: var(--shadow-card);
+  border-color: var(--color-border);
 }
 
 .stat-card-header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  font-size: var(--text-md);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
-  letter-spacing: var(--tracking-label, 0.02em);
+  letter-spacing: 0;
 }
 
 .stat-card-header svg {
-  width: 16px;
-  height: 16px;
-  opacity: 0.7;
+  width: 15px;
+  height: 15px;
+  opacity: 0.85;
 }
 
 .stat-card-row {
@@ -1791,7 +1787,7 @@ body {
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: var(--metric-value, 28px);
   font-weight: var(--font-weight-regular);
   color: var(--color-text-primary);
   letter-spacing: var(--tracking-display, -0.02em);
@@ -1802,8 +1798,8 @@ body {
 .dashboard-stat-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .dashboard-stat-grid .stat-card {
@@ -2095,10 +2091,10 @@ a.ds-btn {
   transition-duration: 0.08s;
 }
 
-/* ===== Table (UI-REFRESH Phase 3) ===== */
+/* ===== Table (cloud-ops dense ops table) ===== */
 .data-table {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
   font-size: var(--text-md);
   table-layout: auto;
@@ -2108,18 +2104,17 @@ a.ds-btn {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: color-mix(in srgb, var(--color-bg-card) 88%, transparent);
-  /* Glass tint only — no per-row blur (perf) */
+  background: var(--color-bg-card);
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .data-table th {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--table-pad-y, 10px) var(--table-pad-x, 12px);
   text-align: left;
   font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-  letter-spacing: 0.03em;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  letter-spacing: 0;
   border-bottom: 1px solid var(--color-border);
   background: inherit;
   white-space: nowrap;
@@ -2128,9 +2123,9 @@ a.ds-btn {
 }
 
 .data-table td {
-  padding: var(--space-3) var(--space-3);
-  border-bottom: 1px solid var(--color-border-light);
-  color: var(--color-text-secondary);
+  padding: var(--table-pad-y, 10px) var(--table-pad-x, 12px);
+  border-bottom: 1px solid var(--color-bg-row-border, var(--color-border-light));
+  color: var(--color-text-primary);
   white-space: nowrap;
   vertical-align: middle;
   line-height: 1.4;
@@ -2141,7 +2136,7 @@ a.ds-btn {
 }
 
 .data-table tbody tr:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-bg-row-hover, var(--color-bg-hover));
 }
 
 .data-table tbody tr.row-selectable {
@@ -2535,66 +2530,58 @@ a.ds-btn {
   max-width: 100%;
 }
 
-/* ===== Status Badge (UI-REFRESH Phase 3 — dark-safe soft fills) ===== */
+/* ===== Status Badge / Chip (cloud-ops StatusChip) ===== */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--gap-tight);
-  font-size: var(--text-sm);
+  gap: 4px;
+  font-size: 11px;
   font-weight: var(--font-weight-medium);
-  padding: 2px var(--space-2);
+  padding: 1px 8px;
   border-radius: var(--radius-full);
-  border: 1px solid transparent;
-  line-height: 1.3;
+  border: none;
+  line-height: 1.45;
+  background: var(--color-chip-bg, var(--color-bg-secondary));
+  color: var(--color-text-secondary);
   transition:
     background-color var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
+    color var(--duration-fast) var(--ease-standard);
 }
 
 .badge-success {
   background: var(--color-success-soft);
   color: var(--color-success-ink);
-  border-color: color-mix(in srgb, var(--color-success) 18%, transparent);
 }
 
 .badge-error,
 .badge-danger {
   background: var(--color-danger-soft);
   color: var(--color-danger-ink);
-  border-color: color-mix(in srgb, var(--color-danger) 18%, transparent);
 }
 
 .badge-warning {
   background: var(--color-warning-soft);
   color: var(--color-warning-ink);
-  border-color: color-mix(in srgb, var(--color-warning) 18%, transparent);
 }
 
 .badge-info {
   background: var(--color-info-soft);
   color: var(--color-info-ink);
-  border-color: color-mix(in srgb, var(--color-info) 18%, transparent);
 }
 
 .badge-primary {
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .badge-purple {
   background: var(--color-purple-soft);
   color: var(--color-purple-ink);
-  border-color: color-mix(in srgb, var(--color-purple) 18%, transparent);
 }
 
 .badge-muted {
-  background: var(--color-bg-secondary);
+  background: var(--color-chip-bg, var(--color-bg-secondary));
   color: var(--color-text-secondary);
-  border-color: var(--color-border);
 }
 
 .badge-link {
@@ -3578,18 +3565,18 @@ textarea.form-input {
 
 .page-title {
   margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: var(--font-weight-regular);
+  font-size: 22px;
+  font-weight: 400;
   color: var(--color-text-primary);
-  letter-spacing: var(--tracking-tight, -0.01em);
+  letter-spacing: -0.01em;
   line-height: var(--line-title, 1.25);
 }
 
 .page-subtitle {
-  margin: var(--space-1) 0 0;
-  font-size: var(--text-md);
-  color: var(--color-text-muted);
-  letter-spacing: 0.01em;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  letter-spacing: 0;
   font-weight: var(--font-weight-regular);
 }
 
@@ -6612,8 +6599,16 @@ textarea.form-input {
 
   .main-content {
     max-width: none;
-    padding: 14px;
+    padding: 12px 16px;
     padding-bottom: 96px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .stat-card {
+    min-height: 112px;
   }
 
   .page-header {

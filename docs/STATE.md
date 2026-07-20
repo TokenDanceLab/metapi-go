@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
-| Tip | `origin/master` **b6bee3c** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs + #547/#584 + WS C1+C2 |
+| Tip | post-v0.8.45: OAuth refresh + Sub2API due + parity KEYS/#579 + WS C1+C2 + **cloud-ops UI 对齐** |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
@@ -35,14 +35,14 @@
 | OPS-RE2-USERID | **fixed in v0.8.45** | was production Exited(2) on 0.8.44; ops still must pin/up 0.8.45 + soak |
 | OPS-OAUTH-REFRESH | **present** (#251 / post-v0.8.45) | OAuth token auto-refresh scheduler (oauth-refresh); TS parity for codex/claude/gemini-cli/antigravity lead times |
 | OPS-SUB2API-REFRESH | **present** (post-#246) | Sub2API managed session token refresh via balance.RefreshBalance (extraConfig parsed, due filter with 300s lead window, concurrency=4); residual: no standalone lightweight refresh endpoint |
-| UI-REFRESH / UI-POLISH | **released v0.8.45** | residual optional empty-DB shot recapture |
+| UI-REFRESH / UI-POLISH | **released v0.8.45** + **cloud-ops align** | visual family → tokendance-design `styles/cloud-ops`; see [`design/cloud-ops-alignment.md`](design/cloud-ops-alignment.md); residual optional empty-DB shot |
 | UI vs 原版功能 | **parity on web surface** | 2026-07-20 inventory: routes/buttons 齐平；体感「没了」= 空库 + pin 落后 tip + 主题换肤 — [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md) |
 
 ## Next-wave pointer
 
 Prioritized **ours vs original** shortlist: [`analysis/high-value-next.md`](analysis/high-value-next.md)  
 **Parity program (ex-Electron)**: [`plan/original-parity-complete-2026-07-20.md`](plan/original-parity-complete-2026-07-20.md)  
-UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md) · PM empty notes [`analysis/ui-pm-empty-state-2026-07-19.md`](analysis/ui-pm-empty-state-2026-07-19.md) · 原版功能对照 [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md)  
+UI wave SSOT: [`analysis/ui-ux-refresh.md`](analysis/ui-ux-refresh.md) · **cloud-ops 对齐** [`design/cloud-ops-alignment.md`](design/cloud-ops-alignment.md) · visual harness [`analysis/ui-visual-acceptance.md`](analysis/ui-visual-acceptance.md) · 原版功能对照 [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md)  
 Full residual inventory: [`analysis/residual-next-candidates.md`](analysis/residual-next-candidates.md)  
 Original parity evidence: [`analysis/original-gap-matrix.md`](analysis/original-gap-matrix.md)  
 WS residual: [`analysis/responses-websocket-residual.md`](analysis/responses-websocket-residual.md)
