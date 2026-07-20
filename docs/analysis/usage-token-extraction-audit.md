@@ -47,7 +47,7 @@ go test ./handler/proxy ./scheduler -count=1 -run Usage
 
 ## Residual honesty
 
-Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata columns, media endpoints that never emit usage, multi-instance projection lag, orphan logs without site join. OpenAI chat stream `stream_options.include_usage` policy is wired (#345); still not perfect billing.
+Perfect billing accuracy is **not** claimed. Remaining gaps: schema metadata columns, multi-instance projection lag, orphan logs without site join. **Media detail fold (2026-07-21)**: OpenAI image/audio detail leaves fill prompt/completion when top-level missing; endpoints with no usage object still zero (no invent). OpenAI chat stream `stream_options.include_usage` policy is wired (#345); still not perfect billing.
 
 ## Aggregation of failed `proxy_logs` (#319)
 

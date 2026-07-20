@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
-| Tip | post-v0.8.45: KEYS + WS C1–C3 + #514 + UC-1 external + cloud-ops UI |
+| Tip | post-v0.8.45: KEYS + WS C1–C3 + #514 + UC-1 + P0-555 media detail fold + cloud-ops UI |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
@@ -27,7 +27,7 @@
 | ID | Status | Note |
 |:---|:-------|:-----|
 | P0-585 cascade | **partial** | load-proof still required; honesty tests do not flip present |
-| P0-555 usage stats | **present-with-residual** | not perfect billing |
+| P0-555 usage stats | **present-with-residual** | media detail fold shipped; multi-instance lag residual; not perfect billing |
 | WS-1 Responses WebSocket | **C1+C2+C3 present** | HTTP multi-turn bridge + per-msg quota + Codex upstream wss (flagged); single-instance honesty |
 | STICKY-B Redis sticky | design-only **deferred** | multi-turn/WS requires single instance or LB pin |
 | UC-1 update-center deploy | **hide/external present** | UI ops note + GHCR/Releases; API residual 501; no invent updateAvailable |

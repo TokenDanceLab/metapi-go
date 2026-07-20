@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | parity core shipped (KEYS/WS/#514/UC-1); next REL residual honesty |
+| Active work | parity core + P0-555 media fold; next P0-585 e2e / ops pin auth |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
@@ -27,7 +27,7 @@
 ## Hard gates
 
 1. **No invent** WS frames / Hijack-silent-close / fake updateAvailable / cluster sticky without AC.  
-2. **WS-1 full parity** is scheduled by plan — still **Milestone + ACs + phased C1→C3** before claiming done.  
+2. **WS-1 C1–C3 present** — C4 single-instance honesty only; no STICKY-B without reopen.  
 3. **STICKY-B Redis deferred** (single-instance / LB pin honesty only).  
 4. **UC-1**: hide or external ops deploy — **not** invent registry.  
 5. **P0-585 stays partial** until production e2e.  
@@ -67,7 +67,7 @@ gh project view 1 --owner TokenDanceLab
 
 ## Next agent
 
-1. Read [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md).  
-2. Either open GitHub Issues for Wave KEYS + WS C1 **present**, or implement B-DOC truth fixes first.  
-3. Do **not** start WS without dependency (`coder/websocket` or equivalent) + tests.  
-4. Do **not** auto pin/up production.
+1. Read [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) + [`../STATE.md`](../STATE.md).  
+2. REL: P0-585 needs **production e2e** (do not flip present from unit alone).  
+3. Ops pin **0.8.45** only with admin auth + ≥15min soak.  
+4. Do **not** invent UC registry / STICKY-B / fake WS terminals.

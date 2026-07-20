@@ -31,7 +31,7 @@
 | 4 | **#579** | Multi-credential on one key | **present** | allow-list sites/credentials shipped | — |
 | 5 | **#514** | Multi-tier ctx routing | **present** | estimate + tightest-fit among same-model routes | residual: tokenizer accuracy |
 | 6 | **P0-585** | Channel cascade | partial | Production e2e only | Silent cascade claim |
-| 7 | **P0-555** | Billing accuracy | present-with-residual | Media / multi-instance ACs | Dashboard trust |
+| 7 | **P0-555** | Billing accuracy | present-with-residual | media detail fold present; multi-instance lag residual | not perfect billing |
 | 8 | **UC-1** | Update-center deploy | **hide/external present** | UI ops note + 501 residual | — |
 | 9 | **STICKY-B** | Redis sticky | design-only | **Deferred** — single-instance / LB pin honesty | Multi-instance multi-turn |
 | 10 | **OPS-PIN** | Prod 0.8.45 | ops | Authorized pin/up + soak | Users on Exited 0.8.44 |
@@ -71,13 +71,11 @@ Out-of-product: Electron · MySQL · k3s · noise issues.
 
 ## C. Recommended sequencing (authoritative)
 
-1. **Docs truth** — #534/#520 present; MASTER points at parity plan.  
-2. **#547 → #584 → #579** product keys/headers.  
-3. **WS-1 C1–C3 present** — next is C4 sticky docs honesty + optional multi-instance pin only.  
-4. **#514 present** — multi-tier ctx routing shipped.  
-5. **P0-585 e2e ∥ P0-555 residual**.  
-6. **UC hide/external**.  
-7. Ops pin **0.8.45** when authorized (parallel anytime).
+1. Parity core **shipped**: KEYS · WS C1–C3 · #514 · UC-1 · C4 docs.  
+2. **P0-585** production e2e only (partial until then).  
+3. **P0-555** remains present-with-residual (media fold present; multi-instance lag).  
+4. Ops pin **0.8.45** when authorized + soak.  
+5. Optional: #571/#577 runtime probes; empty-DB UI shots.
 
 ---
 

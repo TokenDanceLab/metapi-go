@@ -1,3 +1,9 @@
+## [2026-07-21] P0-555 media usage details + route sort_order load
+
+- Usage: fold OpenAI `input_tokens_details` / `output_tokens_details` / `*_tokens_details` text/image/audio leaves into prompt/completion **only when top-level is missing** (no double-count).
+- Honesty tests: media fill, no double-count, zero details no invent; P0-555 remains present-with-residual (multi-instance lag / orphans).
+- Routing load: `LoadEnabledRoutes` SELECT/ORDER BY `sort_order ASC, id ASC` (admin list order parity for multi-route match bucket).
+
 ## [2026-07-21] UC-1 hide/external Update Center honesty
 
 - User decision: no invent registry; deploy via GHCR/ops.

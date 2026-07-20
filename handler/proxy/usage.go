@@ -40,8 +40,9 @@ func (u ParsedUsage) ToUsageSummary() *proxy.UsageSummary {
 // ParseUsageFromBody extracts token usage from a non-stream JSON response body.
 // Supports OpenAI (prompt_tokens/completion_tokens/total_tokens), Anthropic
 // (input_tokens/output_tokens + cache_*_input_tokens), Gemini
-// (usageMetadata.*TokenCount including thoughtsTokenCount), and nested
-// Responses / message_start shapes.
+// (usageMetadata.*TokenCount including thoughtsTokenCount), nested
+// Responses / message_start shapes, and media-ish OpenAI details
+// (input_tokens_details text/image/audio; output audio/image) when present.
 //
 // Does not invent usage when upstream omitted token fields.
 func ParseUsageFromBody(body []byte) ParsedUsage {
@@ -213,32 +214,40 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 
 	// OpenAI prompt_tokens_details.cached_tokens / input_tokens_details.cached_tokens
 	// are subsets of prompt/input tokens — record for cache pricing, do not add again.
+	// Media residual (P0-555): when top-level prompt/input is absent, sum text/image/audio
+	// detail leaves so images/audio endpoints that only emit details still count.
 	if details, ok := usage["prompt_tokens_details"].(map[string]any); ok {
 		if n, ok := asInt64(details["cached_tokens"]); ok {
 			out.CacheReadTokens = n
 			out.Found = true
 		}
+		applyOpenAIMediaDetailPrompt(out, details)
 	}
 	if details, ok := usage["input_tokens_details"].(map[string]any); ok {
 		if n, ok := asInt64(details["cached_tokens"]); ok {
 			out.CacheReadTokens = n
 			out.Found = true
 		}
+		applyOpenAIMediaDetailPrompt(out, details)
 	}
 
 	// OpenAI completion_tokens_details.reasoning_tokens is typically already inside
 	// completion_tokens / total_tokens. Record only; do not double-count when total present.
+	// Media: audio_tokens / image_tokens under completion/output details fill completion
+	// only when top-level completion/output is missing (no invent beyond reported leaves).
 	if details, ok := usage["completion_tokens_details"].(map[string]any); ok {
 		if n, ok := asInt64(details["reasoning_tokens"]); ok {
 			out.ReasoningTokens = n
 			out.Found = true
 		}
+		applyOpenAIMediaDetailCompletion(out, details)
 	}
 	if details, ok := usage["output_tokens_details"].(map[string]any); ok {
 		if n, ok := asInt64(details["reasoning_tokens"]); ok {
 			out.ReasoningTokens = n
 			out.Found = true
 		}
+		applyOpenAIMediaDetailCompletion(out, details)
 	}
 
 	// Gemini-style
@@ -264,6 +273,53 @@ func applyUsageMap(out *ParsedUsage, usage map[string]any) {
 		if _, hasTotal := asInt64(usage["totalTokenCount"]); !hasTotal && n > 0 {
 			out.CompletionTokens += n
 		}
+	}
+}
+
+// applyOpenAIMediaDetailPrompt folds text/image/audio detail leaves into PromptTokens
+// only when PromptTokens is still zero (top-level input/prompt missing). Details are
+// subsets when top-level is present — never double-add.
+func applyOpenAIMediaDetailPrompt(out *ParsedUsage, details map[string]any) {
+	if out == nil || details == nil {
+		return
+	}
+	var sum int64
+	var any bool
+	for _, key := range []string{"text_tokens", "image_tokens", "audio_tokens"} {
+		if n, ok := asInt64(details[key]); ok {
+			sum += n
+			any = true
+		}
+	}
+	if !any {
+		return
+	}
+	out.Found = true
+	if out.PromptTokens == 0 && sum > 0 {
+		out.PromptTokens = sum
+	}
+}
+
+// applyOpenAIMediaDetailCompletion folds image/audio/text detail leaves into
+// CompletionTokens only when CompletionTokens is still zero.
+func applyOpenAIMediaDetailCompletion(out *ParsedUsage, details map[string]any) {
+	if out == nil || details == nil {
+		return
+	}
+	var sum int64
+	var any bool
+	for _, key := range []string{"image_tokens", "audio_tokens", "text_tokens"} {
+		if n, ok := asInt64(details[key]); ok {
+			sum += n
+			any = true
+		}
+	}
+	if !any {
+		return
+	}
+	out.Found = true
+	if out.CompletionTokens == 0 && sum > 0 {
+		out.CompletionTokens = sum
 	}
 }
 

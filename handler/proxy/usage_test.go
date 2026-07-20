@@ -403,3 +403,57 @@ func TestParseUsageFromSSEEventsEmptyUsageObjectDoesNotInvent(t *testing.T) {
 		t.Fatalf("must not invent non-zero tokens from empty/zero usage: %+v", got)
 	}
 }
+
+// P0-555 residual: media endpoints sometimes only emit input_tokens_details /
+// output_tokens_details (image/audio) without top-level input/output. Fold details
+// when top-level is missing; never invent when all zeros.
+func TestParseUsageFromBodyOpenAIMediaDetailsFillMissingTopLevel(t *testing.T) {
+	body := []byte(`{
+		"usage": {
+			"input_tokens_details": {"text_tokens": 12, "image_tokens": 88, "audio_tokens": 0},
+			"output_tokens_details": {"image_tokens": 40, "audio_tokens": 5},
+			"total_tokens": 145
+		}
+	}`)
+	got := ParseUsageFromBody(body)
+	if !got.Found {
+		t.Fatal("expected Found from media details")
+	}
+	if got.PromptTokens != 100 { // 12+88
+		t.Fatalf("prompt = %d, want 100 (text+image details)", got.PromptTokens)
+	}
+	if got.CompletionTokens != 45 { // 40+5
+		t.Fatalf("completion = %d, want 45 (image+audio details)", got.CompletionTokens)
+	}
+	if got.TotalTokens < 145 {
+		t.Fatalf("total = %d, want >= 145", got.TotalTokens)
+	}
+}
+
+func TestParseUsageFromBodyOpenAIMediaDetailsDoNotDoubleCountTopLevel(t *testing.T) {
+	// Top-level input/output present: details are subsets — do not add again.
+	body := []byte(`{
+		"usage": {
+			"input_tokens": 100,
+			"output_tokens": 50,
+			"total_tokens": 150,
+			"input_tokens_details": {"text_tokens": 20, "image_tokens": 80},
+			"output_tokens_details": {"image_tokens": 50}
+		}
+	}`)
+	got := ParseUsageFromBody(body)
+	if got.PromptTokens != 100 {
+		t.Fatalf("prompt = %d, want 100 (top-level wins, no double)", got.PromptTokens)
+	}
+	if got.CompletionTokens != 50 {
+		t.Fatalf("completion = %d, want 50", got.CompletionTokens)
+	}
+}
+
+func TestParseUsageFromBodyOpenAIMediaZeroDetailsDoNotInvent(t *testing.T) {
+	body := []byte(`{"usage":{"input_tokens_details":{"image_tokens":0},"output_tokens_details":{"audio_tokens":0},"total_tokens":0}}`)
+	got := ParseUsageFromBody(body)
+	if got.PromptTokens != 0 || got.CompletionTokens != 0 {
+		t.Fatalf("zero media details must not invent: %+v", got)
+	}
+}

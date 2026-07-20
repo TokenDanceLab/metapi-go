@@ -131,10 +131,10 @@ func (s *proxyRoutingStore) LoadEnabledRoutes(ctx context.Context) ([]store.Toke
 	err := s.selectContext(ctx, &routes, `
 		SELECT id, model_pattern, display_name, display_icon, route_mode, model_mapping,
 		       decision_snapshot, decision_refreshed_at, routing_strategy, context_length,
-		       enabled, created_at, updated_at
+		       sort_order, enabled, created_at, updated_at
 		FROM token_routes
 		WHERE enabled = ?
-		ORDER BY id ASC`, true)
+		ORDER BY sort_order ASC, id ASC`, true)
 	return routes, err
 }
 
