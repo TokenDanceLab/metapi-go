@@ -134,14 +134,13 @@ func TestSelectChannel_MultiTierContext(t *testing.T) {
 		ID: 20, ModelPattern: "gpt-4o", RouteMode: "pattern",
 		RoutingStrategy: "weighted", Enabled: true, ContextLength: int64p(128_000),
 	}
-	// Channels on different routes
 	chSmall := store.RouteChannel{ID: 100, RouteID: 10, AccountID: 1, SourceModel: &sm, Priority: 0, Weight: 10, Enabled: true}
 	chLarge := store.RouteChannel{ID: 200, RouteID: 20, AccountID: 2, SourceModel: &sm, Priority: 0, Weight: 10, Enabled: true}
 	site := store.Site{ID: 1, Name: "s", Platform: "openai", URL: "https://example.com", Status: "active"}
 	acc1 := store.Account{ID: 1, SiteID: 1, Status: "active", AccessToken: token, APIToken: &token}
 	acc2 := store.Account{ID: 2, SiteID: 1, Status: "active", AccessToken: token, APIToken: &token}
 
-	db := &preferredDB{
+	base := &preferredDB{
 		routes: []store.TokenRoute{routeSmall, routeLarge},
 		joined: []struct {
 			Channel store.RouteChannel
@@ -149,28 +148,16 @@ func TestSelectChannel_MultiTierContext(t *testing.T) {
 			Site    store.Site
 			Token   *store.AccountToken
 		}{
-			// loadRouteChannels is filtered by routeIDs — return all and filter in mock?
+			{Channel: chSmall, Account: acc1, Site: site, Token: nil},
+			{Channel: chLarge, Account: acc2, Site: site, Token: nil},
 		},
 	}
-	// preferredDB LoadRouteChannels returns ALL joined regardless of routeIDs.
-	// Override by setting only matching channels after each select is hard.
-	// Use a filtering wrapper:
-	fdb := &tierDB{preferredDB: *db}
-	fdb.routes = []store.TokenRoute{routeSmall, routeLarge}
-	fdb.joined = []struct {
-		Channel store.RouteChannel
-		Account store.Account
-		Site    store.Site
-		Token   *store.AccountToken
-	}{
-		{Channel: chSmall, Account: acc1, Site: site, Token: nil},
-		{Channel: chLarge, Account: acc2, Site: site, Token: nil},
-	}
+	// Pointer embed — avoids copying preferredDB's sync.Mutex (go vet).
+	fdb := &tierDB{preferredDB: base}
 
 	selector := NewChannelSelector(fdb, NewRouteCache(0), 0, RoutingWeightsConfig{}, nil, 0, nil)
 	ctx := context.Background()
 
-	// Small estimate → 32k route → channel 100
 	policy := EmptyDownstreamRoutingPolicy
 	policy.RequestedContextTokens = 10_000
 	sel, err := selector.SelectChannel(ctx, "gpt-4o", policy)
@@ -184,9 +171,7 @@ func TestSelectChannel_MultiTierContext(t *testing.T) {
 		t.Fatalf("context_length 32k, got %#v", sel.ContextLength)
 	}
 
-	// Large estimate → 128k route → channel 200
 	policy.RequestedContextTokens = 80_000
-	// Clear cache so second match reloads
 	selector.cache = NewRouteCache(0)
 	sel, err = selector.SelectChannel(ctx, "gpt-4o", policy)
 	if err != nil {
@@ -196,7 +181,6 @@ func TestSelectChannel_MultiTierContext(t *testing.T) {
 		t.Fatalf("large ctx → ch200, got %#v", sel)
 	}
 
-	// Unknown estimate → first match (route id 10 first in list)
 	policy.RequestedContextTokens = 0
 	selector.cache = NewRouteCache(0)
 	sel, err = selector.SelectChannel(ctx, "gpt-4o", policy)
@@ -210,7 +194,7 @@ func TestSelectChannel_MultiTierContext(t *testing.T) {
 
 // tierDB filters LoadRouteChannels by requested route IDs.
 type tierDB struct {
-	preferredDB
+	*preferredDB
 }
 
 func (db *tierDB) LoadRouteChannels(ctx context.Context, routeIDs []int64) ([]struct {
