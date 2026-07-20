@@ -13,7 +13,7 @@ Four background schedulers still carry TODOs that look like product work. Operat
 
 | Scheduler | File | Interval | What currently runs | Residual / silent gap | Multi-instance |
 |-----------|------|----------|---------------------|------------------------|----------------|
-| Sub2API refresh | `scheduler/sub2api_refresh.go` | 60s (min 60s) | Lease + SQL scan of active `sub2api` accounts; logs `scanned=N, refreshed=0, failed=0` | Does **not** parse `extraConfig.sub2apiAuth`; does **not** filter due tokens; does **not** call `refreshSub2ApiManagedSessionSingleflight` or any upstream refresh. Concurrency constant unused. | `runWithSchedulerLease` (PG advisory lock / process-local mutex). Only one instance runs the empty pass. |
+| Sub2API refresh | `scheduler/sub2api_refresh.go` | 60s (min 60s) | Lease + SQL scan of active `sub2api` accounts; parses `extraConfig.sub2apiAuth` via `isSub2APIRefreshCandidate`; calls `balance.RefreshBalance` per due account (internally uses `refreshSub2ApiManagedSessionSingleflight`); logs `scanned=N, eligible=N, refreshed=N, failed=N` | **Wired and functional.** ExtraConfig parsed, due filter active, full balance refresh path invoked with concurrency=4 semaphore. Residual: refresh is via the full balance/auto-relogin path rather than a standalone lightweight token-refresh; no dedicated Sub2API refresh endpoint. | `runWithSchedulerLease` (PG advisory lock / process-local mutex). Only one instance runs the pass. |
 | Channel recovery | `scheduler/channel_recovery.go` | 30s (min 10s) | Lease + cooling SQL + active candidates via optional `SetActiveChannelIDsProvider` (coordinator) or SQL LIMIT 50 residual + probe | Active path prefers provider (#273); residual SQL only when provider **unset**. Empty provider set does not fall back to residual SQL. Probe real only if model-probe registered. | Lease serializes sweeps; in-flight maps process-local. |
 | Site announcement | `scheduler/site_announcement.go` | 15m (min 10s) | Lease + optional `SyncFunc` (wired from admin `SyncSiteAnnouncements` via `SetDefaultSiteAnnouncementSyncFunc` on route register, #272) | When SyncFunc set: real platform adapter + DB writes. When nil: residual scan-only remains for tests/partial boots. | Lease serializes sync/scan. |
 | Update center | `scheduler/update_center.go` | 15m (min 10s) | Lease + residual log line only (#283) | **No** remote registry/helper poll, **no** version persistence, **no** deploy/rollback, **no** `updateAvailable` invention. Admin status/check are local stubs (`0.0.0` / `updateAvailable=false` + `residual`); deploy/rollback/SSE are 501 residuals (`residual-update-center.md`). | Lease serializes residual log. No cluster-wide "last checked" state. |
@@ -22,7 +22,7 @@ Four background schedulers still carry TODOs that look like product work. Operat
 
 ### 1. `Sub2APIRefreshScheduler` (`sub2api_refresh.go`)
 
-**Runs today**
+**Runs today** (updated 2026-07-20 — code had evolved past the original #246 doc)
 
 1. Start ticker; immediate first `runPass`.
 2. Process-local `passInFlight` skip if previous pass still open.
@@ -38,18 +38,21 @@ Four background schedulers still carry TODOs that look like product work. Operat
      AND s.status = 'active'
    ```
 
-5. Append every scanned row as a "candidate" without parsing `extra_config`.
-6. Log `pass complete (scan-only residual; no tokens refreshed)` with `refreshed=0`, `failed=0`.
+5. Filter through `isSub2APIRefreshCandidate(extraConfig)` which **parses `extraConfig.sub2apiAuth`** for `refreshToken` + `tokenExpiresAt`. Only accounts with a valid refresh token that is due (`IsManagedSub2ApiTokenDue`) become eligible.
+6. For each eligible candidate, call **`balance.RefreshBalance`** (internally invokes `refreshSub2ApiManagedSessionSingleflight` for the Sub2API managed session token). Concurrency cap = 4 via semaphore.
+7. Log `pass complete` with `scanned=N, eligible=N, refreshed=N, failed=N`.
 
 **Residual**
 
 | TODO site | Honest status |
 |-----------|---------------|
-| parse `extraConfig` for `refreshToken` + `tokenExpiresAt` | **Not wired** — `extraConfig` is loaded and discarded |
-| wire Sub2API refresh via singleflight | **Not wired** — balance package has `refreshSub2ApiManagedSessionSingleflight` (auto-relogin style), but scheduler never calls it |
-| concurrency = 4 | Constant only; no worker pool |
+| parse `extraConfig` for `refreshToken` + `tokenExpiresAt` | **Wired** — `isSub2APIRefreshCandidate` does this |
+| wire Sub2API refresh via singleflight | **Wired** — `balance.RefreshBalance` → `refreshSub2ApiManagedSessionSingleflight` |
+| concurrency = 4 | **Wired** — semaphore channel |
+| Standalone lightweight token-refresh path | Residual — current path goes through full balance/auto-relogin flow |
+| Dedicated Sub2API refresh admin endpoint | Residual — `/api/v1/auth/refresh` not implemented |
 
-**Do not invent** a full managed-auth refresh product in this residual wave. Related account-merge residual: `docs/analysis/residual-sub2api-auth.md`.
+**Scheduler is functional and not "scan-only".** The original #246 description was superseded by later commits that wired the full path. For residual detail: `docs/analysis/residual-sub2api-auth.md`.
 
 ### 2. `ChannelRecoveryScheduler` (`channel_recovery.go`)
 

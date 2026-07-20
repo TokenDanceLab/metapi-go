@@ -1,6 +1,6 @@
 # Residual: Sub2API Managed Auth (#194)
 
-Last updated: 2026-07-17
+Last updated: 2026-07-20 (item 2 wired, not incomplete)
 
 ## Scope
 
@@ -23,7 +23,7 @@ Helpers:
 ## Residual / not in this PR
 
 1. **No dedicated Sub2API refresh endpoint in Go yet.** Balance refresh currently falls back through `refreshSub2ApiManagedSessionSingleflight` → auto-relogin style path when managed auth is due. A true `/api/v1/auth/refresh` (or platform-specific) adapter call is still residual.
-2. **Scheduler filter incomplete.** `scheduler/sub2api_refresh.go` still has a TODO to parse `extraConfig` and only refresh candidates with `refreshToken` + due `tokenExpiresAt`.
+2. **Scheduler filter wired (post #246).** `scheduler/sub2api_refresh.go` now parses `extraConfig.sub2apiAuth` via `isSub2APIRefreshCandidate` and calls `balance.RefreshBalance` (→ `refreshSub2ApiManagedSessionSingleflight`) for due tokens only. See `docs/analysis/scheduler-residual-todos.md` for the updated status.
 3. **Create-path managed auth.** `POST /api/accounts` stores top-level `tokenExpiresAt` as a flat extraConfig key for session mode, but does not yet write nested `extraConfig.sub2apiAuth` for sub2api imports.
 4. **Due window.** `IsManagedSub2ApiTokenDue` currently returns true whenever `tokenExpiresAt` is present; a real expiry-window policy remains residual.
 5. **Subscription summary aggregation** from managed auth remains a stub in site service.
