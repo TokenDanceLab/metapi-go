@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] tip after stream missing-usage metric
+
+- Tip `56eca67`: `metapi_stream_missing_usage_total` + OrphanLogs; README unreleased tip honesty.
+
 ## [2026-07-21] P0-555 stream missing-usage metric
 
 - `metapi_stream_missing_usage_total` + `RecordStreamMissingUsage` when include_usage stream ends without usable tokens.

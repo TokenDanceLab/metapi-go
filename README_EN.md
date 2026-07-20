@@ -30,6 +30,8 @@ docker run -d -p 4000:4000 \
 
 Open `http://localhost:4000`.
 
+> **Unreleased tip (master)**: parity KEYS/WS/#514/UC-1 and P0-555 residual observability (OrphanLogs / stream missing-usage metric) are on tip; production pin may still lag at 0.8.44 (see ops STATE). P0-585 remains partial until production e2e.
+
 ## Features
 
 - **Protocol proxy**: OpenAI, Anthropic, Gemini, Codex — with real-time format conversion

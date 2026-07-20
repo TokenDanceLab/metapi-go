@@ -54,6 +54,8 @@ MetAPI 作为中转站之上的**元聚合层**，把多个站点统一到一个
 
 ---
 
+> **Unreleased tip（master）**：parity KEYS/WS/#514/UC-1、P0-555 residual 可观测性（OrphanLogs / stream missing-usage metric）已在 tip；生产 pin 可能仍为 0.8.44，以 ops STATE 为准。P0-585 仍 partial（需生产 e2e）。
+
 ## 快速开始
 
 ### Docker
