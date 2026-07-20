@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-CZcjcDnw.js";import{r as t}from"./vchart-vendor-C149A-YZ.js";t();var n=e();function r({columns:e=2,children:t,className:r}){return(0,n.jsx)(`div`,{className:[`responsive-form-grid`,`responsive-form-grid-${e}`,r].filter(Boolean).join(` `),children:t})}export{r as t};

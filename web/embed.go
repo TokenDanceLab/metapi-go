@@ -1,6 +1,9 @@
 // Package web bundles the built React SPA frontend via go:embed.
-// The frontend must be built from the metapi TypeScript project before
-// compilation: cd ../metapi && npm run build:web && cp -r dist/web/ ../metapi-go/web/dist/
+// Build before compile (from repo root):
+//
+//	cd web && npm ci && npm run build:web
+//
+// Output lands in web/dist/ and is embedded by //go:embed dist.
 package web
 
 import "embed"

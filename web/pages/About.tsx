@@ -231,7 +231,7 @@ export default function About() {
       <div className="card animate-slide-up stagger-5" style={{ padding: 22 }}>
         <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>{tr('数据与隐私')}</h3>
         <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.8 }}>
-          {tr('Metapi 完全自托管，所有数据（账号、令牌、路由、日志）均存储在本地 SQLite 数据库中，不会向任何第三方发送数据。代理请求仅在你的服务器与上游站点之间直连传输。')}
+          {tr('MetAPI Go 完全自托管：账号、令牌、路由与日志默认落在本机 SQLite，生产可选用 PostgreSQL。数据不会主动发往第三方；代理请求仅在你的服务器与上游站点之间传输。')}
         </div>
       </div>
     </div>

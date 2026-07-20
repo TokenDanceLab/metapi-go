@@ -1,3 +1,9 @@
+## [2026-07-21] rebuild embed SPA for About honesty
+
+- Rebuild `web/dist` via `npm run build:web` so embed About shows v0.8.45, Go stack, TokenDanceLab links (drop Fastify 1.3.0 theater).
+- `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
+- `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
+
 ## [2026-07-21] neat-freak: formal-readiness + About honesty
 
 - formal-readiness Track B gates refresh: WS C1–C3 present · UC-1 hide/external present · P0-585/555 residual honesty; A2.1 ops pin lag noted.
