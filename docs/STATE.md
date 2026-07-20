@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
-| Tip | `origin/master` **PENDING579** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs + #547/#584 + WS C1+C2 |
+| Tip | `origin/master` **b6bee3c** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs + #547/#584 + WS C1+C2 |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
