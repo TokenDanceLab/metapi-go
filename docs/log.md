@@ -1,3 +1,9 @@
+## [2026-07-21] neat-freak: CHANGELOG unreleased + #514 UI hint
+
+- CHANGELOG [Unreleased] captures KEYS / WS C1–C3 / #514 / UC-1 / cloud-ops / P0-555 media fold.
+- TokenRoutes context_length help: multi-tier same-model routes (#514).
+- high-value matrix leftover #547 → present (was stale partial).
+
 ## [2026-07-21] P0-555 media usage details + route sort_order load
 
 - Usage: fold OpenAI `input_tokens_details` / `output_tokens_details` / `*_tokens_details` text/image/audio leaves into prompt/completion **only when top-level is missing** (no double-count).

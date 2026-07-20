@@ -7,12 +7,23 @@ All notable changes to MetAPI-Go will be documented in this file.
 
 ## [Unreleased]
 
-### Added
+### Added — original parity program (ex-Electron)
+- **KEYS**: per-downstream-key weight (#547); site custom header override priority (#584); allow-list bind sites/credentials on downstream keys (#579)
+- **WS-1 C1–C3**: Responses WebSocket via `coder/websocket` — upgrade + HTTP SSE bridge + multi-turn/quota (C2) + Codex upstream wss runtime with dial→HTTP fallback (C3); status `c3_codex_upstream_wss`
+- **#514 multi-tier ctx**: same-model routes with different `context_length` pick tightest fit from request estimate; `LoadEnabledRoutes` honors `sort_order`
+- **UC-1**: Update Center hide/external — Settings ops note + GHCR/Releases links; API residual 501; no invent `updateAvailable`
+- **UI**: cloud-ops design family align (tokendance-design palette/shell density)
 - OAuth token auto-refresh scheduler (#251): 60s interval, per-provider lead times (codex=5d, claude=4h, gemini-cli/antigravity=5min), singleflight dedup
 - P12 scheduler spec updated with scheduler #13b (video retention) + #16 (OAuth refresh)
 
-### Fixed
+### Fixed / Honesty
 - `IsManagedSub2ApiTokenDue` no longer returns true unconditionally — now checks real 300s lead window (was always-true stub causing unnecessary refresh passes)
+- **P0-555 residual**: fold OpenAI media `*_tokens_details` text/image/audio leaves when top-level usage missing (no double-count / no invent on zeros); still present-with-residual (multi-instance lag)
+- **C4 docs**: WS multi-turn process-local sticky honesty only (STICKY-B deferred)
+
+### Not yet (gates)
+- **P0-585** remains **partial** until production e2e (unit load-proof does not flip present)
+- **OPS-PIN** 0.8.45 requires admin auth + soak (do not auto pin)
 
 ## [v0.8.45] — 2026-07-20
 

@@ -633,7 +633,7 @@ export default function ManualRoutePanel({
                   />
                   <span style={{ fontSize: 12, color: contextLengthError ? 'var(--color-danger)' : 'var(--color-text-muted)', lineHeight: 1.5 }}>
                     {contextLengthError
-                      || tr('用于 max_tokens 上限校验；空 / 0 = 未知，不强制。')}
+                      || tr('用于 max_tokens 上限校验；同模型多条路由可用不同 context_length 做多档选路（#514，按请求估算选最紧档）；空 / 0 = 未知，不强制。')}
                   </span>
                 </label>
               </div>
@@ -731,7 +731,7 @@ export default function ManualRoutePanel({
                 />
                 <span style={{ fontSize: 12, color: contextLengthError ? 'var(--color-danger)' : 'var(--color-text-muted)', lineHeight: 1.5 }}>
                   {contextLengthError
-                    || tr('用于 max_tokens 上限校验；空 / 0 = 未知，不强制。')}
+                    || tr('用于 max_tokens 上限校验；同模型多条路由可用不同 context_length 做多档选路（#514，按请求估算选最紧档）；空 / 0 = 未知，不强制。')}
                 </span>
               </label>
 

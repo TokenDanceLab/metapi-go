@@ -1,6 +1,6 @@
 # High-value next candidates (ours vs original)
 
-**Date**: 2026-07-20  
+**Date**: 2026-07-21  
 **Scope**: planning inventory — **no product code in this file**.  
 **Mode**: **parity program** after v0.8.45; plan SSOT [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md).  
 **Ops pin**: may lag (read server `projects/metapi/STATE.md`).
@@ -57,7 +57,7 @@
 | **585** | Channel cascade | partial | Prod e2e |
 | **555** | Token stats | present-with-residual | Media / multi-instance |
 | **579** | Multi-key binding | **present** | allow-list bind |
-| **547** | Per-key weight | partial | Product AC |
+| **547** | Per-key weight | **present** | — |
 | **584** | Header priority | **present** | — |
 | **514** | Multi-tier ctx | **present** | — |
 | **534** | Bulk account import | **present** (matrix stale if still missing) | Docs only |

@@ -171,7 +171,7 @@ Remaining **all-rows missing** (1, additional product sample only): **#292** aut
 
 1. G2 matrix was inventory-only; product fixes landed later under **M-FEATURE** / residual releases. This file tracks **current evidence**, not the original freeze.
 2. **2026-07-17 refresh:** mandatory missing set cleared for shipped surfaces — rebuild (**#588/#526/#559**), `/v1/rerank` (**#591**), per-site concurrency (**#594**), per-key proxy (**#578**), Claude `cache_ratio` (**#496**).
-3. Remaining high-leverage **partial** mandatory work: cascade residual load-proof (**#585**), multi-key binding (**#579**), per-key weight (**#547**), header priority (**#584**), usage/stats accuracy (**#555**). Program schedule: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md). Gemini `thought_signature` (**#580/#581**) request-side + proxy sanitize is **present** (#86/#309); multi-turn Responses content (**#538**) is **present** for HTTP (#50/#310); full Responses **WebSocket** is scheduled full TS parity (C1–C3), residual until C1 ships.
+3. Remaining high-leverage **partial** residual: cascade production e2e (**#585 / P0-585**), usage/stats multi-instance lag (**#555 / P0-555** present-with-residual). **Present this wave**: #547/#584/#579 · #514 multi-tier · WS C1–C3 · UC-1 hide/external. Program schedule: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md).
 4. Prefer runtime verification for `unknown-needs-runtime` before opening large implementation issues.
 5. Architecture debt rows can be filed as metapi-go-native issues (not “upstream parity”).
 
