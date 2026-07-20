@@ -15,7 +15,7 @@ var (
 	checkinScheduler *scheduler.CheckinScheduler
 )
 
-// StartBackgroundServices creates and starts all 15 background schedulers.
+// StartBackgroundServices creates and starts all 16 background schedulers.
 func StartBackgroundServices() {
 	slog.Info("starting background schedulers")
 
@@ -75,6 +75,8 @@ func StartBackgroundServices() {
 
 	// ---- Scheduler 15: OAuth Loopback ----
 	newRegistry.Register(scheduler.NewOAuthLoopbackScheduler(cfg))
+	// ---- Scheduler 16: OAuth Token Refresh ----
+	newRegistry.Register(scheduler.NewOAuthRefreshScheduler(cfg))
 
 	servicesMu.Lock()
 	registry = newRegistry
