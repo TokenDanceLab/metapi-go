@@ -17,7 +17,7 @@ import (
 	"github.com/tokendancelab/metapi-go/auth"
 )
 
-// Responses WebSocket transport (#217 / parity Wave C1–C2).
+// Responses WebSocket transport (#217 / parity Wave C1–C3).
 //
 // C1 scope:
 //   - Real WebSocket upgrade via coder/websocket
@@ -26,19 +26,21 @@ import (
 //   - response.create single-turn via in-process HTTP SSE→WS bridge
 //   - Honest errors on the open socket (no fake response.completed for real turns)
 //
-// C2 scope (this file):
+// C2 scope:
 //   - Multi-turn merge (last input + last output + new input)
 //   - Incremental previous_response_id path when client supplies it on response.create
 //   - Per-message managed-key used_requests consume (TS parity; upgrade does not bill)
 //   - Per-message model policy gate (IsModelAllowedByPolicy)
 //
-// Still residual / later waves:
-//   - C3 Codex upstream wss runtime + channel capability probe
-//   - Multi-instance sticky (explicit non-goal; single-instance honesty)
+// C3 scope:
+//   - Codex upstream wss runtime (codex_ws_runtime.go) + session response id store
+//   - Capability probe: platform=codex + CodexUpstreamWebsocketEnabled + extraConfig
+//   - Dial / empty-event failure → HTTP SSE bridge fallback (no fake terminals)
+//   - Process-local sticky only (single-instance honesty; no STICKY-B)
 //
 // Forbidden always: Hijack-silent-close · invent terminal frames for failed bridges.
 const (
-	ResponsesWebsocketResidualStatus = "c2_multi_turn_http_bridge"
+	ResponsesWebsocketResidualStatus = "c3_codex_upstream_wss"
 	ResponsesWebsocketResidualDoc    = "docs/analysis/responses-websocket-residual.md"
 
 	wsTurnStateHeader                 = "x-codex-turn-state"
@@ -73,7 +75,7 @@ func EnsureResponsesWebsocketTransport(srv *http.Server, cfg WebSocketConfig) {
 	slog.Info("responses WebSocket transport registered",
 		"status", ResponsesWebsocketResidualStatus,
 		"http_get", "426 Upgrade Required (non-upgrade GET)",
-		"upgrade", "coder/websocket + multi-turn HTTP SSE bridge (C2)",
+		"upgrade", "coder/websocket + multi-turn HTTP bridge + Codex upstream wss (C3)",
 		"doc", ResponsesWebsocketResidualDoc,
 	)
 }
@@ -146,14 +148,18 @@ func HandleResponsesWebsocket(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	session := &responsesWSSession{
-		conn:      conn,
-		req:       r,
-		auth:      authCtx,
-		path:      path,
-		turnState: turnState,
+		conn:            conn,
+		req:             r,
+		auth:            authCtx,
+		path:            path,
+		turnState:       turnState,
+		clientSessionID: newResponsesWSClientSessionID(),
 	}
 
 	defer func() {
+		for _, key := range session.codexRuntimeKeys {
+			CloseCodexWebsocketSession(key)
+		}
 		_ = conn.Close(websocket.StatusNormalClosure, "session end")
 	}()
 
@@ -195,6 +201,10 @@ type responsesWSSession struct {
 	mu          sync.Mutex
 	lastRequest map[string]any
 	lastOutput  []any
+	// Client-facing WS session id for Codex upstream runtime keying (process-local).
+	clientSessionID string
+	// Upstream Codex wss session keys opened this connection (closed on defer).
+	codexRuntimeKeys []string
 	// message serialisation: one in-flight turn at a time (Codex client queue).
 	queueMu sync.Mutex
 }
@@ -253,8 +263,7 @@ func (s *responsesWSSession) handleMessage(ctx context.Context, raw []byte) erro
 		return s.writeError(ctx, 403, "model is not allowed for this downstream key")
 	}
 
-	// C2: client-supplied previous_response_id opts into incremental path.
-	// Channel capability probe remains C3 (Codex upstream wss).
+	// C2/C3: client previous_response_id opts into incremental path.
 	supportsIncremental := clientRequestsResponsesWSIncremental(msg)
 
 	normalized, nerr := normalizeResponsesWSRequest(msg, lastReq, lastOut, supportsIncremental)
@@ -286,6 +295,21 @@ func (s *responsesWSSession) handleMessage(ctx context.Context, raw []byte) erro
 	}
 
 	normalized.request["stream"] = true
+	if model, _ := normalized.request["model"].(string); strings.TrimSpace(model) != "" {
+		requestModel = strings.TrimSpace(model)
+	}
+
+	// C3: try Codex upstream wss when channel/platform allows; else HTTP bridge.
+	if output, handled, cerr := s.tryCodexUpstreamWSS(ctx, normalized.request, requestModel, supportsIncremental); handled {
+		if cerr != nil {
+			return cerr
+		}
+		s.mu.Lock()
+		s.lastRequest = cloneMap(normalized.nextSnapshot)
+		s.lastOutput = output
+		s.mu.Unlock()
+		return nil
+	}
 
 	output, err := s.bridgeHTTP(ctx, normalized.request, supportsIncremental)
 	if err != nil {
@@ -747,4 +771,146 @@ func asInt(v any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func newResponsesWSClientSessionID() string {
+	return fmt.Sprintf("ws-%d-%d", time.Now().UnixNano(), time.Now().Unix()%1000)
+}
+
+// tryCodexUpstreamWSS attempts Codex platform upstream wss. Returns handled=false
+// to fall through to HTTP bridge (including dial failures with zero events).
+func (s *responsesWSSession) tryCodexUpstreamWSS(ctx context.Context, body map[string]any, requestModel string, preserveIncremental bool) (output []any, handled bool, err error) {
+	cfg := getUpstreamConfig()
+	if cfg == nil || cfg.Router == nil {
+		return nil, false, nil
+	}
+	runtimeCfg := safeConfigGet()
+	if runtimeCfg == nil || !runtimeCfg.CodexUpstreamWebsocketEnabled {
+		return nil, false, nil
+	}
+
+	policy := routingPolicyFromAuth(auth.EmptyDownstreamRoutingPolicy)
+	if s.auth != nil {
+		policy = routingPolicyFromAuth(s.auth.Policy)
+	}
+	selected, selErr := cfg.Router.SelectChannel(ctx, requestModel, policy)
+	if selErr != nil || selected == nil {
+		return nil, false, nil
+	}
+	if !SelectedChannelSupportsCodexWebsocketTransport(selected.Site.Platform, selected.Account.ExtraConfig, requestModel) {
+		return nil, false, nil
+	}
+
+	upstreamModel := selected.ActualModel
+	if strings.TrimSpace(upstreamModel) == "" {
+		upstreamModel = requestModel
+	}
+	upBody := cloneMap(body)
+	upBody["model"] = upstreamModel
+	upBody["stream"] = true
+
+	upstreamURL := proxyBuildUpstreamURL(selected.Site.URL, "/v1/responses")
+	if upstreamURL == "" {
+		return nil, false, nil
+	}
+
+	headers := map[string]string{}
+	if selected.TokenValue != "" {
+		headers["Authorization"] = "Bearer " + selected.TokenValue
+	}
+	if s.req != nil {
+		for _, h := range []string{"user-agent", "originator", "session-id", "session_id", "openai-beta", wsTurnStateHeader} {
+			if v := strings.TrimSpace(s.req.Header.Get(h)); v != "" {
+				headers[h] = v
+			}
+		}
+	}
+	headers[responsesWebsocketTransportHeader] = "1"
+	if preserveIncremental {
+		headers[responsesWebsocketModeHeader] = "incremental"
+	}
+
+	sessionKey := BuildCodexSessionResponseStoreKey(s.clientSessionID, selected.Site.ID, selected.Account.ID, selected.Channel.ID)
+	if sessionKey == "" {
+		sessionKey = s.clientSessionID
+	}
+	found := false
+	for _, k := range s.codexRuntimeKeys {
+		if k == sessionKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		s.codexRuntimeKeys = append(s.codexRuntimeKeys, sessionKey)
+	}
+
+	result, sendErr := SendCodexWebsocketRequest(ctx, CodexWebsocketSendInput{
+		SessionID:  sessionKey,
+		RequestURL: upstreamURL,
+		Headers:    headers,
+		Body:       upBody,
+	})
+	if sendErr != nil {
+		runtimeErr, ok := sendErr.(*CodexWebsocketRuntimeError)
+		if ok && runtimeErr.Status != 0 && len(runtimeErr.Events) == 0 {
+			LogCodexWebsocketDialFallback(sessionKey, sendErr)
+			return nil, false, nil
+		}
+		if ok {
+			for _, ev := range runtimeErr.Events {
+				if werr := s.writeJSON(ctx, ev); werr != nil {
+					return nil, true, werr
+				}
+			}
+			sawTerminal := false
+			for _, ev := range runtimeErr.Events {
+				t, _ := ev["type"].(string)
+				switch strings.TrimSpace(t) {
+				case "response.completed", "response.failed", "response.incomplete":
+					sawTerminal = true
+				}
+			}
+			if !sawTerminal {
+				status := runtimeErr.Status
+				if status == 0 {
+					status = 408
+				}
+				_ = s.writeError(ctx, status, runtimeErr.Error())
+			}
+			return collectResponsesOutputFromMaps(runtimeErr.Events), true, nil
+		}
+		LogCodexWebsocketDialFallback(sessionKey, sendErr)
+		return nil, false, nil
+	}
+
+	for _, ev := range result.Events {
+		if werr := s.writeJSON(ctx, ev); werr != nil {
+			return nil, true, werr
+		}
+	}
+	return collectResponsesOutputFromMaps(result.Events), true, nil
+}
+
+func proxyBuildUpstreamURL(siteURL, path string) string {
+	base := strings.TrimRight(strings.TrimSpace(siteURL), "/")
+	if base == "" {
+		return ""
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return base + path
+}
+
+func collectResponsesOutputFromMaps(events []map[string]any) []any {
+	out := make([]any, 0)
+	for _, ev := range events {
+		if resp, ok := ev["response"].(map[string]any); ok {
+			if arr, ok := resp["output"].([]any); ok && len(arr) > 0 {
+				out = append(out, arr...)
+			}
+		}
+	}
+	return out
 }

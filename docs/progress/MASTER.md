@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | **cloud-ops UI align** shipped; next WS C3 / #514 |
+| Active work | **WS C3 + cloud-ops UI** shipped; next #514 / REL |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
@@ -42,7 +42,7 @@
 |------:|:-----|:-----|:-------|
 | 0 | DOC | Truth: #534/#520 present; matrix/MASTER/high-value | **this session** |
 | 1 | KEYS | **#547** present · **#584** present · **#579** present | allow-list bind shipped |
-| 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | **C1+C2 present** / C3 residual |
+| 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | **C1+C2+C3 present** |
 | 3 | ROUTE | **#514** multi-tier ctx | pending |
 | 4 | REL | P0-585 prod e2e · P0-555 residual | pending |
 | 5 | UC | Hide/external Update Center honesty | pending |

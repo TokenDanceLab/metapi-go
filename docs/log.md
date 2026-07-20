@@ -1,3 +1,12 @@
+## [2026-07-21] WS C3: Codex upstream wss runtime
+
+- Status: `c3_codex_upstream_wss` (was `c2_multi_turn_http_bridge`).
+- Runtime: `handler/proxy/codex_ws_runtime.go` — dial/reuse upstream wss, wait terminal events, process-local previous_response_id store + tool-output infer/recovery strip.
+- Capability probe: platform=codex + `CodexUpstreamWebsocketEnabled` + optional account extraConfig `websockets`.
+- Wire: `tryCodexUpstreamWSS` before HTTP SSE bridge; dial/empty-event failures fall back to bridge (no fake terminals).
+- Tests: URL/headers/body/store/continuation helpers + residual status C3.
+- Residual: multi-instance pin honesty only (no STICKY-B).
+
 ## [2026-07-21] UI cloud-ops 对齐（tokendance-design）
 
 - 参考 `TokenDance/tokendance-design/styles/cloud-ops/` 全面收紧管理台视觉。

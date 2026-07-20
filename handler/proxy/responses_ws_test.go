@@ -22,8 +22,8 @@ func TestEnsureResponsesWebsocketTransport_RegistersResidual(t *testing.T) {
 	if !ResponsesWebsocketTransportRegistered() {
 		t.Fatal("expected residual registration after EnsureResponsesWebsocketTransport")
 	}
-	if ResponsesWebsocketResidualStatus != "c2_multi_turn_http_bridge" {
-		t.Errorf("status = %q, want c2_multi_turn_http_bridge", ResponsesWebsocketResidualStatus)
+	if ResponsesWebsocketResidualStatus != "c3_codex_upstream_wss" {
+		t.Errorf("status = %q, want c3_codex_upstream_wss", ResponsesWebsocketResidualStatus)
 	}
 	if !strings.Contains(ResponsesWebsocketResidualDoc, "responses-websocket-residual") {
 		t.Errorf("doc pointer = %q", ResponsesWebsocketResidualDoc)

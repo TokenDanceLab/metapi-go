@@ -33,7 +33,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 | REL-RETENTION-RFC3339 | Retention cutoff space-datetime vs RFC3339 created_at | **present** (#516/#521) | Retention cutoffs use RFC3339 UTC comparable to proxy_logs/events/files/video `created_at`; same-day prune no longer shielded | Done for created_at retention compare | Multi-instance SQLite lease redesign residual |
 | REL-PG-POOL-PROFILE | PG pool profiles + 53300 lease pressure | **present** (#531 / v0.8.44) | `DB_PROFILE` shared-tiny/normal/dedicated; lease local/backoff; metrics; design `docs/analysis/db-pool-budget.md` |
 | UI-REFRESH | Admin UI GCP/glass/Apple refresh | **design-only** | FOUC hard-fix + tokens + shell; see `ui-ux-refresh.md`; not Track B |
-| WS-1 | Full Responses WebSocket Codex path | residual → **scheduled full TS parity** | `handler/proxy/responses_ws.go` (426 plain GET / 501 upgrade C1 shipped; C2 next); residual doc + plan Wave C1–C3 (#217/#274) | **Parity program** C1 upgrade+bridge → C2 multi-turn → C3 upstream wss; single-instance honesty | High protocol; sticky process-local only |
+| WS-1 | Full Responses WebSocket Codex path | **C1+C2+C3 present** | `handler/proxy/responses_ws.go` + `codex_ws_runtime.go`; status `c3_codex_upstream_wss`; sticky single-instance honesty only |
 | STICKY-B | Redis sticky map (option B) | design-only **deferred** | `proxy/session.go` process-local `stickyBindings`; sticky residual doc (#237/#282) | **Deferred** (user 2026-07-20): document single instance / LB pin; reopen only if multi-instance product | Hot-path Redis if reopened |
 | UC-1 | Update-center remote registry / deploy | residual → **hide/external** | `scheduler/update_center.go` log-only; admin deploy/rollback/SSE **501**; residual-update-center (#283) | **Hide or external ops** (user 2026-07-20); deploy via GHCR/ops — **no invent registry** | Ops safety; no fake updateAvailable |
 | TEST-1 | Admin proxy/chat stream + job queue harness | residual | `handler/admin/test.go` stream/jobs **501** / job not-found; sync path aliases forced-channel harness; `docs/analysis/admin-channel-test-harness.md` (#291) | Optional UX polish; sync harness already present | Low if residual stays honest |
@@ -98,7 +98,7 @@ Give the next residual / product wave a single honest backlog of high-leverage l
 2. **Active program**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) · shortlist [`high-value-next.md`](./high-value-next.md).  
 3. **Order**: docs truth → **#547/#584/#579** → **WS-1 C1–C3** → **#514** → P0-585 e2e ∥ P0-555 residual → UC hide/external.  
 4. **P0-555** stays **present-with-residual**. **P0-585** remains **partial** (production e2e load-proof still required). Redis admission is fail-open / **not** sticky (STICKY-B **deferred**).  
-5. **WS-1** scheduled full TS parity (not invent frames). **STICKY-B** deferred. **UC-1** hide/external (no invent registry).  
+5. **WS-1 C1–C3 present** (not invent frames). **STICKY-B** deferred. **UC-1** hide/external (no invent registry).  
 6. **Do not** invent shared sticky, fake WS completions, or updateAvailable.  
 7. **Original matrix** is evidence; open board is MASTER + parity plan.
 

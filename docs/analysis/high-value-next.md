@@ -25,7 +25,7 @@
 
 | Rank | ID | Title | Status | Next | Risk if skip |
 |-----:|:---|:------|:-------|:-----|:-------------|
-| 1 | **WS-1** | Responses WebSocket Codex | residual (501/426) | **Full TS parity** phased C1→C3 (user 2026-07-20) | Codex CLI WS broken |
+| 1 | **WS-1** | Responses WebSocket Codex | **C1+C2+C3 present** | Full TS parity shipped (C3 Codex upstream wss flagged); sticky single-instance honesty | multi-instance pin only |
 | 2 | **#547** | Per-downstream-key weight | **present** | shipped key_weight + selector + UI | — |
 | 3 | **#584** | Site header override priority | **present** | shipped override flag + ApplyCustomHeadersWithOptions + Sites UI | — |
 | 4 | **#579** | Multi-credential on one key | **present** | allow-list sites/credentials shipped | — |
@@ -73,7 +73,7 @@ Out-of-product: Electron · MySQL · k3s · noise issues.
 
 1. **Docs truth** — #534/#520 present; MASTER points at parity plan.  
 2. **#547 → #584 → #579** product keys/headers.  
-3. **WS-1 C1→C3** full TS parity under single-instance honesty.  
+3. **WS-1 C1–C3 present** — next is C4 sticky docs honesty + optional multi-instance pin only.  
 4. **#514** multi-tier ctx (own batch).  
 5. **P0-585 e2e ∥ P0-555 residual**.  
 6. **UC hide/external**.  

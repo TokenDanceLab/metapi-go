@@ -61,7 +61,8 @@ Decision log (2026-07-20):
 | **C0** | Keep 426/501 residual until C1 ships | — | **done** (C1 shipped) |
 | **C1** | Real upgrade + auth + turn-state echo + `response.create` single-turn + **in-process HTTP SSE→WS bridge** | L | **present** 2026-07-21 (`coder/websocket`) |
 | **C2** | Multi-turn merge/append + prewarm on wire + per-message quota | L | C1 |
-| **C3** | Codex upstream `wss` runtime + session store + `previous_response_id` recovery + dial→HTTP fallback | XL | C2 |
+| **C3** | Codex upstream `wss` runtime + session store + `previous_response_id` recovery + dial→HTTP fallback | XL | **present** 2026-07-21 |
+
 | **C4** | Docs: multi-instance honesty (single instance or LB pin); no STICKY-B unless reopened | S | C1+ |
 
 **TS SSOT**: `metapi/src/server/routes/proxy/responsesWebsocket.ts` + `proxy-core/runtime/codexWebsocket*`  
@@ -127,7 +128,8 @@ Ops pin 0.8.45 ──► user-visible UI (not a code gate for A/C)
 
 ## 6. Acceptance for “parity complete (ex-Electron)”
 
-- [ ] Wave A items present or closed with explicit non-goal AC  
+- [x] Wave A items present or closed with explicit non-goal AC  
+- [x] Wave C C1–C3 present (2026-07-21); C4 sticky docs residual  
 - [ ] Wave C: Codex CLI can complete multi-turn over WS with honesty under single-instance/LB-pin docs  
 - [ ] Wave D: no fake update-center success path  
 - [ ] P0-585/555: status labels match evidence (no silent present)  
