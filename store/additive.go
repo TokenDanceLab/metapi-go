@@ -105,6 +105,18 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 			return EnsureColumn(db, "sites", "custom_headers_override_request_headers", "INTEGER", "BOOLEAN", "DEFAULT 0")
 		},
 	},
+	{
+		// Upstream #579: allow-list bind sites / credentials on one downstream key.
+		// Empty JSON/NULL = no allow-list restriction (legacy exclude-only behavior).
+		Version:     "sc2_009_downstream_key_allow_lists",
+		Description: "downstream_api_keys.allowed_site_ids / allowed_credential_refs TEXT NULL — optional allow-lists; empty means unrestricted",
+		Apply: func(db *DB) error {
+			if err := EnsureColumn(db, "downstream_api_keys", "allowed_site_ids", "TEXT", "TEXT", ""); err != nil {
+				return err
+			}
+			return EnsureColumn(db, "downstream_api_keys", "allowed_credential_refs", "TEXT", "TEXT", "")
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.

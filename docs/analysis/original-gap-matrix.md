@@ -55,7 +55,7 @@
 | 594 | Per-site max concurrency / request control | feature-routing | present | Schema: `sites.max_concurrency` (`store/schema.go` `Site.MaxConcurrency`, additive `store/additive.go` `sc2_002_site_max_concurrency`). Limiter: `proxy/site_concurrency.go` `SiteConcurrencyLimiter` (0 = unlimited; saturate → skip site, no cascade). Wired in `handler/proxy/upstream.go` + admin create/update `handler/admin/sites.go` / `handler/admin/payloads/sites.go`; tests `proxy/site_concurrency_test.go`, `handler/proxy/upstream_test.go` `TestSiteConcurrencySaturateSkipsWithoutFailure`, `handler/admin/sites_test.go` `TestSites_MaxConcurrencyRoundTrip`. Orthogonal to session channel leases in `proxy/session.go` | P2 | no |
 | 591 | Add `/v1/rerank` endpoint | feature-protocol | present | `handler/proxy/rerank.go` `HandleRerank` (`POST` passthrough `/v1/rerank`, model required, stream rejected); registered `handler/proxy/router.go` `RegisterProxyRoutes` → `r.Post("/rerank", HandleRerank)`; metrics path `handler/shared/metrics.go`; tests `handler/proxy/rerank_test.go` + router path coverage; contract `docs/analysis/rerank-endpoint.md` | P1 | no |
 | 583 | Key grouping / tags | feature-keys | present | `downstream_api_keys.group_name` CRUD: `handler/admin/downstream_keys.go` create/update/batch groupName; schema `store/schema.go` `DownstreamAPIKey`; tests `handler/admin/downstream_keys_test.go` | P2 | no |
-| 579 | Downstream key binds multiple keys or multiple sites | feature-keys | partial | Multi-site constraint surface present: `allowed_route_ids`, `excluded_site_ids`, `supported_models`, `site_weight_multipliers` in `auth/downstream.go` + `handler/admin/downstream_keys.go`. No multi-credential / multi-key binding inside one downstream key record | P2 | yes |
+| 579 | Downstream key binds multiple keys or multiple sites | feature-keys | **present** | `allowed_site_ids` + `allowed_credential_refs` (sc2_009) allow-list bind; routing eligibility before exclusions; admin CRUD + DownstreamKeys UI; empty = unrestricted (legacy exclude-only). Exclusions remain composable. | P2 | no |
 | 578 | Per-key outbound proxy | feature-keys | present | Schema: `downstream_api_keys.proxy_url` (`store/schema.go`, additive `store/additive.go` `sc2_001_downstream_proxy_url`). Precedence helper `proxy/key_proxy.go` `ApplyKeyProxyOverride` / `ResolveKeyProxyURL` (key > account > site > system > direct). Auth load + middleware: `auth/downstream.go`, `auth/context.go`, `auth/proxy.go`. Dialer wiring `handler/proxy/upstream.go`; admin CRUD `handler/admin/downstream_keys.go`. Tests `proxy/key_proxy_test.go`, `auth/proxy_test.go` | P2 | no |
 | 570 | Create named custom routes + attach arbitrary channels | feature-routing | present | `POST /api/routes` `handler/admin/token_routes.go` `createRoute` inserts `token_routes` (`model_pattern`, `display_name`, `route_mode`, …); channel attach `POST /api/routes/:id/channels`; group sources `route_group_sources` | P2 | no |
 | 549 | Session stickiness | feature-routing | present | `proxy/session.go` `ProxyChannelCoordinator` `BuildStickySessionKey` / `BindStickyChannel` / `GetStickyChannelID`; config `ProxyStickySessionEnabled`/`ProxyStickySessionTtlMs`; e2e `e2e/e2e_test.go` `TestStickySession`; selection tests `proxy/channel_selection_test.go` sticky preference | P2 | no |
@@ -143,9 +143,9 @@
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (22): **#582, #568, #573, #580, #581, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538, #547**.  
+Mandatory present (23): **#582, #568, #573, #580, #581, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538, #547**.  
 Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559/#580/#581/#538 shipped)*.  
-Mandatory partial (5): **#585, #579, #520, #577, #555**.  
+Mandatory partial (4): **#585, #520, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (2, additional product sample only): **#514** multi-tier ctx routing · **#292** auto priority orchestration.  

@@ -132,6 +132,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		KeyWeight              any      `json:"keyWeight"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
+		AllowedSiteIds         []int64  `json:"allowedSiteIds"`
+		AllowedCredentialRefs  []any    `json:"allowedCredentialRefs"`
 		ProxyURL               *string  `json:"proxyUrl"`
 	}
 	if err := decodeJSONRequest(r, &body); err != nil {
@@ -170,6 +172,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	normalizedSWM := normalizeSiteWeightMultipliersInput(body.SiteWeightMultipliers)
 	normalizedExcludedSites := normalizeInt64Set(body.ExcludedSiteIds)
 	normalizedCredRefs := normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
+	normalizedAllowedSites := normalizeInt64Set(body.AllowedSiteIds)
+	normalizedAllowedCredRefs := normalizeExcludedCredentialRefsInput(body.AllowedCredentialRefs)
 	maxCost := normalizeQuotaFloatOrNull(body.MaxCost)
 	maxRequests := normalizeQuotaIntOrNull(body.MaxRequests)
 	maxRpm := normalizeQuotaIntOrNull(body.MaxRpm)
@@ -177,7 +181,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	keyWeight := normalizeKeyWeightInput(body.KeyWeight)
 
 	// Policy reference validation.
-	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
+	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs, normalizedAllowedSites, normalizedAllowedCredRefs); refErr != "" {
 		writeError(w, http.StatusBadRequest, refErr)
 		return
 	}
@@ -194,7 +198,8 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	swmJSON := toPersistenceJSON(normalizedSWM)
 	excludedSitesJSON := toPersistenceJSON(normalizedExcludedSites)
 	credRefsJSON := toPersistenceJSON(normalizedCredRefs)
-
+	allowedSitesJSON := toPersistenceJSON(normalizedAllowedSites)
+	allowedCredRefsJSON := toPersistenceJSON(normalizedAllowedCredRefs)
 	normalizedGroupName := normalizeGroupNameInput(body.GroupName)
 	var desc interface{}
 	desc = nil
@@ -214,11 +219,13 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
 		 supported_models, allowed_route_ids, site_weight_multipliers, key_weight, excluded_site_ids, excluded_credential_refs,
+		 allowed_site_ids, allowed_credential_refs,
 		 proxy_url, max_rpm, max_tpm, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
 		maxCost, maxRequests,
 		modelsJSON, routeIdsJSON, swmJSON, keyWeight, excludedSitesJSON, credRefsJSON,
+		allowedSitesJSON, allowedCredRefsJSON,
 		proxyURL, maxRpm, maxTpm, now, now,
 	)
 	if err != nil {
@@ -274,6 +281,8 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		KeyWeight              any      `json:"keyWeight"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
+		AllowedSiteIds         []int64  `json:"allowedSiteIds"`
+		AllowedCredentialRefs  []any    `json:"allowedCredentialRefs"`
 		ProxyURL               *string  `json:"proxyUrl"`
 	}
 
@@ -342,6 +351,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 	if _, ok := rawBody["excludedCredentialRefs"]; ok {
 		hasField["excludedCredentialRefs"] = true
+	}
+	if _, ok := rawBody["allowedSiteIds"]; ok {
+		hasField["allowedSiteIds"] = true
+	}
+	if _, ok := rawBody["allowedCredentialRefs"]; ok {
+		hasField["allowedCredentialRefs"] = true
 	}
 	if _, ok := rawBody["proxyUrl"]; ok {
 		hasField["proxyUrl"] = true
@@ -444,6 +459,18 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		excludedCredentialRefs = normalizeExcludedCredentialRefsInput(body.ExcludedCredentialRefs)
 	}
 
+	existingAllowedSiteIds := parseIntArrayFromDB(existing, "allowed_site_ids")
+	allowedSiteIds := existingAllowedSiteIds
+	if hasField["allowedSiteIds"] {
+		allowedSiteIds = normalizeInt64Set(body.AllowedSiteIds)
+	}
+
+	existingAllowedCredentialRefs := parseAnyArrayFromDB(existing, "allowed_credential_refs")
+	allowedCredentialRefs := existingAllowedCredentialRefs
+	if hasField["allowedCredentialRefs"] {
+		allowedCredentialRefs = normalizeExcludedCredentialRefsInput(body.AllowedCredentialRefs)
+	}
+
 	// proxyUrl: absent keeps existing; present empty/null clears to inherit site/system.
 	proxyURL := existingStringPtr(existing, "proxy_url")
 	if hasField["proxyUrl"] {
@@ -480,7 +507,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 
 	// Policy reference validation.
-	if refErr := h.validateDownstreamPolicyReferences(allowedRouteIds, siteWeightMultipliers, excludedSiteIds, excludedCredentialRefs); refErr != "" {
+	if refErr := h.validateDownstreamPolicyReferences(allowedRouteIds, siteWeightMultipliers, excludedSiteIds, excludedCredentialRefs, allowedSiteIds, allowedCredentialRefs); refErr != "" {
 		writeError(w, http.StatusBadRequest, refErr)
 		return
 	}
@@ -492,19 +519,22 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	swmJSON := toPersistenceJSON(siteWeightMultipliers)
 	excludedSitesJSON := toPersistenceJSON(excludedSiteIds)
 	credRefsJSON := toPersistenceJSON(excludedCredentialRefs)
-
+	allowedSitesJSON := toPersistenceJSON(allowedSiteIds)
+	allowedCredRefsJSON := toPersistenceJSON(allowedCredentialRefs)
 	_, err = h.db.Exec(
 		rebindAdminQuery(h.db,
 			`UPDATE downstream_api_keys SET
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
 			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?, max_rpm = ?, max_tpm = ?,
 			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?, key_weight = ?,
-			excluded_site_ids = ?, excluded_credential_refs = ?, proxy_url = ?, updated_at = ?
+			excluded_site_ids = ?, excluded_credential_refs = ?,
+				allowed_site_ids = ?, allowed_credential_refs = ?, proxy_url = ?, updated_at = ?
 		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
 		enabled, expiresAt, maxCost, maxRequests, maxRpm, maxTpm,
 		modelsJSON, routeIdsJSON, swmJSON, keyWeight,
-		excludedSitesJSON, credRefsJSON, proxyURL, now, id,
+		excludedSitesJSON, credRefsJSON,
+			allowedSitesJSON, allowedCredRefsJSON, proxyURL, now, id,
 	)
 	if err != nil {
 		if isUniqueConstraintError(err) {
@@ -1433,6 +1463,8 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 	siteWeightMultipliers map[string]float64,
 	excludedSiteIds []int64,
 	excludedCredentialRefs []any,
+	allowedSiteIds []int64,
+	allowedCredentialRefs []any,
 ) string {
 	// Validate allowedRouteIds exist in token_routes.
 	if len(allowedRouteIds) > 0 {
@@ -1470,6 +1502,11 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 			siteIdSet[id] = true
 		}
 	}
+	for _, id := range allowedSiteIds {
+		if id > 0 {
+			siteIdSet[id] = true
+		}
+	}
 	if len(siteIdSet) > 0 {
 		ids := make([]int64, 0, len(siteIdSet))
 		for id := range siteIdSet {
@@ -1496,8 +1533,8 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 		}
 	}
 
-	// Validate excludedCredentialRefs.
-	for _, ref := range excludedCredentialRefs {
+	// Validate excludedCredentialRefs + allowedCredentialRefs (#579).
+	for _, ref := range append(append([]any{}, excludedCredentialRefs...), allowedCredentialRefs...) {
 		obj, ok := ref.(map[string]any)
 		if !ok {
 			continue
@@ -1508,7 +1545,7 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 			accountId := int64FromAny(obj["accountId"])
 			siteId := int64FromAny(obj["siteId"])
 			if tokenId <= 0 {
-				return fmt.Sprintf("excludedCredentialRefs 包含不存在的令牌: %v", obj["tokenId"])
+				return fmt.Sprintf("credentialRefs 包含不存在的令牌: %v", obj["tokenId"])
 			}
 			row := queryRow(h.db,
 				`SELECT at.id as token_id, at.account_id, a.site_id
@@ -1516,12 +1553,12 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 				 INNER JOIN accounts a ON at.account_id = a.id
 				 WHERE at.id = ?`, tokenId)
 			if row == nil {
-				return fmt.Sprintf("excludedCredentialRefs 包含不存在的令牌: %d", tokenId)
+				return fmt.Sprintf("credentialRefs 包含不存在的令牌: %d", tokenId)
 			}
 			dbAccountId := int64FromAny(mustRowValue(row, "account_id"))
 			dbSiteId := int64FromAny(mustRowValue(row, "site_id"))
 			if dbAccountId != accountId || dbSiteId != siteId {
-				return fmt.Sprintf("excludedCredentialRefs 中的 account_token 引用与账号/站点不匹配: %d", tokenId)
+				return fmt.Sprintf("credentialRefs 中的 account_token 引用与账号/站点不匹配: %d", tokenId)
 			}
 		} else if kind == "default_api_key" {
 			accountId := int64FromAny(obj["accountId"])
@@ -1530,15 +1567,15 @@ func (h *downstreamKeysHandler) validateDownstreamPolicyReferences(
 				`SELECT id as account_id, site_id, api_token
 				 FROM accounts WHERE id = ?`, accountId)
 			if row == nil {
-				return fmt.Sprintf("excludedCredentialRefs 包含不存在的账号: %d", accountId)
+				return fmt.Sprintf("credentialRefs 包含不存在的账号: %d", accountId)
 			}
 			dbSiteId := int64FromAny(mustRowValue(row, "site_id"))
 			if dbSiteId != siteId {
-				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 引用与站点不匹配: %d", accountId)
+				return fmt.Sprintf("credentialRefs 中的 default_api_key 引用与站点不匹配: %d", accountId)
 			}
 			apiToken, _ := mustRowValue(row, "api_token").(string)
 			if strings.TrimSpace(apiToken) == "" {
-				return fmt.Sprintf("excludedCredentialRefs 中的 default_api_key 账号缺少默认 API Key: %d", accountId)
+				return fmt.Sprintf("credentialRefs 中的 default_api_key 账号缺少默认 API Key: %d", accountId)
 			}
 		}
 	}

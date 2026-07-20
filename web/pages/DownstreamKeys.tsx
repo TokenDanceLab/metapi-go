@@ -67,6 +67,8 @@ type DownstreamApiKeyItem = {
   siteWeightMultipliers: Record<number, number>;
   excludedSiteIds: number[];
   excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamExcludedCredentialRef[];
   /** Per-key egress proxy; null/empty inherits site/account/system. */
   proxyUrl?: string | null;
   lastUsedAt: string | null;
@@ -376,6 +378,8 @@ function buildEditorForm(
     siteWeightMultipliersText: JSON.stringify(item?.siteWeightMultipliers || {}, null, 2),
     excludedSiteIds: normalizeExcludedSiteIds(Array.isArray(item?.excludedSiteIds) ? item.excludedSiteIds : []),
     excludedCredentialRefs: normalizeExcludedCredentialRefs(Array.isArray(item?.excludedCredentialRefs) ? item.excludedCredentialRefs : []),
+    allowedSiteIds: normalizeExcludedSiteIds(Array.isArray(item?.allowedSiteIds) ? item.allowedSiteIds : []),
+    allowedCredentialRefs: normalizeExcludedCredentialRefs(Array.isArray(item?.allowedCredentialRefs) ? item.allowedCredentialRefs : []),
   };
 }
 
@@ -665,6 +669,8 @@ export default function DownstreamKeys() {
         siteWeightMultipliers: raw?.siteWeightMultipliers ?? item.siteWeightMultipliers,
         excludedSiteIds: raw?.excludedSiteIds ?? item.excludedSiteIds,
         excludedCredentialRefs: raw?.excludedCredentialRefs ?? item.excludedCredentialRefs,
+        allowedSiteIds: raw?.allowedSiteIds ?? item.allowedSiteIds,
+        allowedCredentialRefs: raw?.allowedCredentialRefs ?? item.allowedCredentialRefs,
         proxyUrl: raw?.proxyUrl ?? item.proxyUrl ?? null,
         lastUsedAt: raw?.lastUsedAt ?? item.lastUsedAt,
       };
@@ -902,6 +908,8 @@ export default function DownstreamKeys() {
         siteWeightMultipliers,
         excludedSiteIds: normalizeExcludedSiteIds(editorForm.excludedSiteIds),
         excludedCredentialRefs: normalizeExcludedCredentialRefs(editorForm.excludedCredentialRefs),
+        allowedSiteIds: normalizeExcludedSiteIds(editorForm.allowedSiteIds || []),
+        allowedCredentialRefs: normalizeExcludedCredentialRefs(editorForm.allowedCredentialRefs || []),
       };
       if (editingId) {
         await api.updateDownstreamApiKey(editingId, payload);

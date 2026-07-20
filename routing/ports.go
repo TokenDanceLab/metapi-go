@@ -64,6 +64,10 @@ type RouteRebuilder interface {
 type DownstreamRoutingPolicy struct {
 	ExcludedSiteIDs        []int64
 	ExcludedCredentialRefs []CredentialRef
+	// AllowedSiteIDs / AllowedCredentialRefs: optional allow-lists (#579).
+	// Empty = unrestricted; non-empty = only listed sites/credentials eligible.
+	AllowedSiteIDs         []int64
+	AllowedCredentialRefs  []CredentialRef
 	AllowedRouteIDs        []int64
 	SupportedModels        []string
 	DenyAllWhenEmpty       bool

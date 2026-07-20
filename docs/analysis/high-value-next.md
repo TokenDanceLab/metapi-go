@@ -28,7 +28,7 @@
 | 1 | **WS-1** | Responses WebSocket Codex | residual (501/426) | **Full TS parity** phased C1→C3 (user 2026-07-20) | Codex CLI WS broken |
 | 2 | **#547** | Per-downstream-key weight | **present** | shipped key_weight + selector + UI | — |
 | 3 | **#584** | Site header override priority | **present** | shipped override flag + ApplyCustomHeadersWithOptions + Sites UI | — |
-| 4 | **#579** | Multi-credential on one key | partial | Model AC then CRUD | Ops workarounds |
+| 4 | **#579** | Multi-credential on one key | **present** | allow-list sites/credentials shipped | — |
 | 5 | **#514** | Multi-tier ctx routing | missing | Own milestone | Only single context_length |
 | 6 | **P0-585** | Channel cascade | partial | Production e2e only | Silent cascade claim |
 | 7 | **P0-555** | Billing accuracy | present-with-residual | Media / multi-instance ACs | Dashboard trust |
@@ -56,7 +56,7 @@
 | ---: | --- | --- | --- |
 | **585** | Channel cascade | partial | Prod e2e |
 | **555** | Token stats | present-with-residual | Media / multi-instance |
-| **579** | Multi-key binding | partial | Product AC |
+| **579** | Multi-key binding | **present** | allow-list bind |
 | **547** | Per-key weight | partial | Product AC |
 | **584** | Header priority | **present** | — |
 | **514** | Multi-tier ctx | missing | Product AC |

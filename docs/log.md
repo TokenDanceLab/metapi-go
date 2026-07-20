@@ -1,3 +1,11 @@
+## [2026-07-21] #579 multi-credential / multi-site allow-list bind
+
+- Schema additive `sc2_009_downstream_key_allow_lists`: `allowed_site_ids` + `allowed_credential_refs` (empty = unrestricted).
+- Auth policy + routing eligibility: allow-list gates before exclusions; both can compose.
+- Admin create/update/validate + DownstreamKeys form types + editor allow-list panels.
+- Tests: `routing/allowlist_579_test.go` site/credential allow + exclude still wins.
+- Product AC: one downstream key can **specify** sites/credentials (not only exclude). Not a rename of exclusions.
+
 ## [2026-07-21] WS C2: multi-turn + per-message quota
 
 - Status string: `c2_multi_turn_http_bridge` (was `c1_http_bridge`).

@@ -40,6 +40,8 @@ export type DownstreamKeyEditorForm = {
   siteWeightMultipliersText: string;
   excludedSiteIds: number[];
   excludedCredentialRefs: DownstreamExcludedCredentialRef[];
+  allowedSiteIds: number[];
+  allowedCredentialRefs: DownstreamExcludedCredentialRef[];
 };
 
 export type DownstreamSiteOption = {
@@ -705,6 +707,85 @@ export default function DownstreamKeyEditorModal({
                     );
                   })}
                 </div>
+
+              <div className="downstream-key-advanced-panel">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div className="downstream-key-modal-section-title">允许站点</div>
+                    <div className="downstream-key-modal-help">非空时仅允许列表中的站点参与路由；空列表表示不限制（仍可叠加排除站点）。</div>
+                  </div>
+                  <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedSiteIds: [] }))}>清空</button>
+                </div>
+                <div className="downstream-key-modal-meta">已允许 {(form.allowedSiteIds || []).length} 个站点</div>
+                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {exclusionSourceLoading ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载站点中...</div>
+                  ) : filteredSites.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选站点</div>
+                  ) : filteredSites.map((site) => {
+                    const checked = (form.allowedSiteIds || []).includes(site.siteId);
+                    return (
+                      <label key={`allow-site-${site.siteId}`} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--color-border-light)', background: checked ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-card))' : 'var(--color-bg-card)' }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => onChange((prev) => ({
+                            ...prev,
+                            allowedSiteIds: normalizeExcludedSiteIds(
+                              e.target.checked
+                                ? [...(prev.allowedSiteIds || []), site.siteId]
+                                : (prev.allowedSiteIds || []).filter((item) => item !== site.siteId),
+                            ),
+                          }))}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: 'var(--color-text-primary)', fontSize: 13, fontWeight: 600 }}>{site.siteName}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="downstream-key-advanced-panel">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div>
+                    <div className="downstream-key-modal-section-title">允许 API Key/令牌</div>
+                    <div className="downstream-key-modal-help">非空时仅允许列表中的凭证；空列表表示不限制（仍可叠加排除凭证）。</div>
+                  </div>
+                  <button type="button" className="btn btn-ghost" style={{ border: '1px solid var(--color-border)' }} onClick={() => onChange((prev) => ({ ...prev, allowedCredentialRefs: [] }))}>清空</button>
+                </div>
+                <div className="downstream-key-modal-meta">已允许 {(form.allowedCredentialRefs || []).length} 个凭证</div>
+                <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {exclusionSourceLoading ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>加载令牌中...</div>
+                  ) : filteredCredentials.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>暂无可选 API Key/令牌</div>
+                  ) : filteredCredentials.map((item) => {
+                    const checked = (form.allowedCredentialRefs || []).some((ref) => buildExcludedCredentialRefKey(ref) === buildExcludedCredentialRefKey(item.ref));
+                    return (
+                      <label key={`allow-cred-${buildExcludedCredentialRefKey(item.ref)}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '8px 10px', borderRadius: 10, border: '1px solid var(--color-border-light)', background: checked ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-bg-card))' : 'var(--color-bg-card)' }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => onChange((prev) => ({
+                            ...prev,
+                            allowedCredentialRefs: normalizeExcludedCredentialRefs(
+                              e.target.checked
+                                ? [...(prev.allowedCredentialRefs || []), item.ref]
+                                : (prev.allowedCredentialRefs || []).filter((ref) => buildExcludedCredentialRefKey(ref) !== buildExcludedCredentialRefKey(item.ref)),
+                            ),
+                          }))}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: 'var(--color-text-primary)', fontSize: 13, fontWeight: 600 }}>{item.title}</div>
+                          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>{item.subtitle}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
               </div>
             </div>
           </div>

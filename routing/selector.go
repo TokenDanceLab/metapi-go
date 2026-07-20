@@ -823,9 +823,30 @@ func (s *ChannelSelector) resolveChannelTokenValue(candidate RouteChannelCandida
 }
 
 func (s *ChannelSelector) resolveDownstreamExclusionReason(candidate RouteChannelCandidate, policy DownstreamRoutingPolicy) string {
+	// #579 allow-list: when AllowedSiteIDs is non-empty, only listed sites are eligible.
+	if len(policy.AllowedSiteIDs) > 0 {
+		allowed := false
+		for _, siteID := range policy.AllowedSiteIDs {
+			if siteID == candidate.Site.ID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return "站点不在下游密钥允许列表中"
+		}
+	}
+
 	for _, siteID := range policy.ExcludedSiteIDs {
 		if siteID == candidate.Site.ID {
 			return "站点已被下游密钥排除"
+		}
+	}
+
+	// #579 allow-list: when AllowedCredentialRefs is non-empty, candidate must match one.
+	if len(policy.AllowedCredentialRefs) > 0 {
+		if !credentialRefMatchesCandidate(candidate, policy.AllowedCredentialRefs, s) {
+			return "API Key/令牌不在下游密钥允许列表中"
 		}
 	}
 
@@ -834,31 +855,43 @@ func (s *ChannelSelector) resolveDownstreamExclusionReason(candidate RouteChanne
 	}
 
 	for _, ref := range policy.ExcludedCredentialRefs {
-		if ref.Kind == "account_token" {
-			if candidate.Channel.TokenID != nil && *candidate.Channel.TokenID == ref.TokenID &&
-				candidate.Token != nil && candidate.Token.ID == ref.TokenID &&
-				candidate.Account.ID == ref.AccountID &&
-				candidate.Site.ID == ref.SiteID {
-				return "API Key/令牌已被下游密钥排除"
-			}
-			continue
-		}
-
-		if candidate.Channel.TokenID == nil &&
-			candidate.Account.ID == ref.AccountID &&
-			candidate.Site.ID == ref.SiteID {
-			tokenValue := s.resolveChannelTokenValue(candidate)
-			apiToken := ""
-			if candidate.Account.APIToken != nil {
-				apiToken = *candidate.Account.APIToken
-			}
-			if tokenValue != "" && apiToken != "" && tokenValue == apiToken {
-				return "API Key/令牌已被下游密钥排除"
-			}
+		if credentialRefMatchesOne(candidate, ref, s) {
+			return "API Key/令牌已被下游密钥排除"
 		}
 	}
 	return ""
 }
+
+func credentialRefMatchesCandidate(candidate RouteChannelCandidate, refs []CredentialRef, s *ChannelSelector) bool {
+	for _, ref := range refs {
+		if credentialRefMatchesOne(candidate, ref, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func credentialRefMatchesOne(candidate RouteChannelCandidate, ref CredentialRef, s *ChannelSelector) bool {
+	if ref.Kind == "account_token" {
+		return candidate.Channel.TokenID != nil && *candidate.Channel.TokenID == ref.TokenID &&
+			candidate.Token != nil && candidate.Token.ID == ref.TokenID &&
+			candidate.Account.ID == ref.AccountID &&
+			candidate.Site.ID == ref.SiteID
+	}
+	// default_api_key (or empty kind legacy): channel without explicit token, using account apiToken.
+	if candidate.Channel.TokenID == nil &&
+		candidate.Account.ID == ref.AccountID &&
+		candidate.Site.ID == ref.SiteID {
+		tokenValue := s.resolveChannelTokenValue(candidate)
+		apiToken := ""
+		if candidate.Account.APIToken != nil {
+			apiToken = *candidate.Account.APIToken
+		}
+		return tokenValue != "" && apiToken != "" && tokenValue == apiToken
+	}
+	return false
+}
+
 
 func (s *ChannelSelector) weightedRandomSelect(
 	candidates []RouteChannelCandidate,

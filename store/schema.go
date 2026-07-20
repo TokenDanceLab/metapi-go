@@ -441,6 +441,11 @@ type DownstreamAPIKey struct {
 	SiteWeightMultipliers  *string `db:"site_weight_multipliers" json:"siteWeightMultipliers"`
 	ExcludedSiteIDs        *string `db:"excluded_site_ids" json:"excludedSiteIds"`
 	ExcludedCredentialRefs *string `db:"excluded_credential_refs" json:"excludedCredentialRefs"`
+	// AllowedSiteIDs / AllowedCredentialRefs are optional allow-lists (#579).
+	// Empty/NULL means unrestricted (legacy exclude-only semantics).
+	// When non-empty, only listed sites/credentials are eligible; exclusions still apply.
+	AllowedSiteIDs        *string `db:"allowed_site_ids" json:"allowedSiteIds"`
+	AllowedCredentialRefs *string `db:"allowed_credential_refs" json:"allowedCredentialRefs"`
 	// KeyWeight is an optional per-downstream-key scalar (#547).
 	// NULL means 1.0 (no change). Positive values amplify channel.Weight
 	// differences in weighted selection: (channel.weight*keyWeight + 10)*...

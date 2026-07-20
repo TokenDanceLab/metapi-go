@@ -35,6 +35,10 @@ type DownstreamRoutingPolicy struct {
 	KeyWeight              float64                 `json:"key_weight"`
 	ExcludedSiteIDs        []int64                 `json:"excluded_site_ids"`
 	ExcludedCredentialRefs []ExcludedCredentialRef `json:"excluded_credential_refs"`
+	// AllowedSiteIDs / AllowedCredentialRefs are optional allow-lists (#579).
+	// Empty = unrestricted; non-empty = only listed sites/credentials eligible.
+	AllowedSiteIDs         []int64                 `json:"allowed_site_ids"`
+	AllowedCredentialRefs  []ExcludedCredentialRef `json:"allowed_credential_refs"`
 	DenyAllWhenEmpty       bool                    `json:"deny_all_when_empty"`
 }
 
@@ -46,5 +50,7 @@ var EmptyDownstreamRoutingPolicy = DownstreamRoutingPolicy{
 	SiteWeightMultipliers:  map[int64]float64{},
 	ExcludedSiteIDs:        []int64{},
 	ExcludedCredentialRefs: []ExcludedCredentialRef{},
+	AllowedSiteIDs:         []int64{},
+	AllowedCredentialRefs:  []ExcludedCredentialRef{},
 	// DenyAllWhenEmpty defaults to false (zero value), which means "allow all"
 }

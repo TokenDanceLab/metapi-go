@@ -1737,19 +1737,8 @@ func bytesReader(b []byte) io.Reader {
 }
 
 func routingPolicyFromAuth(policy auth.DownstreamRoutingPolicy) routing.DownstreamRoutingPolicy {
-	refs := make([]routing.CredentialRef, 0, len(policy.ExcludedCredentialRefs))
-	for _, ref := range policy.ExcludedCredentialRefs {
-		tokenID := int64(0)
-		if ref.TokenID != nil {
-			tokenID = *ref.TokenID
-		}
-		refs = append(refs, routing.CredentialRef{
-			Kind:      string(ref.Kind),
-			SiteID:    ref.SiteID,
-			AccountID: ref.AccountID,
-			TokenID:   tokenID,
-		})
-	}
+	refs := mapAuthCredentialRefs(policy.ExcludedCredentialRefs)
+	allowedRefs := mapAuthCredentialRefs(policy.AllowedCredentialRefs)
 
 	multipliers := policy.SiteWeightMultipliers
 	if multipliers == nil {
@@ -1763,6 +1752,26 @@ func routingPolicyFromAuth(policy auth.DownstreamRoutingPolicy) routing.Downstre
 		KeyWeight:              policy.KeyWeight,
 		ExcludedSiteIDs:        policy.ExcludedSiteIDs,
 		ExcludedCredentialRefs: refs,
+		AllowedSiteIDs:         policy.AllowedSiteIDs,
+		AllowedCredentialRefs:  allowedRefs,
 		DenyAllWhenEmpty:       policy.DenyAllWhenEmpty,
 	}
 }
+
+func mapAuthCredentialRefs(in []auth.ExcludedCredentialRef) []routing.CredentialRef {
+	refs := make([]routing.CredentialRef, 0, len(in))
+	for _, ref := range in {
+		tokenID := int64(0)
+		if ref.TokenID != nil {
+			tokenID = *ref.TokenID
+		}
+		refs = append(refs, routing.CredentialRef{
+			Kind:      string(ref.Kind),
+			SiteID:    ref.SiteID,
+			AccountID: ref.AccountID,
+			TokenID:   tokenID,
+		})
+	}
+	return refs
+}
+

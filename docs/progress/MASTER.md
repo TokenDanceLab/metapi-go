@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | **Parity code** — KEYS #547/#584 + WS C1+C2 landed; next #579 / WS C3 |
+| Active work | **Parity code** — KEYS #547/#584/#579 + WS C1+C2; next WS C3 / #514 |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
@@ -41,7 +41,7 @@
 | Order | Wave | Work | Status |
 |------:|:-----|:-----|:-------|
 | 0 | DOC | Truth: #534/#520 present; matrix/MASTER/high-value | **this session** |
-| 1 | KEYS | **#547** present · **#584** present · **#579** multi-cred remaining | #579 next |
+| 1 | KEYS | **#547** present · **#584** present · **#579** present | allow-list bind shipped |
 | 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | **C1+C2 present** / C3 residual |
 | 3 | ROUTE | **#514** multi-tier ctx | pending |
 | 4 | REL | P0-585 prod e2e · P0-555 residual | pending |

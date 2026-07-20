@@ -56,6 +56,8 @@ type managedKeyView struct {
 	KeyWeight              float64
 	ExcludedSiteIDs        []int64
 	ExcludedCredentialRefs []ExcludedCredentialRef
+	AllowedSiteIDs         []int64
+	AllowedCredentialRefs  []ExcludedCredentialRef
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +189,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 		        max_requests, used_requests, proxy_url, max_rpm, max_tpm,
 		        supported_models, allowed_route_ids,
 		        site_weight_multipliers, key_weight, excluded_site_ids,
-		        excluded_credential_refs
+		        excluded_credential_refs, allowed_site_ids, allowed_credential_refs
 		 FROM downstream_api_keys
 		 WHERE key = ?`, token,
 	)
@@ -198,13 +200,14 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 	var supportedModelsJSON, allowedRouteIDsJSON *string
 	var siteWeightMultiJSON, excludedSiteIDsJSON *string
 	var excludedCredRefsJSON *string
+	var allowedSiteIDsJSON, allowedCredRefsJSON *string
 
 	err := row.Scan(
 		&v.ID, &v.Name, &v.Enabled, &v.ExpiresAt, &v.MaxCost, &v.UsedCost,
 		&v.MaxRequests, &v.UsedRequests, &proxyURL, &v.MaxRPM, &v.MaxTPM,
 		&supportedModelsJSON, &allowedRouteIDsJSON,
 		&siteWeightMultiJSON, &keyWeight, &excludedSiteIDsJSON,
-		&excludedCredRefsJSON,
+		&excludedCredRefsJSON, &allowedSiteIDsJSON, &allowedCredRefsJSON,
 	)
 	if err != nil {
 		// sql.ErrNoRows → return nil, nil (not found)
@@ -232,6 +235,8 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 	v.SiteWeightMultipliers = parseSiteWeightMultipliers(siteWeightMultiJSON)
 	v.ExcludedSiteIDs = parseInt64Array(excludedSiteIDsJSON)
 	v.ExcludedCredentialRefs = parseExcludedCredentialRefs(excludedCredRefsJSON)
+	v.AllowedSiteIDs = parseInt64Array(allowedSiteIDsJSON)
+	v.AllowedCredentialRefs = parseExcludedCredentialRefs(allowedCredRefsJSON)
 
 	return &v, nil
 }
@@ -340,6 +345,8 @@ func toPolicyFromView(v *managedKeyView) DownstreamRoutingPolicy {
 		KeyWeight:              v.KeyWeight,
 		ExcludedSiteIDs:        normalizeInt64Slice(v.ExcludedSiteIDs),
 		ExcludedCredentialRefs: normalizeExcludedRefs(v.ExcludedCredentialRefs),
+		AllowedSiteIDs:         normalizeInt64Slice(v.AllowedSiteIDs),
+		AllowedCredentialRefs:  normalizeExcludedRefs(v.AllowedCredentialRefs),
 		DenyAllWhenEmpty:       true, // managed keys default to deny-all
 	}
 }
