@@ -4,7 +4,7 @@
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: **GITHUB_FULL** capable · product **parity program scheduled in docs** (board Issues TBD)  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
-**Tip**: `18d4dbe` · tag **v0.8.45** (RE2 + UI) · unreleased: OAuth refresh + Sub2API due + KEYS/#579 + WS C1-C3 + cloud-ops UI  
+**Tip**: `cd43d17` · tag **v0.8.45** (RE2 + UI) · unreleased: OAuth refresh + Sub2API due + KEYS/#579 + WS C1-C3 + cloud-ops UI  
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md)
 
 > **开放项 + 硬门禁**。现状 → [`../STATE.md`](../STATE.md) · 日志 → [`../log.md`](../log.md) · shortlist → [`../analysis/high-value-next.md`](../analysis/high-value-next.md)
