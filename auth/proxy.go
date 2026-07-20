@@ -55,7 +55,12 @@ func ProxyAuth(cfg *config.Config) func(http.Handler) http.Handler {
 			// RPM/TPM admission MUST run before consumeManagedKeyRequest so a
 			// 429 over_rpm/over_tpm does not permanently burn used_requests.
 			// Successful admit still increments used_requests exactly once.
-			if result.Source == "managed" && result.Key != nil {
+			//
+			// WebSocket upgrade (GET + Upgrade: websocket): authorize only.
+			// TS responsesWebsocket authorizes on upgrade but bills per message
+			// via consumeManagedKeyRequest in the session loop (WS C2).
+			// Burning used_requests on Accept would double-count the first turn.
+			if result.Source == "managed" && result.Key != nil && !isWebsocketUpgradeRequest(r) {
 				// Soft RPM/TPM admission (learn #116). Fail closed with 429 + Retry-After.
 				// When maxTPM is set, reserve a best-effort estimate from the request
 				// body (#495). estimatedTokens=0 skips TPM accounting (no invent).
@@ -144,4 +149,23 @@ func extractProxyToken(r *http.Request) string {
 	}
 
 	return ""
+}
+
+
+// isWebsocketUpgradeRequest mirrors proxyhandler.IsWebsocketUpgradeRequest
+// without importing that package (auth must stay free of handler deps).
+// Used so ProxyAuth can authorize upgrade GETs without billing the handshake.
+func isWebsocketUpgradeRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+		return false
+	}
+	for _, part := range strings.Split(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
 }

@@ -7,8 +7,8 @@
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) Wave C (C1→C3)  
 **Shortlist**: [`high-value-next.md`](./high-value-next.md) WS-1
 
-> **C1 shipped (2026-07-21)**: plain GET **426**; upgrade → real `coder/websocket` + auth + single-turn HTTP SSE→WS bridge + local prewarm.  
-> Residual for C2/C3: multi-turn incremental, Codex upstream `wss`, multi-instance sticky (still single-instance honesty).  
+> **C1+C2 shipped (2026-07-21)**: plain GET **426**; upgrade → real `coder/websocket` + auth + multi-turn HTTP SSE→WS bridge + local prewarm + per-message managed-key quota + model policy.  
+> Residual for C3: Codex upstream `wss` + channel capability probe; multi-instance sticky (still single-instance honesty).  
 > **User decision 2026-07-20**: **完整 TS 对等** (not invent-frames). Sticky remains **process-local / single-instance honesty** (no STICKY-B now).
 
 ## Goal
@@ -30,7 +30,19 @@ Stop silent capability theater around Responses WebSocket:
 | Turn-state | `x-codex-turn-state` captured/passthrough on bridge inject |
 | Single-turn | `response.create` → in-process `HandleResponses` SSE→WS |
 | Prewarm | `generate=false` first create → local created+completed (zero usage) |
-| Residual | C2 multi-turn incremental · C3 Codex upstream wss · multi-instance pin |
+| Residual | C3 Codex upstream wss · channel incremental capability probe · multi-instance pin |
+
+
+## C2 shipped (2026-07-21)
+
+| Item | Status |
+|------|--------|
+| Multi-turn merge | last input + last assistant output + new input |
+| Incremental path | client `previous_response_id` on `response.create` (no force-merge); bridge mode header `incremental` |
+| Per-message quota | `auth.ConsumeManagedKeyRequest` after normalize; ProxyAuth **does not** bill WS upgrade |
+| Model policy | `IsModelAllowedByPolicy` each turn |
+| Status string | `c2_multi_turn_http_bridge` |
+| Residual | C3 Codex upstream wss · capability probe for incremental when no previous_response_id |
 
 ## Boot wiring
 
@@ -47,9 +59,9 @@ cmd/server
 
 | Field | Value |
 |-------|--------|
-| `status` | `not_implemented` |
+| `status` | `c2_multi_turn_http_bridge` |
 | plain GET | `426 Upgrade Required` |
-| upgrade attempt | `501 Not Implemented` |
+| upgrade attempt | `101` (auth OK) / `401` (no auth) |
 | `doc` | `docs/analysis/responses-websocket-residual.md` |
 
 ## HTTP surface (honest)

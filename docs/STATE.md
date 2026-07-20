@@ -1,6 +1,6 @@
 # STATE.md — MetAPI Go product status
 
-**Last verified**: 2026-07-20
+**Last verified**: 2026-07-21
 
 > **现状 SSOT**（产品仓库）。只记当前事实与指针，不写流水账。  
 > 运维主机/compose/镜像 pin / PG role LIMIT 以 **server 仓** `projects/metapi/STATE.md` 为准（可能与本 tip 不同步）。  
@@ -14,7 +14,7 @@
 | Fact | Value |
 |:-----|:------|
 | Latest release tag | **[v0.8.45](https://github.com/TokenDanceLab/metapi-go/releases/tag/v0.8.45)** (2026-07-20) — RE2-safe + UI tip |
-| Tip | `origin/master` **9f3e3de** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs + #547/#584 + WS C1 |
+| Tip | `origin/master` **9f3e3de** — v0.8.45 tag `4c67dd5`; post-tag: OAuth refresh + Sub2API due + parity plan docs + #547/#584 + WS C1+C2 |
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
@@ -28,7 +28,7 @@
 |:---|:-------|:-----|
 | P0-585 cascade | **partial** | load-proof still required; honesty tests do not flip present |
 | P0-555 usage stats | **present-with-residual** | not perfect billing |
-| WS-1 Responses WebSocket | residual → **scheduled full TS parity** | plan C1–C3; single-instance honesty; no fake frames |
+| WS-1 Responses WebSocket | **C1+C2 present** · C3 residual | HTTP multi-turn bridge + per-msg quota; C3 Codex upstream wss residual; single-instance honesty |
 | STICKY-B Redis sticky | design-only **deferred** | multi-turn/WS requires single instance or LB pin |
 | UC-1 update-center deploy | residual → **hide/external** | no invent registry; GHCR/ops deploy |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |

@@ -22,8 +22,8 @@ func TestEnsureResponsesWebsocketTransport_RegistersResidual(t *testing.T) {
 	if !ResponsesWebsocketTransportRegistered() {
 		t.Fatal("expected residual registration after EnsureResponsesWebsocketTransport")
 	}
-	if ResponsesWebsocketResidualStatus != "c1_http_bridge" {
-		t.Errorf("status = %q, want c1_http_bridge", ResponsesWebsocketResidualStatus)
+	if ResponsesWebsocketResidualStatus != "c2_multi_turn_http_bridge" {
+		t.Errorf("status = %q, want c2_multi_turn_http_bridge", ResponsesWebsocketResidualStatus)
 	}
 	if !strings.Contains(ResponsesWebsocketResidualDoc, "responses-websocket-residual") {
 		t.Errorf("doc pointer = %q", ResponsesWebsocketResidualDoc)
@@ -86,7 +86,7 @@ func TestNormalizeResponsesWSRequest_FirstCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg.Generate = &gen
-	got, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	got, nerr := normalizeResponsesWSRequest(msg, nil, nil, false)
 	if nerr != nil {
 		t.Fatalf("normalize: %+v", nerr)
 	}
@@ -107,7 +107,7 @@ func TestNormalizeResponsesWSRequest_MissingModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	_, nerr := normalizeResponsesWSRequest(msg, nil, nil, false)
 	if nerr == nil || nerr.status != 400 {
 		t.Fatalf("want 400 missing model, got %+v", nerr)
 	}
@@ -119,7 +119,7 @@ func TestNormalizeResponsesWSRequest_AppendBeforeCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	_, nerr := normalizeResponsesWSRequest(msg, nil, nil, false)
 	if nerr == nil || !strings.Contains(nerr.message, "before response.create") {
 		t.Fatalf("want before-create error, got %+v", nerr)
 	}
@@ -129,16 +129,92 @@ func TestShouldHandleLocalPrewarm(t *testing.T) {
 	t.Parallel()
 	f := false
 	msg := &ResponsesWSMessage{Type: "response.create", Generate: &f}
-	if !shouldHandleLocalPrewarm(msg, nil) {
+	if !shouldHandleLocalPrewarm(msg, nil, false) {
 		t.Fatal("expected local prewarm")
 	}
-	if shouldHandleLocalPrewarm(msg, map[string]any{"model": "x"}) {
+	if shouldHandleLocalPrewarm(msg, map[string]any{"model": "x"}, false) {
 		t.Fatal("prewarm only on first turn")
 	}
 	tr := true
 	msg.Generate = &tr
-	if shouldHandleLocalPrewarm(msg, nil) {
+	if shouldHandleLocalPrewarm(msg, nil, false) {
 		t.Fatal("generate=true is not prewarm")
+	}
+	msg.Generate = &f
+	if shouldHandleLocalPrewarm(msg, nil, true) {
+		t.Fatal("incremental path must not local-prewarm")
+	}
+}
+
+func TestNormalizeResponsesWSRequest_MultiTurnMerge(t *testing.T) {
+	t.Parallel()
+	lastReq := map[string]any{
+		"model": "gpt-4o",
+		"input": []any{
+			map[string]any{"role": "user", "content": "hi"},
+		},
+	}
+	lastOut := []any{
+		map[string]any{"type": "message", "role": "assistant", "content": "yo"},
+	}
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","input":[{"role":"user","content":"again"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, nerr := normalizeResponsesWSRequest(msg, lastReq, lastOut, false)
+	if nerr != nil {
+		t.Fatalf("normalize: %+v", nerr)
+	}
+	input, ok := got.request["input"].([]any)
+	if !ok || len(input) != 3 {
+		t.Fatalf("merged input len = %v, want 3", got.request["input"])
+	}
+	if _, hasPrev := got.request["previous_response_id"]; hasPrev {
+		t.Fatal("merge path must strip previous_response_id")
+	}
+	if got.request["model"] != "gpt-4o" {
+		t.Fatalf("model inherited = %v", got.request["model"])
+	}
+}
+
+func TestNormalizeResponsesWSRequest_IncrementalPreviousResponseID(t *testing.T) {
+	t.Parallel()
+	lastReq := map[string]any{
+		"model": "gpt-4o",
+		"input": []any{map[string]any{"role": "user", "content": "old"}},
+	}
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","previous_response_id":"resp_abc","input":[{"role":"user","content":"new"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, nerr := normalizeResponsesWSRequest(msg, lastReq, nil, true)
+	if nerr != nil {
+		t.Fatalf("normalize: %+v", nerr)
+	}
+	if got.request["previous_response_id"] != "resp_abc" {
+		t.Fatalf("previous_response_id = %v", got.request["previous_response_id"])
+	}
+	input, ok := got.request["input"].([]any)
+	if !ok || len(input) != 1 {
+		t.Fatalf("incremental input should not merge history, got %v", got.request["input"])
+	}
+}
+
+func TestClientRequestsResponsesWSIncremental(t *testing.T) {
+	t.Parallel()
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","previous_response_id":"resp_1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !clientRequestsResponsesWSIncremental(msg) {
+		t.Fatal("expected incremental when previous_response_id set")
+	}
+	msg2, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","model":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clientRequestsResponsesWSIncremental(msg2) {
+		t.Fatal("no previous_response_id must not claim incremental")
 	}
 }
 

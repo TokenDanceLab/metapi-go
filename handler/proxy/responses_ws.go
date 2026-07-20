@@ -17,7 +17,7 @@ import (
 	"github.com/tokendancelab/metapi-go/auth"
 )
 
-// Responses WebSocket transport (#217 / parity Wave C1).
+// Responses WebSocket transport (#217 / parity Wave C1–C2).
 //
 // C1 scope:
 //   - Real WebSocket upgrade via coder/websocket
@@ -26,18 +26,24 @@ import (
 //   - response.create single-turn via in-process HTTP SSE→WS bridge
 //   - Honest errors on the open socket (no fake response.completed for real turns)
 //
+// C2 scope (this file):
+//   - Multi-turn merge (last input + last output + new input)
+//   - Incremental previous_response_id path when client supplies it on response.create
+//   - Per-message managed-key used_requests consume (TS parity; upgrade does not bill)
+//   - Per-message model policy gate (IsModelAllowedByPolicy)
+//
 // Still residual / later waves:
-//   - C2 multi-turn incremental + per-message quota refinements
-//   - C3 Codex upstream wss runtime
+//   - C3 Codex upstream wss runtime + channel capability probe
 //   - Multi-instance sticky (explicit non-goal; single-instance honesty)
 //
 // Forbidden always: Hijack-silent-close · invent terminal frames for failed bridges.
 const (
-	ResponsesWebsocketResidualStatus = "c1_http_bridge"
+	ResponsesWebsocketResidualStatus = "c2_multi_turn_http_bridge"
 	ResponsesWebsocketResidualDoc    = "docs/analysis/responses-websocket-residual.md"
 
 	wsTurnStateHeader                 = "x-codex-turn-state"
 	responsesWebsocketTransportHeader = "x-metapi-responses-websocket-transport"
+	responsesWebsocketModeHeader      = "x-metapi-responses-websocket-mode"
 	wsMaxMessageBytes                 = 8 << 20 // 8 MiB per client frame
 	wsReadIdleTimeout                 = 10 * time.Minute
 	wsWriteTimeout                    = 60 * time.Second
@@ -67,7 +73,7 @@ func EnsureResponsesWebsocketTransport(srv *http.Server, cfg WebSocketConfig) {
 	slog.Info("responses WebSocket transport registered",
 		"status", ResponsesWebsocketResidualStatus,
 		"http_get", "426 Upgrade Required (non-upgrade GET)",
-		"upgrade", "coder/websocket + in-process HTTP SSE bridge (C1)",
+		"upgrade", "coder/websocket + multi-turn HTTP SSE bridge (C2)",
 		"doc", ResponsesWebsocketResidualDoc,
 	)
 }
@@ -226,7 +232,7 @@ func (s *responsesWSSession) handleMessage(ctx context.Context, raw []byte) erro
 		return s.writeError(ctx, 400, "unsupported websocket request type: unknown")
 	}
 
-	// C1: response.create (+ response.append merge when a prior turn exists).
+	// C1/C2: response.create (+ response.append merge when a prior turn exists).
 	if reqType != "response.create" && reqType != "response.append" {
 		return s.writeError(ctx, 400, "unsupported websocket request type: "+reqType)
 	}
@@ -236,13 +242,36 @@ func (s *responsesWSSession) handleMessage(ctx context.Context, raw []byte) erro
 	lastOut := s.lastOutput
 	s.mu.Unlock()
 
-	normalized, nerr := normalizeResponsesWSRequest(msg, lastReq, lastOut)
+	// Model policy gate before normalize/quota (TS isModelAllowedByPolicyOrAllowedRoutes).
+	requestModel := strings.TrimSpace(msg.Model)
+	if requestModel == "" && lastReq != nil {
+		if m, ok := lastReq["model"].(string); ok {
+			requestModel = strings.TrimSpace(m)
+		}
+	}
+	if requestModel != "" && s.auth != nil && !IsModelAllowedByPolicy(requestModel, s.auth.Policy) {
+		return s.writeError(ctx, 403, "model is not allowed for this downstream key")
+	}
+
+	// C2: client-supplied previous_response_id opts into incremental path.
+	// Channel capability probe remains C3 (Codex upstream wss).
+	supportsIncremental := clientRequestsResponsesWSIncremental(msg)
+
+	normalized, nerr := normalizeResponsesWSRequest(msg, lastReq, lastOut, supportsIncremental)
 	if nerr != nil {
 		return s.writeError(ctx, nerr.status, nerr.message)
 	}
 
+	// C2: per-message managed-key quota (TS consumeManagedKeyRequest after normalize).
+	// Upgrade auth does not bill; bridge reuses seeded auth context (no double middleware).
+	if s.auth != nil && s.auth.Source == "managed" && s.auth.KeyID != nil {
+		if !auth.ConsumeManagedKeyRequest(*s.auth.KeyID) {
+			return s.writeError(ctx, 403, "API key has exceeded max requests")
+		}
+	}
+
 	// Local prewarm: generate=false on first create — emit synthetic created+completed.
-	if shouldHandleLocalPrewarm(msg, lastReq) {
+	if shouldHandleLocalPrewarm(msg, lastReq, supportsIncremental) {
 		model, _ := normalized.request["model"].(string)
 		for _, payload := range SynthesizePrewarmResponsePayloads(model, "") {
 			if err := s.writeJSON(ctx, payload); err != nil {
@@ -258,7 +287,7 @@ func (s *responsesWSSession) handleMessage(ctx context.Context, raw []byte) erro
 
 	normalized.request["stream"] = true
 
-	output, err := s.bridgeHTTP(ctx, normalized.request)
+	output, err := s.bridgeHTTP(ctx, normalized.request, supportsIncremental)
 	if err != nil {
 		return err
 	}
@@ -284,6 +313,7 @@ func normalizeResponsesWSRequest(
 	msg *ResponsesWSMessage,
 	lastRequest map[string]any,
 	lastOutput []any,
+	supportsIncremental bool,
 ) (*normalizeResult, *normalizeError) {
 	reqType := strings.TrimSpace(msg.Type)
 	raw := msg.Raw
@@ -297,7 +327,8 @@ func normalizeResponsesWSRequest(
 		}
 		next := cloneMap(raw)
 		delete(next, "type")
-		if msg.Generate != nil && !*msg.Generate {
+		// Prewarm-only: strip generate=false when not on incremental path (TS parity).
+		if !supportsIncremental && msg.Generate != nil && !*msg.Generate {
 			delete(next, "generate")
 		}
 		next["stream"] = true
@@ -335,8 +366,12 @@ func normalizeResponsesWSRequest(
 		}
 	}
 
-	// C1 multi-turn honesty: merge last input + last output + new input
-	// (TS non-incremental path). C2 refines incremental/previous_response_id.
+	// C2 incremental: keep previous_response_id + new input only (no history merge).
+	if supportsIncremental && reqType == "response.create" && responsesWSPreviousResponseID(msg) != "" {
+		return &normalizeResult{request: next, nextSnapshot: cloneMap(next)}, nil
+	}
+
+	// Multi-turn honesty (TS non-incremental): merge last input + last output + new input.
 	merged := make([]any, 0, 16)
 	if prevIn, ok := lastRequest["input"].([]any); ok {
 		merged = append(merged, prevIn...)
@@ -349,8 +384,31 @@ func normalizeResponsesWSRequest(
 	return &normalizeResult{request: next, nextSnapshot: cloneMap(next)}, nil
 }
 
-func shouldHandleLocalPrewarm(msg *ResponsesWSMessage, lastRequest map[string]any) bool {
-	if lastRequest != nil {
+// clientRequestsResponsesWSIncremental reports whether this client message opts
+// into the previous_response_id incremental path. C2 does not yet probe channel
+// capability (C3 / Codex wss); we honor an explicit previous_response_id on
+// response.create so multi-turn clients that support it are not force-merged.
+func clientRequestsResponsesWSIncremental(msg *ResponsesWSMessage) bool {
+	return responsesWSPreviousResponseID(msg) != ""
+}
+
+func responsesWSPreviousResponseID(msg *ResponsesWSMessage) string {
+	if msg == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(msg.PreviousResponseID); id != "" {
+		return id
+	}
+	if msg.Raw != nil {
+		if s, ok := msg.Raw["previous_response_id"].(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+func shouldHandleLocalPrewarm(msg *ResponsesWSMessage, lastRequest map[string]any, supportsIncremental bool) bool {
+	if supportsIncremental || lastRequest != nil {
 		return false
 	}
 	if msg == nil || strings.TrimSpace(msg.Type) != "response.create" {
@@ -360,7 +418,7 @@ func shouldHandleLocalPrewarm(msg *ResponsesWSMessage, lastRequest map[string]an
 }
 
 // bridgeHTTP performs an in-process POST /v1/responses and forwards SSE/JSON to the WS.
-func (s *responsesWSSession) bridgeHTTP(ctx context.Context, payload map[string]any) ([]any, error) {
+func (s *responsesWSSession) bridgeHTTP(ctx context.Context, payload map[string]any, preserveIncremental bool) ([]any, error) {
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {
 		_ = s.writeError(ctx, 400, "failed to encode request payload")
@@ -371,6 +429,9 @@ func (s *responsesWSSession) bridgeHTTP(ctx context.Context, payload map[string]
 	bridgeReq.Header.Set("Content-Type", "application/json")
 	bridgeReq.Header.Set("Accept", "text/event-stream")
 	bridgeReq.Header.Set(responsesWebsocketTransportHeader, "1")
+	if preserveIncremental {
+		bridgeReq.Header.Set(responsesWebsocketModeHeader, "incremental")
+	}
 
 	// Inject auth so PrepareCtx / GetProxyAuth succeed.
 	if authz := strings.TrimSpace(s.req.Header.Get("Authorization")); authz != "" {

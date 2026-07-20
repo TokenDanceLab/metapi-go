@@ -240,6 +240,14 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 // Usage consumption — atomic SQL increment (matches TS).
 // ---------------------------------------------------------------------------
 
+// ConsumeManagedKeyRequest atomically reserves one request for a managed key.
+// Used by Responses WebSocket multi-turn billing (WS C2) so each client message
+// is counted once without re-running ProxyAuth middleware on the HTTP bridge.
+// Returns false when the key no longer exists or has reached max_requests.
+func ConsumeManagedKeyRequest(keyID int64) bool {
+	return consumeManagedKeyRequest(keyID)
+}
+
 // consumeManagedKeyRequest atomically reserves one request for a managed key.
 // It returns false when the key no longer exists or has reached max_requests.
 //

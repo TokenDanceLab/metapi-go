@@ -1,3 +1,14 @@
+## [2026-07-21] WS C2: multi-turn + per-message quota
+
+- Status string: `c2_multi_turn_http_bridge` (was `c1_http_bridge`).
+- Multi-turn merge: last input + last output + new input (non-incremental).
+- Incremental: client `previous_response_id` on `response.create` keeps id (no history force-merge); mode header `x-metapi-responses-websocket-mode: incremental` on bridge.
+- Per-message: `auth.ConsumeManagedKeyRequest` after normalize for managed keys; ProxyAuth skips used_requests on WebSocket upgrade handshake (TS parity).
+- Model gate: `IsModelAllowedByPolicy` each turn before bill/bridge.
+- Prewarm still local only on first create with `generate=false` and non-incremental.
+- Tests: merge / incremental / prewarm+incremental / residual status; auth upgrade detector unit.
+- Residual: C3 Codex upstream wss + channel capability probe; multi-instance sticky still single-instance honesty.
+
 ## [2026-07-21] WS C1: Responses WebSocket HTTP bridge
 
 - Dep: `github.com/coder/websocket` (single WS library).
