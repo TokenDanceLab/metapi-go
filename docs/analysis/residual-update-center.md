@@ -3,7 +3,8 @@
 **Date**: 2026-07-17  
 **Issues**: [#197](https://github.com/TokenDanceLab/metapi-go/issues/197), [#283](https://github.com/TokenDanceLab/metapi-go/issues/283)  
 **Lane**: residual honesty (admin ops + scheduler scaffolding)  
-**Scope**: honest 501 / local stubs only. **No remote registry product.**
+**Scope**: honest 501 / local stubs only. **No remote registry product.**  
+**User decision 2026-07-20 (UC-1)**: **hide/external** — Settings UI is an ops note + GHCR/Releases links; no in-app deploy controls.
 
 ## Goal
 
@@ -13,7 +14,7 @@ Stop success-theater for operations that are not implemented in-process, and kee
 
 | Method | Endpoint | Status | Behavior | Invents? |
 |--------|----------|--------|----------|----------|
-| `GET` | `/api/update-center/status` | **200** | Local stub: `currentVersion`/`latestVersion`=`0.0.0`, `updateAvailable=false`, `lastCheckedAt=null`, plus `residual` string | **No** remote poll, **no** fake available update |
+| `GET` | `/api/update-center/status` | **200** | Local stub: `mode=external`, versions `0.0.0`, `updateAvailable=false`, `lastCheckedAt=null`, plus `residual` string | **No** remote poll, **no** fake available update |
 | `POST` | `/api/update-center/check` | **200** | Same payload as status (local-only; no remote registry check) | **No** remote poll, **no** fake available update |
 | `PUT` | `/api/update-center/config` | **200** | Echo request body for UI round-trip; `residual` notes echo-only (not a durable product config store) | **No** deploy side effects |
 | `POST` | `/api/update-center/deploy` | **400** / **501** | Validates `targetTag` (or `targetVersion` alias); then honest residual | **No** `stub-deploy` task id |
@@ -43,7 +44,8 @@ Related (same residual wave historically, implemented work — not residual):
   "latestVersion": "0.0.0",
   "updateAvailable": false,
   "lastCheckedAt": null,
-  "residual": "local stub only; no remote registry/helper polling or version discovery in Go"
+  "residual": "external deploy only; no remote registry/helper polling or in-app version discovery",
+  "mode": "external"
 }
 ```
 

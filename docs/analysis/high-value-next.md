@@ -32,7 +32,7 @@
 | 5 | **#514** | Multi-tier ctx routing | **present** | estimate + tightest-fit among same-model routes | residual: tokenizer accuracy |
 | 6 | **P0-585** | Channel cascade | partial | Production e2e only | Silent cascade claim |
 | 7 | **P0-555** | Billing accuracy | present-with-residual | Media / multi-instance ACs | Dashboard trust |
-| 8 | **UC-1** | Update-center deploy | residual | **Hide/external** (user 2026-07-20) | Fake updateAvailable |
+| 8 | **UC-1** | Update-center deploy | **hide/external present** | UI ops note + 501 residual | — |
 | 9 | **STICKY-B** | Redis sticky | design-only | **Deferred** — single-instance / LB pin honesty | Multi-instance multi-turn |
 | 10 | **OPS-PIN** | Prod 0.8.45 | ops | Authorized pin/up + soak | Users on Exited 0.8.44 |
 | 11 | **REL-RE2** | RE2 user-id | **present** v0.8.45 | Ops pin | Was Exited(2) |

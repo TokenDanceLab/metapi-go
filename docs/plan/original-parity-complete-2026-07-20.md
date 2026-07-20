@@ -131,7 +131,7 @@ Ops pin 0.8.45 ──► user-visible UI (not a code gate for A/C)
 - [x] Wave A items present or closed with explicit non-goal AC  
 - [x] Wave C C1–C3 present (2026-07-21); C4 sticky docs residual  
 - [ ] Wave C: Codex CLI can complete multi-turn over WS with honesty under single-instance/LB-pin docs  
-- [ ] Wave D: no fake update-center success path  
+- [x] Wave D: UC-1 hide/external present (no fake update-center success path)  
 - [ ] P0-585/555: status labels match evidence (no silent present)  
 - [ ] Electron remains non-goal in STATE / formal-readiness  
 

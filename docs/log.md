@@ -1,3 +1,11 @@
+## [2026-07-21] UC-1 hide/external Update Center honesty
+
+- User decision: no invent registry; deploy via GHCR/ops.
+- Backend: status/check `mode=external` + residual; deploy/rollback/SSE remain honest 501.
+- UI: Settings `UpdateCenterSection` → short ops card (Releases/GHCR links); hide check/deploy/rollback controls.
+- About: no "发现新版本" theater from local stub; link to settings ops note.
+- Tests: admin mode assert + vitest honesty cards.
+
 ## [2026-07-21] #514 multi-tier context routing
 
 - Product: multiple same-model `token_routes` with different `context_length` → pick tightest ceiling that fits estimated request ctx.

@@ -35,8 +35,10 @@ func localUpdateCenterStatus() map[string]any {
 		"latestVersion":   "0.0.0",
 		"updateAvailable": false,
 		"lastCheckedAt":   nil,
-		// residual field makes the stub explicit for operators/UI (#283).
-		"residual": "local stub only; no remote registry/helper polling or version discovery in Go",
+		// UC-1: product mode is external (GHCR/ops); never invent updateAvailable.
+		"mode": "external",
+		// residual field makes the stub explicit for operators/UI (#283 / UC-1).
+		"residual": "external deploy only; no remote registry/helper polling or in-app version discovery",
 	}
 }
 

@@ -28,24 +28,15 @@ async function flushMicrotasks() {
   });
 }
 
-describe('About update center', () => {
+describe('About update center (UC-1 external)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.getUpdateCenterStatus.mockResolvedValue({
-      currentVersion: '1.2.3',
-      githubRelease: {
-        normalizedVersion: '1.3.0',
-        displayVersion: '1.3.0',
-        url: 'https://github.com/cita-777/metapi/releases/tag/v1.3.0',
-      },
-      dockerHubTag: {
-        normalizedVersion: 'latest',
-        displayVersion: 'latest @ sha256:efb2ee655386',
-      },
-      helper: {
-        imageTag: 'latest',
-        imageDigest: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-      },
+      currentVersion: '0.0.0',
+      latestVersion: '0.0.0',
+      updateAvailable: false,
+      mode: 'external',
+      residual: 'external deploy only',
     });
   });
 
@@ -53,35 +44,22 @@ describe('About update center', () => {
     vi.clearAllMocks();
   });
 
-  it('shows current version, newer release summaries, and a highlighted update reminder', async () => {
+  it('does not invent a new-version theater from local residual stub', async () => {
     let root!: ReactTestRenderer;
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter>
-            <About />
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
+    await act(async () => {
+      root = create(
+        <MemoryRouter>
+          <About />
+        </MemoryRouter>,
+      );
+    });
+    await flushMicrotasks();
 
-      const text = collectText(root.root);
-      expect(text).toContain('v1.2.3');
-      expect(text).toContain('GitHub 稳定版');
-      expect(text).toContain('1.3.0');
-      expect(text).toContain('Docker Hub');
-      expect(text).toContain('latest @ sha256:efb2ee655386');
-      expect(text).toContain('发现新版本');
-      expect(text).toContain('前往更新中心');
-
-      const highlightedReminder = root.root.find((node) => (
-        typeof node.props.className === 'string'
-        && node.props.className.includes('stat-value-glow')
-        && collectText(node).includes('发现新版本')
-      ));
-      expect(collectText(highlightedReminder)).toContain('发现新版本');
-    } finally {
-      root?.unmount();
-    }
+    const text = collectText(root.root);
+    expect(text).toContain('更新与部署');
+    expect(text).toContain('设置 · 更新与部署说明');
+    expect(text).not.toContain('发现新版本');
+    expect(text).not.toContain('前往更新中心');
+    expect(apiMock.getUpdateCenterStatus).toHaveBeenCalled();
   });
 });

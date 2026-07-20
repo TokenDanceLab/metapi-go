@@ -52,12 +52,31 @@ export default function About() {
       try {
         const status = await api.getUpdateCenterStatus() as {
           currentVersion?: string;
+          residual?: string;
+          mode?: string;
+          updateAvailable?: boolean;
           githubRelease?: { normalizedVersion?: string; displayVersion?: string; tagName?: string | null; digest?: string | null } | null;
           dockerHubTag?: { normalizedVersion?: string; displayVersion?: string; tagName?: string | null; digest?: string | null } | null;
           helper?: { imageTag?: string | null; imageDigest?: string | null } | null;
         };
-        const resolvedCurrentVersion = String(status.currentVersion || VERSION);
         if (cancelled) return;
+        // UC-1 external residual: do not invent "new version" theater from local stub.
+        const isExternalResidual = !!status.residual || status.mode === 'external' || status.updateAvailable === false && !status.githubRelease && !status.dockerHubTag;
+        if (isExternalResidual) {
+          const v = String(status.currentVersion || VERSION);
+          // Keep placeholder only when non-zero product version is supplied later.
+          if (v && v !== '0.0.0') setCurrentVersion(`v${v}`);
+          setLatestGitHubVersion('');
+          setLatestDockerHubVersion('');
+          setUpdateReminder(buildUpdateReminder({
+            currentVersion: VERSION,
+            helper: null,
+            githubRelease: null,
+            dockerHubTag: null,
+          }));
+          return;
+        }
+        const resolvedCurrentVersion = String(status.currentVersion || VERSION);
         setCurrentVersion(`v${resolvedCurrentVersion}`);
         setLatestGitHubVersion(String(status.githubRelease?.displayVersion || status.githubRelease?.normalizedVersion || ''));
         setLatestDockerHubVersion(String(status.dockerHubTag?.displayVersion || status.dockerHubTag?.normalizedVersion || ''));
@@ -104,7 +123,7 @@ export default function About() {
       </div>
 
       <div className="card animate-slide-up stagger-1" style={{ padding: 22, marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>更新提醒</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>更新与部署</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
           <span className={`${updateReminder.badgeClassName} ${updateReminder.highlight ? 'stat-value-glow' : ''}`.trim()}>
             {updateReminder.label}
@@ -113,12 +132,17 @@ export default function About() {
             {updateReminder.detail}
           </span>
         </div>
-        <div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
-          <div>GitHub 稳定版：{latestGitHubVersion || '暂无数据'}</div>
-          <div>Docker Hub：{latestDockerHubVersion || '暂无数据'}</div>
+        <div style={{ display: 'grid', gap: 8, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+          <div>版本发现与镜像升级在应用外完成（GHCR / ops pin）；此处不宣称 in-app 可升级。</div>
+          {(latestGitHubVersion || latestDockerHubVersion) ? (
+            <>
+              <div>GitHub 稳定版：{latestGitHubVersion || '暂无数据'}</div>
+              <div>Docker Hub：{latestDockerHubVersion || '暂无数据'}</div>
+            </>
+          ) : null}
           <div>
             <Link to="/settings" style={{ color: 'var(--color-primary)', textDecoration: 'none', fontWeight: 600 }}>
-              前往更新中心
+              设置 · 更新与部署说明
             </Link>
           </div>
         </div>

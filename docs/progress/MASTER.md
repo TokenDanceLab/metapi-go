@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | **#514 multi-tier ctx** shipped; next REL / UC |
+| Active work | **#514 + UC-1** shipped; next REL (P0-585 e2e / P0-555) |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | empty of open feature issues (M52 closed); new wave not yet filed |
@@ -45,7 +45,7 @@
 | 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | **C1+C2+C3 present** |
 | 3 | ROUTE | **#514** multi-tier ctx | **present** |
 | 4 | REL | P0-585 prod e2e · P0-555 residual | pending |
-| 5 | UC | Hide/external Update Center honesty | pending |
+| 5 | UC | Hide/external Update Center honesty | **present** (UI external card + API residual) |
 | ops | — | Pin/up **0.8.45** + ≥15min soak | needs admin auth |
 
 ## Optional / not blockers

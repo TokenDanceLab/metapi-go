@@ -167,6 +167,9 @@ func TestUpdateCenterStatusAndCheck_LocalOnly(t *testing.T) {
 		if residual == "" {
 			t.Fatalf("%s expected residual field for local stub honesty: %v", label, body)
 		}
+		if mode, _ := body["mode"].(string); mode != "external" {
+			t.Fatalf("%s mode=%v, want external (UC-1)", label, body["mode"])
+		}
 	}
 
 	statusResp := doGet(t, r, "/api/update-center/status")
