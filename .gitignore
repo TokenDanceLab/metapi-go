@@ -3,6 +3,12 @@ web/node_modules/
 web/build/
 web/docs/.vitepress/dist/
 
+# Accidental root npm (real package.json lives under web/)
+/node_modules/
+/package.json
+/package-lock.json
+/test-results/
+
 # Binaries
 /bin/
 /dist/
@@ -53,3 +59,4 @@ web/playwright/.cache/
 
 # Agent worktrees
 .worktrees/
+.claude/
