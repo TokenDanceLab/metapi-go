@@ -107,15 +107,16 @@ func TestHandleResponsesGet426(t *testing.T) {
 	}
 }
 
-func TestHandleResponsesGet426_WebsocketUpgradeIs501Residual(t *testing.T) {
+func TestHandleResponsesGet426_WebsocketUpgradeRequiresAuth(t *testing.T) {
+	// C1: upgrade without ProxyAuth is refused with 401 (not 501 residual theater).
 	req := httptest.NewRequest("GET", "/v1/responses", nil)
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Connection", "Upgrade")
 	rec := httptest.NewRecorder()
 	HandleResponsesGet426(rec, req)
 
-	if rec.Code != 501 {
-		t.Fatalf("expected 501 residual, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != 401 {
+		t.Fatalf("expected 401 without auth, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if strings.Contains(rec.Body.String(), "response.completed") {
 		t.Error("must not invent WS completion payloads")
@@ -166,15 +167,15 @@ func TestHandleResponsesAliasGet426_Valid(t *testing.T) {
 	}
 }
 
-func TestHandleResponsesAliasGet426_WebsocketUpgradeIs501Residual(t *testing.T) {
+func TestHandleResponsesAliasGet426_WebsocketUpgradeRequiresAuth(t *testing.T) {
 	req := httptest.NewRequest("GET", "/responses", nil)
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Connection", "Upgrade")
 	rec := httptest.NewRecorder()
 	HandleResponsesAliasGet426(rec, req)
 
-	if rec.Code != 501 {
-		t.Fatalf("expected 501 residual, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != 401 {
+		t.Fatalf("expected 401 without auth, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -58,8 +58,8 @@ Decision log (2026-07-20):
 
 | Phase | Scope | Effort | Depends |
 |:------|:------|:-------|:--------|
-| **C0** | Keep 426/501 residual until C1 ships | — | — |
-| **C1** | Real upgrade + auth + turn-state echo + `response.create` single-turn + **in-process HTTP SSE→WS bridge** | L | Auth reuse `ProxyAuth` |
+| **C0** | Keep 426/501 residual until C1 ships | — | **done** (C1 shipped) |
+| **C1** | Real upgrade + auth + turn-state echo + `response.create` single-turn + **in-process HTTP SSE→WS bridge** | L | **present** 2026-07-21 (`coder/websocket`) |
 | **C2** | Multi-turn merge/append + prewarm on wire + per-message quota | L | C1 |
 | **C3** | Codex upstream `wss` runtime + session store + `previous_response_id` recovery + dial→HTTP fallback | XL | C2 |
 | **C4** | Docs: multi-instance honesty (single instance or LB pin); no STICKY-B unless reopened | S | C1+ |

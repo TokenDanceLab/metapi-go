@@ -22,8 +22,8 @@ func TestEnsureResponsesWebsocketTransport_RegistersResidual(t *testing.T) {
 	if !ResponsesWebsocketTransportRegistered() {
 		t.Fatal("expected residual registration after EnsureResponsesWebsocketTransport")
 	}
-	if ResponsesWebsocketResidualStatus != "not_implemented" {
-		t.Errorf("status = %q, want not_implemented", ResponsesWebsocketResidualStatus)
+	if ResponsesWebsocketResidualStatus != "c1_http_bridge" {
+		t.Errorf("status = %q, want c1_http_bridge", ResponsesWebsocketResidualStatus)
 	}
 	if !strings.Contains(ResponsesWebsocketResidualDoc, "responses-websocket-residual") {
 		t.Errorf("doc pointer = %q", ResponsesWebsocketResidualDoc)
@@ -56,7 +56,8 @@ func TestIsWebsocketUpgradeRequest(t *testing.T) {
 	}
 }
 
-func TestHandleResponsesWebsocketUpgradeResidual_501(t *testing.T) {
+func TestHandleResponsesWebsocketUpgradeResidual_NoAuth401(t *testing.T) {
+	// C1: upgrade without ProxyAuth context is refused before Accept (no Hijack theater).
 	req := httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Connection", "Upgrade")
@@ -64,19 +65,97 @@ func TestHandleResponsesWebsocketUpgradeResidual_501(t *testing.T) {
 
 	HandleResponsesWebsocketUpgradeResidual(rec, req)
 
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501 body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401 body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "not implemented") {
-		t.Errorf("body should mention not implemented: %s", body)
+	if !strings.Contains(strings.ToLower(body), "auth") {
+		t.Errorf("body should mention auth: %s", body)
 	}
-	if !strings.Contains(body, ResponsesWebsocketResidualDoc) {
-		t.Errorf("body should point at residual doc: %s", body)
-	}
-	// Must not invent fake completion payloads on residual path.
+	// Must not invent fake completion payloads on refusal path.
 	if strings.Contains(body, "response.completed") || strings.Contains(body, "chat.completion") {
-		t.Errorf("residual must not emit fake completions: %s", body)
+		t.Errorf("refusal must not emit fake completions: %s", body)
+	}
+}
+
+func TestNormalizeResponsesWSRequest_FirstCreate(t *testing.T) {
+	t.Parallel()
+	gen := true
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","model":"gpt-4o","input":[{"role":"user","content":"hi"}],"generate":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg.Generate = &gen
+	got, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	if nerr != nil {
+		t.Fatalf("normalize: %+v", nerr)
+	}
+	if got.request["model"] != "gpt-4o" {
+		t.Fatalf("model = %v", got.request["model"])
+	}
+	if got.request["stream"] != true {
+		t.Fatalf("stream = %v, want true", got.request["stream"])
+	}
+	if _, ok := got.request["type"]; ok {
+		t.Fatal("type must be stripped from bridge body")
+	}
+}
+
+func TestNormalizeResponsesWSRequest_MissingModel(t *testing.T) {
+	t.Parallel()
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.create","input":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	if nerr == nil || nerr.status != 400 {
+		t.Fatalf("want 400 missing model, got %+v", nerr)
+	}
+}
+
+func TestNormalizeResponsesWSRequest_AppendBeforeCreate(t *testing.T) {
+	t.Parallel()
+	msg, err := ParseResponsesWSMessage([]byte(`{"type":"response.append","input":[{"role":"user","content":"x"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, nerr := normalizeResponsesWSRequest(msg, nil, nil)
+	if nerr == nil || !strings.Contains(nerr.message, "before response.create") {
+		t.Fatalf("want before-create error, got %+v", nerr)
+	}
+}
+
+func TestShouldHandleLocalPrewarm(t *testing.T) {
+	t.Parallel()
+	f := false
+	msg := &ResponsesWSMessage{Type: "response.create", Generate: &f}
+	if !shouldHandleLocalPrewarm(msg, nil) {
+		t.Fatal("expected local prewarm")
+	}
+	if shouldHandleLocalPrewarm(msg, map[string]any{"model": "x"}) {
+		t.Fatal("prewarm only on first turn")
+	}
+	tr := true
+	msg.Generate = &tr
+	if shouldHandleLocalPrewarm(msg, nil) {
+		t.Fatal("generate=true is not prewarm")
+	}
+}
+
+func TestCollectResponsesOutput_Completed(t *testing.T) {
+	t.Parallel()
+	out := collectResponsesOutput([]any{
+		map[string]any{
+			"type": "response.completed",
+			"response": map[string]any{
+				"output": []any{
+					map[string]any{"type": "message", "role": "assistant"},
+				},
+			},
+		},
+	})
+	if len(out) != 1 {
+		t.Fatalf("output len = %d", len(out))
 	}
 }
 

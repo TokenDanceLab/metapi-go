@@ -7,8 +7,9 @@
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) Wave C (C1→C3)  
 **Shortlist**: [`high-value-next.md`](./high-value-next.md) WS-1
 
-> **Runtime still residual** until C1 ships: plain GET **426**, upgrade **501**.  
-> **User decision 2026-07-20**: implement **完整 TS 对等** (not invent-frames). C1 may add **one** WS library (`coder/websocket` preferred). Sticky remains **process-local / single-instance honesty** (no STICKY-B now).
+> **C1 shipped (2026-07-21)**: plain GET **426**; upgrade → real `coder/websocket` + auth + single-turn HTTP SSE→WS bridge + local prewarm.  
+> Residual for C2/C3: multi-turn incremental, Codex upstream `wss`, multi-instance sticky (still single-instance honesty).  
+> **User decision 2026-07-20**: **完整 TS 对等** (not invent-frames). Sticky remains **process-local / single-instance honesty** (no STICKY-B now).
 
 ## Goal
 
@@ -18,6 +19,18 @@ Stop silent capability theater around Responses WebSocket:
 - Do **not** fake WS completions or Hijack-then-silent-close.
 - **Until C1**: residual stays stdlib-only with clear HTTP status semantics (426 / 501).
 - **From C1**: real upgrade + auth + single-turn bridge + tests; multi-turn/upstream wss in C2/C3 per plan.
+
+## C1 shipped (2026-07-21)
+
+| Item | Status |
+|------|--------|
+| Library | `github.com/coder/websocket` |
+| Upgrade path | `HandleResponsesGet426` / alias → `HandleResponsesWebsocket` |
+| Auth | ProxyAuth middleware + pre-Accept `GetProxyAuth` guard (401 if missing) |
+| Turn-state | `x-codex-turn-state` captured/passthrough on bridge inject |
+| Single-turn | `response.create` → in-process `HandleResponses` SSE→WS |
+| Prewarm | `generate=false` first create → local created+completed (zero usage) |
+| Residual | C2 multi-turn incremental · C3 Codex upstream wss · multi-instance pin |
 
 ## Boot wiring
 
@@ -44,7 +57,7 @@ cmd/server
 | Request | Status | Meaning |
 |---------|--------|---------|
 | `GET /v1/responses` (no Upgrade) | **426** | Client must use WebSocket upgrade for GET; HTTP GET is not a responses read API |
-| `GET /v1/responses` with `Upgrade: websocket` + `Connection: upgrade` | **501** | Residual: transport not implemented; no Hijack, no frames, no fake completions |
+| `GET /v1/responses` with `Upgrade: websocket` + `Connection: upgrade` | **101** (auth OK) / **401** (no auth) | C1: `coder/websocket` accept + message loop; unauthenticated upgrades refused before Accept |
 | `GET /responses` / alias compact | same 426 / 501 after alias resolve | Unknown alias still **404** |
 | `POST /v1/responses` | existing HTTP responses path | Unchanged (not part of this residual) |
 
@@ -56,8 +69,8 @@ JSON error shape remains OpenAI-ish:
 
 ## What is **not** claimed
 
-1. **No live WS server** — `EnsureResponsesWebsocketTransport` does not install `server.ConnState`, does not Hijack, and does not accept WebSocket handshakes.
-2. **No fake completions on wire** — helpers such as `SynthesizePrewarmResponsePayloads` / `ParseResponsesWSMessage` exist for a future runtime and unit tests only; residual handlers never emit them to a client socket.
+1. **C1 live WS server (HTTP bridge)** — upgrade accepted via `coder/websocket` on GET handlers; turns bridge to in-process `POST /v1/responses` (SSE→WS). No Hijack-silent-close.
+2. **No fake completions for real turns** — only explicit local prewarm (`generate=false` first create) emits synthetic created+completed; real turns only forward upstream/bridge events.
 3. **Codex profile capability ≠ transport readiness** — `SupportsResponsesWebsocketIncremental` on the Codex CLI profile describes **client detection** (what Codex clients expect). It does **not** mean metapi-go currently serves incremental WS responses.
 4. **Until C1: no websocket module in go.mod** — residual stays stdlib-only. **C1+**: one library is allowed; still no fake frames.
 

@@ -42,7 +42,7 @@
 |------:|:-----|:-----|:-------|
 | 0 | DOC | Truth: #534/#520 present; matrix/MASTER/high-value | **this session** |
 | 1 | KEYS | **#547** present · **#584** present · **#579** multi-cred remaining | #579 next |
-| 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | pending Issues |
+| 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | C1 present / C2-C3 pending Issues |
 | 3 | ROUTE | **#514** multi-tier ctx | pending |
 | 4 | REL | P0-585 prod e2e · P0-555 residual | pending |
 | 5 | UC | Hide/external Update Center honesty | pending |
@@ -68,6 +68,6 @@ gh project view 1 --owner TokenDanceLab
 ## Next agent
 
 1. Read [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md).  
-2. Either open GitHub Issues for Wave KEYS + WS C1, or implement B-DOC truth fixes first.  
+2. Either open GitHub Issues for Wave KEYS + WS C1 **present**, or implement B-DOC truth fixes first.  
 3. Do **not** start WS without dependency (`coder/websocket` or equivalent) + tests.  
 4. Do **not** auto pin/up production.

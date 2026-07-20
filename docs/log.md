@@ -1,3 +1,11 @@
+## [2026-07-21] WS C1: Responses WebSocket HTTP bridge
+
+- Dep: `github.com/coder/websocket` (single WS library).
+- Upgrade path: GET `/v1/responses` (+ alias) → real Accept after ProxyAuth; 401 without auth; plain GET still 426.
+- Session: `response.create` single-turn + local prewarm (`generate=false`); in-process `HandleResponses` SSE→WS bridge.
+- Tests: upgrade auth guard, normalize helpers, prewarm dial integration; no fake completions on real turns.
+- Residual: C2 multi-turn incremental · C3 Codex upstream wss · single-instance honesty (no STICKY-B).
+
 ## [2026-07-21] #584 site custom header override priority
 
 - Schema `custom_headers_override_request_headers` + additive `sc2_008_site_custom_headers_override_request_headers`.
