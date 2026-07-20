@@ -17,6 +17,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - P12 scheduler spec updated with scheduler #13b (video retention) + #16 (OAuth refresh)
 
 ### Fixed / Honesty
+- **TPM admission estimate** (#495 residual polish): count Claude `system` + Gemini `contents` string leaves (parity with routing context estimate); still best-effort chars/4, not a tokenizer
 - `IsManagedSub2ApiTokenDue` no longer returns true unconditionally — now checks real 300s lead window (was always-true stub causing unnecessary refresh passes)
 - **P0-555 residual**: fold OpenAI media `*_tokens_details` text/image/audio leaves when top-level usage missing (no double-count / no invent on zeros); still present-with-residual (multi-instance lag)
 - **C4 docs**: WS multi-turn process-local sticky honesty only (STICKY-B deferred)

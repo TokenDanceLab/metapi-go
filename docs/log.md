@@ -4,6 +4,11 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] TPM estimate Claude/Gemini envelope parity
+
+- auth `estimateAdmissionTokens` counts `system` + `contents` string leaves (align routing #514 estimate).
+- Tests: Claude system increases estimate; Gemini contents-only path.
+
 ## [2026-07-21] plan: parity core status banner
 
 - `original-parity-complete` waves A/C/D marked present; B REL open; E runtime optional; ops pin gated.

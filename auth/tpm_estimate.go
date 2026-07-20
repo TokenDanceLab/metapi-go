@@ -11,8 +11,9 @@ import (
 // Best-effort TPM admission estimate (#495 / learn #116).
 //
 // Strategy (documented intentionally; not a tokenizer):
-//  1. Prefer JSON body fields used by chat/completions & responses APIs:
-//     sum string rune lengths under "messages" and "input", then chars/4.
+//  1. Prefer JSON body fields used by chat/completions, responses, Claude, Gemini:
+//     sum string rune lengths under "messages", "input", "system", "contents",
+//     then chars/4 (same leaf strategy as routing.EstimateRequestContextTokens).
 //  2. Else fall back to Content-Length/4 when present (floor only).
 //  3. Clamp positive estimates to [1, 128000].
 //  4. Unreadable / empty / non-JSON with no Content-Length → 0 (skip TPM accounting).
@@ -73,7 +74,9 @@ func estimateAdmissionTokens(r *http.Request) int64 {
 }
 
 // sumMessagesInputStringRunes walks JSON "messages" / "input" and sums rune
-// lengths of string leaves. Returns 0 for non-JSON or missing fields.
+// lengths of string leaves. Also counts Claude "system" and Gemini "contents"
+// envelopes (parity with routing.EstimateRequestContextTokens). Returns 0 for
+// non-JSON or missing fields.
 func sumMessagesInputStringRunes(raw []byte) int64 {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || raw[0] != '{' {
@@ -89,6 +92,13 @@ func sumMessagesInputStringRunes(raw []byte) int64 {
 	}
 	if in, ok := top["input"]; ok {
 		total += sumJSONStringRunes(in)
+	}
+	// Claude Messages / Gemini generateContent alternate envelopes.
+	if sys, ok := top["system"]; ok {
+		total += sumJSONStringRunes(sys)
+	}
+	if contents, ok := top["contents"]; ok {
+		total += sumJSONStringRunes(contents)
 	}
 	return total
 }

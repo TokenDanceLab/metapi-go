@@ -112,6 +112,38 @@ func TestEstimateAdmissionTokens_UnicodeRunes(t *testing.T) {
 	}
 }
 
+func TestEstimateAdmissionTokens_ClaudeSystemEnvelope(t *testing.T) {
+	// Claude-style: system + messages content leaves (8 + 8 chars).
+	// role="user" also contributes 4 runes under recursive walk → 20/4 = 5 tokens.
+	// Assert system is counted (without system, messages-only would be 12/4=3).
+	body := `{"model":"claude","system":"abcdefgh","messages":[{"role":"user","content":"ijklmnop"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+	req.ContentLength = int64(len(body))
+	got := estimateAdmissionTokens(req)
+	if got != 5 {
+		t.Fatalf("claude system+messages estimate = %d, want 5", got)
+	}
+	// Sanity: messages-only body is smaller than system+messages.
+	bodyMsgOnly := `{"model":"claude","messages":[{"role":"user","content":"ijklmnop"}]}`
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(bodyMsgOnly))
+	req2.ContentLength = int64(len(bodyMsgOnly))
+	gotMsg := estimateAdmissionTokens(req2)
+	if gotMsg >= got {
+		t.Fatalf("system envelope should increase estimate: withSystem=%d messagesOnly=%d", got, gotMsg)
+	}
+}
+
+func TestEstimateAdmissionTokens_GeminiContentsEnvelope(t *testing.T) {
+	// Gemini-style contents (no messages/input) — 12 chars → 3 tokens.
+	body := `{"contents":[{"parts":[{"text":"abcdefghijkl"}]}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini:generateContent", strings.NewReader(body))
+	req.ContentLength = int64(len(body))
+	got := estimateAdmissionTokens(req)
+	if got != 3 {
+		t.Fatalf("gemini contents estimate = %d, want 3", got)
+	}
+}
+
 func TestKeyAdmissionLimiter_TPM_WithEstimateHelper(t *testing.T) {
 	// Wire helper → Allow: two estimates of 600 against maxTPM=1000.
 	l := NewKeyAdmissionLimiter()
