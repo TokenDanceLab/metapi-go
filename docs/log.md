@@ -3,6 +3,14 @@
 > **进度日志**（append-only）。不是现状 SSOT。  
 > 现状 → [`STATE.md`](STATE.md) · 开放项 → [`progress/MASTER.md`](progress/MASTER.md)
 
+## [2026-07-20] 四路并行原版功能对齐研究
+
+- 4 路 sonnet 代理：后端路由 · 平台/调度 · 前端 · gap 矩阵对抗复核。
+- 前端 18 路由 + 14 侧栏 **100% 齐平**；14 平台适配器完整对齐；调度 16 任务全覆盖。
+- 明确缺口：**Responses WebSocket**（501 residual）· Sub2API 托管刷新仅扫描 · Update Center 纯占位（UC-1）· OAuth 定期 token 刷新无独立 scheduler。
+- gap 矩阵漂移：**#513 model_mapping** → present（`ResolveMappedModel` + routing wire 完整）；其余 backlog=yes 均 CONFIRMED。
+- 结论：**Track A 对内可用（是）· Track B 对外「完全完备」（否）** — WS/Sticky/UC/级联e2e/计费residual 仍在。
+
 ## [2026-07-20] Release v0.8.45 — RE2-safe + UI tip
 
 - Tag **v0.8.45**: RE2-safe NewAPI user-id extract (blocks production restart) + M51–M52/console density UI + fail-fast probe tests.

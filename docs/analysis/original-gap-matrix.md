@@ -1,7 +1,7 @@
 # Original MetAPI Gap Matrix (metapi-go evidence)
 
 > Snapshot date: 2026-07-16 (G2 inventory)  
-> **Matrix evidence refreshed: 2026-07-17** (post v0.8.15 — #568 present, #585/#555 partial evidence, #590 present)  
+> **Matrix evidence refreshed: 2026-07-17** (post v0.8.15 — #568 present, #585/#555 partial evidence, #590 present) · **2026-07-20** (#513→present; adversarial replay)  
 > **Read-me 2026-07-18**: this table is **historical evidence**, not the living residual board.  
 > Living residual / next-wave: [`residual-next-candidates.md`](./residual-next-candidates.md) · shortlist [`high-value-next.md`](./high-value-next.md) · 现状 [`../STATE.md`](../STATE.md).  
 > Known matrix drift: **#520 context_length** row still says partial — product later shipped **CTX-520** (admin + multi-dialect enforce + UI); trust residual inventory over this row.  
@@ -94,7 +94,7 @@
 | 530 | Site custom request overrides not applied automatically | feature-protocol | partial | Related to #584 — headers applied on platform proxy path; “automatic override of all request paths” not uniformly evidenced for every proxy surface | P2 | yes |
 | 515 | Global model whitelist sporadically resets to `[]` | bug-correctness | unknown-needs-runtime | Settings store `handler/admin/settings.go` + `store/settings.go`; race/reset needs runtime/repro | P0 | yes |
 | 514 | Multi-tier ctx sizes per model to switch channels | feature-routing | missing | No multi-tier context routing dimension; no `context_length` model metadata (#520) | P2 | yes |
-| 513 | Model redirect/alias | feature-routing | partial | `token_routes.model_mapping` column + route create/update in `handler/admin/token_routes.go`; product completeness TBD | P2 | yes |
+| 513 | Model redirect/alias | feature-routing | **present** | `token_routes.model_mapping` + `ResolveMappedModel` in `routing/matcher.go` (exact→pattern fallback) + `ParseModelMappingRecord` + admin CRUD wired in `handler/admin/token_routes.go`; tests cover routing integration | P2 | no |
 | 511 | Minimax thinking concatenated into content | feature-protocol | partial | Think-tag extraction `transform/shared` `ExtractInlineThinkTags` / reasoning_content paths; Minimax-specific regression not isolated | P1 | yes |
 | 507 | `/v1/models` response shape issues | feature-protocol | partial | `handler/proxy/models.go` + e2e `e2e_flow_test.go` GET `/v1/models`; shape parity with all clients needs runtime | P1 | yes |
 | 506 | Custom endpoint configuration | feature-routing | present | `site_api_endpoints` + `service/site_service.go` `UpsertSiteAPIEndpoints` / sites API endpoints payload | P2 | no |

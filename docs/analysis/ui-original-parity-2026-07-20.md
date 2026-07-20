@@ -1,6 +1,6 @@
 # UI 原版对照 · 功能/按钮/观感（2026-07-20）
 
-**Scope**: 回应「UIUX 太丑 + 原版功能和按钮全没了」  
+**Scope**: 回应「UIUX 太丑 + 原版功能和按钮全没了」; **2026-07-20 四路并行验证通过**  
 **对照面**:
 - **metapi-go** tip `98b6aff` / product pages under `web/`
 - **原版 TokenDance/metapi**（同 monorepo sibling web；与 cita-777 同源 web 壳；含 Electron desktop）
@@ -98,15 +98,16 @@ P0-585 partial、P0-555 residual、#579/#547/#584 partial 等是 **协议/计费
 
 | ID | 动作 | 价值 |
 |:---|:-----|:-----|
-| **UI-REL-1** | 决定 tip 是否打 **v0.8.45** 发版（把 first-run + glass 推到 ops pin） | 用户立刻看到「功能在」 |
+| **UI-REL-1** | ~~决定 tip 是否打 v0.8.45 发版~~ → **v0.8.45 已 tagged**（RE2+UI）；ops pin/up 仍需授权 soak | 用户看到「功能在」 |
 | **SHOT-1** | 空库重录 `page-dashboard/sites/settings-*-win32.png`（含 #553/#554） | 文档/评分诚实；需 `METAPI_UI_AUTH_TOKEN` + 空库 |
-| **MOCK-NAV** | Shell mock 侧栏对齐生产 14 项 | **done tip** — `DesignSystemGallery` + shell shots + win32 gallery baselines |
+| **MOCK-NAV** | Shell mock 侧栏对齐生产 14 项 | **done tip** |
+| **MOCK-PARITY-AUDIT** | 四路并行原版齐平研究（前端/后端/平台/gap） | **done 2026-07-20** — 结论：Track A 对内可用，Track B 未完备 |
 | **VIS-1** | 可选：primary 回 indigo 或提供主题 preset（GCP / Classic） | 缓解「不像原版」 |
 | **NAV-1** | first-run 侧栏强调 站点/连接/设置（progressive） | 降 onboarding 噪音 |
 | **DENSE-1** | 有数据页（Sites/Accounts 表格）再做一 denser pass | 运营态「满」感 |
-| **CONSOLE-1** | 系统字体 + pill 导航 + 冷静标题 + 高分屏 content max-width | **done tip** — tokens/index.css/index.html + DESIGN |
+| **CONSOLE-1** | 系统字体 + pill 导航 + 冷静标题 + 高分屏 content max-width | **done tip** |
 
-**默认建议**：先 **UI-REL-1 + SHOT-1**；主题 preset（VIS-1）仍可选。
+**默认建议**：v0.8.45 已 tagged → 优先 **ops pin/up soak** + **SHOT-1**；主题 preset（VIS-1）仍可选。
 
 ---
 
