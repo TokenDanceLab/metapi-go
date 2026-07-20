@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestNormalizeManagedRefreshToken(t *testing.T) {
@@ -136,5 +137,33 @@ func TestIsSub2ApiPlatform(t *testing.T) {
 	}
 	if IsSub2ApiPlatform("anyrouter") {
 		t.Fatal("anyrouter should not match")
+	}
+}
+
+func TestIsManagedSub2ApiTokenDue(t *testing.T) {
+	t.Parallel()
+	now := time.Now().Unix()
+
+	// Nil tokenExpiresAt → not due.
+	if IsManagedSub2ApiTokenDue(nil) {
+		t.Fatal("nil should not be due")
+	}
+
+	// Already expired → due.
+	expired := now - 60
+	if !IsManagedSub2ApiTokenDue(expired) {
+		t.Fatal("expired token should be due")
+	}
+
+	// Expiring soon (within 300s lead window) → due.
+	dueSoon := now + 120
+	if !IsManagedSub2ApiTokenDue(dueSoon) {
+		t.Fatal("token expiring within lead window should be due")
+	}
+
+	// Expiring far in the future → not due.
+	farFuture := now + 3600
+	if IsManagedSub2ApiTokenDue(farFuture) {
+		t.Fatal("token far in the future should not be due")
 	}
 }

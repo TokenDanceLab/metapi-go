@@ -51,6 +51,7 @@ Four background schedulers still carry TODOs that look like product work. Operat
 | concurrency = 4 | **Wired** — semaphore channel |
 | Standalone lightweight token-refresh path | Residual — current path goes through full balance/auto-relogin flow |
 | Dedicated Sub2API refresh admin endpoint | Residual — `/api/v1/auth/refresh` not implemented |
+| Due window filter | **Wired** — `IsManagedSub2ApiTokenDue` uses 300s lead window (was always-true stub) |
 
 **Scheduler is functional and not "scan-only".** The original #246 description was superseded by later commits that wired the full path. For residual detail: `docs/analysis/residual-sub2api-auth.md`.
 

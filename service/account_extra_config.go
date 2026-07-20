@@ -5,6 +5,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // AutoReloginConfig holds credentials for auto-relogin.
@@ -236,11 +237,17 @@ func IsSub2ApiPlatform(platform string) bool {
 }
 
 // IsManagedSub2ApiTokenDue checks if a managed Sub2Api token needs refresh.
+// A token is "due" if it expires within sub2apiRefreshLeadSeconds of now.
 func IsManagedSub2ApiTokenDue(tokenExpiresAt any) bool {
 	if tokenExpiresAt == nil {
 		return false
 	}
-	// A token is "due" for refresh if it expires within some window.
-	// For now, always consider it due if present — real logic will be in P4.
-	return true
+	exp, ok := NormalizeManagedTokenExpiresAt(tokenExpiresAt)
+	if !ok || exp <= 0 {
+		return false
+	}
+	now := time.Now().Unix()
+	// Use a 5-minute lead window: refresh if token expires within 300s.
+	const sub2apiRefreshLeadSeconds int64 = 300
+	return exp-now <= sub2apiRefreshLeadSeconds
 }
