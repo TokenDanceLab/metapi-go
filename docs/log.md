@@ -4,6 +4,11 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] routing estimate envelope tests + #577 evidence
+
+- `routing` EstimateRequestContextTokens tests for Claude system + Gemini contents.
+- matrix #577 notes unit anyrouter checkin coverage; live model-list residual.
+
 ## [2026-07-21] tip after TPM estimate polish
 
 - Tip `e408fdf`: auth TPM counts Claude system + Gemini contents; pre-push race clean.

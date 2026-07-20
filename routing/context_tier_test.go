@@ -224,3 +224,29 @@ func (db *tierDB) LoadRouteChannels(ctx context.Context, routeIDs []int64) ([]st
 	}
 	return out, nil
 }
+
+func TestEstimateRequestContextTokens_ClaudeSystem(t *testing.T) {
+	t.Parallel()
+	// system alone should yield non-zero estimate (chars/4).
+	body := map[string]any{
+		"model":  "claude",
+		"system": "0123456789abcdef", // 16 runes → 4 tokens
+	}
+	got := EstimateRequestContextTokens(body)
+	if got != 4 {
+		t.Fatalf("claude system estimate = %d, want 4", got)
+	}
+}
+
+func TestEstimateRequestContextTokens_GeminiContents(t *testing.T) {
+	t.Parallel()
+	body := map[string]any{
+		"contents": []any{
+			map[string]any{"parts": []any{map[string]any{"text": "0123456789abcdef"}}},
+		},
+	}
+	got := EstimateRequestContextTokens(body)
+	if got != 4 {
+		t.Fatalf("gemini contents estimate = %d, want 4", got)
+	}
+}
