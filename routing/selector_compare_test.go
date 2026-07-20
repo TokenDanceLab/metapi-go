@@ -47,7 +47,7 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 	for i := 0; i < iterations; i++ {
 		result := CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), routingWeights,
-			nil, nil, 0, WeightedMode, "", nil, 1.0,
+			nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 		if result.Selected != nil {
 			selectionCounts[result.Selected.Channel.ID]++
@@ -65,7 +65,7 @@ func TestSelector_GoldenWeightFormula(t *testing.T) {
 	clearAllStableFirstCaches()
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), routingWeights,
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 
 	for _, d := range result.Details {

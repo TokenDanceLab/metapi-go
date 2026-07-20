@@ -901,3 +901,26 @@ func TestDownstreamKeysUpdateAndResetUsageRedactPlaintextKey(t *testing.T) {
 		t.Fatalf("reset-usage usedRequests = %#v, want 0", resetItem["usedRequests"])
 	}
 }
+
+func TestNormalizeKeyWeightInput(t *testing.T) {
+	if got := normalizeKeyWeightInput(nil); got != nil {
+		t.Fatalf("nil -> nil, got %v", got)
+	}
+	if got := normalizeKeyWeightInput(0); got != nil {
+		t.Fatalf("0 -> nil, got %v", got)
+	}
+	if got := normalizeKeyWeightInput(-1.5); got != nil {
+		t.Fatalf("negative -> nil, got %v", got)
+	}
+	if got := normalizeKeyWeightInput(""); got != nil {
+		t.Fatalf("empty -> nil, got %v", got)
+	}
+	got := normalizeKeyWeightInput(2.5)
+	if got == nil || *got != 2.5 {
+		t.Fatalf("2.5 -> 2.5, got %v", got)
+	}
+	got = normalizeKeyWeightInput("3")
+	if got == nil || *got != 3 {
+		t.Fatalf(`"3" -> 3, got %v`, got)
+	}
+}

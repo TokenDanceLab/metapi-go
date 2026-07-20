@@ -59,7 +59,7 @@
 | 578 | Per-key outbound proxy | feature-keys | present | Schema: `downstream_api_keys.proxy_url` (`store/schema.go`, additive `store/additive.go` `sc2_001_downstream_proxy_url`). Precedence helper `proxy/key_proxy.go` `ApplyKeyProxyOverride` / `ResolveKeyProxyURL` (key > account > site > system > direct). Auth load + middleware: `auth/downstream.go`, `auth/context.go`, `auth/proxy.go`. Dialer wiring `handler/proxy/upstream.go`; admin CRUD `handler/admin/downstream_keys.go`. Tests `proxy/key_proxy_test.go`, `auth/proxy_test.go` | P2 | no |
 | 570 | Create named custom routes + attach arbitrary channels | feature-routing | present | `POST /api/routes` `handler/admin/token_routes.go` `createRoute` inserts `token_routes` (`model_pattern`, `display_name`, `route_mode`, …); channel attach `POST /api/routes/:id/channels`; group sources `route_group_sources` | P2 | no |
 | 549 | Session stickiness | feature-routing | present | `proxy/session.go` `ProxyChannelCoordinator` `BuildStickySessionKey` / `BindStickyChannel` / `GetStickyChannelID`; config `ProxyStickySessionEnabled`/`ProxyStickySessionTtlMs`; e2e `e2e/e2e_test.go` `TestStickySession`; selection tests `proxy/channel_selection_test.go` sticky preference | P2 | no |
-| 547 | Per-key weight for load balancing | feature-keys | partial | Channel weight: `route_channels.weight` (`store/schema.go`, `handler/admin/token_routes.go`). Downstream **site** multipliers: `site_weight_multipliers` + `routing` `TestSiteWeightMultipliers`. No dedicated per-downstream-key weight scalar independent of site multipliers | P2 | yes |
+| 547 | Per-key weight for load balancing | feature-keys | **present** | `downstream_api_keys.key_weight` (sc2_007) + auth/routing `KeyWeight` multiplies `channel.Weight` in `CalculateWeightedSelection`; admin CRUD + DownstreamKeys UI; tests `TestNormalizeKeyWeightInput` / `TestCalculateWeightedSelection_KeyWeightAmplifiesChannelWeight` | P2 | no |
 | 520 | PR: model context_length + manual model deletion | feature-admin-ux | partial | Manual models: `handler/admin/accounts.go` manual model insert/update paths + tests `handler/admin/accounts_test.go`. **No** `context_length` / `contextLength` field in Go schema, handlers, or web API types (only mentioned in gap docs) | P2 | yes |
 | 584 | PR: site custom header override priority | feature-protocol | partial | Site custom headers applied with `req.Header.Set` in `platform/site_proxy.go` `SiteProxy.Do` / `DoWithProxy` (always overwrite same-name). Reserved-header filter: `service/account_service.go` `filterPlatformCustomHeaders`. No opt-in “override priority” flag / request-header precedence policy as in upstream PR | P2 | yes |
 | 588 | PR: pattern-group channels auto-sync after rebuild | feature-routing | present | Real rebuild: `service/route_rebuild.go` `RebuildRoutesBestEffort` → `RebuildTokenRoutesFromAvailability` (process mutex; rebuilds automatic pattern/exact channels from exact-route sources + `token_model_availability` / model availability; preserves `manual_override`; invalidates routing cache). Create path `PopulateRouteChannelsByModelPattern`. Hooks: account mutations `handler/admin/accounts.go`, maintenance `handler/admin/settings_maintenance.go`, admin rebuild `handler/admin/token_routes.go`. Spec note `docs/specs/p7-token-router.md` FE-GROUP-REBUILD. Tests `service/route_rebuild_test.go`. `explicit_group` membership stays on `route_group_sources` and expands at select time (by design) | P2 | no |
@@ -137,15 +137,15 @@
 
 | status | mandatory (29) | all rows (64) |
 | --- | ---: | ---: |
-| present | 21 | 21 |
-| partial | 7 | 28 |
+| present | 22 | 22 |
+| partial | 6 | 27 |
 | missing | 0 | 2 |
 | unknown-needs-runtime | 1 | 6 |
 | n/a-upstream-only | 0 | 6 |
 
-Mandatory present (21): **#582, #568, #573, #580, #581, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538**.  
+Mandatory present (22): **#582, #568, #573, #580, #581, #583, #570, #549, #550, #586, #569, #529, #590, #594, #591, #578, #588, #526, #559, #496, #538, #547**.  
 Mandatory missing (0): *(none — #594/#591/#578/#588/#526/#559/#580/#581/#538 shipped)*.  
-Mandatory partial (7): **#585, #579, #547, #520, #584, #577, #555**.  
+Mandatory partial (6): **#585, #579, #520, #584, #577, #555**.  
 Mandatory unknown (1): **#571**.
 
 Remaining **all-rows missing** (2, additional product sample only): **#514** multi-tier ctx routing · **#292** auto priority orchestration.  

@@ -19,6 +19,7 @@ export type SummaryItem = {
   maxRpm?: number | null;
   /** Optional soft TPM window (learn #116); null = unlimited. */
   maxTpm?: number | null;
+  keyWeight?: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;

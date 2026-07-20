@@ -64,7 +64,7 @@ func TestWeightedStrategy_Deterministic(t *testing.T) {
 	for i := 0; i < iterations; i++ {
 		result := CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-			nil, nil, 0, WeightedMode, "", nil, 1.0,
+			nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 		if result.Selected != nil {
 			selectionCounts[result.Selected.Channel.ID]++
@@ -82,7 +82,7 @@ func TestWeightedStrategy_Deterministic(t *testing.T) {
 	// Verify probabilities sum to ~1.0
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 	sum := 0.0
 	for _, d := range result.Details {
@@ -218,7 +218,7 @@ func TestStableFirstStrategy_Deterministic(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		result := CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-			nil, nil, 0, StableFirstMode, rotationKey, nil, 1.0,
+			nil, 1.0, nil, 0, StableFirstMode, rotationKey, nil, 1.0,
 		)
 		if result.Selected == nil {
 			t.Fatal("stable_first: expected a selection")
@@ -256,7 +256,7 @@ func TestStableFirstStrategy_ContributionFormula(t *testing.T) {
 
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+		nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
 	)
 
 	if result.Selected == nil {
@@ -294,7 +294,7 @@ func TestEmptyCandidates_AllStrategies(t *testing.T) {
 	// Weighted mode
 	result := CalculateWeightedSelection(
 		nil, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 	if result.Selected != nil {
 		t.Error("weighted: expected nil selection for empty candidates")
@@ -315,7 +315,7 @@ func TestEmptyCandidates_AllStrategies(t *testing.T) {
 	// Stable first mode
 	result = CalculateWeightedSelection(
 		nil, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+		nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
 	)
 	if result.Selected != nil {
 		t.Error("stable_first: expected nil selection for empty candidates")
@@ -336,7 +336,7 @@ func TestSingleCandidate_AllStrategies(t *testing.T) {
 	// Weighted mode
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 	if result.Selected == nil || result.Selected.Channel.ID != 1 {
 		t.Error("weighted: expected channel 1 for single candidate")
@@ -351,7 +351,7 @@ func TestSingleCandidate_AllStrategies(t *testing.T) {
 	// Stable first mode
 	result = CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+		nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
 	)
 	if result.Selected == nil || result.Selected.Channel.ID != 1 {
 		t.Error("stable_first: expected channel 1 for single candidate")
@@ -392,7 +392,7 @@ func TestAllCandidatesCooldown(t *testing.T) {
 
 	result := CalculateWeightedSelection(
 		filtered, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, nowMs, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, nowMs, WeightedMode, "", nil, 1.0,
 	)
 	if result.Selected == nil {
 		t.Error("all cooldown: expected a selection despite all being in cooldown")
@@ -436,7 +436,7 @@ func TestAllBreakerOpen(t *testing.T) {
 	// Verify that selection still works despite all breakers being open
 	result := CalculateWeightedSelection(
 		healthy, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 	if result.Selected == nil {
 		t.Error("all breaker open: expected a selection despite all breakers open")
@@ -504,7 +504,7 @@ func TestSiteWeightMultipliers(t *testing.T) {
 
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		multipliers, nil, 0, WeightedMode, "", nil, 1.0,
+		multipliers, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 
 	if result.Selected == nil {
@@ -541,7 +541,7 @@ func TestFallbackCostPenalty(t *testing.T) {
 
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 100.0, // high fallback cost penalizes c1
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 100.0, // high fallback cost penalizes c1
 	)
 
 	if result.Selected == nil {
@@ -576,7 +576,7 @@ func TestZeroWeightChannels(t *testing.T) {
 
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 
 	if result.Selected == nil {
@@ -611,7 +611,7 @@ func TestPriorityLayering(t *testing.T) {
 	// The algorithm should process priority 0 first and select from it
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1}, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 
 	if result.Selected == nil || result.Selected.Channel.ID != 1 {
@@ -630,7 +630,7 @@ func TestPriorityLayering(t *testing.T) {
 	// (breaker filter returns all if all are broken)
 	brokenResult := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1}, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 
 	if brokenResult.Selected == nil {
@@ -695,7 +695,7 @@ func TestGoldenFile_Consistency(t *testing.T) {
 
 	weightedResult := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, WeightedMode, "", nil, 1.0,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 	)
 	for _, d := range weightedResult.Details {
 		sb.WriteString(formatInt(d.Candidate.Channel.ID))
@@ -721,7 +721,7 @@ func TestGoldenFile_Consistency(t *testing.T) {
 
 	stableFirstResult := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), defaultRoutingWeights(),
-		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+		nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
 	)
 	for _, d := range stableFirstResult.Details {
 		sb.WriteString(formatInt(d.Candidate.Channel.ID))

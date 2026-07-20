@@ -26,7 +26,7 @@
 | Rank | ID | Title | Status | Next | Risk if skip |
 |-----:|:---|:------|:-------|:-----|:-------------|
 | 1 | **WS-1** | Responses WebSocket Codex | residual (501/426) | **Full TS parity** phased C1→C3 (user 2026-07-20) | Codex CLI WS broken |
-| 2 | **#547** | Per-downstream-key weight | partial | Product AC + schema + selector | Weak LB control |
+| 2 | **#547** | Per-downstream-key weight | **present** | shipped key_weight + selector + UI | — |
 | 3 | **#584** | Site header override priority | partial | Opt-in site-wins vs request-wins | PR parity gap |
 | 4 | **#579** | Multi-credential on one key | partial | Model AC then CRUD | Ops workarounds |
 | 5 | **#514** | Multi-tier ctx routing | missing | Own milestone | Only single context_length |

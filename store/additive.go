@@ -89,6 +89,14 @@ var enterpriseAdditiveSteps = []AdditiveStep{
 				`CREATE INDEX IF NOT EXISTS token_routes_sort_order_id_idx ON token_routes (sort_order, id)`)
 		},
 	},
+	{
+		// Upstream #547: per-downstream-key weight scalar for weighted LB.
+		Version:     "sc2_007_downstream_key_weight",
+		Description: "downstream_api_keys.key_weight REAL/DOUBLE NULL — optional per-key weight; NULL means 1.0",
+		Apply: func(db *DB) error {
+			return EnsureColumn(db, "downstream_api_keys", "key_weight", "REAL", "DOUBLE PRECISION", "")
+		},
+	},
 }
 
 // schemaMigrationsDDL creates the version bookkeeping table.

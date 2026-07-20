@@ -53,6 +53,7 @@ type managedKeyView struct {
 	SupportedModels        []string
 	AllowedRouteIDs        []int64
 	SiteWeightMultipliers  map[int64]float64
+	KeyWeight              float64
 	ExcludedSiteIDs        []int64
 	ExcludedCredentialRefs []ExcludedCredentialRef
 }
@@ -185,7 +186,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 		`SELECT id, name, enabled, expires_at, max_cost, used_cost,
 		        max_requests, used_requests, proxy_url, max_rpm, max_tpm,
 		        supported_models, allowed_route_ids,
-		        site_weight_multipliers, excluded_site_ids,
+		        site_weight_multipliers, key_weight, excluded_site_ids,
 		        excluded_credential_refs
 		 FROM downstream_api_keys
 		 WHERE key = ?`, token,
@@ -193,6 +194,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 
 	var v managedKeyView
 	var proxyURL *string
+	var keyWeight *float64
 	var supportedModelsJSON, allowedRouteIDsJSON *string
 	var siteWeightMultiJSON, excludedSiteIDsJSON *string
 	var excludedCredRefsJSON *string
@@ -201,7 +203,7 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 		&v.ID, &v.Name, &v.Enabled, &v.ExpiresAt, &v.MaxCost, &v.UsedCost,
 		&v.MaxRequests, &v.UsedRequests, &proxyURL, &v.MaxRPM, &v.MaxTPM,
 		&supportedModelsJSON, &allowedRouteIDsJSON,
-		&siteWeightMultiJSON, &excludedSiteIDsJSON,
+		&siteWeightMultiJSON, &keyWeight, &excludedSiteIDsJSON,
 		&excludedCredRefsJSON,
 	)
 	if err != nil {
@@ -218,6 +220,10 @@ func getManagedKeyByToken(token string) (*managedKeyView, error) {
 		if trimmed != "" {
 			v.ProxyURL = &trimmed
 		}
+	}
+
+	if keyWeight != nil && *keyWeight > 0 && !math.IsNaN(*keyWeight) && !math.IsInf(*keyWeight, 0) {
+		v.KeyWeight = *keyWeight
 	}
 
 	// Parse JSON columns into typed slices/maps
@@ -323,6 +329,7 @@ func toPolicyFromView(v *managedKeyView) DownstreamRoutingPolicy {
 		SupportedModels:        normalizeStringSlice(v.SupportedModels),
 		AllowedRouteIDs:        normalizeInt64Slice(v.AllowedRouteIDs),
 		SiteWeightMultipliers:  normalizeSiteWeightMap(v.SiteWeightMultipliers),
+		KeyWeight:              v.KeyWeight,
 		ExcludedSiteIDs:        normalizeInt64Slice(v.ExcludedSiteIDs),
 		ExcludedCredentialRefs: normalizeExcludedRefs(v.ExcludedCredentialRefs),
 		DenyAllWhenEmpty:       true, // managed keys default to deny-all

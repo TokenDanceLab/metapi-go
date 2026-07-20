@@ -78,6 +78,7 @@ func TestCalculateWeightedSelection_GoldenFile(t *testing.T) {
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"), routingWeights,
 		nil, // siteWeightMultipliers
+		1.0, // keyWeight
 		nil, // channelLoadProvider
 		0,   // nowMs
 		WeightedMode,
@@ -197,7 +198,7 @@ func TestEffectiveUnitCost_MinimumClamp(t *testing.T) {
 
 func TestCalculateWeightedSelection_EmptyCandidates(t *testing.T) {
 	result := CalculateWeightedSelection(
-		nil, staticModel("gpt-4"), RoutingWeightsConfig{}, nil, nil, 0, WeightedMode, "", nil, 1.0)
+		nil, staticModel("gpt-4"), RoutingWeightsConfig{}, nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
 	if result.Selected != nil {
 		t.Error("expected nil selected for empty candidates")
 	}
@@ -213,7 +214,7 @@ func TestCalculateWeightedSelection_SingleCandidate(t *testing.T) {
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		nil, nil, 0, WeightedMode, "", nil, 1.0)
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
 	}
@@ -242,7 +243,7 @@ func TestCalculateWeightedSelection_SiteWeightMultipliers(t *testing.T) {
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		multipliers, nil, 0, WeightedMode, "", nil, 1.0)
+		multipliers, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
 
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
@@ -285,7 +286,7 @@ func TestCalculateWeightedSelection_FallbackPenalty(t *testing.T) {
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		nil, nil, 0, WeightedMode, "", nil, 100.0) // high fallback cost
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 100.0) // high fallback cost
 
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
@@ -319,7 +320,7 @@ func TestCalculateWeightedSelection_StableFirstMode(t *testing.T) {
 	result := CalculateWeightedSelection(
 		candidates, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0)
+		nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0)
 
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate in stable_first mode")
@@ -338,7 +339,7 @@ func TestCalculateWeightedSelection_ZeroWeightChannels(t *testing.T) {
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		nil, nil, 0, WeightedMode, "", nil, 1.0)
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
 
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate even with weight=0")
@@ -385,7 +386,7 @@ func TestValueScoreComputation(t *testing.T) {
 	result := CalculateWeightedSelection(
 		[]RouteChannelCandidate{c1, c2}, staticModel("gpt-4"),
 		RoutingWeightsConfig{BaseWeightFactor: 0.5, ValueScoreFactor: 0.5, CostWeight: 0.4, BalanceWeight: 0.3, UsageWeight: 0.3},
-		nil, nil, 0, WeightedMode, "", nil, 1.0)
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
 
 	if result.Selected == nil {
 		t.Fatal("expected a selected candidate")
@@ -430,7 +431,7 @@ func BenchmarkCalculateWeightedSelection_5Candidates(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), routingWeights,
-			nil, nil, 0, WeightedMode, "", nil, 1.0,
+			nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 	}
 }
@@ -461,7 +462,7 @@ func BenchmarkCalculateWeightedSelection_10Candidates(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), routingWeights,
-			nil, nil, 0, WeightedMode, "", nil, 1.0,
+			nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 	}
 }
@@ -483,7 +484,7 @@ func BenchmarkCalculateWeightedSelection_SingleCandidate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), routingWeights,
-			nil, nil, 0, WeightedMode, "", nil, 1.0,
+			nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0,
 		)
 	}
 }
@@ -506,7 +507,7 @@ func BenchmarkCalculateWeightedSelection_StableFirst(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = CalculateWeightedSelection(
 			candidates, staticModel("gpt-4"), routingWeights,
-			nil, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
+			nil, 1.0, nil, 0, StableFirstMode, "1:gpt-4", nil, 1.0,
 		)
 	}
 }
@@ -557,7 +558,6 @@ func BenchmarkMakeCandidate(b *testing.B) {
 	}
 }
 
-
 // TestStableFirstStateMaps_ConcurrentRace exercises concurrent select + update + clear
 // against the shared stable-first maps. Run with -race.
 func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
@@ -588,7 +588,7 @@ func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
 			for i := 0; i < iters; i++ {
 				result := CalculateWeightedSelection(
 					candidates, staticModel("gpt-4"), routingWeights,
-					nil, nil, 0, StableFirstMode, rotationKey, nil, 1.0,
+					nil, 1.0, nil, 0, StableFirstMode, rotationKey, nil, 1.0,
 				)
 				if result.Selected != nil {
 					rememberStableFirstSiteSelectionForKey(rotationKey, result.Selected.Site.ID)
@@ -602,4 +602,52 @@ func TestStableFirstStateMaps_ConcurrentRace(t *testing.T) {
 		}(w)
 	}
 	wg.Wait()
+}
+
+func TestCalculateWeightedSelection_KeyWeightAmplifiesChannelWeight(t *testing.T) {
+	ResetSiteRuntimeHealthState()
+
+	// Equal sites/accounts; channel weights 1 vs 100.
+	// Without keyWeight both get +10 base offset so ratio is mild.
+	// With keyWeight=1000 the heavy channel dominates.
+	candidates := []RouteChannelCandidate{
+		makeCandidate(1, 100, 1001, 1, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+		makeCandidate(2, 200, 2001, 100, 0, 100, 5, 50.0, 1.0, nil, 0, nil),
+	}
+	cfg := RoutingWeightsConfig{BaseWeightFactor: 1, ValueScoreFactor: 0, CostWeight: 0, BalanceWeight: 0, UsageWeight: 0}
+
+	base := CalculateWeightedSelection(
+		candidates, staticModel("gpt-4"),
+		cfg,
+		nil, 1.0, nil, 0, WeightedMode, "", nil, 1.0)
+	hi := CalculateWeightedSelection(
+		candidates, staticModel("gpt-4"),
+		cfg,
+		nil, 1000.0, nil, 0, WeightedMode, "", nil, 1.0)
+
+	var baseP2, hiP2 float64
+	for _, d := range base.Details {
+		if d.Candidate.Channel.ID == 2 {
+			baseP2 = d.Probability
+		}
+	}
+	for _, d := range hi.Details {
+		if d.Candidate.Channel.ID == 2 {
+			hiP2 = d.Probability
+		}
+	}
+	if hiP2 <= baseP2 {
+		t.Fatalf("expected keyWeight to increase heavy-channel probability, base=%.6f hi=%.6f", baseP2, hiP2)
+	}
+	if hi.Selected == nil || hi.Selected.Channel.ID != 2 {
+		t.Fatalf("expected channel 2 selected under large keyWeight, got %+v", hi.Selected)
+	}
+	// zero/negative keyWeight treated as 1.0
+	zero := CalculateWeightedSelection(
+		candidates, staticModel("gpt-4"),
+		cfg,
+		nil, 0, nil, 0, WeightedMode, "", nil, 1.0)
+	if len(zero.Details) != len(base.Details) {
+		t.Fatalf("zero keyWeight should behave like 1.0 details")
+	}
 }

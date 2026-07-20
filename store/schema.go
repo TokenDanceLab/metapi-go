@@ -437,6 +437,10 @@ type DownstreamAPIKey struct {
 	SiteWeightMultipliers  *string `db:"site_weight_multipliers" json:"siteWeightMultipliers"`
 	ExcludedSiteIDs        *string `db:"excluded_site_ids" json:"excludedSiteIds"`
 	ExcludedCredentialRefs *string `db:"excluded_credential_refs" json:"excludedCredentialRefs"`
+	// KeyWeight is an optional per-downstream-key scalar (#547).
+	// NULL means 1.0 (no change). Positive values amplify channel.Weight
+	// differences in weighted selection: (channel.weight*keyWeight + 10)*...
+	KeyWeight *float64 `db:"key_weight" json:"keyWeight"`
 	// ProxyURL is an optional per-key egress proxy override.
 	// NULL falls back to site / system proxy — preserves pre-SC2 behavior.
 	ProxyURL   *string `db:"proxy_url" json:"proxyUrl"`

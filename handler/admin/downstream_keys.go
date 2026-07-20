@@ -129,6 +129,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
+		KeyWeight              any      `json:"keyWeight"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
 		ProxyURL               *string  `json:"proxyUrl"`
@@ -173,6 +174,7 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	maxRequests := normalizeQuotaIntOrNull(body.MaxRequests)
 	maxRpm := normalizeQuotaIntOrNull(body.MaxRpm)
 	maxTpm := normalizeQuotaIntOrNull(body.MaxTpm)
+	keyWeight := normalizeKeyWeightInput(body.KeyWeight)
 
 	// Policy reference validation.
 	if refErr := h.validateDownstreamPolicyReferences(normalizedRouteIds, normalizedSWM, normalizedExcludedSites, normalizedCredRefs); refErr != "" {
@@ -211,12 +213,12 @@ func (h *downstreamKeysHandler) createKey(w http.ResponseWriter, r *http.Request
 	id, err := execInsertID(h.db,
 		`INSERT INTO downstream_api_keys
 		(name, key, description, group_name, tags, enabled, expires_at, max_cost, used_cost, max_requests, used_requests,
-		 supported_models, allowed_route_ids, site_weight_multipliers, excluded_site_ids, excluded_credential_refs,
+		 supported_models, allowed_route_ids, site_weight_multipliers, key_weight, excluded_site_ids, excluded_credential_refs,
 		 proxy_url, max_rpm, max_tpm, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		body.Name, body.Key, desc, normalizedGroupName, tagsJSON, enabled, body.ExpiresAt,
 		maxCost, maxRequests,
-		modelsJSON, routeIdsJSON, swmJSON, excludedSitesJSON, credRefsJSON,
+		modelsJSON, routeIdsJSON, swmJSON, keyWeight, excludedSitesJSON, credRefsJSON,
 		proxyURL, maxRpm, maxTpm, now, now,
 	)
 	if err != nil {
@@ -269,6 +271,7 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		SupportedModels        []string `json:"supportedModels"`
 		AllowedRouteIds        []int64  `json:"allowedRouteIds"`
 		SiteWeightMultipliers  any      `json:"siteWeightMultipliers"`
+		KeyWeight              any      `json:"keyWeight"`
 		ExcludedSiteIds        []int64  `json:"excludedSiteIds"`
 		ExcludedCredentialRefs []any    `json:"excludedCredentialRefs"`
 		ProxyURL               *string  `json:"proxyUrl"`
@@ -330,6 +333,9 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 	}
 	if _, ok := rawBody["siteWeightMultipliers"]; ok {
 		hasField["siteWeightMultipliers"] = true
+	}
+	if _, ok := rawBody["keyWeight"]; ok {
+		hasField["keyWeight"] = true
 	}
 	if _, ok := rawBody["excludedSiteIds"]; ok {
 		hasField["excludedSiteIds"] = true
@@ -421,6 +427,11 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 		siteWeightMultipliers = normalizeSiteWeightMultipliersInput(body.SiteWeightMultipliers)
 	}
 
+	keyWeight := existingFloat64Ptr(existing, "key_weight")
+	if hasField["keyWeight"] {
+		keyWeight = normalizeKeyWeightInput(rawBody["keyWeight"])
+	}
+
 	existingExcludedSiteIds := parseIntArrayFromDB(existing, "excluded_site_ids")
 	excludedSiteIds := existingExcludedSiteIds
 	if hasField["excludedSiteIds"] {
@@ -487,12 +498,12 @@ func (h *downstreamKeysHandler) updateKey(w http.ResponseWriter, r *http.Request
 			`UPDATE downstream_api_keys SET
 			name = ?, key = ?, description = ?, group_name = ?, tags = ?,
 			enabled = ?, expires_at = ?, max_cost = ?, max_requests = ?, max_rpm = ?, max_tpm = ?,
-			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?,
+			supported_models = ?, allowed_route_ids = ?, site_weight_multipliers = ?, key_weight = ?,
 			excluded_site_ids = ?, excluded_credential_refs = ?, proxy_url = ?, updated_at = ?
 		WHERE id = ?`),
 		name, key, description, groupName, tagsJSON,
 		enabled, expiresAt, maxCost, maxRequests, maxRpm, maxTpm,
-		modelsJSON, routeIdsJSON, swmJSON,
+		modelsJSON, routeIdsJSON, swmJSON, keyWeight,
 		excludedSitesJSON, credRefsJSON, proxyURL, now, id,
 	)
 	if err != nil {
@@ -1256,6 +1267,51 @@ func normalizeQuotaFloatOrNull(input any) *float64 {
 		return &f
 	case *float64:
 		return normalizeQuotaFloatOrNull(derefAnyFloat(v))
+	default:
+		return nil
+	}
+}
+
+// normalizeKeyWeightInput accepts number|string|null for per-key weight (#547).
+// null / omitted / 0 / "" / non-positive → NULL (routing treats as 1.0).
+func normalizeKeyWeightInput(input any) *float64 {
+	if input == nil {
+		return nil
+	}
+	switch v := input.(type) {
+	case float64:
+		if v > 0 && !math.IsNaN(v) && !math.IsInf(v, 0) {
+			return &v
+		}
+		return nil
+	case int:
+		if v > 0 {
+			f := float64(v)
+			return &f
+		}
+		return nil
+	case int64:
+		if v > 0 {
+			f := float64(v)
+			return &f
+		}
+		return nil
+	case json.Number:
+		f, err := v.Float64()
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		return &f
+	case string:
+		s := strings.TrimSpace(v)
+		if s == "" {
+			return nil
+		}
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil || f <= 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil
+		}
+		return &f
 	default:
 		return nil
 	}

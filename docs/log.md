@@ -1,3 +1,10 @@
+## [2026-07-21] #547 per-downstream-key weight
+
+- Schema `key_weight` + additive `sc2_007_downstream_key_weight`.
+- Auth policy + routing: `KeyWeight` multiplies `channel.Weight` in weighted selection (NULL/≤0 → 1.0).
+- Admin create/update + DownstreamKeys UI "密钥权重".
+- Tests: normalize helper + weighted amplification; schema column count 24.
+
 # log.md — MetAPI Go progress log
 
 > **进度日志**（append-only）。不是现状 SSOT。  

@@ -68,6 +68,9 @@ type DownstreamRoutingPolicy struct {
 	SupportedModels        []string
 	DenyAllWhenEmpty       bool
 	SiteWeightMultipliers  map[int64]float64
+	// KeyWeight multiplies channel.Weight in weighted selection (#547).
+	// 0 or negative is treated as 1.0 (no-op).
+	KeyWeight float64
 }
 
 // CredentialRef identifies a specific credential to exclude.

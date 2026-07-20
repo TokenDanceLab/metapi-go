@@ -28,9 +28,11 @@ type ExcludedCredentialRef struct {
 //   - true  (managed key default): reject all models
 //   - false (global token default): allow all models
 type DownstreamRoutingPolicy struct {
-	SupportedModels        []string                `json:"supported_models"`
-	AllowedRouteIDs        []int64                 `json:"allowed_route_ids"`
-	SiteWeightMultipliers  map[int64]float64       `json:"site_weight_multipliers"`
+	SupportedModels       []string          `json:"supported_models"`
+	AllowedRouteIDs       []int64           `json:"allowed_route_ids"`
+	SiteWeightMultipliers map[int64]float64 `json:"site_weight_multipliers"`
+	// KeyWeight multiplies channel.Weight in weighted selection (#547). 0 = treat as 1.0.
+	KeyWeight              float64                 `json:"key_weight"`
 	ExcludedSiteIDs        []int64                 `json:"excluded_site_ids"`
 	ExcludedCredentialRefs []ExcludedCredentialRef `json:"excluded_credential_refs"`
 	DenyAllWhenEmpty       bool                    `json:"deny_all_when_empty"`

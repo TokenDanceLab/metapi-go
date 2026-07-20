@@ -61,6 +61,7 @@ type DownstreamApiKeyItem = {
   maxRpm?: number | null;
   /** Optional soft TPM window (learn #116); null = unlimited. */
   maxTpm?: number | null;
+  keyWeight?: number | null;
   supportedModels: string[];
   allowedRouteIds: number[];
   siteWeightMultipliers: Record<number, number>;
@@ -366,6 +367,7 @@ function buildEditorForm(
     maxRequests: item?.maxRequests === null || item?.maxRequests === undefined ? '' : String(item.maxRequests),
     maxRpm: item?.maxRpm === null || item?.maxRpm === undefined ? '' : String(item.maxRpm),
     maxTpm: item?.maxTpm === null || item?.maxTpm === undefined ? '' : String(item.maxTpm),
+    keyWeight: item?.keyWeight === null || item?.keyWeight === undefined ? '' : String(item.keyWeight),
     expiresAt: toDateTimeLocal(item?.expiresAt),
     enabled: item?.enabled ?? true,
     proxyUrl: item?.proxyUrl ?? '',
@@ -375,6 +377,16 @@ function buildEditorForm(
     excludedSiteIds: normalizeExcludedSiteIds(Array.isArray(item?.excludedSiteIds) ? item.excludedSiteIds : []),
     excludedCredentialRefs: normalizeExcludedCredentialRefs(Array.isArray(item?.excludedCredentialRefs) ? item.excludedCredentialRefs : []),
   };
+}
+
+function parseKeyWeightOrNull(raw: string): { valid: boolean; value: number | null; error?: string } {
+  const text = String(raw ?? '').trim();
+  if (!text) return { valid: true, value: null };
+  const n = Number(text);
+  if (!Number.isFinite(n) || n <= 0) {
+    return { valid: false, value: null, error: '密钥权重须为正数，留空表示 1.0' };
+  }
+  return { valid: true, value: n };
 }
 
 function summarizeModelLimit(models: string[]): string {
@@ -647,6 +659,7 @@ export default function DownstreamKeys() {
         usedRequests: raw?.usedRequests ?? item.usedRequests,
         maxRpm: raw?.maxRpm ?? item.maxRpm ?? null,
         maxTpm: raw?.maxTpm ?? item.maxTpm ?? null,
+        keyWeight: raw?.keyWeight ?? item.keyWeight ?? null,
         supportedModels: raw?.supportedModels ?? item.supportedModels,
         allowedRouteIds: raw?.allowedRouteIds ?? item.allowedRouteIds,
         siteWeightMultipliers: raw?.siteWeightMultipliers ?? item.siteWeightMultipliers,
@@ -842,6 +855,11 @@ export default function DownstreamKeys() {
       toast.info(parsedMaxTpm.error || 'TPM 上限格式无效');
       return;
     }
+    const parsedKeyWeight = parseKeyWeightOrNull(editorForm.keyWeight);
+    if (!parsedKeyWeight.valid) {
+      toast.info(parsedKeyWeight.error || '密钥权重格式无效');
+      return;
+    }
 
     let siteWeightMultipliers: Record<number, number> = {};
     const rawWeights = editorForm.siteWeightMultipliersText.trim();
@@ -877,6 +895,7 @@ export default function DownstreamKeys() {
         maxRequests: editorForm.maxRequests.trim() ? Number(editorForm.maxRequests.trim()) : null,
         maxRpm: parsedMaxRpm.value,
         maxTpm: parsedMaxTpm.value,
+        keyWeight: parsedKeyWeight.value,
         proxyUrl: parsedProxy.value,
         supportedModels: uniqStrings(editorForm.selectedModels),
         allowedRouteIds: uniqIds(editorForm.selectedGroupRouteIds).filter((id) => routeMap.has(id) && isGroupRouteOption(routeMap.get(id)!)),

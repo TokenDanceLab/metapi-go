@@ -1757,6 +1757,7 @@ func routingPolicyFromAuth(policy auth.DownstreamRoutingPolicy) routing.Downstre
 		SupportedModels:        policy.SupportedModels,
 		AllowedRouteIDs:        policy.AllowedRouteIDs,
 		SiteWeightMultipliers:  multipliers,
+		KeyWeight:              policy.KeyWeight,
 		ExcludedSiteIDs:        policy.ExcludedSiteIDs,
 		ExcludedCredentialRefs: refs,
 		DenyAllWhenEmpty:       policy.DenyAllWhenEmpty,

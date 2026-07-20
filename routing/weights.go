@@ -78,6 +78,7 @@ func CalculateWeightedSelection(
 	modelResolver func(RouteChannelCandidate) string,
 	routingWeights RoutingWeightsConfig,
 	siteWeightMultipliers map[int64]float64,
+	keyWeight float64,
 	channelLoadProvider ChannelLoadSnapshotProvider,
 	nowMs int64,
 	mode WeightedSelectionMode,
@@ -165,6 +166,11 @@ func CalculateWeightedSelection(
 	}
 	siteHistoricalHealthMetrics := BuildSiteHistoricalHealthMetrics(candidates)
 
+	effectiveKeyWeight := 1.0
+	if keyWeight > 0 && isFiniteFloat(keyWeight) {
+		effectiveKeyWeight = keyWeight
+	}
+
 	// Step 8: Contributions
 	contributions := make([]float64, n)
 	for i, candidate := range candidates {
@@ -188,7 +194,7 @@ func CalculateWeightedSelection(
 		}
 
 		normalizedVS := (valueScores[i] - minVS) / vsRange
-		baseContribution := (float64(candidate.Channel.Weight) + 10) *
+		baseContribution := (float64(candidate.Channel.Weight)*effectiveKeyWeight + 10) *
 			(routingWeights.BaseWeightFactor + normalizedVS*routingWeights.ValueScoreFactor)
 		contribution := baseContribution / siteChannels
 

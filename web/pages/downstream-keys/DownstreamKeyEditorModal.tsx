@@ -29,6 +29,8 @@ export type DownstreamKeyEditorForm = {
   maxRpm: string;
   /** Optional soft TPM; empty = unlimited. */
   maxTpm: string;
+  /** Optional per-key weight scalar (#547); empty = 1.0. */
+  keyWeight: string;
   expiresAt: string;
   enabled: boolean;
   /** Per-key egress proxy; empty = inherit site/account/system. */
@@ -434,6 +436,17 @@ export default function DownstreamKeyEditorModal({
             placeholder="留空表示不限，例如 100000"
             style={inputStyle}
             inputMode="numeric"
+            autoComplete="off"
+          />
+        </div>
+        <div className="downstream-key-modal-field">
+          <div className="downstream-key-modal-label">密钥权重</div>
+          <input
+            value={form.keyWeight}
+            onChange={(e) => onChange((prev) => ({ ...prev, keyWeight: e.target.value }))}
+            placeholder="留空=1.0，例如 2 放大通道 weight 差"
+            style={inputStyle}
+            inputMode="decimal"
             autoComplete="off"
           />
         </div>
