@@ -33,6 +33,7 @@
 | UC-1 update-center deploy | residual | admin deploy 501 / log-only |
 | OPS-PG-BUDGET | **present product** (v0.8.44 code) | profiles + lease backoff; ops still size role LIMIT |
 | OPS-RE2-USERID | **fixed in v0.8.45** | was production Exited(2) on 0.8.44; ops still must pin/up 0.8.45 + soak |
+| OPS-OAUTH-REFRESH | **present** (#251 / post-v0.8.45) | OAuth token auto-refresh scheduler (oauth-refresh); TS parity for codex/claude/gemini-cli/antigravity lead times |
 | UI-REFRESH / UI-POLISH | **released v0.8.45** | residual optional empty-DB shot recapture |
 | UI vs 原版功能 | **parity on web surface** | 2026-07-20 inventory: routes/buttons 齐平；体感「没了」= 空库 + pin 落后 tip + 主题换肤 — [`analysis/ui-original-parity-2026-07-20.md`](analysis/ui-original-parity-2026-07-20.md) |
 
