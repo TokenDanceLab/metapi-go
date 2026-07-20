@@ -57,6 +57,17 @@ Stop silent capability theater around Responses WebSocket:
 | Status string | `c3_codex_upstream_wss` |
 | Residual | multi-instance pin honesty only |
 
+
+## C4 docs (2026-07-21) — single-instance honesty
+
+| Item | Status |
+|------|--------|
+| Multi-instance multi-turn | **not claimed** without LB pin |
+| Process-local stores | previous_response_id + codex socket reuse are **single-instance** |
+| STICKY-B Redis | **deferred** (user 2026-07-20) |
+| Ops guidance | run one sticky instance or pin WS sessions at LB |
+
+
 ## Boot wiring
 
 ```
