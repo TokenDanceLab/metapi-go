@@ -5,6 +5,15 @@ All notable changes to MetAPI-Go will be documented in this file.
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### Added
+- OAuth token auto-refresh scheduler (#251): 60s interval, per-provider lead times (codex=5d, claude=4h, gemini-cli/antigravity=5min), singleflight dedup
+- P12 scheduler spec updated with scheduler #13b (video retention) + #16 (OAuth refresh)
+
+### Fixed
+- `IsManagedSub2ApiTokenDue` no longer returns true unconditionally — now checks real 300s lead window (was always-true stub causing unnecessary refresh passes)
+
 ## [v0.8.45] — 2026-07-20
 
 ### Fixed / Reliability
