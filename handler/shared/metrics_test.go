@@ -32,6 +32,19 @@ func TestMetricsCollector_RecordAndExpose(t *testing.T) {
 	if !strings.Contains(body, "metapi_proxy_errors_total 1") {
 		t.Fatalf("body missing errors counter: %s", body)
 	}
+	RecordStreamMissingUsage()
+	RecordStreamMissingUsage()
+	if got := StreamMissingUsageTotal(); got != 2 {
+		t.Fatalf("StreamMissingUsageTotal = %d, want 2", got)
+	}
+	rec2 := httptest.NewRecorder()
+	if writeErr := WritePrometheusMetrics(rec2); writeErr != nil {
+		t.Fatalf("WritePrometheusMetrics after missing usage: %v", writeErr)
+	}
+	body2 := rec2.Body.String()
+	if !strings.Contains(body2, "metapi_stream_missing_usage_total 2") {
+		t.Fatalf("body missing stream missing usage counter: %s", body2)
+	}
 	RecordStreamEnd()
 	_, _, streams, _ = SnapshotForTest()
 	if streams != 0 {

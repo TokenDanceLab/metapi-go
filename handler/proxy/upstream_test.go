@@ -15,6 +15,7 @@ import (
 
 	"github.com/tokendancelab/metapi-go/auth"
 	"github.com/tokendancelab/metapi-go/config"
+	"github.com/tokendancelab/metapi-go/handler/shared"
 	"github.com/tokendancelab/metapi-go/proxy"
 	"github.com/tokendancelab/metapi-go/routing"
 	"github.com/tokendancelab/metapi-go/store"
@@ -1590,5 +1591,21 @@ func TestDefaultUpstreamClientRejectsCrossOriginRedirect(t *testing.T) {
 	if resp != nil {
 		// Body is already closed by net/http on CheckRedirect error.
 		_ = resp.Body.Close()
+	}
+}
+
+func TestWarnMissingStreamUsage_RecordsMetric(t *testing.T) {
+	shared.ResetMetricsForTest()
+	warnMissingStreamUsageAfterIncludeUsage("gpt-4o", "/v1/chat/completions", ParsedUsage{Found: false})
+	if got := shared.StreamMissingUsageTotal(); got != 1 {
+		t.Fatalf("missing usage metric = %d, want 1", got)
+	}
+	warnMissingStreamUsageAfterIncludeUsage("gpt-4o", "/v1/chat/completions", ParsedUsage{Found: true})
+	if got := shared.StreamMissingUsageTotal(); got != 2 {
+		t.Fatalf("zero usage residual metric = %d, want 2", got)
+	}
+	warnMissingStreamUsageAfterIncludeUsage("gpt-4o", "/v1/chat/completions", ParsedUsage{Found: true, PromptTokens: 3})
+	if got := shared.StreamMissingUsageTotal(); got != 2 {
+		t.Fatalf("usable usage should not increment, got %d", got)
 	}
 }

@@ -503,6 +503,7 @@ func warnMissingStreamUsageAfterIncludeUsage(model, path string, usage ParsedUsa
 	if !shouldWarnMissingStreamUsage(true, usage) {
 		return
 	}
+	shared.RecordStreamMissingUsage()
 	slog.Warn("stream ended without usage after include_usage",
 		"model", model,
 		"path", path,

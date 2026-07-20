@@ -52,6 +52,11 @@ usage-aggregation: orphan proxy_logs skipped site buckets orphan_logs=N processe
 
 This does **not** invent a synthetic site bucket; global dashboard `SUM(proxy_logs)` paths still see those rows when reading raw logs. Perfect multi-instance billing is **not** claimed.
 
+
+### Stream include_usage without tokens
+
+When OpenAI chat/completions stream path injects `stream_options.include_usage` but the SSE ends without usable token counts, we log a warn and increment `metapi_stream_missing_usage_total`. Tokens are **never invented**.
+
 ## Tests
 
 - `scheduler/usage_aggregation_test.go`

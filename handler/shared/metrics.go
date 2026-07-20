@@ -23,6 +23,8 @@ type MetricsCollector struct {
 	dbConnectionsInUse atomic.Int64
 	dbConnErrorsTotal  atomic.Int64
 	routeRebuildOK     atomic.Int64
+	// Streams that requested include_usage but ended without usable tokens (P0-555 residual).
+	streamMissingUsageTotal atomic.Int64
 	startTime          time.Time
 
 	// Labeled outcomes + latency histograms (low-cardinality only).
@@ -157,6 +159,14 @@ func RecordDBConnError() { globalMetrics.dbConnErrorsTotal.Add(1) }
 
 // RecordRouteRebuildCompleted increments successful route rebuild/cache-invalidate counter.
 func RecordRouteRebuildCompleted() { globalMetrics.routeRebuildOK.Add(1) }
+
+// RecordStreamMissingUsage increments when a stream expected include_usage tokens
+// but ended without usable counts (observability only; never invents tokens).
+func RecordStreamMissingUsage() { globalMetrics.streamMissingUsageTotal.Add(1) }
+
+// StreamMissingUsageTotal returns the missing-usage residual counter (tests/ops).
+func StreamMissingUsageTotal() int64 { return globalMetrics.streamMissingUsageTotal.Load() }
+
 
 // ObserveProxyOutcome records a terminal proxy outcome: labeled counter, latency
 // histogram, legacy error counter (when not success), and optional Observer hook.
@@ -322,6 +332,7 @@ func ResetMetricsForTest() {
 	globalMetrics.dbConnectionsInUse.Store(0)
 	globalMetrics.dbConnErrorsTotal.Store(0)
 	globalMetrics.routeRebuildOK.Store(0)
+	globalMetrics.streamMissingUsageTotal.Store(0)
 	globalMetrics.startTime = time.Now()
 	globalMetrics.outcomesMu.Lock()
 	globalMetrics.outcomes = make(map[outcomeKey]int64)
@@ -410,6 +421,10 @@ func WritePrometheusMetrics(w http.ResponseWriter) error {
 	appendLine("# HELP metapi_route_rebuild_total Total route cache rebuild/invalidate operations\n")
 	appendLine("# TYPE metapi_route_rebuild_total counter\n")
 	appendLine("metapi_route_rebuild_total{result=\"completed\"} %d\n", m.routeRebuildOK.Load())
+
+	appendLine("# HELP metapi_stream_missing_usage_total Streams that requested include_usage but ended without usable tokens\n")
+	appendLine("# TYPE metapi_stream_missing_usage_total counter\n")
+	appendLine("metapi_stream_missing_usage_total %d\n", m.streamMissingUsageTotal.Load())
 
 	// Labeled terminal outcomes (privacy-safe, bounded labels).
 	appendLine("# HELP metapi_proxy_outcomes_total Terminal proxy outcomes by endpoint/status/stream\n")
