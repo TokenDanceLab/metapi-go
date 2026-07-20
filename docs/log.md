@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] matrix #571 static evidence note
+
+- #571 remains unknown-needs-runtime for live OAuth; static allowlist/seed/probe + `codex_models_test.go` documented in matrix.
+
 ## [2026-07-21] tip after OrphanLogs observability
 
 - Tip `c9ca3e7`: usage projection OrphanLogs + slog; P0-555 still present-with-residual.

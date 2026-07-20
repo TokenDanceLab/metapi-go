@@ -63,7 +63,7 @@
 | **534** | Bulk account import | **present** (matrix stale if still missing) | Docs only |
 | **520** | context_length | **present-with-residual** | Dialects residual only |
 | **577** | AnyRouter check-in | partial | Live runtime |
-| **571** | Codex OAuth gpt-5.5 | unknown-needs-runtime | Runtime probe |
+| **571** | Codex OAuth gpt-5.5 | unknown-needs-runtime | Live probe only (static allowlist+tests present) |
 
 Out-of-product: Electron · MySQL · k3s · noise issues.
 
