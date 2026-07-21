@@ -4,6 +4,12 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] #557 P0-585 production e2e procedure + probe script
+
+- `docs/analysis/p0585-production-e2e-procedure.md` — pass/fail, staging inject, evidence harvest.
+- `scripts/p0585_cascade_probe.py` — dry-run default; `METAPI_P0585_LIVE=1` for authorized live probes.
+- Does not flip P0-585 present; does not pin production.
+
 ## [2026-07-21] tip after P0-585 HTTP e2e
 
 - Tip `0027db6`: e2e cascade load-proof + M53 board #557/#558.

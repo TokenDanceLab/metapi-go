@@ -30,7 +30,7 @@
 | 3 | **#584** | Site header override priority | **present** | shipped override flag + ApplyCustomHeadersWithOptions + Sites UI | — |
 | 4 | **#579** | Multi-credential on one key | **present** | allow-list sites/credentials shipped | — |
 | 5 | **#514** | Multi-tier ctx routing | **present** | estimate + tightest-fit among same-model routes | residual: tokenizer accuracy |
-| 6 | **P0-585** | Channel cascade | partial | HTTP e2e load-proof present; **production e2e** still required to flip present | Silent cascade claim |
+| 6 | **P0-585** | Channel cascade | partial | HTTP e2e present; live procedure #557 + `scripts/p0585_cascade_probe.py` | Silent cascade claim |
 | 7 | **P0-555** | Billing accuracy | present-with-residual | media detail fold + orphan/missing-usage observability; multi-instance lag residual | not perfect billing |
 | 8 | **UC-1** | Update-center deploy | **hide/external present** | UI ops note + 501 residual | — |
 | 9 | **STICKY-B** | Redis sticky | design-only | **Deferred** — single-instance / LB pin honesty | Multi-instance multi-turn |

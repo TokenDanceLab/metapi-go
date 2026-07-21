@@ -95,3 +95,5 @@ docs/
 | `plan/lane-charters.md` | File ownership for parallel WFs (ownership rules still useful) |
 | `plan/feature-complete-roadmap.md` | F0 snapshot (closed / historical) |
 | `plan/gap-inventory-acceptance.md` | G4 acceptance (closed) |
+
+- P0-585 live e2e procedure: [`analysis/p0585-production-e2e-procedure.md`](analysis/p0585-production-e2e-procedure.md) (#557)

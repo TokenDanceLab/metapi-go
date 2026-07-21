@@ -123,14 +123,14 @@ These are **not** bugs of “mark sibling failed,” but residual fleet-level pr
 | Site/model breaker | 3 transient fails open breaker → **all** channels on that site/model filtered via `FilterSiteRuntimeBrokenCandidatesByModel*` | Intentional systemic protection; can look like cascade under multi-channel storms on one site |
 | Credential-scoped usage limit | Short window cools **all channels sharing the credential** | Shared quota / key truth — not peer-channel poison, still multi-channel impact |
 | Empty-filter fallback | Global filters return the **full set** when healthy is empty; weighted / RR / stable_first layers demote soft-empty priorities before that global fallback (**#358**, **#368**) | Global starvation prevention still reselects cooled channels when the whole fleet is degraded |
-| Production multi-channel load proof | Load-shaped systemic poison not proven e2e under production traffic | Unit/integration isolation proven only; gap matrix #585 residual / inventory P0-585 |
+| Production multi-channel load proof | Load-shaped systemic poison not proven under **live** traffic | Unit + HTTP e2e present; **procedure** [`p0585-production-e2e-procedure.md`](./p0585-production-e2e-procedure.md) + `scripts/p0585_cascade_probe.py` (#557); inventory stays **partial** until signed live report |
 
 ### What would close (or further shrink) residual
 
 | Residual item | Closing bar (product wave; out of #336 scope) |
 |:--------------|:-----------------------------------------------|
 | Site/model breaker “cascade look” | Product AC if breaker thresholds / model scope need operator knobs or different policy — **not** docs-only |
-| Production multi-channel load proof | Load-test or production evidence plan with multi-channel same-site failure storms; metrics that sibling channels stay eligible while breakers stay closed for single-channel noise |
+| Production multi-channel load proof | Follow [`p0585-production-e2e-procedure.md`](./p0585-production-e2e-procedure.md) + #557; attach live report; keep partial until AC |
 | Empty-filter fallback (global) | Removing global full-set fallback risks hard outage when all candidates are dirty; weighted / RR / stable_first per-layer demotion is shipped (**#358**, **#368**) |
 
 ## Tests

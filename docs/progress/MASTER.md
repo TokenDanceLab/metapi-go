@@ -69,6 +69,6 @@ gh project view 1 --owner TokenDanceLab
 ## Next agent
 
 1. Read [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md) + [`../STATE.md`](../STATE.md).  
-2. REL: P0-585 needs **production e2e** (do not flip present from unit alone).  
+2. REL: P0-585 needs **production/live e2e** per [`../analysis/p0585-production-e2e-procedure.md`](../analysis/p0585-production-e2e-procedure.md) (#557); HTTP e2e already on tip.  
 3. Ops pin **0.8.45** only with admin auth + ≥15min soak.  
 4. Do **not** invent UC registry / STICKY-B / fake WS terminals.

@@ -1,4 +1,4 @@
-.PHONY: build test race race-integration vet lint vuln mod-verify docs-hygiene bench-routing coverage verify verify-race docker-verify run docker-build clean web-build migrate-build ui-visual ui-e2e
+.PHONY: p0585-probe p0585-e2e build test race race-integration vet lint vuln mod-verify docs-hygiene bench-routing coverage verify verify-race docker-verify run docker-build clean web-build migrate-build ui-visual ui-e2e
 
 # Build the server binary (requires web/dist/ to exist for go:embed)
 build:
@@ -81,3 +81,10 @@ migrate-build:
 clean:
 	rm -f metapi metapi.exe metapi-migrate metapi-migrate.exe
 	rm -rf web/dist
+
+# P0-585 cascade probe (dry-run by default; set METAPI_P0585_LIVE=1 for authorized live)
+p0585-probe:
+	python scripts/p0585_cascade_probe.py
+
+p0585-e2e:
+	go test ./e2e -count=1 -run 'P0585HTTP' -timeout 60s
