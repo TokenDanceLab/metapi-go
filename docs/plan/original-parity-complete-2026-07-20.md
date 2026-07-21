@@ -18,7 +18,7 @@
 | A KEYS (#547/#584/#579) + #514 | **present** |
 | C WS C1–C4 | **present** (C3 flagged; sticky single-instance honesty) |
 | D UC-1 | **hide/external present** |
-| B REL | **open** — P0-585 partial; P0-555 present-with-residual |
+| B REL | **open** — P0-585 partial (HTTP e2e present; prod #557); P0-555 present-with-residual |
 | E runtime | **optional** — #571/#577 live probes |
 | Ops pin 0.8.45 | **gated** (admin auth + soak) |
 

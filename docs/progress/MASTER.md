@@ -2,7 +2,7 @@
 
 **Last verified**: 2026-07-21  
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
-**Mode**: **GITHUB_FULL** capable · product **parity program scheduled in docs** (board Issues TBD)  
+**Mode**: **GITHUB_FULL** · product **parity core shipped**; active M53 REL-HONESTY  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
 **Tip**: `e8f0f18` · tag **v0.8.45** · unreleased: parity core + P0-555 residual observability + embed SPA  
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md)
@@ -13,16 +13,17 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | parity core shipped; P0-555 residual observability; next P0-585 e2e / ops pin auth |
+| Active work | REL: P0-585 HTTP e2e shipped; prod e2e tracked #557; P0-555 residual; ops pin gated |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
-| Board | empty of open feature issues (M52 closed); new wave not yet filed |
+| Board | M53 REL-HONESTY · open [#557](https://github.com/TokenDanceLab/metapi-go/issues/557) P0-585 prod e2e · [#558](https://github.com/TokenDanceLab/metapi-go/issues/558) runtime probes |
 
 ## Open product board
 
 | Issue | Track | Title |
 |------:|:------|:------|
-| — | — | **empty** — parity core shipped; file REL/runtime probe issues only if scheduling work |
+| [#557](https://github.com/TokenDanceLab/metapi-go/issues/557) | REL | P0-585 production multi-channel cascade e2e (keep partial until live) |
+| [#558](https://github.com/TokenDanceLab/metapi-go/issues/558) | REL | Runtime probes #571/#577 live (optional) |
 
 ## Hard gates
 
@@ -44,7 +45,7 @@
 | 1 | KEYS | **#547** present · **#584** present · **#579** present | allow-list bind shipped |
 | 2 | WS | **C1** upgrade+HTTP bridge → **C2** multi-turn → **C3** upstream wss | **C1+C2+C3 present** |
 | 3 | ROUTE | **#514** multi-tier ctx | **present** |
-| 4 | REL | P0-585 prod e2e · P0-555 residual | pending |
+| 4 | REL | P0-585 HTTP e2e load-proof **present**; prod e2e still pending · P0-555 residual | partial |
 | 5 | UC | Hide/external Update Center honesty | **present** (UI external card + API residual) |
 | ops | — | Pin/up **0.8.45** + ≥15min soak | needs admin auth |
 

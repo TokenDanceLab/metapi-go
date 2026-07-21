@@ -4,6 +4,17 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] SDD REL board: M53 + #557/#558
+
+- Milestone **53 REL-HONESTY**; issues #557 (P0-585 prod e2e) · #558 (runtime probes optional).
+- HTTP cascade e2e shipped same session; board tracks remaining prod/live residual.
+
+## [2026-07-21] REL: P0-585 HTTP cascade e2e (partial remains)
+
+- `e2e/e2e_p0585_cascade_test.go`: multi-channel 5xx storm channel-scoped exclude + recover healthy sibling.
+- mockRouter `excludeSnapshots` for SelectNextChannel honesty.
+- Does **not** flip P0-585 present (prod/live storm still required).
+
 ## [2026-07-21] tip after stream missing-usage metric
 
 - Tip `56eca67`: `metapi_stream_missing_usage_total` + OrphanLogs; README unreleased tip honesty.

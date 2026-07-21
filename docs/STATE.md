@@ -18,7 +18,7 @@
 | Production pin (ops) | server `projects/metapi/STATE.md` — hk3 still **0.8.44 Exited(2)** until authorized pin/up of **0.8.45** + 15min soak; pool/role **1/1**; restart=no |
 | Standby us1 pin | compose **0.8.42** + image pulled (#528); cold stack not auto-started |
 | Active milestone | **[52 UI-POLISH](https://github.com/TokenDanceLab/metapi-go/milestone/52)** — Wave1 + first-run Wave2 closed; **v0.8.45** tagged |
-| Open issues / PRs | board empty (epic #548 closed); optional residual not scheduled as issues |
+| Open issues / PRs | M53 [#557](https://github.com/TokenDanceLab/metapi-go/issues/557) P0-585 prod e2e · [#558](https://github.com/TokenDanceLab/metapi-go/issues/558) runtime probes |
 | Mode | **parity program (docs)** — v0.8.45 released; ops pin/up gated; original-complete plan SSOT [`plan/original-parity-complete-2026-07-20.md`](plan/original-parity-complete-2026-07-20.md) |
 | Stack | Go 1.26.5 · React 19 · Vite 8 · dual dialect SQLite/PG |
 

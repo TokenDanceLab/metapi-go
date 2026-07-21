@@ -17,6 +17,7 @@ All notable changes to MetAPI-Go will be documented in this file.
 - P12 scheduler spec updated with scheduler #13b (video retention) + #16 (OAuth refresh)
 
 ### Fixed / Honesty
+- **P0-585 residual**: HTTP-path multi-channel 5xx storm + recover e2e (`e2e/e2e_p0585_cascade_test.go`); channel-scoped excludeSnapshots; inventory stays **partial** (no prod e2e flip)
 - **P0-555 residual observability**: `metapi_stream_missing_usage_total` when stream requested `include_usage` but ended without usable tokens (plus OrphanLogs on projection)
 - **P0-555 residual observability**: usage projection reports `OrphanLogs` + slog when proxy_logs lack site join (watermark advances; site buckets skip; still present-with-residual)
 - **TPM admission estimate** (#495 residual polish): count Claude `system` + Gemini `contents` string leaves (parity with routing context estimate); still best-effort chars/4, not a tokenizer

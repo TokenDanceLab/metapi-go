@@ -49,6 +49,7 @@ type mockRouter struct {
 
 	// Tracks which channels were returned.
 	selectedIDs      []int64
+	excludeSnapshots [][]int64 // SelectNextChannel exclude lists (P0-585 honesty)
 	recordedFailures []recordedFailure
 	recordedSuccess  []recordedSuccess
 
@@ -86,6 +87,9 @@ func (m *mockRouter) SelectChannel(ctx context.Context, requestedModel string, p
 func (m *mockRouter) SelectNextChannel(ctx context.Context, requestedModel string, excludeChannelIDs []int64, policy routing.DownstreamRoutingPolicy) (*routing.SelectedChannel, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	cp := append([]int64(nil), excludeChannelIDs...)
+	m.excludeSnapshots = append(m.excludeSnapshots, cp)
 
 	// Skip excluded
 	for len(m.channelStack) > 0 {
