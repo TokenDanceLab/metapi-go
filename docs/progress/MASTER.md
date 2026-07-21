@@ -4,7 +4,7 @@
 **Repo**: https://github.com/TokenDanceLab/metapi-go  
 **Mode**: **GITHUB_FULL** · product **parity core shipped**; active M53 REL-HONESTY  
 **Project**: https://github.com/orgs/TokenDanceLab/projects/1  
-**Tip**: `0027db6` · tag **v0.8.45** · unreleased: parity core + P0-555 obs + P0-585 HTTP e2e · board M53  
+**Tip**: `d0288f3` · tag **v0.8.45** · unreleased: parity core + P0-555 obs + P0-585 HTTP e2e + #557 procedure  
 **Program plan**: [`../plan/original-parity-complete-2026-07-20.md`](../plan/original-parity-complete-2026-07-20.md)
 
 > **开放项 + 硬门禁**。现状 → [`../STATE.md`](../STATE.md) · 日志 → [`../log.md`](../log.md) · shortlist → [`../analysis/high-value-next.md`](../analysis/high-value-next.md)
@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |:-----|:------|
-| Active work | REL: P0-585 HTTP e2e shipped; prod e2e tracked #557; P0-555 residual; ops pin gated |
+| Active work | #557 procedure/harness shipped; live soak pending; ops pin gated |
 | User decisions | WS = **full TS parity**; sticky = **single-instance honesty**; UC = **hide/external deploy** |
 | Ops | hk3 pin still **0.8.44 Exited** until authorized **0.8.45** soak (server STATE) |
 | Board | M53 REL-HONESTY · open [#557](https://github.com/TokenDanceLab/metapi-go/issues/557) P0-585 prod e2e · [#558](https://github.com/TokenDanceLab/metapi-go/issues/558) runtime probes |

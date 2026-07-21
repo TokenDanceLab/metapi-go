@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] tip after #557 procedure
+
+- Tip `d0288f3`: p0585 production e2e procedure + probe harness on master.
+
 ## [2026-07-21] #557 P0-585 production e2e procedure + probe script
 
 - `docs/analysis/p0585-production-e2e-procedure.md` — pass/fail, staging inject, evidence harvest.
