@@ -4,6 +4,10 @@
 - `web/embed.go` build comment points at in-repo `web/` (not legacy metapi TS monorepo copy path).
 - `web/package.json` version 0.8.45; `README_EN.md` GHCR badge 0.8.45; About privacy dual-dialect storage.
 
+## [2026-07-21] tip after P0-585 HTTP e2e
+
+- Tip `0027db6`: e2e cascade load-proof + M53 board #557/#558.
+
 ## [2026-07-21] SDD REL board: M53 + #557/#558
 
 - Milestone **53 REL-HONESTY**; issues #557 (P0-585 prod e2e) · #558 (runtime probes optional).
